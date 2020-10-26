@@ -1,0 +1,8 @@
+[requires]
+glew/2.1.0
+vulkan-headers/1.2.154.0
+spdlog/1.8.0
+fmt/7.0.3
+
+[generators]
+cmake

@@ -5,7 +5,11 @@ include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 
 find_package(Vulkan REQUIRED FATAL_ERROR)
-add_executable(VkTutorial main.cpp)
+add_executable(VkTutorial
+    HelloTriangle.cpp 
+    HelloTriangle.h 
+    main.cpp
+)
 conan_target_link_libraries(VkTutorial ${CONAN_LIBS})
 
 target_include_directories (VkTutorial PUBLIC ${VULKAN_INCLUDE_DIRS})

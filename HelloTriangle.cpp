@@ -2,15 +2,14 @@
 
 #include <spdlog/spdlog.h>
 
-const std::vector<const char*> HelloTriangleApplication::validationLayers = {
-	"VK_LAYER_KHRONOS_validation"
-};
+const std::vector<const char *> HelloTriangleApplication::validationLayers = {
+	"VK_LAYER_KHRONOS_validation"};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL HelloTriangleApplication::debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT messageType,
-	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-	void* pUserData) {
+	const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
+{
 
 	spdlog::error("validation layer: {}", pCallbackData->pMessage);
 
@@ -56,7 +55,7 @@ void HelloTriangleApplication::setupInstance()
 	createInfo.pApplicationInfo = &appInfo;
 
 	uint32_t glfwExtensionCount = 0;
-	const char** glfwExtensions;
+	const char **glfwExtensions;
 
 	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 	spdlog::info("GLFW requires {} extensions", glfwExtensionCount);
@@ -70,7 +69,7 @@ void HelloTriangleApplication::setupInstance()
 	std::vector<VkExtensionProperties> extensions(extensionCount);
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
 	spdlog::info("available extensions:");
-	for (const auto& extension : extensions) {
+	for (const auto &extension : extensions) {
 		spdlog::info("\t{}", extension.extensionName);
 	}
 
@@ -89,7 +88,7 @@ void HelloTriangleApplication::setupInstance()
 		createInfo.ppEnabledLayerNames = validationLayers.data();
 
 		populateDebugMessengerCreateInfo(debugCreateInfo);
-		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
 	}
 	else {
 		createInfo.enabledLayerCount = 0;
@@ -126,7 +125,8 @@ void HelloTriangleApplication::cleanup()
 	spdlog::info("Application shut down.");
 }
 
-bool HelloTriangleApplication::checkValidationLayerSupport() {
+bool HelloTriangleApplication::checkValidationLayerSupport()
+{
 	uint32_t layerCount;
 	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
@@ -134,12 +134,12 @@ bool HelloTriangleApplication::checkValidationLayerSupport() {
 	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
 	spdlog::info("Supported Vulkan Layers:");
-	for (const char* layerName : validationLayers) {
+	for (const char *layerName : validationLayers) {
 		bool layerFound = false;
 
 		spdlog::info("  {0}", layerName);
 
-		for (const auto& layerProperties : availableLayers) {
+		for (const auto &layerProperties : availableLayers) {
 			if (strcmp(layerName, layerProperties.layerName) == 0) {
 				layerFound = true;
 			}
@@ -153,12 +153,13 @@ bool HelloTriangleApplication::checkValidationLayerSupport() {
 	return true;
 }
 
-std::vector<const char*> HelloTriangleApplication::getRequiredExtensions() {
+std::vector<const char *> HelloTriangleApplication::getRequiredExtensions()
+{
 	uint32_t glfwExtensionCount = 0;
-	const char** glfwExtensions;
+	const char **glfwExtensions;
 	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+	std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
 	if (enableValidationLayers) {
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -167,22 +168,30 @@ std::vector<const char*> HelloTriangleApplication::getRequiredExtensions() {
 	return extensions;
 }
 
-void HelloTriangleApplication::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+void HelloTriangleApplication::populateDebugMessengerCreateInfo(
+	VkDebugUtilsMessengerCreateInfoEXT &createInfo)
+{
 	createInfo = {};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+								 VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+								 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+							 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+							 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 	createInfo.pfnUserCallback = debugCallback;
 }
 
 void HelloTriangleApplication::setupDebugMessenger()
 {
-	if (!enableValidationLayers) return;
+	if (!enableValidationLayers)
+		return;
 
 	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
 	populateDebugMessengerCreateInfo(createInfo);
 
-	if (CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) != VK_SUCCESS) {
+	if (CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) !=
+		VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug messenger!");
 	}
 }
@@ -197,7 +206,7 @@ void HelloTriangleApplication::pickPhysicalDevice()
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
 
-	for (const auto& device : devices) {
+	for (const auto &device : devices) {
 		if (isDeviceSuitable(device)) {
 			m_physicalDevice = device;
 			break;
@@ -220,7 +229,7 @@ QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice 
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
 
 	int i = 0;
-	for (const auto& queueFamily : queueFamilies) {
+	for (const auto &queueFamily : queueFamilies) {
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			indices.graphicsFamily = i;
 		}
@@ -236,7 +245,7 @@ QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice 
 	return indices;
 }
 
-bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice& device)
+bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
 {
 	VkPhysicalDeviceProperties deviceProperties;
 	vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -244,10 +253,13 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice& device)
 	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 
 	spdlog::info("Found vulkan device: {}", deviceProperties.deviceName);
-	//spdlog::info("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion, deviceProperties.apiVersion);
+	// spdlog::info("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion,
+	// deviceProperties.apiVersion);
 
 	auto qfi = findQueueFamilies(device);
-	spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}", qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(), qfi.transferFamily.has_value());
+	spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}",
+				 qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(),
+				 qfi.transferFamily.has_value());
 
 	return qfi.graphicsFamily.has_value();
 }

@@ -8,6 +8,7 @@ find_package(Vulkan REQUIRED FATAL_ERROR)
 add_executable(VkTutorial
     HelloTriangle.cpp 
     HelloTriangle.h 
+	Utils.h
     main.cpp
 )
 conan_target_link_libraries(VkTutorial ${CONAN_LIBS})

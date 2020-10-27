@@ -36,6 +36,13 @@ void HelloTriangleApplication::initWindow()
 
 void HelloTriangleApplication::initVulkan()
 {
+	setupInstance();
+	setupDebugMessenger();
+	pickPhysicalDevice();
+}
+
+void HelloTriangleApplication::setupInstance()
+{
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "Hello Triangle";
@@ -97,14 +104,21 @@ void HelloTriangleApplication::initVulkan()
 
 void HelloTriangleApplication::mainLoop()
 {
+	spdlog::info("Entering main loop.");
 	while (!glfwWindowShouldClose(m_window)) {
 		glfwPollEvents();
 	}
+	spdlog::info("Leaving main loop.");
 }
 
 void HelloTriangleApplication::cleanup()
 {
 	spdlog::info("Cleaning up Vulkan and GLFW..");
+
+	if (enableValidationLayers) {
+		DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
+	}
+
 	vkDestroyInstance(m_instance, nullptr);
 	glfwDestroyWindow(m_window);
 	glfwTerminate();
@@ -171,4 +185,69 @@ void HelloTriangleApplication::setupDebugMessenger()
 	if (CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug messenger!");
 	}
+}
+
+void HelloTriangleApplication::pickPhysicalDevice()
+{
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+	if (deviceCount == 0) {
+		throw std::runtime_error("failed to find GPUs with Vulkan support!");
+	}
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+
+	for (const auto& device : devices) {
+		if (isDeviceSuitable(device)) {
+			m_physicalDevice = device;
+			break;
+		}
+	}
+
+	if (m_physicalDevice == VK_NULL_HANDLE) {
+		throw std::runtime_error("failed to find a suitable GPU!");
+	}
+}
+
+QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice device)
+{
+	QueueFamilyIndices indices;
+
+	uint32_t queueFamilyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+	int i = 0;
+	for (const auto& queueFamily : queueFamilies) {
+		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			indices.graphicsFamily = i;
+		}
+		if (queueFamily.queueCount & VK_QUEUE_COMPUTE_BIT) {
+			indices.computeFamily = i;
+		}
+		if (queueFamily.queueCount & VK_QUEUE_TRANSFER_BIT) {
+			indices.transferFamily = i;
+		}
+		i++;
+	}
+
+	return indices;
+}
+
+bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice& device)
+{
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+	spdlog::info("Found vulkan device: {}", deviceProperties.deviceName);
+	//spdlog::info("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion, deviceProperties.apiVersion);
+
+	auto qfi = findQueueFamilies(device);
+	spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}", qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(), qfi.transferFamily.has_value());
+
+	return qfi.graphicsFamily.has_value();
 }

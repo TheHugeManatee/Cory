@@ -51,11 +51,18 @@ class HelloTriangleApplication {
 	// figure out which queue families are supported (like memory transfer, compute, graphics etc.)
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
+	// set up the logical device. this creates the queues and instantiates the features
+	void createLogicalDevice();
+
+  private:
+	bool isDeviceSuitable(const VkPhysicalDevice &device);
+
   private:
 	GLFWwindow *m_window;
 	VkInstance m_instance;
+	VkDevice m_device;
 	VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
+	VkQueue m_graphicsQueue;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;
-	bool isDeviceSuitable(const VkPhysicalDevice &device);
 };

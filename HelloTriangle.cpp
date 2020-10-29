@@ -38,6 +38,7 @@ void HelloTriangleApplication::initVulkan()
 	setupInstance();
 	setupDebugMessenger();
 	pickPhysicalDevice();
+	createLogicalDevice();
 }
 
 void HelloTriangleApplication::setupInstance()
@@ -117,6 +118,8 @@ void HelloTriangleApplication::cleanup()
 	if (enableValidationLayers) {
 		DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 	}
+
+	vkDestroyDevice(m_device, nullptr);
 
 	vkDestroyInstance(m_instance, nullptr);
 	glfwDestroyWindow(m_window);
@@ -243,6 +246,50 @@ QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice 
 	}
 
 	return indices;
+}
+
+void HelloTriangleApplication::createLogicalDevice()
+{
+	QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
+
+	VkDeviceQueueCreateInfo queueCreateInfo{};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+	queueCreateInfo.queueCount = 1;
+
+	float queuePriority = 1.0f;
+	queueCreateInfo.pQueuePriorities = &queuePriority;
+
+	VkPhysicalDeviceFeatures deviceFeatures{};
+	// specify device features here, right now we don't need anything
+
+	VkDeviceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+	createInfo.pQueueCreateInfos = &queueCreateInfo;
+	createInfo.queueCreateInfoCount = 1; // just one queue
+
+	createInfo.pEnabledFeatures = &deviceFeatures;
+
+	// device-specific extensions - we don't need any for now
+	createInfo.enabledExtensionCount = 0;
+
+	// device-specific layers - these are already covered by the instance layers, not
+	// strictly needed again here but seems to be good practice.
+	if (enableValidationLayers) {
+		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+		createInfo.ppEnabledLayerNames = validationLayers.data();
+	}
+	else {
+		createInfo.enabledLayerCount = 0;
+	}
+
+	if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create logical device.");
+	}
+
+	// store the handle to the graphics queue
+	vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)

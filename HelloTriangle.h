@@ -20,6 +20,7 @@ class HelloTriangleApplication {
 #endif
 
 	static const std::vector<const char *> validationLayers;
+	static const std::vector<const char *> deviceExtensions;
 
 	static VKAPI_ATTR VkBool32 VKAPI_CALL
 	debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -32,18 +33,20 @@ class HelloTriangleApplication {
 	void initWindow();
 	void initVulkan();
 
-	void setupInstance();
-
 	void mainLoop();
 	void cleanup();
+
+	void setupInstance();
 
 	// setup of validation layers
 	bool checkValidationLayerSupport();
 	std::vector<const char *> getRequiredExtensions();
 
 	// set up of debug callback
-	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
 	void setupDebugMessenger();
+	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
+
+	void createSurface();
 
 	// list all vulkan devices and pick one that is suitable for our purposes.
 	void pickPhysicalDevice();
@@ -54,6 +57,8 @@ class HelloTriangleApplication {
 	// set up the logical device. this creates the queues and instantiates the features
 	void createLogicalDevice();
 
+	bool checkDeviceExtensionSupport(const VkPhysicalDevice &device);
+
   private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
 
@@ -62,7 +67,9 @@ class HelloTriangleApplication {
 	VkInstance m_instance;
 	VkDevice m_device;
 	VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
+	VkSurfaceKHR m_surface;
 	VkQueue m_graphicsQueue;
+	VkQueue m_presentQueue;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 };

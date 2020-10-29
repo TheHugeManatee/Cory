@@ -2,8 +2,13 @@
 
 #include <spdlog/spdlog.h>
 
+#include <set>
+
 const std::vector<const char *> HelloTriangleApplication::validationLayers = {
 	"VK_LAYER_KHRONOS_validation"};
+
+const std::vector<const char *> HelloTriangleApplication::deviceExtensions = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL HelloTriangleApplication::debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -37,6 +42,7 @@ void HelloTriangleApplication::initVulkan()
 {
 	setupInstance();
 	setupDebugMessenger();
+	createSurface();
 	pickPhysicalDevice();
 	createLogicalDevice();
 }
@@ -119,6 +125,7 @@ void HelloTriangleApplication::cleanup()
 		DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 	}
 
+	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
 	vkDestroyDevice(m_device, nullptr);
 
 	vkDestroyInstance(m_instance, nullptr);
@@ -185,6 +192,13 @@ void HelloTriangleApplication::populateDebugMessengerCreateInfo(
 	createInfo.pfnUserCallback = debugCallback;
 }
 
+void HelloTriangleApplication::createSurface()
+{
+	if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) != VK_SUCCESS) {
+		throw std::runtime_error("Could not create window surface!");
+	}
+}
+
 void HelloTriangleApplication::setupDebugMessenger()
 {
 	if (!enableValidationLayers)
@@ -208,6 +222,8 @@ void HelloTriangleApplication::pickPhysicalDevice()
 	}
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+
+	spdlog::info("Found {} vulkan devices.", deviceCount);
 
 	for (const auto &device : devices) {
 		if (isDeviceSuitable(device)) {
@@ -242,6 +258,11 @@ QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice 
 		if (queueFamily.queueCount & VK_QUEUE_TRANSFER_BIT) {
 			indices.transferFamily = i;
 		}
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
+		if (presentSupport) {
+			indices.presentFamily = i;
+		}
 		i++;
 	}
 
@@ -252,13 +273,21 @@ void HelloTriangleApplication::createLogicalDevice()
 {
 	QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
 
-	VkDeviceQueueCreateInfo queueCreateInfo{};
-	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-	queueCreateInfo.queueCount = 1;
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
+											  indices.presentFamily.value()};
 
 	float queuePriority = 1.0f;
-	queueCreateInfo.pQueuePriorities = &queuePriority;
+
+	for (uint32_t queueFamily : uniqueQueueFamilies) {
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = queueFamily;
+		queueCreateInfo.queueCount = 1;
+		queueCreateInfo.pQueuePriorities = &queuePriority;
+		queueCreateInfos.push_back(queueCreateInfo);
+	}
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
 	// specify device features here, right now we don't need anything
@@ -266,8 +295,8 @@ void HelloTriangleApplication::createLogicalDevice()
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
-	createInfo.pQueueCreateInfos = &queueCreateInfo;
-	createInfo.queueCreateInfoCount = 1; // just one queue
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 
 	createInfo.pEnabledFeatures = &deviceFeatures;
 
@@ -288,8 +317,26 @@ void HelloTriangleApplication::createLogicalDevice()
 		throw std::runtime_error("Failed to create logical device.");
 	}
 
-	// store the handle to the graphics queue
+	// store the handle to the graphics and present queues
 	vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
+	vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0, &m_presentQueue);
+}
+
+bool HelloTriangleApplication::checkDeviceExtensionSupport(const VkPhysicalDevice &device)
+{
+	uint32_t extensionCount;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+										 availableExtensions.data());
+
+	std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+	for (const auto &extension : availableExtensions) {
+		requiredExtensions.erase(extension.extensionName);
+	}
+
+	return requiredExtensions.empty();
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
@@ -304,9 +351,11 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
 	// deviceProperties.apiVersion);
 
 	auto qfi = findQueueFamilies(device);
-	spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}",
+	spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}, Present {}",
 				 qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(),
-				 qfi.transferFamily.has_value());
+				 qfi.transferFamily.has_value(), qfi.presentFamily.has_value());
 
-	return qfi.graphicsFamily.has_value();
+	bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+	return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported;
 }

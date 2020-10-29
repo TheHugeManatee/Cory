@@ -68,6 +68,10 @@ class HelloTriangleApplication {
 	void createSwapChain();
 	void createImageViews();
 
+	VkShaderModule createShaderModule(const std::vector<char> &code);
+
+	void createGraphicsPipeline();
+
   private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
 

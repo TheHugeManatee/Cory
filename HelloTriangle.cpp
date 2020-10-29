@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include <algorithm>
+#include <fstream>
 #include <set>
 
 const std::vector<const char *> HelloTriangleApplication::validationLayers = {
@@ -10,6 +11,22 @@ const std::vector<const char *> HelloTriangleApplication::validationLayers = {
 
 const std::vector<const char *> HelloTriangleApplication::deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
+static std::vector<char> readFile(const std::string &filename)
+{
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		throw std::runtime_error("failed to open file!");
+	}
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> buffer(fileSize);
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+	file.close();
+
+	return buffer;
+}
 
 VKAPI_ATTR VkBool32 VKAPI_CALL HelloTriangleApplication::debugCallback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -47,6 +64,7 @@ void HelloTriangleApplication::initVulkan()
 	pickPhysicalDevice();
 	createLogicalDevice();
 	createSwapChain();
+	createGraphicsPipeline();
 }
 
 void HelloTriangleApplication::setupInstance()
@@ -511,6 +529,51 @@ void HelloTriangleApplication::createImageViews()
 			throw std::runtime_error("Could not create swap chain image views");
 		}
 	}
+}
+
+VkShaderModule HelloTriangleApplication::createShaderModule(const std::vector<char> &code)
+{
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size();
+	createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(m_device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+		throw std::runtime_error("Could not create shader");
+	}
+
+	return shaderModule;
+}
+
+void HelloTriangleApplication::createGraphicsPipeline()
+{
+	auto vertShaderCode = readFile("vert.spv");
+	auto fragShaderCode = readFile("frag.spv");
+
+	auto vertShaderModule = createShaderModule(vertShaderCode);
+	auto fragShaderModule = createShaderModule(fragShaderCode);
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = vertShaderModule;
+	// entrypoint -- means we can add multiple entry points in one module - yays!
+	vertShaderStageInfo.pName = "main";
+
+	// Note: pSpecializationInfo can be used to set compile time constants - kinda like macros in an
+	// online compilation?
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = fragShaderModule;
+	fragShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+
+	vkDestroyShaderModule(m_device, vertShaderModule, nullptr);
+	vkDestroyShaderModule(m_device, fragShaderModule, nullptr);
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)

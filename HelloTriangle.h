@@ -66,6 +66,7 @@ class HelloTriangleApplication {
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
 
 	void createSwapChain();
+	void createImageViews();
 
   private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
@@ -82,6 +83,7 @@ class HelloTriangleApplication {
 	std::vector<VkImage> m_swapChainImages;
 	VkFormat m_swapChainImageFormat;
 	VkExtent2D m_swapChainExtent;
+	std::vector<VkImageView> m_swapChainImageViews;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 };

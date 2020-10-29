@@ -58,6 +58,14 @@ class HelloTriangleApplication {
 	void createLogicalDevice();
 
 	bool checkDeviceExtensionSupport(const VkPhysicalDevice &device);
+	SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
+	VkSurfaceFormatKHR
+	chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
+	VkPresentModeKHR
+	chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
+	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
+
+	void createSwapChain();
 
   private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
@@ -70,6 +78,10 @@ class HelloTriangleApplication {
 	VkSurfaceKHR m_surface;
 	VkQueue m_graphicsQueue;
 	VkQueue m_presentQueue;
+	VkSwapchainKHR m_swapChain;
+	std::vector<VkImage> m_swapChainImages;
+	VkFormat m_swapChainImageFormat;
+	VkExtent2D m_swapChainExtent;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 };

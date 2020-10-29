@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <optional>
+#include <vector>
 
 inline VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
 											 const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
@@ -36,4 +37,10 @@ struct QueueFamilyIndices {
 	std::optional<uint32_t> computeFamily;
 	std::optional<uint32_t> transferFamily;
 	std::optional<uint32_t> presentFamily;
+};
+
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
 };

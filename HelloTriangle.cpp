@@ -70,6 +70,7 @@ void HelloTriangleApplication::initVulkan()
 	createFramebuffers();
 	createCommandPool();
 	createCommandBuffers();
+	createSyncObjects();
 }
 
 void HelloTriangleApplication::setupInstance()
@@ -138,7 +139,11 @@ void HelloTriangleApplication::mainLoop()
 	spdlog::info("Entering main loop.");
 	while (!glfwWindowShouldClose(m_window)) {
 		glfwPollEvents();
+		drawFrame();
 	}
+
+	vkDeviceWaitIdle(m_device);
+
 	spdlog::info("Leaving main loop.");
 }
 
@@ -146,29 +151,22 @@ void HelloTriangleApplication::cleanup()
 {
 	spdlog::info("Cleaning up Vulkan and GLFW..");
 
+	cleanupSwapChain();
+
+	for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+		vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
+		vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
+		vkDestroyFence(m_device, m_inFlightFences[i], nullptr);
+	}
+
 	vkDestroyCommandPool(m_device, m_commandPool, nullptr);
 
-	for (auto framebuffer : m_swapChainFramebuffers) {
-		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
-	}
-
-	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
-	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-
-	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
-
-	for (auto imageView : m_swapChainImageViews) {
-		vkDestroyImageView(m_device, imageView, nullptr);
-	}
-
-	vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+	vkDestroyDevice(m_device, nullptr);
 
 	if (enableValidationLayers) {
 		DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 	}
-
-	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
-	vkDestroyDevice(m_device, nullptr);
 
 	vkDestroyInstance(m_instance, nullptr);
 	glfwDestroyWindow(m_window);
@@ -766,6 +764,20 @@ void HelloTriangleApplication::createRenderPass()
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
 
+	//****************** Subpass dependencies ******************
+	// this sets up the render pass to wait for the STAGE_COLOR_ATTACHMENT_OUTPUT stage to ensure
+	// the images are available and the swap chain is not still reading the image
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
+
 	if (vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS) {
 		throw std::runtime_error("Could not create render pass");
 	}
@@ -865,6 +877,129 @@ void HelloTriangleApplication::createCommandBuffers()
 			throw std::runtime_error("failed to record command buffer");
 		}
 	}
+}
+
+void HelloTriangleApplication::drawFrame()
+{
+	// fences to sync per-frame draw resources
+	vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+
+	// acquire image
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX,
+						  m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	// Check if a previous frame is using this image (i.e. there is its fence to wait on)
+	if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
+		vkWaitForFences(m_device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+	}
+	// Mark the image as now being in use by this frame
+	m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
+
+	// execute command buffer with that image as attachment
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	// vkQueueSubmit allows to wait for a specific semaphore, which in our case waits until the
+	// image is signaled available
+	VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphores[m_currentFrame]};
+	VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_commandBuffers[imageIndex];
+
+	// vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
+	VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphores[m_currentFrame]};
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	// make sure to reset the frame-respective fence
+	vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
+
+	if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]) !=
+		VK_SUCCESS) // could use a fence here instead of the semaphores for synchronization
+	{
+		throw std::runtime_error("Could not submit draw command buffer");
+	}
+
+	// return image to the swap chain
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores; // wait for queue to finish
+
+	VkSwapchainKHR swapChains[] = {m_swapChain};
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr; // can be used to check every individual swap chai is successful
+
+	vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void HelloTriangleApplication::createSyncObjects()
+{
+	m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+	m_imagesInFlight.resize(m_swapChainImages.size(), VK_NULL_HANDLE);
+
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+
+		if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
+				VK_SUCCESS ||
+			vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) !=
+				VK_SUCCESS ||
+			vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
+
+			throw std::runtime_error("failed to create synchronization objects for a frame!");
+		}
+	}
+}
+
+void HelloTriangleApplication::recreateSwapChain()
+{
+	vkDeviceWaitIdle(m_device);
+
+	cleanupSwapChain();
+
+	createSwapChain();
+	createImageViews();
+	createRenderPass();
+	createGraphicsPipeline();
+	createFramebuffers();
+	createCommandBuffers();
+}
+
+void HelloTriangleApplication::cleanupSwapChain()
+{
+	for (auto framebuffer : m_swapChainFramebuffers) {
+		vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+	}
+
+	vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()),
+						 m_commandBuffers.data());
+
+	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+
+	for (auto imageView : m_swapChainImageViews) {
+		vkDestroyImageView(m_device, imageView, nullptr);
+	}
+
+	vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)

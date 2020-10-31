@@ -22,6 +22,8 @@ class HelloTriangleApplication {
 	static const std::vector<const char *> validationLayers;
 	static const std::vector<const char *> deviceExtensions;
 
+	static const int MAX_FRAMES_IN_FLIGHT{2};
+
 	static VKAPI_ATTR VkBool32 VKAPI_CALL
 	debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 				  VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -80,6 +82,14 @@ class HelloTriangleApplication {
 
 	void createCommandBuffers();
 
+	void drawFrame();
+
+	void createSyncObjects();
+
+	void recreateSwapChain();
+
+	void cleanupSwapChain();
+
   private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
 
@@ -104,6 +114,12 @@ class HelloTriangleApplication {
 
 	VkCommandPool m_commandPool;
 	std::vector<VkCommandBuffer> m_commandBuffers;
+
+	size_t m_currentFrame{};
+	std::vector<VkSemaphore> m_imageAvailableSemaphores;
+	std::vector<VkSemaphore> m_renderFinishedSemaphores;
+	std::vector<VkFence> m_inFlightFences;
+	std::vector<VkFence> m_imagesInFlight;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 };

@@ -143,7 +143,9 @@ void HelloTriangleApplication::cleanup()
 {
 	spdlog::info("Cleaning up Vulkan and GLFW..");
 
+	vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 
 	for (auto imageView : m_swapChainImageViews) {
@@ -606,6 +608,13 @@ void HelloTriangleApplication::createGraphicsPipeline()
 	scissor.offset = {0, 0};
 	scissor.extent = m_swapChainExtent;
 
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.pViewports = &viewport;
+	viewportState.scissorCount = 1;
+	viewportState.pScissors = &scissor;
+
 	//****************** Rasterizer ******************
 	VkPipelineRasterizationStateCreateInfo rasterizer{};
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -681,6 +690,30 @@ void HelloTriangleApplication::createGraphicsPipeline()
 	if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
 		VK_SUCCESS) {
 		throw std::runtime_error("Could not create pipeline layout!");
+	}
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = nullptr; // skipped for now
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = nullptr; // skipped for now --why tho?
+	pipelineInfo.layout = m_pipelineLayout;
+	pipelineInfo.renderPass = m_renderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // note: vulkan can have "base" and "derived"
+													  // pipelines when they are similar
+	pipelineInfo.basePipelineIndex = -1;
+
+	if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+								  &m_graphicsPipeline) != VK_SUCCESS) {
+		throw std::runtime_error("Could not create graphics pipeline");
 	}
 
 	vkDestroyShaderModule(m_device, vertShaderModule, nullptr);

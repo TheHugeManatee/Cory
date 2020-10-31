@@ -146,8 +146,6 @@ void HelloTriangleApplication::cleanup()
 	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
 
-	vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-
 	for (auto imageView : m_swapChainImageViews) {
 		vkDestroyImageView(m_device, imageView, nullptr);
 	}
@@ -519,6 +517,7 @@ void HelloTriangleApplication::createImageViews()
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 		createInfo.image = m_swapChainImages[i];
 		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = m_swapChainImageFormat;
 		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -531,7 +530,7 @@ void HelloTriangleApplication::createImageViews()
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
-		if (vkCreateImageView(m_device, &createInfo, nullptr, m_swapChainImageViews.data()) !=
+		if (vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]) !=
 			VK_SUCCESS) {
 			throw std::runtime_error("Could not create swap chain image views");
 		}

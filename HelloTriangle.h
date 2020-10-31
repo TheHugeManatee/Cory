@@ -31,6 +31,12 @@ class HelloTriangleApplication {
 
 	void run();
 
+  public:
+	// handling window resizes happens automatically based on the result values of
+	// vkAcquireNextFrameKHR and vkQueuePresentKHR. however, it might not be reliable on some
+	// drivers, so we use this flag to check the glfw resize events explicitly
+	bool framebufferResized{};
+
   private:
 	void initWindow();
 	void initVulkan();
@@ -116,6 +122,7 @@ class HelloTriangleApplication {
 	std::vector<VkCommandBuffer> m_commandBuffers;
 
 	size_t m_currentFrame{};
+
 	std::vector<VkSemaphore> m_imageAvailableSemaphores;
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
 	std::vector<VkFence> m_inFlightFences;

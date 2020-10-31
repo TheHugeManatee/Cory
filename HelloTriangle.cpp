@@ -52,8 +52,14 @@ void HelloTriangleApplication::initWindow()
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
 	m_window = glfwCreateWindow(WIDTH, HEIGHT, "VK Tutorial", nullptr, nullptr);
+	glfwSetWindowUserPointer(m_window, this);
+
+	glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow *window, int width, int height) {
+		auto app = reinterpret_cast<HelloTriangleApplication *>(glfwGetWindowUserPointer(window));
+		app->framebufferResized = true;
+	});
 }
 
 void HelloTriangleApplication::initVulkan()
@@ -886,8 +892,17 @@ void HelloTriangleApplication::drawFrame()
 
 	// acquire image
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX,
-						  m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+	auto result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX,
+										m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
+										&imageIndex);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		recreateSwapChain();
+		return;
+	}
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		throw std::runtime_error("failed to acquire swap chain image");
+	}
 
 	// Check if a previous frame is using this image (i.e. there is its fence to wait on)
 	if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
@@ -936,7 +951,15 @@ void HelloTriangleApplication::drawFrame()
 	presentInfo.pImageIndices = &imageIndex;
 	presentInfo.pResults = nullptr; // can be used to check every individual swap chai is successful
 
-	vkQueuePresentKHR(m_presentQueue, &presentInfo);
+	result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+		framebufferResized = false;
+		recreateSwapChain();
+	}
+	else if (result != VK_SUCCESS) {
+		throw std::runtime_error("failed to present swap chain image");
+	}
 
 	m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -970,6 +993,17 @@ void HelloTriangleApplication::createSyncObjects()
 
 void HelloTriangleApplication::recreateSwapChain()
 {
+	// window might be minimized
+	int width = 0, height = 0;
+	glfwGetFramebufferSize(m_window, &width, &height);
+	if (width == height == 0)
+		spdlog::info("Window minimized");
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(m_window, &width, &height);
+		glfwWaitEvents();
+	}
+	spdlog::info("Framebuffer resized");
+
 	vkDeviceWaitIdle(m_device);
 
 	cleanupSwapChain();

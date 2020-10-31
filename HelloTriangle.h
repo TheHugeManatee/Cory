@@ -72,6 +72,8 @@ class HelloTriangleApplication {
 
 	void createGraphicsPipeline();
 
+	void createRenderPass();
+
   private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
 
@@ -89,6 +91,7 @@ class HelloTriangleApplication {
 	VkExtent2D m_swapChainExtent;
 	std::vector<VkImageView> m_swapChainImageViews;
 
+	VkRenderPass m_renderPass;
 	VkPipelineLayout m_pipelineLayout;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;

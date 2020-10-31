@@ -74,6 +74,8 @@ class HelloTriangleApplication {
 
 	void createRenderPass();
 
+	void createFramebuffers();
+
   private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
 
@@ -94,6 +96,8 @@ class HelloTriangleApplication {
 	VkRenderPass m_renderPass;
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_graphicsPipeline;
+
+	std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 };

@@ -3,7 +3,7 @@
 #include <stdexcept>
 
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
-                                                  VkMemoryPropertyFlags properties)
+                        VkMemoryPropertyFlags properties)
 {
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
@@ -18,16 +18,15 @@ uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
     throw std::runtime_error("Failed to find a suitable memory type!");
 }
 
-device_buffer::device_buffer()
-{
-
-}
+device_buffer::device_buffer() {}
 device_buffer::~device_buffer() {}
 
-
-void device_buffer::create(Context &ctx, VkDeviceSize size, VkBufferUsageFlags usage,
-                    VkMemoryPropertyFlags properties)
+void device_buffer::create(graphics_context &ctx, VkDeviceSize size, VkBufferUsageFlags usage,
+                           VkMemoryPropertyFlags properties)
 {
+    // Note: ideally, we would not allocate each buffer individually but instead allocate a big
+    // chunk and assign it to individual buffers using the vkBindBufferMemory see also
+    // https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
     m_size = size;
     m_usage = usage;
     m_properties = properties;
@@ -36,7 +35,8 @@ void device_buffer::create(Context &ctx, VkDeviceSize size, VkBufferUsageFlags u
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
     bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;// sharing between queue families - we don't do that atm
+    bufferInfo.sharingMode =
+        VK_SHARING_MODE_EXCLUSIVE; // sharing between queue families - we don't do that atm
 
     if (vkCreateBuffer(ctx.device, &bufferInfo, nullptr, &m_buffer) != VK_SUCCESS) {
         throw std::runtime_error("Could not allocate buffer!");
@@ -58,16 +58,15 @@ void device_buffer::create(Context &ctx, VkDeviceSize size, VkBufferUsageFlags u
     }
 
     vkBindBufferMemory(ctx.device, m_buffer, m_bufferMemory, 0);
-
 }
 
-
-void device_buffer::destroy(Context &ctx) {
+void device_buffer::destroy(graphics_context &ctx)
+{
     vkDestroyBuffer(ctx.device, m_buffer, nullptr);
     vkFreeMemory(ctx.device, m_bufferMemory, nullptr);
 }
 
-void device_buffer::upload(Context &ctx, void *srcData, VkDeviceSize size,
+void device_buffer::upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
                            VkDeviceSize offset /*= 0*/)
 {
     void *mappedData;
@@ -76,7 +75,7 @@ void device_buffer::upload(Context &ctx, void *srcData, VkDeviceSize size,
     memcpy(mappedData, srcData, (size_t)size);
     vkUnmapMemory(ctx.device, m_bufferMemory);
 
-        // NOTE: writes are not necessarily visible on the device bc/ caches.
+    // NOTE: writes are not necessarily visible on the device bc/ caches.
     // either: use memory heap that is HOST_COHERENT
     // or: use vkFlushMappedMemoryRanges after writing mapped range and
     // vkInvalidateMappedMemoryRanges before reading on GPU
@@ -85,8 +84,43 @@ void device_buffer::upload(Context &ctx, void *srcData, VkDeviceSize size,
     // next vkQueueSubmit()
 }
 
-void device_buffer::download(Context &ctx, host_buffer &buf)
+void device_buffer::download(graphics_context &ctx, host_buffer &buf)
 {
     throw std::runtime_error("Function not implemented.");
 }
 
+void device_buffer::copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size)
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = ctx.transientCmdPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer copyCmdBuffer;
+    vkAllocateCommandBuffers(ctx.device, &allocInfo, &copyCmdBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // this is a throwaway buffer
+
+    vkBeginCommandBuffer(copyCmdBuffer, &beginInfo);
+
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(copyCmdBuffer, buffer(), rhs.buffer(), 1, &copyRegion);
+
+    vkEndCommandBuffer(copyCmdBuffer);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &copyCmdBuffer;
+
+    vkQueueSubmit(ctx.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(ctx.graphicsQueue); // alternative: wait for a fence that is signaled
+
+    vkFreeCommandBuffers(ctx.device, ctx.transientCmdPool, 1, &copyCmdBuffer);
+}

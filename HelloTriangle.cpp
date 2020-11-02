@@ -75,7 +75,7 @@ void HelloTriangleApplication::initVulkan()
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
-    createVertexBuffers();
+    createGeometry();
     createCommandBuffers();
     createSyncObjects();
 }
@@ -160,9 +160,10 @@ void HelloTriangleApplication::cleanup()
 
     cleanupSwapChain();
 
-    m_vertexBuffer->destroy(m_ctx);
-    //vkDestroyBuffer(m_ctx.device, m_vertexBuffer, nullptr);
-    //vkFreeMemory(m_ctx.device, m_vertexBufferMemory, nullptr);
+    m_vertexBuffer.destroy(m_ctx);
+    m_indexBuffer.destroy(m_ctx);
+    // vkDestroyBuffer(m_ctx.device, m_vertexBuffer, nullptr);
+    // vkFreeMemory(m_ctx.device, m_vertexBufferMemory, nullptr);
 
     for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         vkDestroySemaphore(m_ctx.device, m_renderFinishedSemaphores[i], nullptr);
@@ -171,6 +172,7 @@ void HelloTriangleApplication::cleanup()
     }
 
     vkDestroyCommandPool(m_ctx.device, m_commandPool, nullptr);
+    vkDestroyCommandPool(m_ctx.device, m_ctx.transientCmdPool, nullptr);
 
     vkDestroySurfaceKHR(m_ctx.instance, m_surface, nullptr);
     vkDestroyDevice(m_ctx.device, nullptr);
@@ -370,8 +372,8 @@ void HelloTriangleApplication::createLogicalDevice()
     }
 
     // store the handle to the graphics and present queues
-    vkGetDeviceQueue(m_ctx.device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
-    vkGetDeviceQueue(m_ctx.device, indices.presentFamily.value(), 0, &m_presentQueue);
+    vkGetDeviceQueue(m_ctx.device, indices.graphicsFamily.value(), 0, &m_ctx.graphicsQueue);
+    vkGetDeviceQueue(m_ctx.device, indices.presentFamily.value(), 0, &m_ctx.presentQueue);
 }
 
 bool HelloTriangleApplication::checkDeviceExtensionSupport(const VkPhysicalDevice &device)
@@ -814,8 +816,8 @@ void HelloTriangleApplication::createFramebuffers()
         framebufferInfo.height = m_swapChainExtent.height;
         framebufferInfo.layers = 1;
 
-        if (vkCreateFramebuffer(m_ctx.device, &framebufferInfo, nullptr, &m_swapChainFramebuffers[i]) !=
-            VK_SUCCESS) {
+        if (vkCreateFramebuffer(m_ctx.device, &framebufferInfo, nullptr,
+                                &m_swapChainFramebuffers[i]) != VK_SUCCESS) {
             throw std::runtime_error("Could not create framebuffer");
         }
     }
@@ -833,6 +835,16 @@ void HelloTriangleApplication::createCommandPool()
 
     if (vkCreateCommandPool(m_ctx.device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
         throw std::runtime_error("Could not create command pool!");
+    }
+
+    // create a second command pool for transient operations
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
+    if (vkCreateCommandPool(m_ctx.device, &poolInfo, nullptr, &m_ctx.transientCmdPool) !=
+        VK_SUCCESS) {
+        throw std::runtime_error("Could not create transient command pool!");
     }
 }
 
@@ -884,12 +896,14 @@ void HelloTriangleApplication::createCommandBuffers()
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
 
         // bind the vertex buffer
-        VkBuffer vertexBuffers[] = {m_vertexBuffer->buffer()};
+        VkBuffer vertexBuffers[] = {m_vertexBuffer.buffer()};
         VkDeviceSize offsets[] = {0};
         vkCmdBindVertexBuffers(cmdBuf, 0, 1, vertexBuffers, offsets);
 
+        vkCmdBindIndexBuffer(cmdBuf, m_indexBuffer.buffer(), 0, VK_INDEX_TYPE_UINT16);
+
         // draw three vertices
-        vkCmdDraw(cmdBuf, m_numVertices, 1, 0, 0);
+        vkCmdDrawIndexed(cmdBuf, m_numVertices, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(cmdBuf);
 
@@ -897,6 +911,126 @@ void HelloTriangleApplication::createCommandBuffers()
             throw std::runtime_error("failed to record command buffer");
         }
     }
+}
+
+void HelloTriangleApplication::createSyncObjects()
+{
+    m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+    m_imagesInFlight.resize(m_swapChainImages.size(), VK_NULL_HANDLE);
+
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+
+        if (vkCreateSemaphore(m_ctx.device, &semaphoreInfo, nullptr,
+                              &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
+            vkCreateSemaphore(m_ctx.device, &semaphoreInfo, nullptr,
+                              &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
+            vkCreateFence(m_ctx.device, &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
+
+            throw std::runtime_error("failed to create synchronization objects for a frame!");
+        }
+    }
+}
+
+void HelloTriangleApplication::recreateSwapChain()
+{
+    // window might be minimized
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(m_window, &width, &height);
+    if (width == height == 0)
+        spdlog::info("Window minimized");
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(m_window, &width, &height);
+        glfwWaitEvents();
+    }
+    spdlog::info("Framebuffer resized");
+
+    vkDeviceWaitIdle(m_ctx.device);
+
+    cleanupSwapChain();
+
+    createSwapChain();
+    createImageViews();
+    createRenderPass();
+    createGraphicsPipeline();
+    createFramebuffers();
+    createCommandBuffers();
+}
+
+void HelloTriangleApplication::cleanupSwapChain()
+{
+    for (auto framebuffer : m_swapChainFramebuffers) {
+        vkDestroyFramebuffer(m_ctx.device, framebuffer, nullptr);
+    }
+
+    vkFreeCommandBuffers(m_ctx.device, m_commandPool,
+                         static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+
+    vkDestroyPipeline(m_ctx.device, m_graphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(m_ctx.device, m_pipelineLayout, nullptr);
+    vkDestroyRenderPass(m_ctx.device, m_renderPass, nullptr);
+
+    for (auto imageView : m_swapChainImageViews) {
+        vkDestroyImageView(m_ctx.device, imageView, nullptr);
+    }
+
+    vkDestroySwapchainKHR(m_ctx.device, m_swapChain, nullptr);
+}
+
+void HelloTriangleApplication::createGeometry()
+{
+    auto [vertices, indices] = primitives::quad();
+    m_numVertices = indices.size();
+    createVertexBuffers(vertices);
+    createIndexBuffer(indices);
+}
+
+void HelloTriangleApplication::createVertexBuffers(const std::vector<Vertex> &vertices)
+{
+    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+    device_buffer stagingBuffer;
+    stagingBuffer.create(m_ctx, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    stagingBuffer.upload(m_ctx, vertices.data(), bufferSize);
+
+    m_vertexBuffer.create(
+        m_ctx, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    stagingBuffer.copy_to(m_ctx, m_vertexBuffer, bufferSize);
+
+    stagingBuffer.destroy(m_ctx);
+}
+
+void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &indices)
+{
+    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+    device_buffer stagingBuffer;
+    stagingBuffer.create(m_ctx, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    stagingBuffer.upload(m_ctx, indices.data(), bufferSize);
+
+    m_indexBuffer.create(m_ctx, bufferSize,
+                         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    stagingBuffer.copy_to(m_ctx, m_indexBuffer, bufferSize);
+
+    stagingBuffer.destroy(m_ctx);
 }
 
 void HelloTriangleApplication::drawFrame()
@@ -947,7 +1081,7 @@ void HelloTriangleApplication::drawFrame()
     // make sure to reset the frame-respective fence
     vkResetFences(m_ctx.device, 1, &m_inFlightFences[m_currentFrame]);
 
-    if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]) !=
+    if (vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]) !=
         VK_SUCCESS) // could use a fence here instead of the semaphores for synchronization
     {
         throw std::runtime_error("Could not submit draw command buffer");
@@ -965,7 +1099,7 @@ void HelloTriangleApplication::drawFrame()
     presentInfo.pImageIndices = &imageIndex;
     presentInfo.pResults = nullptr; // can be used to check every individual swap chai is successful
 
-    result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    result = vkQueuePresentKHR(m_ctx.presentQueue, &presentInfo);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
         framebufferResized = false;
@@ -976,92 +1110,6 @@ void HelloTriangleApplication::drawFrame()
     }
 
     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
-void HelloTriangleApplication::createSyncObjects()
-{
-    m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-    m_imagesInFlight.resize(m_swapChainImages.size(), VK_NULL_HANDLE);
-
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-
-        if (vkCreateSemaphore(m_ctx.device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
-                VK_SUCCESS ||
-            vkCreateSemaphore(m_ctx.device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) !=
-                VK_SUCCESS ||
-            vkCreateFence(m_ctx.device, &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
-
-            throw std::runtime_error("failed to create synchronization objects for a frame!");
-        }
-    }
-}
-
-void HelloTriangleApplication::recreateSwapChain()
-{
-    // window might be minimized
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(m_window, &width, &height);
-    if (width == height == 0)
-        spdlog::info("Window minimized");
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(m_window, &width, &height);
-        glfwWaitEvents();
-    }
-    spdlog::info("Framebuffer resized");
-
-    vkDeviceWaitIdle(m_ctx.device);
-
-    cleanupSwapChain();
-
-    createSwapChain();
-    createImageViews();
-    createRenderPass();
-    createGraphicsPipeline();
-    createFramebuffers();
-    createCommandBuffers();
-}
-
-void HelloTriangleApplication::cleanupSwapChain()
-{
-    for (auto framebuffer : m_swapChainFramebuffers) {
-        vkDestroyFramebuffer(m_ctx.device, framebuffer, nullptr);
-    }
-
-    vkFreeCommandBuffers(m_ctx.device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()),
-                         m_commandBuffers.data());
-
-    vkDestroyPipeline(m_ctx.device, m_graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(m_ctx.device, m_pipelineLayout, nullptr);
-    vkDestroyRenderPass(m_ctx.device, m_renderPass, nullptr);
-
-    for (auto imageView : m_swapChainImageViews) {
-        vkDestroyImageView(m_ctx.device, imageView, nullptr);
-    }
-
-    vkDestroySwapchainKHR(m_ctx.device, m_swapChain, nullptr);
-}
-
-void HelloTriangleApplication::createVertexBuffers()
-{
-    auto vertices = primitives::triangle();
-    m_numVertices = static_cast<uint32_t>(vertices.size());
-
-    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-    m_vertexBuffer = std::make_unique<device_buffer>();
-    m_vertexBuffer->create(m_ctx, bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-    m_vertexBuffer->upload(m_ctx, vertices.data(), bufferSize);
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)

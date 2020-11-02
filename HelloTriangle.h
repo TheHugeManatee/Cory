@@ -80,35 +80,27 @@ class HelloTriangleApplication {
     VkShaderModule createShaderModule(const std::vector<char> &code);
 
     void createGraphicsPipeline();
-
     void createRenderPass();
-
     void createFramebuffers();
-
     void createCommandPool();
-
     void createCommandBuffers();
+    void createSyncObjects();
+    void recreateSwapChain();
+    void cleanupSwapChain();
+    void createGeometry();
+    void createVertexBuffers(const std::vector<Vertex> &vertices);
+    void createIndexBuffer(const std::vector<uint16_t> &indices);
 
     void drawFrame();
-
-    void createSyncObjects();
-
-    void recreateSwapChain();
-
-    void cleanupSwapChain();
-
-    void createVertexBuffers();
 
   private:
     bool isDeviceSuitable(const VkPhysicalDevice &device);
 
   private:
     GLFWwindow *m_window;
-    Context m_ctx;
+    graphics_context m_ctx;
 
     VkSurfaceKHR m_surface;
-    VkQueue m_graphicsQueue;
-    VkQueue m_presentQueue;
     VkSwapchainKHR m_swapChain;
     std::vector<VkImage> m_swapChainImages;
     VkFormat m_swapChainImageFormat;
@@ -131,7 +123,8 @@ class HelloTriangleApplication {
     std::vector<VkFence> m_imagesInFlight;
 
     uint32_t m_numVertices;
-    std::unique_ptr<device_buffer> m_vertexBuffer;
+    device_buffer m_vertexBuffer;
+    device_buffer m_indexBuffer;
 
     VkDebugUtilsMessengerEXT m_debugMessenger;
 };

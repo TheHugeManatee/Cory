@@ -80,22 +80,22 @@ struct Vertex {
 		// uvec4: VK_FORMAT_R32G32B32A32_UINT
 		// double: VK_FORMAT_R64_SFLOAT
 
-
-
 		attributeDescriptions[1].binding = 0;
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-		attributeDescriptions[1].offset = offsetof(Vertex, pos);
+		attributeDescriptions[1].offset = offsetof(Vertex, color);
 
 		return attributeDescriptions;
 	}
 };
 
+
+
 namespace primitives {
-}
 inline std::vector<Vertex> triangle()
 {
 	return std::vector<Vertex>{{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 							   {{0.5f, 0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
 							   {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
+}
 }

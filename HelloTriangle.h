@@ -96,7 +96,12 @@ class HelloTriangleApplication {
 
 	void cleanupSwapChain();
 
-  private:
+
+	void createVertexBuffers();
+
+uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+private:
 	bool isDeviceSuitable(const VkPhysicalDevice &device);
 
   private:
@@ -127,6 +132,10 @@ class HelloTriangleApplication {
 	std::vector<VkSemaphore> m_renderFinishedSemaphores;
 	std::vector<VkFence> m_inFlightFences;
 	std::vector<VkFence> m_imagesInFlight;
+
+	uint32_t m_numVertices;
+	VkBuffer m_vertexBuffer;
+	VkDeviceMemory m_vertexBufferMemory;
 
 	VkDebugUtilsMessengerEXT m_debugMessenger;
 };

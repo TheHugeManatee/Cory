@@ -4,4 +4,5 @@ glslc.exe shaders/triangle.frag -o build/frag.spv
 
 robocopy "build" "out/build/x64-Debug/bin/" *.spv
 robocopy "build" "out/build/x64-Release/bin/" *.spv
+robocopy "build" "build19" *.spv
 pause

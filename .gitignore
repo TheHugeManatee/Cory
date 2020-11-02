@@ -2,3 +2,5 @@ build/
 out/
 .vs/
 CMakeSettings.json
+
+build19/

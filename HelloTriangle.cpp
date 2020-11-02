@@ -466,7 +466,7 @@ void HelloTriangleApplication::createSwapChain()
 	const VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
 	// we use one more image as a buffer to avoid stalls when waiting for the next image to become
-	// avalable
+	// available
 	uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
 	if (swapChainSupport.capabilities.maxImageCount > 0 &&
 		imageCount > swapChainSupport.capabilities.maxImageCount) {
@@ -502,12 +502,12 @@ void HelloTriangleApplication::createSwapChain()
 
 	createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
 	createInfo.compositeAlpha =
-		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // whether the alpha channel should be used to composit
+		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // whether the alpha channel should be used to composite
 										   // on top of other windows
 	createInfo.presentMode = presentMode;
 	createInfo.clipped =
 		VK_TRUE; // false would force pixels to be rendered even if they are occluded. might be
-				 // important if the buffer is read back somehow (screenshots etc?)
+				 // important if the buffer is read back somehow (screen shots etc?)
 
 	createInfo.oldSwapchain = VK_NULL_HANDLE; // old swap chain, required when resizing etc.
 
@@ -570,7 +570,7 @@ VkShaderModule HelloTriangleApplication::createShaderModule(const std::vector<ch
 void HelloTriangleApplication::createGraphicsPipeline()
 {
 	//****************** Shaders ******************
-	auto vertShaderCode = readFile("vert.spv");
+	auto vertShaderCode = readFile("passthrough.spv");
 	auto fragShaderCode = readFile("frag.spv");
 
 	auto vertShaderModule = createShaderModule(vertShaderCode);
@@ -595,12 +595,16 @@ void HelloTriangleApplication::createGraphicsPipeline()
 	VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
 	//****************** Vertex Input ******************
+	auto bindingDescription = Vertex::getBindingDescription();
+	auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
-	vertexInputInfo.pVertexBindingDescriptions = nullptr;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount =
+		static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;

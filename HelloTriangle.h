@@ -6,6 +6,7 @@
 #include "Utils.h"
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 class HelloTriangleApplication {
@@ -130,8 +131,7 @@ class HelloTriangleApplication {
     std::vector<VkFence> m_imagesInFlight;
 
     uint32_t m_numVertices;
-    VkBuffer m_vertexBuffer;
-    VkDeviceMemory m_vertexBufferMemory;
+    std::unique_ptr<device_buffer> m_vertexBuffer;
 
     VkDebugUtilsMessengerEXT m_debugMessenger;
 };

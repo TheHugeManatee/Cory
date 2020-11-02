@@ -8,6 +8,7 @@
 #include <array>
 #include <optional>
 #include <vector>
+#include <memory>
 
 inline VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                              const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
@@ -100,29 +101,51 @@ struct Context {
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
                         VkMemoryPropertyFlags properties);
 
-class Buffer {
+class host_buffer {
   public:
-    Buffer(Context& device, VkDeviceSize size, VkBufferUsageFlags usage,
-           VkMemoryPropertyFlags properties);
-    ~Buffer();
+    host_buffer(size_t size)
+        : m_size{size}
+        , m_data{std::make_unique<uint8_t[]>(m_size)} {
+    };
+    ~host_buffer(){};
 
-    // don't copy this thing
-    Buffer(const Buffer &rhs) = delete;
-    void operator=(const Buffer &rhs) = delete;
-    
-    // we could move technically, but I'm lazy
-    Buffer(Buffer &&rhs) = delete;
-    void operator=(Buffer &&rhs) = delete;
-
-    void upload(void *data, uint32_t size, uint32_t offset);
-    void download();
+    uint8_t *data() { return m_data.get(); };
+    size_t size() { return m_size; }
 
   private:
-    VkBuffer m_buffer;
-    VkDeviceMemory m_bufferMemory;
-    VkDeviceSize m_size;
-    VkBufferUsageFlags m_usage;         // maybe not needed
-    VkMemoryPropertyFlags m_properties; // maybe not needed
+    size_t m_size;
+    std::unique_ptr<uint8_t[]> m_data;
+};
+
+class device_buffer {
+  public:
+    device_buffer();
+    ~device_buffer();
+
+    // don't copy this thing
+    device_buffer(const device_buffer &rhs) = delete;
+    void operator=(const device_buffer &rhs) = delete;
+
+    // we could move technically, but I'm lazy
+    device_buffer(device_buffer &&rhs) = delete;
+    void operator=(device_buffer &&rhs) = delete;
+
+    void create(Context &ctx, VkDeviceSize size, VkBufferUsageFlags usage,
+                VkMemoryPropertyFlags properties);
+    void destroy(Context &ctx);
+
+    void upload(Context &ctx, void *srcData, VkDeviceSize size, VkDeviceSize offset = 0);
+    void download(Context &ctx, host_buffer& buf);
+
+    VkBuffer buffer() { return m_buffer; };
+    VkDeviceMemory memory() { return m_bufferMemory; }
+
+  private:
+    VkBuffer m_buffer{};
+    VkDeviceMemory m_bufferMemory{};
+    VkDeviceSize m_size{};
+    VkBufferUsageFlags m_usage{};         // maybe not needed
+    VkMemoryPropertyFlags m_properties{}; // maybe not needed
 };
 
 namespace primitives {

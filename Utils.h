@@ -91,6 +91,40 @@ struct Vertex {
     }
 };
 
+struct Context {
+    VkInstance instance;
+    VkDevice device;
+    VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+};
+
+uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
+                        VkMemoryPropertyFlags properties);
+
+class Buffer {
+  public:
+    Buffer(Context& device, VkDeviceSize size, VkBufferUsageFlags usage,
+           VkMemoryPropertyFlags properties);
+    ~Buffer();
+
+    // don't copy this thing
+    Buffer(const Buffer &rhs) = delete;
+    void operator=(const Buffer &rhs) = delete;
+    
+    // we could move technically, but I'm lazy
+    Buffer(Buffer &&rhs) = delete;
+    void operator=(Buffer &&rhs) = delete;
+
+    void upload(void *data, uint32_t size, uint32_t offset);
+    void download();
+
+  private:
+    VkBuffer m_buffer;
+    VkDeviceMemory m_bufferMemory;
+    VkDeviceSize m_size;
+    VkBufferUsageFlags m_usage;         // maybe not needed
+    VkMemoryPropertyFlags m_properties; // maybe not needed
+};
+
 namespace primitives {
 inline std::vector<Vertex> triangle()
 {

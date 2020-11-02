@@ -136,7 +136,7 @@ void HelloTriangleApplication::setupInstance()
         createInfo.pNext = nullptr;
     }
 
-    if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS) {
+    if (vkCreateInstance(&createInfo, nullptr, &m_ctx.instance) != VK_SUCCESS) {
         throw std::runtime_error("failed to create instance!");
     }
 }
@@ -149,7 +149,7 @@ void HelloTriangleApplication::mainLoop()
         drawFrame();
     }
 
-    vkDeviceWaitIdle(m_device);
+    vkDeviceWaitIdle(m_ctx.device);
 
     spdlog::info("Leaving main loop.");
 }
@@ -160,25 +160,25 @@ void HelloTriangleApplication::cleanup()
 
     cleanupSwapChain();
 
-    vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
-    vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+    vkDestroyBuffer(m_ctx.device, m_vertexBuffer, nullptr);
+    vkFreeMemory(m_ctx.device, m_vertexBufferMemory, nullptr);
 
     for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
-        vkDestroyFence(m_device, m_inFlightFences[i], nullptr);
+        vkDestroySemaphore(m_ctx.device, m_renderFinishedSemaphores[i], nullptr);
+        vkDestroySemaphore(m_ctx.device, m_imageAvailableSemaphores[i], nullptr);
+        vkDestroyFence(m_ctx.device, m_inFlightFences[i], nullptr);
     }
 
-    vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+    vkDestroyCommandPool(m_ctx.device, m_commandPool, nullptr);
 
-    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
-    vkDestroyDevice(m_device, nullptr);
+    vkDestroySurfaceKHR(m_ctx.instance, m_surface, nullptr);
+    vkDestroyDevice(m_ctx.device, nullptr);
 
     if (enableValidationLayers) {
-        DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
+        DestroyDebugUtilsMessengerEXT(m_ctx.instance, m_debugMessenger, nullptr);
     }
 
-    vkDestroyInstance(m_instance, nullptr);
+    vkDestroyInstance(m_ctx.instance, nullptr);
     glfwDestroyWindow(m_window);
     glfwTerminate();
 
@@ -244,7 +244,7 @@ void HelloTriangleApplication::populateDebugMessengerCreateInfo(
 
 void HelloTriangleApplication::createSurface()
 {
-    if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) != VK_SUCCESS) {
+    if (glfwCreateWindowSurface(m_ctx.instance, m_window, nullptr, &m_surface) != VK_SUCCESS) {
         throw std::runtime_error("Could not create window surface!");
     }
 }
@@ -257,7 +257,7 @@ void HelloTriangleApplication::setupDebugMessenger()
     VkDebugUtilsMessengerCreateInfoEXT createInfo{};
     populateDebugMessengerCreateInfo(createInfo);
 
-    if (CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger) !=
+    if (CreateDebugUtilsMessengerEXT(m_ctx.instance, &createInfo, nullptr, &m_debugMessenger) !=
         VK_SUCCESS) {
         throw std::runtime_error("failed to set up debug messenger!");
     }
@@ -266,23 +266,23 @@ void HelloTriangleApplication::setupDebugMessenger()
 void HelloTriangleApplication::pickPhysicalDevice()
 {
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+    vkEnumeratePhysicalDevices(m_ctx.instance, &deviceCount, nullptr);
     if (deviceCount == 0) {
         throw std::runtime_error("failed to find GPUs with Vulkan support!");
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+    vkEnumeratePhysicalDevices(m_ctx.instance, &deviceCount, devices.data());
 
     spdlog::info("Found {} vulkan devices.", deviceCount);
 
     for (const auto &device : devices) {
         if (isDeviceSuitable(device)) {
-            m_physicalDevice = device;
+            m_ctx.physicalDevice = device;
             break;
         }
     }
 
-    if (m_physicalDevice == VK_NULL_HANDLE) {
+    if (m_ctx.physicalDevice == VK_NULL_HANDLE) {
         throw std::runtime_error("failed to find a suitable GPU!");
     }
 }
@@ -321,7 +321,7 @@ QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(VkPhysicalDevice 
 
 void HelloTriangleApplication::createLogicalDevice()
 {
-    QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
+    QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
@@ -364,13 +364,13 @@ void HelloTriangleApplication::createLogicalDevice()
         createInfo.enabledLayerCount = 0;
     }
 
-    if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) != VK_SUCCESS) {
+    if (vkCreateDevice(m_ctx.physicalDevice, &createInfo, nullptr, &m_ctx.device) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create logical device.");
     }
 
     // store the handle to the graphics and present queues
-    vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
-    vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0, &m_presentQueue);
+    vkGetDeviceQueue(m_ctx.device, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
+    vkGetDeviceQueue(m_ctx.device, indices.presentFamily.value(), 0, &m_presentQueue);
 }
 
 bool HelloTriangleApplication::checkDeviceExtensionSupport(const VkPhysicalDevice &device)
@@ -463,7 +463,7 @@ VkExtent2D HelloTriangleApplication::chooseSwapExtent(const VkSurfaceCapabilitie
 void HelloTriangleApplication::createSwapChain()
 {
     const SwapChainSupportDetails swapChainSupport =
-        querySwapChainSupport(m_physicalDevice, m_surface);
+        querySwapChainSupport(m_ctx.physicalDevice, m_surface);
 
     const VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
     const VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
@@ -489,7 +489,7 @@ void HelloTriangleApplication::createSwapChain()
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // for off-screen rendering, it is possible to use
                                              // VK_IMAGE_USAGE_TRANSFER_DST_BIT instead
 
-    QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
+    QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice);
     uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
 
     // if the swap and present queues are different, the swap chain images have to be shareable
@@ -515,13 +515,13 @@ void HelloTriangleApplication::createSwapChain()
 
     createInfo.oldSwapchain = VK_NULL_HANDLE; // old swap chain, required when resizing etc.
 
-    if (vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapChain) != VK_SUCCESS) {
+    if (vkCreateSwapchainKHR(m_ctx.device, &createInfo, nullptr, &m_swapChain) != VK_SUCCESS) {
         throw std::runtime_error("Could not create swap chain!");
     }
 
-    vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, nullptr);
+    vkGetSwapchainImagesKHR(m_ctx.device, m_swapChain, &imageCount, nullptr);
     m_swapChainImages.resize(imageCount);
-    vkGetSwapchainImagesKHR(m_device, m_swapChain, &imageCount, m_swapChainImages.data());
+    vkGetSwapchainImagesKHR(m_ctx.device, m_swapChain, &imageCount, m_swapChainImages.data());
 
     m_swapChainImageFormat = surfaceFormat.format;
     m_swapChainExtent = extent;
@@ -549,7 +549,7 @@ void HelloTriangleApplication::createImageViews()
         createInfo.subresourceRange.baseArrayLayer = 0;
         createInfo.subresourceRange.layerCount = 1;
 
-        if (vkCreateImageView(m_device, &createInfo, nullptr, &m_swapChainImageViews[i]) !=
+        if (vkCreateImageView(m_ctx.device, &createInfo, nullptr, &m_swapChainImageViews[i]) !=
             VK_SUCCESS) {
             throw std::runtime_error("Could not create swap chain image views");
         }
@@ -564,7 +564,7 @@ VkShaderModule HelloTriangleApplication::createShaderModule(const std::vector<ch
     createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
 
     VkShaderModule shaderModule;
-    if (vkCreateShaderModule(m_device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+    if (vkCreateShaderModule(m_ctx.device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
         throw std::runtime_error("Could not create shader");
     }
 
@@ -708,7 +708,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
-    if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
+    if (vkCreatePipelineLayout(m_ctx.device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
         VK_SUCCESS) {
         throw std::runtime_error("Could not create pipeline layout!");
     }
@@ -732,13 +732,13 @@ void HelloTriangleApplication::createGraphicsPipeline()
                                                       // pipelines when they are similar
     pipelineInfo.basePipelineIndex = -1;
 
-    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+    if (vkCreateGraphicsPipelines(m_ctx.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
                                   &m_graphicsPipeline) != VK_SUCCESS) {
         throw std::runtime_error("Could not create graphics pipeline");
     }
 
-    vkDestroyShaderModule(m_device, vertShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, fragShaderModule, nullptr);
+    vkDestroyShaderModule(m_ctx.device, vertShaderModule, nullptr);
+    vkDestroyShaderModule(m_ctx.device, fragShaderModule, nullptr);
 }
 
 void HelloTriangleApplication::createRenderPass()
@@ -792,7 +792,7 @@ void HelloTriangleApplication::createRenderPass()
     renderPassInfo.dependencyCount = 1;
     renderPassInfo.pDependencies = &dependency;
 
-    if (vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS) {
+    if (vkCreateRenderPass(m_ctx.device, &renderPassInfo, nullptr, &m_renderPass) != VK_SUCCESS) {
         throw std::runtime_error("Could not create render pass");
     }
 }
@@ -813,7 +813,7 @@ void HelloTriangleApplication::createFramebuffers()
         framebufferInfo.height = m_swapChainExtent.height;
         framebufferInfo.layers = 1;
 
-        if (vkCreateFramebuffer(m_device, &framebufferInfo, nullptr, &m_swapChainFramebuffers[i]) !=
+        if (vkCreateFramebuffer(m_ctx.device, &framebufferInfo, nullptr, &m_swapChainFramebuffers[i]) !=
             VK_SUCCESS) {
             throw std::runtime_error("Could not create framebuffer");
         }
@@ -822,7 +822,7 @@ void HelloTriangleApplication::createFramebuffers()
 
 void HelloTriangleApplication::createCommandPool()
 {
-    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_physicalDevice);
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
 
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -830,7 +830,7 @@ void HelloTriangleApplication::createCommandPool()
     poolInfo.flags = 0; // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
                         // or VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT might be necessary
 
-    if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
+    if (vkCreateCommandPool(m_ctx.device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
         throw std::runtime_error("Could not create command pool!");
     }
 }
@@ -846,7 +846,7 @@ void HelloTriangleApplication::createCommandBuffers()
                                                        // but can be called from other cmd buffer
     allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
 
-    if (vkAllocateCommandBuffers(m_device, &allocInfo, m_commandBuffers.data()) != VK_SUCCESS) {
+    if (vkAllocateCommandBuffers(m_ctx.device, &allocInfo, m_commandBuffers.data()) != VK_SUCCESS) {
         throw std::runtime_error("Could not allocate command buffers");
     }
 
@@ -901,11 +901,11 @@ void HelloTriangleApplication::createCommandBuffers()
 void HelloTriangleApplication::drawFrame()
 {
     // fences to sync per-frame draw resources
-    vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    vkWaitForFences(m_ctx.device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
     // acquire image
     uint32_t imageIndex;
-    auto result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX,
+    auto result = vkAcquireNextImageKHR(m_ctx.device, m_swapChain, UINT64_MAX,
                                         m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
                                         &imageIndex);
 
@@ -919,7 +919,7 @@ void HelloTriangleApplication::drawFrame()
 
     // Check if a previous frame is using this image (i.e. there is its fence to wait on)
     if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
-        vkWaitForFences(m_device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+        vkWaitForFences(m_ctx.device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
     }
     // Mark the image as now being in use by this frame
     m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
@@ -944,7 +944,7 @@ void HelloTriangleApplication::drawFrame()
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     // make sure to reset the frame-respective fence
-    vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
+    vkResetFences(m_ctx.device, 1, &m_inFlightFences[m_currentFrame]);
 
     if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]) !=
         VK_SUCCESS) // could use a fence here instead of the semaphores for synchronization
@@ -993,11 +993,11 @@ void HelloTriangleApplication::createSyncObjects()
 
     for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
 
-        if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
+        if (vkCreateSemaphore(m_ctx.device, &semaphoreInfo, nullptr, &m_imageAvailableSemaphores[i]) !=
                 VK_SUCCESS ||
-            vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) !=
+            vkCreateSemaphore(m_ctx.device, &semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) !=
                 VK_SUCCESS ||
-            vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
+            vkCreateFence(m_ctx.device, &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
 
             throw std::runtime_error("failed to create synchronization objects for a frame!");
         }
@@ -1017,7 +1017,7 @@ void HelloTriangleApplication::recreateSwapChain()
     }
     spdlog::info("Framebuffer resized");
 
-    vkDeviceWaitIdle(m_device);
+    vkDeviceWaitIdle(m_ctx.device);
 
     cleanupSwapChain();
 
@@ -1032,21 +1032,21 @@ void HelloTriangleApplication::recreateSwapChain()
 void HelloTriangleApplication::cleanupSwapChain()
 {
     for (auto framebuffer : m_swapChainFramebuffers) {
-        vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+        vkDestroyFramebuffer(m_ctx.device, framebuffer, nullptr);
     }
 
-    vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()),
+    vkFreeCommandBuffers(m_ctx.device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()),
                          m_commandBuffers.data());
 
-    vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-    vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+    vkDestroyPipeline(m_ctx.device, m_graphicsPipeline, nullptr);
+    vkDestroyPipelineLayout(m_ctx.device, m_pipelineLayout, nullptr);
+    vkDestroyRenderPass(m_ctx.device, m_renderPass, nullptr);
 
     for (auto imageView : m_swapChainImageViews) {
-        vkDestroyImageView(m_device, imageView, nullptr);
+        vkDestroyImageView(m_ctx.device, imageView, nullptr);
     }
 
-    vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+    vkDestroySwapchainKHR(m_ctx.device, m_swapChain, nullptr);
 }
 
 void HelloTriangleApplication::createVertexBuffers()
@@ -1062,34 +1062,34 @@ void HelloTriangleApplication::createVertexBuffers()
     bufferInfo.sharingMode =
         VK_SHARING_MODE_EXCLUSIVE; // sharing between queue families - we don't do that
 
-    if (vkCreateBuffer(m_device, &bufferInfo, nullptr, &m_vertexBuffer) != VK_SUCCESS) {
+    if (vkCreateBuffer(m_ctx.device, &bufferInfo, nullptr, &m_vertexBuffer) != VK_SUCCESS) {
         throw std::runtime_error("Could not allocate vertex buffer");
     }
 
     // allocate the actual memory on the physical device
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_device, m_vertexBuffer, &memRequirements);
+    vkGetBufferMemoryRequirements(m_ctx.device, m_vertexBuffer, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex =
-        findMemoryType(memRequirements.memoryTypeBits,
+        findMemoryType(m_ctx.physicalDevice, memRequirements.memoryTypeBits,
                        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_vertexBufferMemory) != VK_SUCCESS) {
+    if (vkAllocateMemory(m_ctx.device, &allocInfo, nullptr, &m_vertexBufferMemory) != VK_SUCCESS) {
         throw std::runtime_error("Could not allocate vertex buffer memory");
     }
 
     // bind the memory to the buffer
-    vkBindBufferMemory(m_device, m_vertexBuffer, m_vertexBufferMemory, 0);
+    vkBindBufferMemory(m_ctx.device, m_vertexBuffer, m_vertexBufferMemory, 0);
 
     // bind the buffer to fill it
     void *data;
-    vkMapMemory(m_device, m_vertexBufferMemory, 0, bufferInfo.size, 0,
+    vkMapMemory(m_ctx.device, m_vertexBufferMemory, 0, bufferInfo.size, 0,
                 &data); // alternately use VK_WHOLE_SIZE
     std::copy(vertices.data(), vertices.data() + m_numVertices, reinterpret_cast<Vertex *>(data));
-    vkUnmapMemory(m_device, m_vertexBufferMemory);
+    vkUnmapMemory(m_ctx.device, m_vertexBufferMemory);
 
     // NOTE: writes are not necessarily visible on the device bc/ caches.
     // either: use memory heap that is HOST_COHERENT
@@ -1098,22 +1098,6 @@ void HelloTriangleApplication::createVertexBuffers()
 
     // NOTE 2: CPU-GPU transfer happens in the background and is guaranteed to complete before the
     // next vkQueueSubmit()
-}
-
-uint32_t HelloTriangleApplication::findMemoryType(uint32_t typeFilter,
-                                                  VkMemoryPropertyFlags properties)
-{
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
-
-    for (uint32_t i{}; i < memProperties.memoryTypeCount; ++i) {
-        if ((typeFilter & (1 << i)) &&
-            (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("Failed to find a suitable memory type!");
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)

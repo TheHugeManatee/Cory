@@ -98,16 +98,13 @@ class HelloTriangleApplication {
 
     void createVertexBuffers();
 
-    uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
   private:
     bool isDeviceSuitable(const VkPhysicalDevice &device);
 
   private:
     GLFWwindow *m_window;
-    VkInstance m_instance;
-    VkDevice m_device;
-    VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
+    Context m_ctx;
+
     VkSurfaceKHR m_surface;
     VkQueue m_graphicsQueue;
     VkQueue m_presentQueue;

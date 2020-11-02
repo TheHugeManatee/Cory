@@ -9,6 +9,7 @@ add_executable(VkTutorial
     HelloTriangle.cpp 
     HelloTriangle.h 
 	Utils.h
+    Utils.cpp
     main.cpp
 )
 conan_target_link_libraries(VkTutorial ${CONAN_LIBS})

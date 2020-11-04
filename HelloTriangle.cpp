@@ -2,9 +2,16 @@
 
 #include <spdlog/spdlog.h>
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <set>
+
+
 
 const std::vector<const char *> HelloTriangleApplication::validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
@@ -72,6 +79,7 @@ void HelloTriangleApplication::initVulkan()
     createSwapChain();
     createImageViews();
     createRenderPass();
+    createDescriptorSetLayout();
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
@@ -159,6 +167,8 @@ void HelloTriangleApplication::cleanup()
     spdlog::info("Cleaning up Vulkan and GLFW..");
 
     cleanupSwapChain();
+
+    vkDestroyDescriptorSetLayout(m_ctx.device, m_descriptorSetLayout, nullptr);
 
     m_vertexBuffer.destroy(m_ctx);
     m_indexBuffer.destroy(m_ctx);
@@ -449,18 +459,17 @@ VkExtent2D HelloTriangleApplication::chooseSwapExtent(const VkSurfaceCapabilitie
     if (capabilities.currentExtent.width != UINT32_MAX) {
         return capabilities.currentExtent;
     }
-    else {
-        int width, height;
-        glfwGetFramebufferSize(m_window, &width, &height);
 
-        VkExtent2D actualExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    int width, height;
+    glfwGetFramebufferSize(m_window, &width, &height);
 
-        actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width,
-                                        capabilities.maxImageExtent.width);
-        actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height,
-                                         capabilities.maxImageExtent.height);
-        return actualExtent;
-    }
+    VkExtent2D actualExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+
+    actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width,
+                                    capabilities.maxImageExtent.width);
+    actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height,
+                                     capabilities.maxImageExtent.height);
+    return actualExtent;
 }
 
 void HelloTriangleApplication::createSwapChain()
@@ -587,7 +596,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
     vertShaderStageInfo.module = vertShaderModule;
-    // entrypoint -- means we can add multiple entry points in one module - yays!
+    // entry point -- means we can add multiple entry points in one module - yays!
     vertShaderStageInfo.pName = "main";
 
     // Note: pSpecializationInfo can be used to set compile time constants - kinda like macros in an
@@ -706,8 +715,8 @@ void HelloTriangleApplication::createGraphicsPipeline()
     // stores/manages shader uniform values
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pSetLayouts = nullptr;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -757,7 +766,7 @@ void HelloTriangleApplication::createRenderPass()
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     //****************** Subpasses ******************
-    // descibe which layout each attachment should be transitioned to
+    // describe which layout each attachment should be transitioned to
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -768,7 +777,7 @@ void HelloTriangleApplication::createRenderPass()
     subpass.pColorAttachments = &colorAttachmentRef;
     // NOTE: the order of attachments directly corresponds to the 'layout(location=0) out vec4
     // color' index in the fragment shader pInputAttachments: attachments that are read from a
-    // shader pResolveAttachments: atachments used for multisampling color attachments
+    // shader pResolveAttachments: attachments used for multisampling color attachments
     // pDepthStencilAttachment: attachment for depth and stencil data
     // pPreserveAttachments: attachments that are not currently used by the subpass but for which
     // the data needs to be preserved.
@@ -962,6 +971,7 @@ void HelloTriangleApplication::recreateSwapChain()
     createRenderPass();
     createGraphicsPipeline();
     createFramebuffers();
+    createUniformBuffers();
     createCommandBuffers();
 }
 
@@ -983,12 +993,16 @@ void HelloTriangleApplication::cleanupSwapChain()
     }
 
     vkDestroySwapchainKHR(m_ctx.device, m_swapChain, nullptr);
+
+    for (auto &buffer : m_uniformBuffers) {
+        buffer.destroy(m_ctx);
+    }
 }
 
 void HelloTriangleApplication::createGeometry()
 {
     auto [vertices, indices] = primitives::quad();
-    m_numVertices = indices.size();
+    m_numVertices = static_cast<uint32_t>(indices.size());
     createVertexBuffers(vertices);
     createIndexBuffer(indices);
 }
@@ -1033,6 +1047,18 @@ void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &in
     stagingBuffer.destroy(m_ctx);
 }
 
+void HelloTriangleApplication::createUniformBuffers() {
+    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+    m_uniformBuffers.resize(m_swapChainImages.size());
+
+    for (size_t i{}; i < m_swapChainImages.size(); ++i) {
+        m_uniformBuffers[i].create(m_ctx, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    }
+}
+
 void HelloTriangleApplication::drawFrame()
 {
     // fences to sync per-frame draw resources
@@ -1048,7 +1074,8 @@ void HelloTriangleApplication::drawFrame()
         recreateSwapChain();
         return;
     }
-    else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         throw std::runtime_error("failed to acquire swap chain image");
     }
 
@@ -1058,6 +1085,8 @@ void HelloTriangleApplication::drawFrame()
     }
     // Mark the image as now being in use by this frame
     m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
+
+    updateUniformBuffer(imageIndex);
 
     // execute command buffer with that image as attachment
     VkSubmitInfo submitInfo{};
@@ -1112,6 +1141,27 @@ void HelloTriangleApplication::drawFrame()
     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
+{
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time =
+        std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    UniformBufferObject ubo;
+    ubo.model =
+        glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+                           glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj =
+        glm::perspective(glm::radians(45.0f),
+                         m_swapChainExtent.width / (float)m_swapChainExtent.height, 0.1f, 10.0f);
+    ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted. otherwise image will be upside down :)
+
+    m_uniformBuffers[m_currentFrame].upload(m_ctx, &ubo, sizeof(ubo));
+}
+
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
 {
     VkPhysicalDeviceProperties deviceProperties;
@@ -1137,5 +1187,25 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
             !swapChainDetails.formats.empty() && !swapChainDetails.presentModes.empty();
     }
 
-    return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported;
+    return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported && swapChainAdequate;
+}
+
+void HelloTriangleApplication::createDescriptorSetLayout()
+{
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    uboLayoutBinding.binding = 0;
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; // or VK_SHADER_STAGE_ALL_GRAPHICS
+    uboLayoutBinding.pImmutableSamplers = nullptr;// idk, something with image sampling
+    
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings = &uboLayoutBinding;
+
+    if (vkCreateDescriptorSetLayout(m_ctx.device, &layoutInfo, nullptr, &m_descriptorSetLayout) !=
+        VK_SUCCESS) {
+        throw std::runtime_error("failed to create descriptor set layout");
+    }
 }

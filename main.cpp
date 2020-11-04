@@ -1,22 +1,21 @@
 #include <spdlog/spdlog.h>
 
 #include <cstdlib>
-#include <stdexcept>
 
 #include "HelloTriangle.h"
 
 int main()
 {
-	HelloTriangleApplication app;
+    HelloTriangleApplication app;
 
-	try {
-		app.run();
-	}
-	catch (const std::exception &e) {
-		spdlog::error("Unhandled exception: {}", e.what());
+    try {
+        app.run();
+    }
+    catch (const std::exception &e) {
+        spdlog::critical("Unhandled exception: {}", e.what());
 
-		return EXIT_FAILURE;
-	}
+        return EXIT_FAILURE;
+    }
 
-	return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }

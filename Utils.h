@@ -8,7 +8,7 @@
 #include <array>
 #include <memory>
 #include <optional>
-#include <stdint.h>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -22,9 +22,7 @@ inline VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
     }
-    else {
-        return VK_ERROR_EXTENSION_NOT_PRESENT;
-    }
+    return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 
 inline void DestroyDebugUtilsMessengerEXT(VkInstance instance,
@@ -180,3 +178,9 @@ inline mesh quad()
     return {vertices, indices};
 }
 } // namespace primitives
+
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};

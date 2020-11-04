@@ -86,12 +86,16 @@ class HelloTriangleApplication {
     void createCommandBuffers();
     void createSyncObjects();
     void recreateSwapChain();
-    void cleanupSwapChain();
+    void cleanupSwapChain(); 
     void createGeometry();
     void createVertexBuffers(const std::vector<Vertex> &vertices);
     void createIndexBuffer(const std::vector<uint16_t> &indices);
+    void createUniformBuffers();
+    void createDescriptorSetLayout();
 
     void drawFrame();
+
+void updateUniformBuffer(uint32_t imageIndex);
 
   private:
     bool isDeviceSuitable(const VkPhysicalDevice &device);
@@ -108,12 +112,14 @@ class HelloTriangleApplication {
     std::vector<VkImageView> m_swapChainImageViews;
 
     VkRenderPass m_renderPass;
+    VkDescriptorSetLayout m_descriptorSetLayout;
     VkPipelineLayout m_pipelineLayout;
     VkPipeline m_graphicsPipeline;
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
     VkCommandPool m_commandPool;
     std::vector<VkCommandBuffer> m_commandBuffers;
+    std::vector<device_buffer> m_uniformBuffers;
 
     size_t m_currentFrame{};
 

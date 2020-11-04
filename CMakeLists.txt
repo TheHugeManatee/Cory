@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 2.8.12)
-project(VulkanTutorial)
+cmake_minimum_required(VERSION 3.12)
+project(VulkanTutorial CXX)
+
+set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-checks=*")
 
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()

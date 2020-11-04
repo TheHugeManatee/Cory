@@ -127,11 +127,11 @@ class device_buffer {
 
     // don't copy this thing
     device_buffer(const device_buffer &rhs) = delete;
-    void operator=(const device_buffer &rhs) = delete;
+    device_buffer& operator=(const device_buffer &rhs) = delete;
 
-    // we could move technically, but I'm lazy
-    device_buffer(device_buffer &&rhs) = delete;
-    void operator=(device_buffer &&rhs) = delete;
+    // we could move technically
+    device_buffer(device_buffer &&rhs) = default;
+    device_buffer& operator=(device_buffer &&rhs) = default;
 
     void create(graphics_context &ctx, VkDeviceSize size, VkBufferUsageFlags usage,
                 VkMemoryPropertyFlags properties);

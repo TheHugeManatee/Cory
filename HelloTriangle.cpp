@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -80,6 +81,9 @@ void HelloTriangleApplication::initVulkan()
     createImageViews();
     createRenderPass();
     createDescriptorSetLayout();
+    createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
@@ -586,7 +590,7 @@ VkShaderModule HelloTriangleApplication::createShaderModule(const std::vector<ch
 void HelloTriangleApplication::createGraphicsPipeline()
 {
     //****************** Shaders ******************
-    auto vertShaderCode = readFile("passthrough.spv");
+    auto vertShaderCode = readFile("default-vert.spv");
     auto fragShaderCode = readFile("frag.spv");
 
     auto vertShaderModule = createShaderModule(vertShaderCode);
@@ -659,7 +663,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
         VK_POLYGON_MODE_FILL; // _LINE and _POINT are alternatives, but require enabling GPU feature
     rasterizer.lineWidth = 1.0f; // >1.0 requires 'wideLines' GPU feature
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f;
     rasterizer.depthBiasClamp = 0.0f;
@@ -911,6 +915,10 @@ void HelloTriangleApplication::createCommandBuffers()
 
         vkCmdBindIndexBuffer(cmdBuf, m_indexBuffer.buffer(), 0, VK_INDEX_TYPE_UINT16);
 
+        vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1,
+                                &descriptorSets[i], 0, nullptr);
+
+
         // draw three vertices
         vkCmdDrawIndexed(cmdBuf, m_numVertices, 1, 0, 0, 0);
 
@@ -972,6 +980,8 @@ void HelloTriangleApplication::recreateSwapChain()
     createGraphicsPipeline();
     createFramebuffers();
     createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
 }
 
@@ -980,6 +990,7 @@ void HelloTriangleApplication::cleanupSwapChain()
     for (auto framebuffer : m_swapChainFramebuffers) {
         vkDestroyFramebuffer(m_ctx.device, framebuffer, nullptr);
     }
+    vkDestroyDescriptorPool(m_ctx.device, m_descriptorPool, nullptr);
 
     vkFreeCommandBuffers(m_ctx.device, m_commandPool,
                          static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
@@ -1159,7 +1170,65 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
                          m_swapChainExtent.width / (float)m_swapChainExtent.height, 0.1f, 10.0f);
     ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted. otherwise image will be upside down :)
 
-    m_uniformBuffers[m_currentFrame].upload(m_ctx, &ubo, sizeof(ubo));
+    m_uniformBuffers[imageIndex].upload(m_ctx, &ubo, sizeof(ubo));
+}
+
+void HelloTriangleApplication::createDescriptorPool()
+{ VkDescriptorPoolSize poolSize{};
+    poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSize.descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = 1;
+    poolInfo.pPoolSizes = &poolSize;
+    // enables creation and freeing of individual descriptor sets -- we don't care for that right now
+    //poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; 
+
+    poolInfo.maxSets = static_cast<uint32_t>(m_swapChainImages.size());
+    
+    if (vkCreateDescriptorPool(m_ctx.device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
+        throw std::runtime_error("Could not create descriptor pool");
+    }
+
+}
+
+void HelloTriangleApplication::createDescriptorSets()
+{
+    std::vector<VkDescriptorSetLayout> layouts(m_swapChainImages.size(), m_descriptorSetLayout);
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = m_descriptorPool;
+    allocInfo.descriptorSetCount = static_cast<uint32_t>(m_swapChainImages.size());
+    allocInfo.pSetLayouts = layouts.data();
+
+    // NOTE: descriptor sets are freed implicitly when the pool is freed.
+    descriptorSets.resize(m_swapChainImages.size());
+    if(vkAllocateDescriptorSets(m_ctx.device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+        throw std::runtime_error("Could not allocate descriptor sets");
+    }
+
+    // populate every descriptor
+    for (size_t i{}; i < m_swapChainImages.size(); ++i) {
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = m_uniformBuffers[i].buffer();
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(UniformBufferObject); // access range, could be VK_WHOLE_SIZE
+
+        VkWriteDescriptorSet descriptorWrite{};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descriptorSets[i];
+        descriptorWrite.dstBinding = 0;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = &bufferInfo;
+        descriptorWrite.pImageInfo = nullptr;
+        descriptorWrite.pTexelBufferView = nullptr;
+
+        vkUpdateDescriptorSets(m_ctx.device, 1, &descriptorWrite, 0, nullptr);
+    }
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)

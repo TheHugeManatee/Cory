@@ -97,7 +97,11 @@ class HelloTriangleApplication {
 
 void updateUniformBuffer(uint32_t imageIndex);
 
-  private:
+void createDescriptorPool();
+
+void createDescriptorSets();
+
+private:
     bool isDeviceSuitable(const VkPhysicalDevice &device);
 
   private:
@@ -113,6 +117,8 @@ void updateUniformBuffer(uint32_t imageIndex);
 
     VkRenderPass m_renderPass;
     VkDescriptorSetLayout m_descriptorSetLayout;
+    VkDescriptorPool m_descriptorPool;
+    std::vector<VkDescriptorSet> descriptorSets;
     VkPipelineLayout m_pipelineLayout;
     VkPipeline m_graphicsPipeline;
     std::vector<VkFramebuffer> m_swapChainFramebuffers;

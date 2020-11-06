@@ -78,17 +78,22 @@ void HelloTriangleApplication::initVulkan()
     createSwapChain();
     createImageViews();
     createRenderPass();
+    
     createDescriptorSetLayout();
     createUniformBuffers();
     createDescriptorPool();
     createDescriptorSets();
+    createCommandPool();
+    
     createGraphicsPipeline();
     createFramebuffers();
-    createCommandPool();
+    createSyncObjects();
+
     createTextureImage();
     createGeometry();
+
     createCommandBuffers();
-    createSyncObjects();
+
 }
 
 void HelloTriangleApplication::setupInstance()
@@ -175,6 +180,7 @@ void HelloTriangleApplication::cleanup()
 
     m_vertexBuffer.destroy(m_ctx);
     m_indexBuffer.destroy(m_ctx);
+    m_texture.destroy(m_ctx);
     // vkDestroyBuffer(m_ctx.device, m_vertexBuffer, nullptr);
     // vkFreeMemory(m_ctx.device, m_vertexBufferMemory, nullptr);
 
@@ -917,7 +923,6 @@ void HelloTriangleApplication::createCommandBuffers()
         vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1,
                                 &descriptorSets[i], 0, nullptr);
 
-
         // draw three vertices
         vkCmdDrawIndexed(cmdBuf, m_numVertices, 1, 0, 0, 0);
 
@@ -1057,7 +1062,8 @@ void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &in
     stagingBuffer.destroy(m_ctx);
 }
 
-void HelloTriangleApplication::createUniformBuffers() {
+void HelloTriangleApplication::createUniformBuffers()
+{
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
     m_uniformBuffers.resize(m_swapChainImages.size());
@@ -1167,13 +1173,15 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     ubo.proj =
         glm::perspective(glm::radians(45.0f),
                          m_swapChainExtent.width / (float)m_swapChainExtent.height, 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted. otherwise image will be upside down :)
+    ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted.
+                          // otherwise image will be upside down :)
 
     m_uniformBuffers[imageIndex].upload(m_ctx, &ubo, sizeof(ubo));
 }
 
 void HelloTriangleApplication::createDescriptorPool()
-{ VkDescriptorPoolSize poolSize{};
+{
+    VkDescriptorPoolSize poolSize{};
     poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSize.descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
 
@@ -1181,15 +1189,15 @@ void HelloTriangleApplication::createDescriptorPool()
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = 1;
     poolInfo.pPoolSizes = &poolSize;
-    // enables creation and freeing of individual descriptor sets -- we don't care for that right now
-    //poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; 
+    // enables creation and freeing of individual descriptor sets -- we don't care for that right
+    // now
+    // poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     poolInfo.maxSets = static_cast<uint32_t>(m_swapChainImages.size());
-    
+
     if (vkCreateDescriptorPool(m_ctx.device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("Could not create descriptor pool");
     }
-
 }
 
 void HelloTriangleApplication::createDescriptorSets()
@@ -1204,7 +1212,7 @@ void HelloTriangleApplication::createDescriptorSets()
 
     // NOTE: descriptor sets are freed implicitly when the pool is freed.
     descriptorSets.resize(m_swapChainImages.size());
-    if(vkAllocateDescriptorSets(m_ctx.device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+    if (vkAllocateDescriptorSets(m_ctx.device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
         throw std::runtime_error("Could not allocate descriptor sets");
     }
 
@@ -1255,7 +1263,8 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
             !swapChainDetails.formats.empty() && !swapChainDetails.presentModes.empty();
     }
 
-    return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported && swapChainAdequate;
+    return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported &&
+           swapChainAdequate;
 }
 
 void HelloTriangleApplication::createTextureImage()
@@ -1265,7 +1274,25 @@ void HelloTriangleApplication::createTextureImage()
     if (!image.data) {
         throw std::runtime_error("Could not load texture image from file!");
     }
+
+    device_buffer stagingBuffer;
+    stagingBuffer.create(m_ctx, image.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    stagingBuffer.upload(m_ctx, image.data, image.size());
+
+    m_texture.create(m_ctx, {image.width, image.height, 1}, VK_IMAGE_TYPE_2D,
+                     VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+
+    //
+    stagingBuffer.destroy(m_ctx);
 }
+
+
 
 void HelloTriangleApplication::createDescriptorSetLayout()
 {
@@ -1273,9 +1300,10 @@ void HelloTriangleApplication::createDescriptorSetLayout()
     uboLayoutBinding.binding = 0;
     uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; // or VK_SHADER_STAGE_ALL_GRAPHICS
-    uboLayoutBinding.pImmutableSamplers = nullptr;// idk, something with image sampling
-    
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                  VK_SHADER_STAGE_FRAGMENT_BIT; // or VK_SHADER_STAGE_ALL_GRAPHICS
+    uboLayoutBinding.pImmutableSamplers = nullptr; // idk, something with image sampling
+
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = 1;

@@ -92,6 +92,10 @@ class HelloTriangleApplication {
     void createIndexBuffer(const std::vector<uint16_t> &indices);
     void createUniformBuffers();
     void createDescriptorSetLayout();
+    void createTextureImage();
+
+    void beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
 
     void drawFrame();
 
@@ -138,6 +142,8 @@ private:
     device_buffer m_vertexBuffer;
     device_buffer m_indexBuffer;
 
+    device_image m_texture;
+
     VkDebugUtilsMessengerEXT m_debugMessenger;
-    void createTextureImage();
+    
 };

@@ -15,6 +15,12 @@
 
 #include <stb_image.h>
 
+struct Vertex;
+class host_buffer;
+class device_buffer;
+class device_image;
+struct stbi_image;
+
 inline VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                              const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
                                              const VkAllocationCallbacks *pAllocator,
@@ -145,6 +151,7 @@ class device_buffer {
     void download(graphics_context &ctx, host_buffer &buf);
 
     void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
+    void copy_to(graphics_context &ctx, const device_image&rhs);
 
     VkBuffer buffer() { return m_buffer; };
     VkDeviceMemory memory() { return m_bufferMemory; }
@@ -155,6 +162,43 @@ class device_buffer {
     VkDeviceSize m_size{};
     VkBufferUsageFlags m_usage{};         // maybe not needed
     VkMemoryPropertyFlags m_properties{}; // maybe not needed
+};
+
+class device_image {
+  public:
+    device_image();
+    ~device_image();
+
+    // don't copy this thing
+    device_image(const device_image &rhs) = delete;
+    device_image &operator=(const device_image &rhs) = delete;
+
+    // we could move technically
+    device_image(device_image &&rhs) = default;
+    device_image &operator=(device_image &&rhs) = default;
+
+    void create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format,
+                VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
+    void destroy(graphics_context &ctx);
+
+    void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
+                VkDeviceSize offset = 0);
+    //void download(graphics_context &ctx, host_buffer &buf);
+    //void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
+
+    void transitionLayout(graphics_context& ctx, VkImageLayout newLayout);
+
+    VkImage image() const { return m_image; };
+    VkDeviceMemory memory() const { return m_imageMemory; }
+    glm::uvec3 size() const { return m_size; }
+
+  private:
+    VkImage m_image{};
+    VkDeviceMemory m_imageMemory{};
+    glm::uvec3 m_size{};
+    uint32_t m_mipLevels{};
+    VkFormat m_format{};
+    VkImageLayout m_currentLayout{};
 };
 
 namespace primitives {
@@ -192,10 +236,22 @@ struct stbi_image {
   public:
     explicit stbi_image(const std::string &file);
     ~stbi_image();
-    size_t size() { return size_t(width) * size_t(height)* 4; }
+    size_t size() { return size_t(width) * size_t(height) * 4; }
 
     int width{};
     int height{};
     int channels{};
     unsigned char *data{};
+};
+
+class SingleTimeCommandBuffer {
+  public:
+    SingleTimeCommandBuffer(graphics_context &ctx);
+    ~SingleTimeCommandBuffer();
+
+    VkCommandBuffer &buffer() { return m_commandBuffer; }
+
+  private:
+    graphics_context m_ctx;
+    VkCommandBuffer m_commandBuffer;
 };

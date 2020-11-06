@@ -4,3 +4,5 @@ out/
 CMakeSettings.json
 
 build19/
+
+*.spv

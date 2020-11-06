@@ -139,4 +139,5 @@ private:
     device_buffer m_indexBuffer;
 
     VkDebugUtilsMessengerEXT m_debugMessenger;
+    void createTextureImage();
 };

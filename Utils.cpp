@@ -1,3 +1,5 @@
+#define STB_IMAGE_IMPLEMENTATION
+
 #include "Utils.h"
 
 #include <stdexcept>
@@ -124,3 +126,9 @@ void device_buffer::copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceS
 
     vkFreeCommandBuffers(ctx.device, ctx.transientCmdPool, 1, &copyCmdBuffer);
 }
+
+stbi_image::stbi_image(const std::string &file) {
+    data = stbi_load(file.c_str(), &width, &height, &channels, STBI_rgb_alpha);
+}
+
+stbi_image::~stbi_image() { stbi_image_free(data); }

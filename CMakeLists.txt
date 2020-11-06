@@ -16,7 +16,10 @@ add_executable(VkTutorial
 )
 conan_target_link_libraries(VkTutorial ${CONAN_LIBS})
 
-target_include_directories (VkTutorial PUBLIC ${VULKAN_INCLUDE_DIRS})
+set(VKEX_RESOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resource CACHE PATH "Directory to resources (textures/shaders)")
+
+target_compile_definitions(VkTutorial PRIVATE "RESOURCE_DIR=\"${VKEX_RESOURCE_DIR}\"")
+target_include_directories (VkTutorial PUBLIC ${VULKAN_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty)
 target_link_libraries (VkTutorial ${Vulkan_LIBRARIES})
 
 

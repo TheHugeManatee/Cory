@@ -12,8 +12,6 @@
 #include <fstream>
 #include <set>
 
-
-
 const std::vector<const char *> HelloTriangleApplication::validationLayers = {
     "VK_LAYER_KHRONOS_validation"};
 
@@ -25,7 +23,7 @@ static std::vector<char> readFile(const std::string &filename)
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
+        throw std::runtime_error(fmt::format("failed to open file {}", filename));
     }
     size_t fileSize = (size_t)file.tellg();
     std::vector<char> buffer(fileSize);
@@ -87,6 +85,7 @@ void HelloTriangleApplication::initVulkan()
     createGraphicsPipeline();
     createFramebuffers();
     createCommandPool();
+    createTextureImage();
     createGeometry();
     createCommandBuffers();
     createSyncObjects();
@@ -590,8 +589,8 @@ VkShaderModule HelloTriangleApplication::createShaderModule(const std::vector<ch
 void HelloTriangleApplication::createGraphicsPipeline()
 {
     //****************** Shaders ******************
-    auto vertShaderCode = readFile("default-vert.spv");
-    auto fragShaderCode = readFile("frag.spv");
+    auto vertShaderCode = readFile(RESOURCE_DIR "/default-vert.spv");
+    auto fragShaderCode = readFile(RESOURCE_DIR "/frag.spv");
 
     auto vertShaderModule = createShaderModule(vertShaderCode);
     auto fragShaderModule = createShaderModule(fragShaderCode);
@@ -1257,6 +1256,15 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
     }
 
     return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported && swapChainAdequate;
+}
+
+void HelloTriangleApplication::createTextureImage()
+{
+    stbi_image image(RESOURCE_DIR "/manatee.jpg");
+
+    if (!image.data) {
+        throw std::runtime_error("Could not load texture image from file!");
+    }
 }
 
 void HelloTriangleApplication::createDescriptorSetLayout()

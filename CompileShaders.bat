@@ -1,10 +1,6 @@
-glslc.exe shaders/triangleimplicit.vert -o build/triangle_vert.spv
-glslc.exe shaders/passthrough.vert -o build/passthrough.spv
-glslc.exe shaders/triangle.frag -o build/frag.spv
-glslc.exe shaders/default.vert -o build/default-vert.spv
+glslc.exe shaders/triangleimplicit.vert -o resource/triangle_vert.spv
+glslc.exe shaders/passthrough.vert -o resource/passthrough.spv
+glslc.exe shaders/triangle.frag -o resource/frag.spv
+glslc.exe shaders/default.vert -o resource/default-vert.spv
 
-
-robocopy "build" "out/build/x64-Debug/bin/" *.spv
-robocopy "build" "out/build/x64-Release/bin/" *.spv
-robocopy "build" "build19" *.spv
 pause

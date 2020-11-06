@@ -6,11 +6,14 @@
 #include <glm/glm.hpp>
 
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <optional>
-#include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
+
+#include <stb_image.h>
 
 inline VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                              const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
@@ -127,11 +130,11 @@ class device_buffer {
 
     // don't copy this thing
     device_buffer(const device_buffer &rhs) = delete;
-    device_buffer& operator=(const device_buffer &rhs) = delete;
+    device_buffer &operator=(const device_buffer &rhs) = delete;
 
     // we could move technically
     device_buffer(device_buffer &&rhs) = default;
-    device_buffer& operator=(device_buffer &&rhs) = default;
+    device_buffer &operator=(device_buffer &&rhs) = default;
 
     void create(graphics_context &ctx, VkDeviceSize size, VkBufferUsageFlags usage,
                 VkMemoryPropertyFlags properties);
@@ -183,4 +186,16 @@ struct UniformBufferObject {
     glm::mat4 model;
     glm::mat4 view;
     glm::mat4 proj;
+};
+
+struct stbi_image {
+  public:
+    explicit stbi_image(const std::string &file);
+    ~stbi_image();
+    size_t size() { return size_t(width) * size_t(height)* 4; }
+
+    int width{};
+    int height{};
+    int channels{};
+    unsigned char *data{};
 };

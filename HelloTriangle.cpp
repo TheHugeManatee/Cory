@@ -1287,8 +1287,10 @@ void HelloTriangleApplication::createTextureImage()
                      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
+    m_texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    stagingBuffer.copy_to(m_ctx, m_texture);
+    m_texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    //
     stagingBuffer.destroy(m_ctx);
 }
 

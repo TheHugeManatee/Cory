@@ -2,6 +2,7 @@
 
 #include "Utils.h"
 
+#include <fmt/format.h>
 #include <stdexcept>
 
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
@@ -118,8 +119,6 @@ void device_buffer::copy_to(graphics_context &ctx, const device_image &rhs)
 
     vkCmdCopyBufferToImage(cmdBuf.buffer(), m_buffer, rhs.image(),
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-
 }
 
 stbi_image::stbi_image(const std::string &file)
@@ -193,7 +192,7 @@ void device_image::upload(graphics_context &ctx, const void *srcData, VkDeviceSi
 
 void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayout)
 {
-    if (m_currentLayout = newLayout)
+    if (m_currentLayout == newLayout)
         return;
 
     SingleTimeCommandBuffer cmdBuf(ctx);
@@ -212,11 +211,32 @@ void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayo
     barrier.subresourceRange.layerCount = 1;
     barrier.subresourceRange.levelCount = 1;
 
-    barrier.srcAccessMask = 0; // TODO
-    barrier.dstAccessMask = 0; // TODO
+    VkPipelineStageFlags sourceStage;
+    VkPipelineStageFlags destinationStage;
 
-    vkCmdPipelineBarrier(cmdBuf.buffer(), 0 /*TODO*/, 0 /*TODO*/, 0, 0, nullptr, 0, nullptr, 1,
-                         &barrier);
+    if (m_currentLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if (m_currentLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+             newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else {
+        throw std::runtime_error(fmt::format("unsupported layout transition: from {} to {}",
+                                             m_currentLayout, newLayout));
+    }
+
+    vkCmdPipelineBarrier(cmdBuf.buffer(), sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr,
+                         1, &barrier);
 
     m_currentLayout = newLayout;
 }

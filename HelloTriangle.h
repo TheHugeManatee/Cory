@@ -86,7 +86,7 @@ class HelloTriangleApplication {
     void createCommandBuffers();
     void createSyncObjects();
     void recreateSwapChain();
-    void cleanupSwapChain(); 
+    void cleanupSwapChain();
     void createGeometry();
     void createVertexBuffers(const std::vector<Vertex> &vertices);
     void createIndexBuffer(const std::vector<uint16_t> &indices);
@@ -94,18 +94,15 @@ class HelloTriangleApplication {
     void createDescriptorSetLayout();
     void createTextureImage();
 
-    void beginSingleTimeCommands();
-    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
-
     void drawFrame();
 
-void updateUniformBuffer(uint32_t imageIndex);
+    void updateUniformBuffer(uint32_t imageIndex);
 
-void createDescriptorPool();
+    void createDescriptorPool();
 
-void createDescriptorSets();
+    void createDescriptorSets();
 
-private:
+  private:
     bool isDeviceSuitable(const VkPhysicalDevice &device);
 
   private:
@@ -145,5 +142,4 @@ private:
     device_image m_texture;
 
     VkDebugUtilsMessengerEXT m_debugMessenger;
-    
 };

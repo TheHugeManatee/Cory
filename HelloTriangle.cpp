@@ -77,16 +77,18 @@ void HelloTriangleApplication::initVulkan()
     createLogicalDevice();
 
     createTransientCommandPool();
-    
+
     createSwapChain();
     createImageViews();
     createRenderPass();
 
-
     createFramebuffers();
     createSyncObjects();
 
-    createTextureImage();
+    m_texture = createTextureImage(RESOURCE_DIR "/manatee.jpg", VK_FILTER_LINEAR,
+                                   VK_SAMPLER_ADDRESS_MODE_REPEAT);
+    m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", VK_FILTER_NEAREST,
+                                    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
     createGeometry();
 
     createDescriptorSetLayout();
@@ -199,6 +201,7 @@ void HelloTriangleApplication::cleanup()
     m_vertexBuffer.destroy(m_ctx);
     m_indexBuffer.destroy(m_ctx);
     m_texture.destroy(m_ctx);
+    m_texture2.destroy(m_ctx);
     // vkDestroyBuffer(m_ctx.device, m_vertexBuffer, nullptr);
     // vkFreeMemory(m_ctx.device, m_vertexBufferMemory, nullptr);
 
@@ -615,7 +618,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
 {
     //****************** Shaders ******************
     auto vertShaderCode = readFile(RESOURCE_DIR "/default-vert.spv");
-    auto fragShaderCode = readFile(RESOURCE_DIR "/frag.spv");
+    auto fragShaderCode = readFile(RESOURCE_DIR "/manatee.spv");
 
     auto vertShaderModule = createShaderModule(vertShaderCode);
     auto fragShaderModule = createShaderModule(fragShaderCode);
@@ -1233,10 +1236,14 @@ void HelloTriangleApplication::createDescriptorSets()
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(UniformBufferObject); // access range, could be VK_WHOLE_SIZE
 
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageView = m_texture.view();
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.sampler = m_texture.sampler();
+        std::array<VkDescriptorImageInfo, 2> imageInfos;
+        imageInfos[0].imageView = m_texture.view();
+        imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[0].sampler = m_texture.sampler();
+
+        imageInfos[1].imageView = m_texture2.view();
+        imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[1].sampler = m_texture2.sampler();
 
         std::array<VkWriteDescriptorSet, 2> descriptorWrites;
         descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -1255,9 +1262,9 @@ void HelloTriangleApplication::createDescriptorSets()
         descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].dstArrayElement = 0;
         descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[1].descriptorCount = 1;
+        descriptorWrites[1].descriptorCount = static_cast<uint32_t>(imageInfos.size());
         descriptorWrites[1].pBufferInfo = nullptr;
-        descriptorWrites[1].pImageInfo = &imageInfo;
+        descriptorWrites[1].pImageInfo = imageInfos.data();
         descriptorWrites[1].pTexelBufferView = nullptr;
         descriptorWrites[1].pNext = nullptr;
 
@@ -1299,9 +1306,12 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
            swapChainAdequate && supportedFeatures.samplerAnisotropy;
 }
 
-void HelloTriangleApplication::createTextureImage()
+device_image HelloTriangleApplication::createTextureImage(std::string textureFilename,
+                                                          VkFilter filter,
+                                                          VkSamplerAddressMode addressMode)
 {
-    stbi_image image(RESOURCE_DIR "/manatee.jpg");
+    stbi_image image(textureFilename.c_str());
+    device_image texture;
 
     if (!image.data) {
         throw std::runtime_error("Could not load texture image from file!");
@@ -1314,16 +1324,18 @@ void HelloTriangleApplication::createTextureImage()
 
     stagingBuffer.upload(m_ctx, image.data, image.size());
 
-    m_texture.create(m_ctx, {image.width, image.height, 1}, VK_IMAGE_TYPE_2D,
-                     VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
-                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    texture.create(m_ctx, {image.width, image.height, 1}, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB,
+                   VK_IMAGE_TILING_OPTIMAL, filter, addressMode,
+                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    m_texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-    stagingBuffer.copy_to(m_ctx, m_texture);
-    m_texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    stagingBuffer.copy_to(m_ctx, texture);
+    texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     stagingBuffer.destroy(m_ctx);
+
+    return texture;
 }
 
 void HelloTriangleApplication::createDescriptorSetLayout()
@@ -1338,7 +1350,7 @@ void HelloTriangleApplication::createDescriptorSetLayout()
 
     VkDescriptorSetLayoutBinding samplerBinding{};
     samplerBinding.binding = 1;
-    samplerBinding.descriptorCount = 1;
+    samplerBinding.descriptorCount = 2;
     samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     samplerBinding.pImmutableSamplers = nullptr;

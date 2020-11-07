@@ -183,8 +183,8 @@ class device_image {
     device_image(device_image &&rhs) = default;
     device_image &operator=(device_image &&rhs) = default;
 
-    void create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format,
-                VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
+    void create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format, 
+                VkImageTiling tiling, VkFilter filter, VkSamplerAddressMode addressMode, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
     void destroy(graphics_context &ctx);
 
     void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,

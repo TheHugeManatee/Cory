@@ -131,8 +131,8 @@ stbi_image::~stbi_image() { stbi_image_free(data); }
 
 device_image::device_image() {}
 
-void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format,
-                          VkImageTiling tiling, VkImageUsageFlags usage,
+void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format, 
+                          VkImageTiling tiling, VkFilter filter, VkSamplerAddressMode addressMode, VkImageUsageFlags usage,
                           VkMemoryPropertyFlags properties)
 {
     m_size = size;
@@ -197,11 +197,11 @@ void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType ty
     // image sampler
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.magFilter = filter;
+    samplerInfo.minFilter = filter;
+    samplerInfo.addressModeU = addressMode;
+    samplerInfo.addressModeV = addressMode;
+    samplerInfo.addressModeW = addressMode;
     samplerInfo.anisotropyEnable = VK_TRUE;
     samplerInfo.maxAnisotropy = 16.0f;
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;

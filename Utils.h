@@ -151,7 +151,7 @@ class device_buffer {
     void download(graphics_context &ctx, host_buffer &buf);
 
     void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
-    void copy_to(graphics_context &ctx, const device_image&rhs);
+    void copy_to(graphics_context &ctx, const device_image &rhs);
 
     VkBuffer buffer() { return m_buffer; };
     VkDeviceMemory memory() { return m_bufferMemory; }
@@ -183,13 +183,15 @@ class device_image {
 
     void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
                 VkDeviceSize offset = 0);
-    //void download(graphics_context &ctx, host_buffer &buf);
-    //void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
+    // void download(graphics_context &ctx, host_buffer &buf);
+    // void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
 
-    void transitionLayout(graphics_context& ctx, VkImageLayout newLayout);
+    void transitionLayout(graphics_context &ctx, VkImageLayout newLayout);
 
     VkImage image() const { return m_image; };
     VkDeviceMemory memory() const { return m_imageMemory; }
+    VkImageView view() const { return m_imageView; }
+    VkSampler sampler() const { return m_sampler; }
     glm::uvec3 size() const { return m_size; }
 
   private:
@@ -199,6 +201,8 @@ class device_image {
     uint32_t m_mipLevels{};
     VkFormat m_format{};
     VkImageLayout m_currentLayout{};
+    VkImageView m_imageView;
+    VkSampler m_sampler;
 };
 
 namespace primitives {

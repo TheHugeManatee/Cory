@@ -2,6 +2,7 @@
 
 #include "Utils.h"
 
+#include <cassert>
 #include <fmt/format.h>
 #include <stdexcept>
 
@@ -139,6 +140,7 @@ void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType ty
     m_format = format;
     m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
+    // create image object
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = type; // i.e. 1D/2D/3D
@@ -158,6 +160,7 @@ void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType ty
         throw std::runtime_error("failed to create image!");
     }
 
+    // create and bind image memory
     VkMemoryRequirements memRequirements;
     vkGetImageMemoryRequirements(ctx.device, m_image, &memRequirements);
 
@@ -172,10 +175,53 @@ void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType ty
     }
 
     vkBindImageMemory(ctx.device, m_image, m_imageMemory, 0);
+
+    // image view
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.format = m_format;
+    viewInfo.image = m_image;
+    assert(type == VK_IMAGE_TYPE_2D &&
+           "TODO: creating views for image types other than 2D not implemented!");
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+        throw std::runtime_error("Could not create image view");
+    }
+
+    // image sampler
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+    samplerInfo.maxAnisotropy = 16.0f;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE; // [0,1] or [0, numberOfTexels]
+    samplerInfo.compareEnable = VK_FALSE;           // necessary for PCF shadow maps
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f; // we don't have mips
+    samplerInfo.maxLod = 0.0f;
+
+    if (vkCreateSampler(ctx.device, &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS) {
+        throw std::runtime_error("Could not create texture sampler!");
+    }
 }
 
 void device_image::destroy(graphics_context &ctx)
 {
+    vkDestroySampler(ctx.device, m_sampler, nullptr);
+    vkDestroyImageView(ctx.device, m_imageView, nullptr);
     vkDestroyImage(ctx.device, m_image, nullptr);
     vkFreeMemory(ctx.device, m_imageMemory, nullptr);
 }

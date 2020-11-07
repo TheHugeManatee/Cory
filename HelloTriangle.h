@@ -42,6 +42,8 @@ class HelloTriangleApplication {
     void initWindow();
     void initVulkan();
 
+    void createTransientCommandPool();
+
     void mainLoop();
     void cleanup();
 
@@ -82,7 +84,7 @@ class HelloTriangleApplication {
     void createGraphicsPipeline();
     void createRenderPass();
     void createFramebuffers();
-    void createCommandPool();
+    void createAppCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
     void recreateSwapChain();

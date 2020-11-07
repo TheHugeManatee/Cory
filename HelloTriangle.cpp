@@ -75,24 +75,43 @@ void HelloTriangleApplication::initVulkan()
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+
+    createTransientCommandPool();
+    
     createSwapChain();
     createImageViews();
     createRenderPass();
 
-    createDescriptorSetLayout();
-    createUniformBuffers();
-    createDescriptorPool();
-    createDescriptorSets();
-    createCommandPool();
 
-    createGraphicsPipeline();
     createFramebuffers();
     createSyncObjects();
 
     createTextureImage();
     createGeometry();
 
+    createDescriptorSetLayout();
+    createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
+    createGraphicsPipeline();
+
+    createAppCommandPool();
     createCommandBuffers();
+}
+
+void HelloTriangleApplication::createTransientCommandPool()
+{
+    // create a second command pool for transient operations
+    VkCommandPoolCreateInfo poolInfo{};
+    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
+    if (vkCreateCommandPool(m_ctx.device, &poolInfo, nullptr, &m_ctx.transientCmdPool) !=
+        VK_SUCCESS) {
+        throw std::runtime_error("Could not create transient command pool!");
+    }
 }
 
 void HelloTriangleApplication::setupInstance()
@@ -841,7 +860,7 @@ void HelloTriangleApplication::createFramebuffers()
     }
 }
 
-void HelloTriangleApplication::createCommandPool()
+void HelloTriangleApplication::createAppCommandPool()
 {
     QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
 
@@ -853,16 +872,6 @@ void HelloTriangleApplication::createCommandPool()
 
     if (vkCreateCommandPool(m_ctx.device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
         throw std::runtime_error("Could not create command pool!");
-    }
-
-    // create a second command pool for transient operations
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-
-    if (vkCreateCommandPool(m_ctx.device, &poolInfo, nullptr, &m_ctx.transientCmdPool) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("Could not create transient command pool!");
     }
 }
 
@@ -1168,7 +1177,7 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     UniformBufferObject ubo;
     ubo.model =
         glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+    ubo.view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj =
         glm::perspective(glm::radians(45.0f),
@@ -1239,16 +1248,18 @@ void HelloTriangleApplication::createDescriptorSets()
         descriptorWrites[0].pBufferInfo = &bufferInfo;
         descriptorWrites[0].pImageInfo = nullptr;
         descriptorWrites[0].pTexelBufferView = nullptr;
+        descriptorWrites[0].pNext = nullptr;
 
         descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         descriptorWrites[1].dstSet = descriptorSets[i];
-        descriptorWrites[1].dstBinding = 0;
+        descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].dstArrayElement = 0;
         descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrites[1].descriptorCount = 1;
         descriptorWrites[1].pBufferInfo = nullptr;
         descriptorWrites[1].pImageInfo = &imageInfo;
         descriptorWrites[1].pTexelBufferView = nullptr;
+        descriptorWrites[1].pNext = nullptr;
 
         vkUpdateDescriptorSets(m_ctx.device, static_cast<uint32_t>(descriptorWrites.size()),
                                descriptorWrites.data(), 0, nullptr);
@@ -1282,7 +1293,7 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
 
     // supported features
     VkPhysicalDeviceFeatures supportedFeatures;
-    vkGetPhysicalDeviceFeatures(m_ctx.physicalDevice, &supportedFeatures);
+    vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
 
     return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported &&
            swapChainAdequate && supportedFeatures.samplerAnisotropy;

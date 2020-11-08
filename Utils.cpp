@@ -22,6 +22,34 @@ uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
     throw std::runtime_error("Failed to find a suitable memory type!");
 }
 
+VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice,
+                             const std::vector<VkFormat> &candidates, VkImageTiling tiling,
+                             VkFormatFeatureFlags features)
+{
+    for (const VkFormat &format : candidates) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+
+        if (tiling == VK_IMAGE_TILING_LINEAR &&
+            (props.linearTilingFeatures & features) == features) {
+            return format;
+        }
+        else if (tiling == VK_IMAGE_TILING_OPTIMAL &&
+                 (props.optimalTilingFeatures & features) == features) {
+            return format;
+        }
+    }
+    throw std::runtime_error("failed to find supported format!");
+}
+
+VkFormat findDepthFormat(VkPhysicalDevice physicalDevice)
+{
+    return findSupportedFormat(
+        physicalDevice,
+        {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+        VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+}
+
 device_buffer::device_buffer() {}
 device_buffer::~device_buffer() {}
 
@@ -131,9 +159,91 @@ stbi_image::~stbi_image() { stbi_image_free(data); }
 
 device_image::device_image() {}
 
-void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format, 
-                          VkImageTiling tiling, VkFilter filter, VkSamplerAddressMode addressMode, VkImageUsageFlags usage,
-                          VkMemoryPropertyFlags properties)
+void device_image::destroy(graphics_context &ctx)
+{
+    if (m_sampler)
+        vkDestroySampler(ctx.device, m_sampler, nullptr);
+    if (m_imageView)
+        vkDestroyImageView(ctx.device, m_imageView, nullptr);
+    if (m_image)
+        vkDestroyImage(ctx.device, m_image, nullptr);
+    if (m_imageMemory)
+        vkFreeMemory(ctx.device, m_imageMemory, nullptr);
+}
+
+void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayout)
+{
+    if (m_currentLayout == newLayout)
+        return;
+
+    SingleTimeCommandBuffer cmdBuf(ctx);
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = m_currentLayout;
+    barrier.newLayout = newLayout;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+
+    barrier.image = m_image;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.baseMipLevel = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.levelCount = 1;
+
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (hasStencilComponent(m_format)) {
+            barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+    }
+
+    VkPipelineStageFlags sourceStage;
+    VkPipelineStageFlags destinationStage;
+
+    if (m_currentLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    }
+    else if (m_currentLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+             newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    }
+    else if (m_currentLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+             newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+        barrier.srcAccessMask = 0;
+        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    }
+    else {
+        throw std::runtime_error(fmt::format("unsupported layout transition: from {} to {}",
+                                             m_currentLayout, newLayout));
+    }
+
+    vkCmdPipelineBarrier(cmdBuf.buffer(), sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr,
+                         1, &barrier);
+
+    m_currentLayout = newLayout;
+}
+
+device_image::~device_image() {}
+
+void device_texture::create(graphics_context &ctx, glm::uvec3 size, VkImageType type,
+                            VkFormat format, VkImageTiling tiling, VkFilter filter,
+                            VkSamplerAddressMode addressMode, VkImageUsageFlags usage,
+                            VkMemoryPropertyFlags properties)
 {
     m_size = size;
     m_mipLevels = 1;
@@ -218,16 +328,8 @@ void device_image::create(graphics_context &ctx, glm::uvec3 size, VkImageType ty
     }
 }
 
-void device_image::destroy(graphics_context &ctx)
-{
-    vkDestroySampler(ctx.device, m_sampler, nullptr);
-    vkDestroyImageView(ctx.device, m_imageView, nullptr);
-    vkDestroyImage(ctx.device, m_image, nullptr);
-    vkFreeMemory(ctx.device, m_imageMemory, nullptr);
-}
-
-void device_image::upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
-                          VkDeviceSize offset /*= 0*/)
+void device_texture::upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
+                            VkDeviceSize offset /*= 0*/)
 {
     void *mappedData;
     vkMapMemory(ctx.device, m_imageMemory, offset, size, 0,
@@ -235,59 +337,6 @@ void device_image::upload(graphics_context &ctx, const void *srcData, VkDeviceSi
     memcpy(mappedData, srcData, (size_t)size);
     vkUnmapMemory(ctx.device, m_imageMemory);
 }
-
-void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayout)
-{
-    if (m_currentLayout == newLayout)
-        return;
-
-    SingleTimeCommandBuffer cmdBuf(ctx);
-
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = m_currentLayout;
-    barrier.newLayout = newLayout;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-
-    barrier.image = m_image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.layerCount = 1;
-    barrier.subresourceRange.levelCount = 1;
-
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
-
-    if (m_currentLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    else if (m_currentLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-             newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    }
-    else {
-        throw std::runtime_error(fmt::format("unsupported layout transition: from {} to {}",
-                                             m_currentLayout, newLayout));
-    }
-
-    vkCmdPipelineBarrier(cmdBuf.buffer(), sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr,
-                         1, &barrier);
-
-    m_currentLayout = newLayout;
-}
-
-device_image::~device_image() {}
 
 SingleTimeCommandBuffer::SingleTimeCommandBuffer(graphics_context &ctx)
     : m_ctx{ctx}
@@ -321,4 +370,65 @@ SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
     vkQueueWaitIdle(m_ctx.graphicsQueue);
 
     vkFreeCommandBuffers(m_ctx.device, m_ctx.transientCmdPool, 1, &m_commandBuffer);
+}
+
+void device_depth::create(graphics_context &ctx, glm::uvec3 size, VkFormat format)
+{
+    m_size = size;
+    m_mipLevels = 1;
+    m_format = format;
+    m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    // create image object
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width = size.x;
+    imageInfo.extent.height = size.y;
+    imageInfo.extent.depth = size.z;
+    imageInfo.mipLevels = m_mipLevels;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = m_format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = m_currentLayout;
+    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateImage(ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create image!");
+    }
+
+    // create and bind image memory
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(ctx.device, m_image, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
+                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate image memory!");
+    }
+
+    vkBindImageMemory(ctx.device, m_image, m_imageMemory, 0);
+
+    // image view
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.format = m_format;
+    viewInfo.image = m_image;
+
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+        throw std::runtime_error("Could not create image view");
+    }
 }

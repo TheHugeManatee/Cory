@@ -119,6 +119,15 @@ struct graphics_context {
 
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
                         VkMemoryPropertyFlags properties);
+VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice,
+                             const std::vector<VkFormat> &candidates, VkImageTiling tiling,
+                             VkFormatFeatureFlags features);
+VkFormat findDepthFormat(VkPhysicalDevice physicalDevice);
+inline bool hasStencilComponent(VkFormat format)
+{
+    return format == VK_FORMAT_D16_UNORM_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT ||
+           format == VK_FORMAT_S8_UINT;
+}
 
 class host_buffer {
   public:
@@ -183,14 +192,7 @@ class device_image {
     device_image(device_image &&rhs) = default;
     device_image &operator=(device_image &&rhs) = default;
 
-    void create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format, 
-                VkImageTiling tiling, VkFilter filter, VkSamplerAddressMode addressMode, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
     void destroy(graphics_context &ctx);
-
-    void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
-                VkDeviceSize offset = 0);
-    // void download(graphics_context &ctx, host_buffer &buf);
-    // void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
 
     void transitionLayout(graphics_context &ctx, VkImageLayout newLayout);
 
@@ -200,15 +202,34 @@ class device_image {
     VkSampler sampler() const { return m_sampler; }
     glm::uvec3 size() const { return m_size; }
 
-  private:
+  protected:
     VkImage m_image{};
     VkDeviceMemory m_imageMemory{};
     glm::uvec3 m_size{};
     uint32_t m_mipLevels{};
     VkFormat m_format{};
     VkImageLayout m_currentLayout{};
-    VkImageView m_imageView;
-    VkSampler m_sampler;
+    VkImageView m_imageView{};
+    VkSampler m_sampler{};
+};
+
+class device_texture : public device_image {
+  public:
+    void create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format,
+                VkImageTiling tiling, VkFilter filter, VkSamplerAddressMode addressMode,
+                VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
+
+    void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
+                VkDeviceSize offset = 0);
+    // void download(graphics_context &ctx, host_buffer &buf);
+    // void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
+
+  private:
+};
+
+class device_depth : public device_image {
+  public:
+    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format);
 };
 
 namespace primitives {
@@ -234,6 +255,24 @@ inline mesh quad()
     std::vector<uint16_t> indices{0, 1, 2, 2, 3, 0};
     return {vertices, indices};
 }
+
+inline mesh doublequad()
+{
+    std::vector<Vertex> vertices{{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+                                 {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+                                 {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+                                 {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+                                 {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+                                 {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+                                 {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+                                 {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
+    std::vector<uint16_t> indices{0, 1, 2, 2, 3, 0,
+
+                                  4, 5, 6, 6, 7, 4};
+    return {vertices, indices};
+}
+
 } // namespace primitives
 
 struct UniformBufferObject {

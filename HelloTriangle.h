@@ -94,15 +94,15 @@ class HelloTriangleApplication {
     void createIndexBuffer(const std::vector<uint16_t> &indices);
     void createUniformBuffers();
     void createDescriptorSetLayout();
-    device_image createTextureImage(std::string textureFilename, VkFilter filter, VkSamplerAddressMode addressMode);
+    device_texture createTextureImage(std::string textureFilename, VkFilter filter, VkSamplerAddressMode addressMode);
 
     void drawFrame();
 
     void updateUniformBuffer(uint32_t imageIndex);
 
     void createDescriptorPool();
-
     void createDescriptorSets();
+    void createDepthResources();
 
   private:
     bool isDeviceSuitable(const VkPhysicalDevice &device);
@@ -141,8 +141,9 @@ class HelloTriangleApplication {
     device_buffer m_vertexBuffer;
     device_buffer m_indexBuffer;
 
-    device_image m_texture;
-    device_image m_texture2;
+    device_texture m_texture;
+    device_texture m_texture2;
+    device_depth m_depthBuffer;
 
     VkDebugUtilsMessengerEXT m_debugMessenger;
 };

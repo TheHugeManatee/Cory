@@ -3,6 +3,8 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 #include <glm/glm.hpp>
 
 #include <array>
@@ -13,7 +15,9 @@
 #include <utility>
 #include <vector>
 
+// single-header includes
 #include <stb_image.h>
+#include <tiny_obj_loader.h>
 
 struct Vertex;
 class host_buffer;
@@ -105,6 +109,21 @@ struct Vertex {
 
         return attributeDescriptions;
     }
+
+    bool operator==(const Vertex &rhs) const
+    {
+        return rhs.pos == pos && rhs.color == color && rhs.texCoord == texCoord;
+    }
+
+    struct hasher {
+        size_t operator()(Vertex const &vertex) const
+        {
+            return ((std::hash<glm::vec3>()(vertex.pos) ^
+                     (std::hash<glm::vec3>()(vertex.color) << 1)) >>
+                    1) ^
+                   (std::hash<glm::vec2>()(vertex.texCoord) << 1);
+        }
+    };
 };
 
 struct graphics_context {

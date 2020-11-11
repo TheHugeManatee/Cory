@@ -87,7 +87,7 @@ void HelloTriangleApplication::initVulkan()
     createFramebuffers();
     createSyncObjects();
 
-    m_texture = createTextureImage(RESOURCE_DIR "/manatee.jpg", VK_FILTER_LINEAR,
+    m_texture = createTextureImage(RESOURCE_DIR "/viking_room.png", VK_FILTER_LINEAR,
                                    VK_SAMPLER_ADDRESS_MODE_REPEAT);
     m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", VK_FILTER_NEAREST,
                                     VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
@@ -710,7 +710,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     multisampling.alphaToOneEnable = VK_FALSE;
 
     //****************** Depth and Stencil ******************
-    VkPipelineDepthStencilStateCreateInfo depthStencil {};
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depthStencil.depthTestEnable = VK_TRUE;
     depthStencil.depthWriteEnable = VK_TRUE;
@@ -809,7 +809,7 @@ void HelloTriangleApplication::createRenderPass()
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    VkAttachmentDescription depthAttachment {};
+    VkAttachmentDescription depthAttachment{};
     depthAttachment.format = findDepthFormat(m_ctx.physicalDevice);
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -819,14 +819,13 @@ void HelloTriangleApplication::createRenderPass()
     depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-
     //****************** Subpasses ******************
     // describe which layout each attachment should be transitioned to
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
     colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference depthAttachmentRef {};
+    VkAttachmentReference depthAttachmentRef{};
     depthAttachmentRef.attachment = 1;
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
@@ -843,8 +842,7 @@ void HelloTriangleApplication::createRenderPass()
     // the data needs to be preserved.
 
     //****************** Render Pass ******************
-    std::array<VkAttachmentDescription, 2> attachments = {
-        colorAttachment, depthAttachment};
+    std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
@@ -858,10 +856,13 @@ void HelloTriangleApplication::createRenderPass()
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.srcStageMask =
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dependency.dstStageMask =
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.dstAccessMask =
+        VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
     renderPassInfo.dependencyCount = 1;
     renderPassInfo.pDependencies = &dependency;
@@ -876,7 +877,7 @@ void HelloTriangleApplication::createFramebuffers()
     m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
 
     for (size_t i{0}; i < m_swapChainImageViews.size(); ++i) {
-        std::array<VkImageView , 2> attachments = {m_swapChainImageViews[i], m_depthBuffer.view()};
+        std::array<VkImageView, 2> attachments = {m_swapChainImageViews[i], m_depthBuffer.view()};
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1065,8 +1066,43 @@ void HelloTriangleApplication::cleanupSwapChain()
 
 void HelloTriangleApplication::createGeometry()
 {
-    auto [vertices, indices] = primitives::doublequad();
+    //     auto [vertices, indices] = primitives::doublequad();
+    //     m_numVertices = static_cast<uint32_t>(indices.size());
+
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                          RESOURCE_DIR "/viking_room.obj")) {
+
+        throw std::runtime_error(fmt::format("Could not load 3D model: {} {}", warn, err));
+    }
+
+    std::vector<Vertex> vertices;
+    std::vector<uint16_t> indices;
+    std::unordered_map<Vertex, uint32_t, Vertex::hasher> uniqueVertices;
+    for (const auto &shape : shapes) {
+
+        for (const auto &index : shape.mesh.indices) {
+            Vertex v{};
+            v.pos = {attrib.vertices[3 * index.vertex_index + 0],
+                     attrib.vertices[3 * index.vertex_index + 1],
+                     attrib.vertices[3 * index.vertex_index + 2]};
+            v.texCoord = {attrib.texcoords[2 * index.texcoord_index + 0],
+                          1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
+            v.color = {1.0f, 1.0f, 1.0f};
+
+            if (uniqueVertices.count(v) == 0) {
+                uniqueVertices[v] = static_cast<uint32_t>(vertices.size());
+                vertices.push_back(v);
+            }
+
+            indices.push_back(uniqueVertices[v]);
+        }
+    }
     m_numVertices = static_cast<uint32_t>(indices.size());
+
     createVertexBuffers(vertices);
     createIndexBuffer(indices);
 }
@@ -1354,8 +1390,8 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
 }
 
 device_texture HelloTriangleApplication::createTextureImage(std::string textureFilename,
-                                                          VkFilter filter,
-                                                          VkSamplerAddressMode addressMode)
+                                                            VkFilter filter,
+                                                            VkSamplerAddressMode addressMode)
 {
     stbi_image image(textureFilename.c_str());
     device_texture texture;

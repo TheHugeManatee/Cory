@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vulkan/vulkan.hpp>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -55,7 +57,7 @@ class HelloTriangleApplication {
 
     // set up of debug callback
     void setupDebugMessenger();
-    void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
+    void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo);
 
     void createSurface();
 
@@ -150,5 +152,5 @@ class HelloTriangleApplication {
     device_texture m_texture;
     device_texture m_texture2;
 
-    VkDebugUtilsMessengerEXT m_debugMessenger;
+    vk::DebugUtilsMessengerEXT m_debugMessenger;
 };

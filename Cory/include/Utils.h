@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vulkan\vulkan.hpp>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -48,6 +50,18 @@ inline void DestroyDebugUtilsMessengerEXT(VkInstance instance,
         func(instance, debugMessenger, pAllocator);
     }
 }
+
+struct graphics_context {
+    vk::DispatchLoaderDynamic dl; // the vulkan dynamic dispatch loader
+    vk::UniqueInstance instance{};
+    VkDevice device{};
+    VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+    VkCommandPool transientCmdPool{};
+
+    VkQueue graphicsQueue;
+    VkQueue presentQueue;
+};
+
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -126,15 +140,6 @@ struct Vertex {
     };
 };
 
-struct graphics_context {
-    VkInstance instance{};
-    VkDevice device{};
-    VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
-    VkCommandPool transientCmdPool{};
-
-    VkQueue graphicsQueue;
-    VkQueue presentQueue;
-};
 
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
                         VkMemoryPropertyFlags properties);
@@ -336,6 +341,6 @@ class SingleTimeCommandBuffer {
     VkCommandBuffer &buffer() { return m_commandBuffer; }
 
   private:
-    graphics_context m_ctx;
+    graphics_context& m_ctx;
     VkCommandBuffer m_commandBuffer;
 };

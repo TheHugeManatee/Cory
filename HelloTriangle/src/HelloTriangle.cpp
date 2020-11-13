@@ -51,6 +51,7 @@ void HelloTriangleApplication::run()
     initWindow();
     initVulkan();
     mainLoop();
+
     cleanup();
 }
 
@@ -121,17 +122,11 @@ void HelloTriangleApplication::createTransientCommandPool()
 
 void HelloTriangleApplication::setupInstance()
 {
-    VkApplicationInfo appInfo{};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "Hello Triangle";
-    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "No Engine";
-    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion = VK_API_VERSION_1_0;
 
-    VkInstanceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pApplicationInfo = &appInfo;
+    vk::ApplicationInfo appInfo("Hello Triangle", VK_MAKE_VERSION(1, 0, 0), "No Engine",
+                                VK_MAKE_VERSION(1, 0, 0), VK_API_VERSION_1_1);
+
+    vk::InstanceCreateInfo createInfo({}, &appInfo);
 
     uint32_t glfwExtensionCount = 0;
     const char **glfwExtensions;
@@ -158,7 +153,8 @@ void HelloTriangleApplication::setupInstance()
     createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 
     // validation layers
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+    vk::DebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+
     if (enableValidationLayers && !checkValidationLayerSupport()) {
         throw std::runtime_error("validation layers requested, but not available!");
     }
@@ -175,9 +171,12 @@ void HelloTriangleApplication::setupInstance()
         createInfo.pNext = nullptr;
     }
 
-    if (vkCreateInstance(&createInfo, nullptr, &m_ctx.instance) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create instance!");
-    }
+    m_ctx.instance = vk::createInstanceUnique(createInfo);
+
+    vk::DynamicLoader dl;
+    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr =
+        dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
+    m_ctx.dl = vk::DispatchLoaderDynamic(*m_ctx.instance, vkGetInstanceProcAddr);
 }
 
 void HelloTriangleApplication::mainLoop()
@@ -218,14 +217,14 @@ void HelloTriangleApplication::cleanup()
     vkDestroyCommandPool(m_ctx.device, m_commandPool, nullptr);
     vkDestroyCommandPool(m_ctx.device, m_ctx.transientCmdPool, nullptr);
 
-    vkDestroySurfaceKHR(m_ctx.instance, m_surface, nullptr);
+    vkDestroySurfaceKHR(m_ctx.instance->operator VkInstance(), m_surface, nullptr);
     vkDestroyDevice(m_ctx.device, nullptr);
 
     if (enableValidationLayers) {
-        DestroyDebugUtilsMessengerEXT(m_ctx.instance, m_debugMessenger, nullptr);
+        m_ctx.instance->destroyDebugUtilsMessengerEXT(m_debugMessenger, nullptr, m_ctx.dl);
     }
 
-    vkDestroyInstance(m_ctx.instance, nullptr);
+    //vkDestroyInstance(m_ctx.instance, nullptr);
     glfwDestroyWindow(m_window);
     glfwTerminate();
 
@@ -276,22 +275,25 @@ std::vector<const char *> HelloTriangleApplication::getRequiredExtensions()
 }
 
 void HelloTriangleApplication::populateDebugMessengerCreateInfo(
-    VkDebugUtilsMessengerCreateInfoEXT &createInfo)
+    vk::DebugUtilsMessengerCreateInfoEXT &createInfo)
 {
-    createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.messageSeverity = 
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError | 
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose;
+        
+    createInfo.messageType = 
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | 
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation | 
+        vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
+
     createInfo.pfnUserCallback = debugCallback;
 }
 
 void HelloTriangleApplication::createSurface()
 {
-    if (glfwCreateWindowSurface(m_ctx.instance, m_window, nullptr, &m_surface) != VK_SUCCESS) {
+    if (glfwCreateWindowSurface(m_ctx.instance->operator VkInstance(), m_window, nullptr,
+                                &m_surface) != VK_SUCCESS) {
         throw std::runtime_error("Could not create window surface!");
     }
 }
@@ -301,24 +303,21 @@ void HelloTriangleApplication::setupDebugMessenger()
     if (!enableValidationLayers)
         return;
 
-    VkDebugUtilsMessengerCreateInfoEXT createInfo{};
+    vk::DebugUtilsMessengerCreateInfoEXT createInfo;
     populateDebugMessengerCreateInfo(createInfo);
-
-    if (CreateDebugUtilsMessengerEXT(m_ctx.instance, &createInfo, nullptr, &m_debugMessenger) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("failed to set up debug messenger!");
-    }
+   
+    m_debugMessenger =  m_ctx.instance->createDebugUtilsMessengerEXT(createInfo, nullptr, m_ctx.dl);
 }
 
 void HelloTriangleApplication::pickPhysicalDevice()
 {
     uint32_t deviceCount = 0;
-    vkEnumeratePhysicalDevices(m_ctx.instance, &deviceCount, nullptr);
+    vkEnumeratePhysicalDevices((VkInstance)(*m_ctx.instance), &deviceCount, nullptr);
     if (deviceCount == 0) {
         throw std::runtime_error("failed to find GPUs with Vulkan support!");
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(m_ctx.instance, &deviceCount, devices.data());
+    vkEnumeratePhysicalDevices((VkInstance)(*m_ctx.instance), &deviceCount, devices.data());
 
     spdlog::info("Found {} vulkan devices.", deviceCount);
 
@@ -708,7 +707,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     multisampling.sampleShadingEnable = VK_TRUE;
     multisampling.rasterizationSamples = m_msaaSamples;
     multisampling.minSampleShading = 0.2f; // controls how smooth the msaa
-    multisampling.pSampleMask = nullptr; // ?
+    multisampling.pSampleMask = nullptr;   // ?
     multisampling.alphaToCoverageEnable = VK_FALSE;
     multisampling.alphaToOneEnable = VK_FALSE;
 
@@ -1379,8 +1378,8 @@ void HelloTriangleApplication::createDepthResources()
 
     VkFormat depthFormat = findDepthFormat(m_ctx.physicalDevice);
 
-    m_depthBuffer.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1},
-                         depthFormat, m_msaaSamples);
+    m_depthBuffer.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1}, depthFormat,
+                         m_msaaSamples);
     m_depthBuffer.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 

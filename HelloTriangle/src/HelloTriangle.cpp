@@ -1103,7 +1103,7 @@ void HelloTriangleApplication::createGeometry()
 
     std::vector<Vertex> vertices;
     std::vector<uint16_t> indices;
-    std::unordered_map<Vertex, uint32_t, Vertex::hasher> uniqueVertices;
+    std::unordered_map<Vertex, uint16_t, Vertex::hasher> uniqueVertices;
     for (const auto &shape : shapes) {
 
         for (const auto &index : shape.mesh.indices) {
@@ -1116,7 +1116,7 @@ void HelloTriangleApplication::createGeometry()
             v.color = {1.0f, 1.0f, 1.0f};
 
             if (uniqueVertices.count(v) == 0) {
-                uniqueVertices[v] = static_cast<uint32_t>(vertices.size());
+                uniqueVertices[v] = static_cast<uint16_t>(vertices.size());
                 vertices.push_back(v);
             }
 

@@ -1,8 +1,8 @@
-glslc.exe shaders/triangleimplicit.vert -o resource/triangle_vert.spv
-glslc.exe shaders/passthrough.vert -o resource/passthrough.spv
-glslc.exe shaders/triangle.frag -o resource/frag.spv
-glslc.exe shaders/default.vert -o resource/default-vert.spv
-glslc.exe shaders/coolmanatee.frag -o resource/manatee.spv
+glslc.exe Shaders/triangleimplicit.vert -o Resource/triangle_vert.spv
+glslc.exe Shaders/passthrough.vert -o Resource/passthrough.spv
+glslc.exe Shaders/triangle.frag -o Resource/frag.spv
+glslc.exe Shaders/default.vert -o Resource/default-vert.spv
+glslc.exe Shaders/coolmanatee.frag -o Resource/manatee.spv
 
 
 pause

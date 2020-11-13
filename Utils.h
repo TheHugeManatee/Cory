@@ -230,6 +230,7 @@ class device_image {
     VkImageLayout m_currentLayout{};
     VkImageView m_imageView{};
     VkSampler m_sampler{};
+    VkSampleCountFlagBits m_samples{VK_SAMPLE_COUNT_1_BIT};
 };
 
 class device_texture : public device_image {
@@ -255,9 +256,15 @@ class device_texture : public device_image {
   private:
 };
 
-class device_depth_buffer : public device_image {
+class render_target : public device_image {
   public:
-    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format);
+    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format, VkSampleCountFlagBits msaaSamples);
+};
+
+class depth_buffer : public device_image {
+  public:
+    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format,
+                VkSampleCountFlagBits msaaSamples);
 };
 
 namespace primitives {

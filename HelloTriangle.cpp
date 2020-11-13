@@ -83,6 +83,7 @@ void HelloTriangleApplication::initVulkan()
     createImageViews();
     createRenderPass();
 
+    createColorResources();
     createDepthResources();
     createFramebuffers();
     createSyncObjects();
@@ -324,6 +325,7 @@ void HelloTriangleApplication::pickPhysicalDevice()
     for (const auto &device : devices) {
         if (isDeviceSuitable(device)) {
             m_ctx.physicalDevice = device;
+            m_msaaSamples = getMaxUsableSampleCount();
             break;
         }
     }
@@ -388,6 +390,7 @@ void HelloTriangleApplication::createLogicalDevice()
     VkPhysicalDeviceFeatures deviceFeatures{};
     // specify device features here
     deviceFeatures.samplerAnisotropy = VK_TRUE;
+    //deviceFeatures.sampleRateShading = VK_TRUE;
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -703,7 +706,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     VkPipelineMultisampleStateCreateInfo multisampling{};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisampling.rasterizationSamples = m_msaaSamples;
     multisampling.minSampleShading = 1.0f;
     multisampling.pSampleMask = nullptr; // ?
     multisampling.alphaToCoverageEnable = VK_FALSE;
@@ -801,23 +804,33 @@ void HelloTriangleApplication::createRenderPass()
 {
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = m_swapChainImageFormat;
-    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachment.samples = m_msaaSamples;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // care about color
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // don't care about stencil
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentDescription depthAttachment{};
     depthAttachment.format = findDepthFormat(m_ctx.physicalDevice);
-    depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depthAttachment.samples = m_msaaSamples;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentDescription colorAttachmentResolve{};
+    colorAttachmentResolve.format = m_swapChainImageFormat;
+    colorAttachmentResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+    colorAttachmentResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachmentResolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachmentResolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colorAttachmentResolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    colorAttachmentResolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    colorAttachmentResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     //****************** Subpasses ******************
     // describe which layout each attachment should be transitioned to
@@ -829,11 +842,16 @@ void HelloTriangleApplication::createRenderPass()
     depthAttachmentRef.attachment = 1;
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+    VkAttachmentReference colorAttachmentResolveRef{};
+    colorAttachmentResolveRef.attachment = 2;
+    colorAttachmentResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &colorAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
+    subpass.pResolveAttachments = &colorAttachmentResolveRef;
     // NOTE: the order of attachments directly corresponds to the 'layout(location=0) out vec4
     // color' index in the fragment shader pInputAttachments: attachments that are read from a
     // shader pResolveAttachments: attachments used for multisampling color attachments
@@ -842,7 +860,8 @@ void HelloTriangleApplication::createRenderPass()
     // the data needs to be preserved.
 
     //****************** Render Pass ******************
-    std::array<VkAttachmentDescription, 2> attachments = {colorAttachment, depthAttachment};
+    std::array<VkAttachmentDescription, 3> attachments = {colorAttachment, depthAttachment,
+                                                          colorAttachmentResolve};
     VkRenderPassCreateInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
@@ -877,7 +896,8 @@ void HelloTriangleApplication::createFramebuffers()
     m_swapChainFramebuffers.resize(m_swapChainImageViews.size());
 
     for (size_t i{0}; i < m_swapChainImageViews.size(); ++i) {
-        std::array<VkImageView, 2> attachments = {m_swapChainImageViews[i], m_depthBuffer.view()};
+        std::array<VkImageView, 3> attachments = {m_renderTarget.view(), m_depthBuffer.view(),
+                                                  m_swapChainImageViews[i]};
 
         VkFramebufferCreateInfo framebufferInfo{};
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -1029,6 +1049,7 @@ void HelloTriangleApplication::recreateSwapChain()
     createImageViews();
     createRenderPass();
     createGraphicsPipeline();
+    createColorResources();
     createDepthResources();
     createFramebuffers();
     createUniformBuffers();
@@ -1040,6 +1061,7 @@ void HelloTriangleApplication::recreateSwapChain()
 void HelloTriangleApplication::cleanupSwapChain()
 {
     m_depthBuffer.destroy(m_ctx);
+    m_renderTarget.destroy(m_ctx);
 
     for (auto framebuffer : m_swapChainFramebuffers) {
         vkDestroyFramebuffer(m_ctx.device, framebuffer, nullptr);
@@ -1346,13 +1368,19 @@ void HelloTriangleApplication::createDescriptorSets()
     }
 }
 
+void HelloTriangleApplication::createColorResources()
+{
+    m_renderTarget.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1},
+                          m_swapChainImageFormat, m_msaaSamples);
+}
+
 void HelloTriangleApplication::createDepthResources()
 {
 
     VkFormat depthFormat = findDepthFormat(m_ctx.physicalDevice);
 
     m_depthBuffer.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1},
-                         depthFormat);
+                         depthFormat, m_msaaSamples);
     m_depthBuffer.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 }
 
@@ -1389,11 +1417,40 @@ bool HelloTriangleApplication::isDeviceSuitable(const VkPhysicalDevice &device)
            swapChainAdequate && supportedFeatures.samplerAnisotropy;
 }
 
+VkSampleCountFlagBits HelloTriangleApplication::getMaxUsableSampleCount()
+{
+    VkPhysicalDeviceProperties physicalDeviceProperties;
+    vkGetPhysicalDeviceProperties(m_ctx.physicalDevice, &physicalDeviceProperties);
+
+    VkSampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
+                                physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+    if (counts & VK_SAMPLE_COUNT_64_BIT) {
+        return VK_SAMPLE_COUNT_64_BIT;
+    }
+    if (counts & VK_SAMPLE_COUNT_32_BIT) {
+        return VK_SAMPLE_COUNT_32_BIT;
+    }
+    if (counts & VK_SAMPLE_COUNT_16_BIT) {
+        return VK_SAMPLE_COUNT_16_BIT;
+    }
+    if (counts & VK_SAMPLE_COUNT_8_BIT) {
+        return VK_SAMPLE_COUNT_8_BIT;
+    }
+    if (counts & VK_SAMPLE_COUNT_4_BIT) {
+        return VK_SAMPLE_COUNT_4_BIT;
+    }
+    if (counts & VK_SAMPLE_COUNT_2_BIT) {
+        return VK_SAMPLE_COUNT_2_BIT;
+    }
+
+    return VK_SAMPLE_COUNT_1_BIT;
+}
+
 device_texture HelloTriangleApplication::createTextureImage(std::string textureFilename,
                                                             VkFilter filter,
                                                             VkSamplerAddressMode addressMode)
 {
-    stbi_image image(textureFilename.c_str());
+    stbi_image image(textureFilename);
     device_texture texture;
 
     if (!image.data) {
@@ -1407,9 +1464,10 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
 
     stagingBuffer.upload(m_ctx, image.data, image.size());
 
-    uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(image.width, image.height)))) + 1;
-    texture.create(m_ctx, {image.width, image.height, 1}, mipLevels, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB,
-                   VK_IMAGE_TILING_OPTIMAL, filter, addressMode,
+    uint32_t mipLevels =
+        static_cast<uint32_t>(std::floor(std::log2(std::max(image.width, image.height)))) + 1;
+    texture.create(m_ctx, {image.width, image.height, 1}, mipLevels, VK_IMAGE_TYPE_2D,
+                   VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, filter, addressMode,
                    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                        VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -1418,9 +1476,9 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
     stagingBuffer.copy_to(m_ctx, texture);
     stagingBuffer.destroy(m_ctx);
 
-    
-    texture.generate_mipmaps(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT);
-    //texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    texture.generate_mipmaps(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                             VK_ACCESS_SHADER_READ_BIT);
+    // texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     return texture;
 }

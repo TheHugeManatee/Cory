@@ -35,7 +35,7 @@ VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice,
             (props.linearTilingFeatures & features) == features) {
             return format;
         }
-        else if (tiling == VK_IMAGE_TILING_OPTIMAL &&
+        if (tiling == VK_IMAGE_TILING_OPTIMAL &&
                  (props.optimalTilingFeatures & features) == features) {
             return format;
         }
@@ -456,12 +456,13 @@ SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
     vkFreeCommandBuffers(m_ctx.device, m_ctx.transientCmdPool, 1, &m_commandBuffer);
 }
 
-void device_depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat format)
+void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat format, VkSampleCountFlagBits msaaSamples)
 {
     m_size = size;
     m_mipLevels = 1;
     m_format = format;
     m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_samples = msaaSamples;
 
     // create image object
     VkImageCreateInfo imageInfo{};
@@ -476,7 +477,7 @@ void device_depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkForma
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = m_currentLayout;
     imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.samples = m_samples;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     if (vkCreateImage(ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
@@ -507,6 +508,69 @@ void device_depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkForma
 
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+        throw std::runtime_error("Could not create image view");
+    }
+}
+
+void render_target::create(graphics_context &ctx, glm::uvec3 size,
+                           VkFormat format, VkSampleCountFlagBits msaaSamples)
+{
+    m_size = size;
+    m_mipLevels = 1;
+    m_format = format;
+    m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_samples = msaaSamples;
+
+    // create image object
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width = size.x;
+    imageInfo.extent.height = size.y;
+    imageInfo.extent.depth = size.z;
+    imageInfo.mipLevels = m_mipLevels;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = m_format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = m_currentLayout;
+    imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    imageInfo.samples = m_samples;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateImage(ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create image!");
+    }
+
+    // create and bind image memory
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(ctx.device, m_image, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
+                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate image memory!");
+    }
+
+    vkBindImageMemory(ctx.device, m_image, m_imageMemory, 0);
+
+    // image view
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.format = m_format;
+    viewInfo.image = m_image;
+
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.baseArrayLayer = 0;

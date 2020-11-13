@@ -102,14 +102,18 @@ class HelloTriangleApplication {
 
     void createDescriptorPool();
     void createDescriptorSets();
+    void createColorResources();
     void createDepthResources();
 
   private:
     bool isDeviceSuitable(const VkPhysicalDevice &device);
+    VkSampleCountFlagBits getMaxUsableSampleCount();
 
   private:
     GLFWwindow *m_window;
     graphics_context m_ctx;
+
+    VkSampleCountFlagBits m_msaaSamples{VK_SAMPLE_COUNT_1_BIT};
 
     VkSurfaceKHR m_surface;
     VkSwapchainKHR m_swapChain;
@@ -141,9 +145,10 @@ class HelloTriangleApplication {
     device_buffer m_vertexBuffer;
     device_buffer m_indexBuffer;
 
+    depth_buffer m_depthBuffer;
+    render_target m_renderTarget;
     device_texture m_texture;
     device_texture m_texture2;
-    device_depth_buffer m_depthBuffer;
 
     VkDebugUtilsMessengerEXT m_debugMessenger;
 };

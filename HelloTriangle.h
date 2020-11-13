@@ -143,7 +143,7 @@ class HelloTriangleApplication {
 
     device_texture m_texture;
     device_texture m_texture2;
-    device_depth m_depthBuffer;
+    device_depth_buffer m_depthBuffer;
 
     VkDebugUtilsMessengerEXT m_debugMessenger;
 };

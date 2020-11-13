@@ -4,8 +4,8 @@
 #include <GLFW/glfw3.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
-#include <glm/gtx/hash.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include <array>
 #include <cstdint>
@@ -234,19 +234,28 @@ class device_image {
 
 class device_texture : public device_image {
   public:
-    void create(graphics_context &ctx, glm::uvec3 size, VkImageType type, VkFormat format,
-                VkImageTiling tiling, VkFilter filter, VkSamplerAddressMode addressMode,
-                VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
+    void create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels, VkImageType type,
+                VkFormat format, VkImageTiling tiling, VkFilter filter,
+                VkSamplerAddressMode addressMode, VkImageUsageFlags usage,
+                VkMemoryPropertyFlags properties);
 
     void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
                 VkDeviceSize offset = 0);
     // void download(graphics_context &ctx, host_buffer &buf);
     // void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
 
+    /**
+     * generates mipmaps for a texture. dstLayout and dstAccess specify the configuration that the texture
+     * should be transitioned to after the mipmap generation
+     */
+    void generate_mipmaps(graphics_context &ctx,
+                          VkImageLayout dstLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                          VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT);
+
   private:
 };
 
-class device_depth : public device_image {
+class device_depth_buffer : public device_image {
   public:
     void create(graphics_context &ctx, glm::uvec3 size, VkFormat format);
 };

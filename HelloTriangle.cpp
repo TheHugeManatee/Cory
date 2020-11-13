@@ -1407,16 +1407,20 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
 
     stagingBuffer.upload(m_ctx, image.data, image.size());
 
-    texture.create(m_ctx, {image.width, image.height, 1}, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB,
+    uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(image.width, image.height)))) + 1;
+    texture.create(m_ctx, {image.width, image.height, 1}, mipLevels, VK_IMAGE_TYPE_2D, VK_FORMAT_R8G8B8A8_SRGB,
                    VK_IMAGE_TILING_OPTIMAL, filter, addressMode,
-                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
     stagingBuffer.copy_to(m_ctx, texture);
-    texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
     stagingBuffer.destroy(m_ctx);
+
+    
+    texture.generate_mipmaps(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_SHADER_READ_BIT);
+    //texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     return texture;
 }

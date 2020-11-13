@@ -65,7 +65,7 @@ class HelloTriangleApplication {
     void pickPhysicalDevice();
 
     // figure out which queue families are supported (like memory transfer, compute, graphics etc.)
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+    QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice & device);
 
     // set up the logical device. this creates the queues and instantiates the features
     void createLogicalDevice();
@@ -108,7 +108,7 @@ class HelloTriangleApplication {
     void createDepthResources();
 
   private:
-    bool isDeviceSuitable(const VkPhysicalDevice &device);
+    bool isDeviceSuitable(const vk::PhysicalDevice &device);
     VkSampleCountFlagBits getMaxUsableSampleCount();
 
   private:
@@ -117,7 +117,7 @@ class HelloTriangleApplication {
 
     VkSampleCountFlagBits m_msaaSamples{VK_SAMPLE_COUNT_1_BIT};
 
-    VkSurfaceKHR m_surface;
+    vk::SurfaceKHR m_surface;
     VkSwapchainKHR m_swapChain;
     std::vector<VkImage> m_swapChainImages;
     VkFormat m_swapChainImageFormat;

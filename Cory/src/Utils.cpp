@@ -69,13 +69,13 @@ void device_buffer::create(graphics_context &ctx, VkDeviceSize size, VkBufferUsa
     bufferInfo.sharingMode =
         VK_SHARING_MODE_EXCLUSIVE; // sharing between queue families - we don't do that atm
 
-    if (vkCreateBuffer(ctx.device, &bufferInfo, nullptr, &m_buffer) != VK_SUCCESS) {
+    if (vkCreateBuffer(*ctx.device, &bufferInfo, nullptr, &m_buffer) != VK_SUCCESS) {
         throw std::runtime_error("Could not allocate buffer!");
     }
 
     // get the device memory requirements
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(ctx.device, m_buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(*ctx.device, m_buffer, &memRequirements);
 
     // allocate the physical device memory
     VkMemoryAllocateInfo allocInfo{};
@@ -84,27 +84,27 @@ void device_buffer::create(graphics_context &ctx, VkDeviceSize size, VkBufferUsa
     allocInfo.memoryTypeIndex =
         findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &m_bufferMemory) != VK_SUCCESS) {
+    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_bufferMemory) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate buffer memory!");
     }
 
-    vkBindBufferMemory(ctx.device, m_buffer, m_bufferMemory, 0);
+    vkBindBufferMemory(*ctx.device, m_buffer, m_bufferMemory, 0);
 }
 
 void device_buffer::destroy(graphics_context &ctx)
 {
-    vkDestroyBuffer(ctx.device, m_buffer, nullptr);
-    vkFreeMemory(ctx.device, m_bufferMemory, nullptr);
+    vkDestroyBuffer(*ctx.device, m_buffer, nullptr);
+    vkFreeMemory(*ctx.device, m_bufferMemory, nullptr);
 }
 
 void device_buffer::upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
                            VkDeviceSize offset /*= 0*/)
 {
     void *mappedData;
-    vkMapMemory(ctx.device, m_bufferMemory, offset, size, 0,
+    vkMapMemory(*ctx.device, m_bufferMemory, offset, size, 0,
                 &mappedData); // alternately use VK_WHOLE_SIZE
     memcpy(mappedData, srcData, (size_t)size);
-    vkUnmapMemory(ctx.device, m_bufferMemory);
+    vkUnmapMemory(*ctx.device, m_bufferMemory);
 
     // NOTE: writes are not necessarily visible on the device bc/ caches.
     // either: use memory heap that is HOST_COHERENT
@@ -161,13 +161,13 @@ device_image::device_image() {}
 void device_image::destroy(graphics_context &ctx)
 {
     if (m_sampler)
-        vkDestroySampler(ctx.device, m_sampler, nullptr);
+        vkDestroySampler(*ctx.device, m_sampler, nullptr);
     if (m_imageView)
-        vkDestroyImageView(ctx.device, m_imageView, nullptr);
+        vkDestroyImageView(*ctx.device, m_imageView, nullptr);
     if (m_image)
-        vkDestroyImage(ctx.device, m_image, nullptr);
+        vkDestroyImage(*ctx.device, m_image, nullptr);
     if (m_imageMemory)
-        vkFreeMemory(ctx.device, m_imageMemory, nullptr);
+        vkFreeMemory(*ctx.device, m_imageMemory, nullptr);
 }
 
 void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayout)
@@ -265,13 +265,13 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateImage(ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
+    if (vkCreateImage(*ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
         throw std::runtime_error("failed to create image!");
     }
 
     // create and bind image memory
     VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(ctx.device, m_image, &memRequirements);
+    vkGetImageMemoryRequirements(*ctx.device, m_image, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -279,11 +279,11 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     allocInfo.memoryTypeIndex =
         findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
+    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate image memory!");
     }
 
-    vkBindImageMemory(ctx.device, m_image, m_imageMemory, 0);
+    vkBindImageMemory(*ctx.device, m_image, m_imageMemory, 0);
 
     // image view
     VkImageViewCreateInfo viewInfo{};
@@ -299,7 +299,7 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+    if (vkCreateImageView(*ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
         throw std::runtime_error("Could not create image view");
     }
 
@@ -322,7 +322,7 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = static_cast<float>(m_mipLevels);
 
-    if (vkCreateSampler(ctx.device, &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS) {
+    if (vkCreateSampler(*ctx.device, &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS) {
         throw std::runtime_error("Could not create texture sampler!");
     }
 }
@@ -331,10 +331,10 @@ void device_texture::upload(graphics_context &ctx, const void *srcData, VkDevice
                             VkDeviceSize offset /*= 0*/)
 {
     void *mappedData;
-    vkMapMemory(ctx.device, m_imageMemory, offset, size, 0,
+    vkMapMemory(*ctx.device, m_imageMemory, offset, size, 0,
                 &mappedData); // alternately use VK_WHOLE_SIZE
     memcpy(mappedData, srcData, (size_t)size);
-    vkUnmapMemory(ctx.device, m_imageMemory);
+    vkUnmapMemory(*ctx.device, m_imageMemory);
 }
 
 void device_texture::generate_mipmaps(graphics_context &ctx, VkImageLayout dstLayout,
@@ -429,7 +429,7 @@ SingleTimeCommandBuffer::SingleTimeCommandBuffer(graphics_context &ctx)
     allocInfo.commandPool = m_ctx.transientCmdPool;
     allocInfo.commandBufferCount = 1;
 
-    vkAllocateCommandBuffers(m_ctx.device, &allocInfo, &m_commandBuffer);
+    vkAllocateCommandBuffers(*m_ctx.device, &allocInfo, &m_commandBuffer);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -451,7 +451,7 @@ SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
     vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
     vkQueueWaitIdle(m_ctx.graphicsQueue);
 
-    vkFreeCommandBuffers(m_ctx.device, m_ctx.transientCmdPool, 1, &m_commandBuffer);
+    vkFreeCommandBuffers(*m_ctx.device, m_ctx.transientCmdPool, 1, &m_commandBuffer);
 }
 
 void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat format, VkSampleCountFlagBits msaaSamples)
@@ -478,13 +478,13 @@ void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat forma
     imageInfo.samples = m_samples;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateImage(ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
+    if (vkCreateImage(*ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
         throw std::runtime_error("failed to create image!");
     }
 
     // create and bind image memory
     VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(ctx.device, m_image, &memRequirements);
+    vkGetImageMemoryRequirements(*ctx.device, m_image, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -492,11 +492,11 @@ void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat forma
     allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
+    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate image memory!");
     }
 
-    vkBindImageMemory(ctx.device, m_image, m_imageMemory, 0);
+    vkBindImageMemory(*ctx.device, m_image, m_imageMemory, 0);
 
     // image view
     VkImageViewCreateInfo viewInfo{};
@@ -511,7 +511,7 @@ void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat forma
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+    if (vkCreateImageView(*ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
         throw std::runtime_error("Could not create image view");
     }
 }
@@ -541,13 +541,13 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size,
     imageInfo.samples = m_samples;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateImage(ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
+    if (vkCreateImage(*ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
         throw std::runtime_error("failed to create image!");
     }
 
     // create and bind image memory
     VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(ctx.device, m_image, &memRequirements);
+    vkGetImageMemoryRequirements(*ctx.device, m_image, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -555,11 +555,11 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size,
     allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
                                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    if (vkAllocateMemory(ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
+    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
         throw std::runtime_error("failed to allocate image memory!");
     }
 
-    vkBindImageMemory(ctx.device, m_image, m_imageMemory, 0);
+    vkBindImageMemory(*ctx.device, m_image, m_imageMemory, 0);
 
     // image view
     VkImageViewCreateInfo viewInfo{};
@@ -574,7 +574,7 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size,
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+    if (vkCreateImageView(*ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
         throw std::runtime_error("Could not create image view");
     }
 }

@@ -54,12 +54,12 @@ inline void DestroyDebugUtilsMessengerEXT(VkInstance instance,
 struct graphics_context {
     vk::DispatchLoaderDynamic dl; // the vulkan dynamic dispatch loader
     vk::UniqueInstance instance{};
-    VkDevice device{};
-    VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+    vk::PhysicalDevice physicalDevice{};
+    vk::UniqueDevice device{};
     VkCommandPool transientCmdPool{};
 
-    VkQueue graphicsQueue;
-    VkQueue presentQueue;
+    VkQueue graphicsQueue{};
+    VkQueue presentQueue{};
 };
 
 

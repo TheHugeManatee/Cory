@@ -62,7 +62,6 @@ struct graphics_context {
     VkQueue presentQueue{};
 };
 
-
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> computeFamily;
@@ -140,17 +139,16 @@ struct Vertex {
     };
 };
 
-
 uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
                         VkMemoryPropertyFlags properties);
-VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice,
-                             const std::vector<VkFormat> &candidates, VkImageTiling tiling,
-                             VkFormatFeatureFlags features);
-VkFormat findDepthFormat(VkPhysicalDevice physicalDevice);
-inline bool hasStencilComponent(VkFormat format)
+vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
+                               const std::vector<vk::Format> &candidates, vk::ImageTiling tiling,
+                               vk::FormatFeatureFlags features);
+vk::Format findDepthFormat(vk::PhysicalDevice physicalDevice);
+inline bool hasStencilComponent(vk::Format format)
 {
-    return format == VK_FORMAT_D16_UNORM_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT ||
-           format == VK_FORMAT_S8_UINT;
+    return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD16UnormS8Uint ||
+           format == vk::Format::eD24UnormS8Uint || format == vk::Format::eS8Uint;
 }
 
 class host_buffer {
@@ -251,8 +249,8 @@ class device_texture : public device_image {
     // void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
 
     /**
-     * generates mipmaps for a texture. dstLayout and dstAccess specify the configuration that the texture
-     * should be transitioned to after the mipmap generation
+     * generates mipmaps for a texture. dstLayout and dstAccess specify the configuration that the
+     * texture should be transitioned to after the mipmap generation
      */
     void generate_mipmaps(graphics_context &ctx,
                           VkImageLayout dstLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -263,7 +261,8 @@ class device_texture : public device_image {
 
 class render_target : public device_image {
   public:
-    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format, VkSampleCountFlagBits msaaSamples);
+    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format,
+                VkSampleCountFlagBits msaaSamples);
 };
 
 class depth_buffer : public device_image {
@@ -341,6 +340,6 @@ class SingleTimeCommandBuffer {
     VkCommandBuffer &buffer() { return m_commandBuffer; }
 
   private:
-    graphics_context& m_ctx;
+    graphics_context &m_ctx;
     VkCommandBuffer m_commandBuffer;
 };

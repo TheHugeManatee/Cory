@@ -109,22 +109,22 @@ class HelloTriangleApplication {
 
   private:
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
-    VkSampleCountFlagBits getMaxUsableSampleCount();
+    vk::SampleCountFlagBits getMaxUsableSampleCount();
 
   private:
     GLFWwindow *m_window;
     graphics_context m_ctx;
 
-    VkSampleCountFlagBits m_msaaSamples{VK_SAMPLE_COUNT_1_BIT};
+    vk::SampleCountFlagBits m_msaaSamples{vk::SampleCountFlagBits::e1};
 
     vk::SurfaceKHR m_surface;
-    VkSwapchainKHR m_swapChain;
-    std::vector<VkImage> m_swapChainImages;
-    VkFormat m_swapChainImageFormat;
-    VkExtent2D m_swapChainExtent;
-    std::vector<VkImageView> m_swapChainImageViews;
+    vk::SwapchainKHR m_swapChain;
+    std::vector<vk::Image> m_swapChainImages;
+    vk::Format m_swapChainImageFormat;
+    vk::Extent2D m_swapChainExtent;
+    std::vector<vk::ImageView> m_swapChainImageViews;
 
-    VkRenderPass m_renderPass;
+    vk::RenderPass m_renderPass;
     VkDescriptorSetLayout m_descriptorSetLayout;
     VkDescriptorPool m_descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;

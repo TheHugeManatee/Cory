@@ -21,19 +21,18 @@ uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
     throw std::runtime_error("Failed to find a suitable memory type!");
 }
 
-VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice,
-                             const std::vector<VkFormat> &candidates, VkImageTiling tiling,
-                             VkFormatFeatureFlags features)
+vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
+                             const std::vector<vk::Format> &candidates, vk::ImageTiling tiling,
+                             vk::FormatFeatureFlags features)
 {
-    for (const VkFormat &format : candidates) {
-        VkFormatProperties props;
-        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+    for (const vk::Format &format : candidates) {
+        vk::FormatProperties props = physicalDevice.getFormatProperties(format);
 
-        if (tiling == VK_IMAGE_TILING_LINEAR &&
+        if (tiling == vk::ImageTiling::eLinear &&
             (props.linearTilingFeatures & features) == features) {
             return format;
         }
-        if (tiling == VK_IMAGE_TILING_OPTIMAL &&
+        if (tiling == vk::ImageTiling::eOptimal &&
                  (props.optimalTilingFeatures & features) == features) {
             return format;
         }
@@ -41,12 +40,12 @@ VkFormat findSupportedFormat(VkPhysicalDevice physicalDevice,
     throw std::runtime_error("failed to find supported format!");
 }
 
-VkFormat findDepthFormat(VkPhysicalDevice physicalDevice)
+vk::Format findDepthFormat(vk::PhysicalDevice physicalDevice)
 {
     return findSupportedFormat(
         physicalDevice,
-        {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
-        VK_IMAGE_TILING_OPTIMAL, VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+        {vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
+        vk::ImageTiling::eOptimal, vk::FormatFeatureFlagBits::eDepthStencilAttachment);
 }
 
 device_buffer::device_buffer() {}
@@ -193,7 +192,7 @@ void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayo
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (hasStencilComponent(m_format)) {
+        if (hasStencilComponent(vk::Format(m_format))) {
             barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
         }
     }

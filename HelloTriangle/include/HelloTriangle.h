@@ -70,13 +70,13 @@ class HelloTriangleApplication {
     // set up the logical device. this creates the queues and instantiates the features
     void createLogicalDevice();
 
-    bool checkDeviceExtensionSupport(const VkPhysicalDevice &device);
-    SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
-    VkSurfaceFormatKHR
-    chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
-    VkPresentModeKHR
-    chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);
-    VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities);
+    bool checkDeviceExtensionSupport(const vk::PhysicalDevice &device);
+    SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device, vk::SurfaceKHR surface);
+    vk::SurfaceFormatKHR
+    chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats);
+    vk::PresentModeKHR
+    chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
+    vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities);
 
     void createSwapChain();
     void createImageViews();

@@ -107,6 +107,8 @@ class HelloTriangleApplication {
     void createColorResources();
     void createDepthResources();
 
+void createMemoryAllocator();
+
   private:
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
     vk::SampleCountFlagBits getMaxUsableSampleCount();

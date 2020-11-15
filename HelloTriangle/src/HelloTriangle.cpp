@@ -8,6 +8,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <vk_mem_alloc.h>
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -77,6 +79,8 @@ void HelloTriangleApplication::initVulkan()
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+
+    createMemoryAllocator();
 
     createTransientCommandPool();
 
@@ -200,6 +204,8 @@ void HelloTriangleApplication::cleanup()
     m_texture2.destroy(m_ctx);
 
     m_ctx.instance->destroySurfaceKHR(m_surface);
+
+    vmaDestroyAllocator(m_ctx.allocator);
 
     if (enableValidationLayers) {
         m_ctx.instance->destroyDebugUtilsMessengerEXT(m_debugMessenger, nullptr, m_ctx.dl);
@@ -1263,6 +1269,17 @@ void HelloTriangleApplication::createDepthResources()
     m_depthBuffer.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1}, depthFormat,
                          m_msaaSamples);
     m_depthBuffer.transitionLayout(m_ctx, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+}
+
+void HelloTriangleApplication::createMemoryAllocator()
+{
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_1;
+    allocatorInfo.physicalDevice = m_ctx.physicalDevice;
+    allocatorInfo.device = *m_ctx.device;
+    allocatorInfo.instance = *m_ctx.instance;
+
+    vmaCreateAllocator(&allocatorInfo, &m_ctx.allocator);
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const vk::PhysicalDevice &device)

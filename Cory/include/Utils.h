@@ -9,6 +9,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 
+#include <vk_mem_alloc.h>
+
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -31,8 +33,12 @@ struct graphics_context {
     vk::DispatchLoaderDynamic dl; // the vulkan dynamic dispatch loader
     vk::UniqueInstance instance{};
     vk::PhysicalDevice physicalDevice{};
+    VmaAllocator allocator {};
+    
     vk::UniqueDevice device{};
     vk::UniqueCommandPool transientCmdPool{};
+
+
 
     vk::Queue graphicsQueue{};
     vk::Queue presentQueue{};

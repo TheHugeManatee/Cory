@@ -29,6 +29,23 @@ class device_buffer;
 class device_image;
 struct stbi_image;
 
+#include <fmt/format.h>
+inline std::string formatBytes(size_t bytes)
+{
+    const static std::array<std::string_view, 5> suffix{"b", "KiB", "MiB", "GiB", "TiB"};
+    uint32_t suff{};
+    size_t remaind{};
+    for (; suff < suffix.size() && bytes >= 1024; ++suff) {
+        remaind = bytes % 1024;
+        bytes /= 1024;
+    }
+
+    if (remaind == 0)
+        return fmt::format("{} {}", bytes , suffix[suff]);
+
+    return fmt::format("{:.2f} {}", float(bytes) + float(remaind) / 1024.f, suffix[suff]);
+}
+
 struct graphics_context {
     vk::DispatchLoaderDynamic dl; // the vulkan dynamic dispatch loader
     vk::UniqueInstance instance{};

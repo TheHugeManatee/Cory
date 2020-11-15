@@ -198,22 +198,13 @@ void HelloTriangleApplication::cleanup()
 
     m_texture.destroy(m_ctx);
     m_texture2.destroy(m_ctx);
-    // vkDestroyBuffer(*m_ctx.device, m_vertexBuffer, nullptr);
-    // vkFreeMemory(*m_ctx.device, m_vertexBufferMemory, nullptr);
 
-    for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        vkDestroySemaphore(*m_ctx.device, m_renderFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(*m_ctx.device, m_imageAvailableSemaphores[i], nullptr);
-        vkDestroyFence(*m_ctx.device, m_inFlightFences[i], nullptr);
-    }
-
-    vkDestroySurfaceKHR(m_ctx.instance->operator VkInstance(), m_surface, nullptr);
+    m_ctx.instance->destroySurfaceKHR(m_surface);
 
     if (enableValidationLayers) {
         m_ctx.instance->destroyDebugUtilsMessengerEXT(m_debugMessenger, nullptr, m_ctx.dl);
     }
 
-    // vkDestroyInstance(m_ctx.instance, nullptr);
     glfwDestroyWindow(m_window);
     glfwTerminate();
 
@@ -916,25 +907,16 @@ void HelloTriangleApplication::createSyncObjects()
     m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
     m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-    m_imagesInFlight.resize(m_swapChainImages.size(), VK_NULL_HANDLE);
+    m_imagesInFlight.resize(m_swapChainImages.size());
 
-    VkSemaphoreCreateInfo semaphoreInfo{};
-    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    vk::SemaphoreCreateInfo semaphoreInfo{};
+    vk::FenceCreateInfo fenceInfo{};
+    fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
 
     for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-
-        if (vkCreateSemaphore(*m_ctx.device, &semaphoreInfo, nullptr,
-                              &m_imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(*m_ctx.device, &semaphoreInfo, nullptr,
-                              &m_renderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(*m_ctx.device, &fenceInfo, nullptr, &m_inFlightFences[i]) != VK_SUCCESS) {
-
-            throw std::runtime_error("failed to create synchronization objects for a frame!");
-        }
+        m_imageAvailableSemaphores[i] = m_ctx.device->createSemaphoreUnique(semaphoreInfo);
+        m_renderFinishedSemaphores[i] = m_ctx.device->createSemaphoreUnique(semaphoreInfo);
+        m_inFlightFences[i] = m_ctx.device->createFenceUnique(fenceInfo);
     }
 }
 
@@ -1089,80 +1071,82 @@ void HelloTriangleApplication::createUniformBuffers()
 void HelloTriangleApplication::drawFrame()
 {
     // fences to sync per-frame draw resources
-    vkWaitForFences(*m_ctx.device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    auto perFrameFenceResult =
+        m_ctx.device->waitForFences({*m_inFlightFences[m_currentFrame]}, true, UINT64_MAX);
+    if (perFrameFenceResult != vk::Result::eSuccess) {
+        throw std::runtime_error(fmt::format("failed to wait for inFlightFences[{}], error: {}",
+                                             m_currentFrame, perFrameFenceResult));
+    }
 
     // acquire image
-    uint32_t imageIndex;
-    auto result = vkAcquireNextImageKHR(*m_ctx.device, m_swapChain, UINT64_MAX,
-                                        m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE,
-                                        &imageIndex);
+    auto [result, imageIndex] = m_ctx.device->acquireNextImageKHR(
+        m_swapChain, UINT64_MAX, *m_imageAvailableSemaphores[m_currentFrame], nullptr);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    if (result == vk::Result::eErrorOutOfDateKHR) {
         recreateSwapChain();
         return;
     }
 
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
         throw std::runtime_error("failed to acquire swap chain image");
     }
 
     // Check if a previous frame is using this image (i.e. there is its fence to wait on)
-    if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE) {
-        vkWaitForFences(*m_ctx.device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+    if (m_imagesInFlight[imageIndex] != vk::Fence{}) {
+        result = m_ctx.device->waitForFences({m_imagesInFlight[imageIndex]}, true, UINT64_MAX);
+        if (result != vk::Result::eSuccess) {
+            throw std::runtime_error(fmt::format("failed to wait for inFlightFences[{}], error: {}",
+                                                 imageIndex, result));
+        }
     }
     // Mark the image as now being in use by this frame
-    m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
+    m_imagesInFlight[imageIndex] = *m_inFlightFences[m_currentFrame];
 
     updateUniformBuffer(imageIndex);
 
     // execute command buffer with that image as attachment
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    vk::SubmitInfo submitInfo{};
 
     // vkQueueSubmit allows to wait for a specific semaphore, which in our case waits until the
     // image is signaled available
-    VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphores[m_currentFrame]};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    vk::Semaphore waitSemaphores[] = {*m_imageAvailableSemaphores[m_currentFrame]};
+    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    VkCommandBuffer tmpCommandBuffer = static_cast<VkCommandBuffer>(*m_commandBuffers[imageIndex]);
-    submitInfo.pCommandBuffers = &tmpCommandBuffer;
+    submitInfo.pCommandBuffers = &*m_commandBuffers[imageIndex];
 
     // vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
-    VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphores[m_currentFrame]};
+    vk::Semaphore signalSemaphores[] = {*m_renderFinishedSemaphores[m_currentFrame]};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     // make sure to reset the frame-respective fence
-    vkResetFences(*m_ctx.device, 1, &m_inFlightFences[m_currentFrame]);
+    m_ctx.device->resetFences(*m_inFlightFences[m_currentFrame]);
 
-    if (vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]) !=
-        VK_SUCCESS) // could use a fence here instead of the semaphores for synchronization
-    {
-        throw std::runtime_error("Could not submit draw command buffer");
-    }
+    m_ctx.graphicsQueue.submit(submitInfo, *m_inFlightFences[m_currentFrame]);
 
     // return image to the swap chain
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    vk::PresentInfoKHR presentInfo{};
     presentInfo.waitSemaphoreCount = 1;
     presentInfo.pWaitSemaphores = signalSemaphores; // wait for queue to finish
 
-    VkSwapchainKHR swapChains[] = {m_swapChain};
+    vk::SwapchainKHR swapChains[] = {m_swapChain};
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
     presentInfo.pImageIndices = &imageIndex;
-    presentInfo.pResults = nullptr; // can be used to check every individual swap chai is successful
+    presentInfo.pResults =
+        nullptr; // can be used to check every individual swap chain is successful
 
-    result = vkQueuePresentKHR(m_ctx.presentQueue, &presentInfo);
+    result = m_ctx.presentQueue.presentKHR(presentInfo);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR ||
+        framebufferResized) {
         framebufferResized = false;
         recreateSwapChain();
     }
-    else if (result != VK_SUCCESS) {
+    else if (result != vk::Result::eSuccess) {
         throw std::runtime_error("failed to present swap chain image");
     }
 

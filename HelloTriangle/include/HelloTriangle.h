@@ -138,10 +138,10 @@ class HelloTriangleApplication {
 
     size_t m_currentFrame{};
 
-    std::vector<VkSemaphore> m_imageAvailableSemaphores;
-    std::vector<VkSemaphore> m_renderFinishedSemaphores;
-    std::vector<VkFence> m_inFlightFences;
-    std::vector<VkFence> m_imagesInFlight;
+    std::vector<vk::UniqueSemaphore> m_imageAvailableSemaphores;
+    std::vector<vk::UniqueSemaphore> m_renderFinishedSemaphores;
+    std::vector<vk::UniqueFence> m_inFlightFences;
+    std::vector<vk::Fence> m_imagesInFlight;
 
     uint32_t m_numVertices;
     device_buffer m_vertexBuffer;

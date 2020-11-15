@@ -81,7 +81,7 @@ class HelloTriangleApplication {
     void createSwapChain();
     void createImageViews();
 
-    VkShaderModule createShaderModule(const std::vector<char> &code);
+    vk::UniqueShaderModule createShaderModule(const std::vector<char> &code);
 
     void createGraphicsPipeline();
     void createRenderPass();
@@ -125,11 +125,11 @@ class HelloTriangleApplication {
     std::vector<vk::ImageView> m_swapChainImageViews;
 
     vk::RenderPass m_renderPass;
-    VkDescriptorSetLayout m_descriptorSetLayout;
-    VkDescriptorPool m_descriptorPool;
-    std::vector<VkDescriptorSet> descriptorSets;
-    VkPipelineLayout m_pipelineLayout;
-    VkPipeline m_graphicsPipeline;
+    vk::UniqueDescriptorSetLayout m_descriptorSetLayout;
+    vk::UniqueDescriptorPool m_descriptorPool;
+    std::vector<vk::DescriptorSet> m_descriptorSets;
+    vk::UniquePipelineLayout m_pipelineLayout;
+    vk::UniquePipeline m_graphicsPipeline;
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
     vk::UniqueCommandPool m_commandPool;

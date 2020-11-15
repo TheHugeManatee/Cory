@@ -43,7 +43,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL HelloTriangleApplication::debugCallback(
 
     spdlog::error("validation layer: {}", pCallbackData->pMessage);
 
-    return VK_FALSE;
+    return false;
 }
 
 void HelloTriangleApplication::run()
@@ -192,8 +192,6 @@ void HelloTriangleApplication::cleanup()
     spdlog::info("Cleaning up Vulkan and GLFW..");
 
     cleanupSwapChain();
-
-    vkDestroyDescriptorSetLayout(*m_ctx.device, m_descriptorSetLayout, nullptr);
 
     m_vertexBuffer.destroy(m_ctx);
     m_indexBuffer.destroy(m_ctx);
@@ -553,17 +551,13 @@ void HelloTriangleApplication::createImageViews()
     }
 }
 
-VkShaderModule HelloTriangleApplication::createShaderModule(const std::vector<char> &code)
+vk::UniqueShaderModule HelloTriangleApplication::createShaderModule(const std::vector<char> &code)
 {
-    VkShaderModuleCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    vk::ShaderModuleCreateInfo createInfo{};
     createInfo.codeSize = code.size();
     createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
 
-    VkShaderModule shaderModule;
-    if (vkCreateShaderModule(*m_ctx.device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create shader");
-    }
+    auto shaderModule = m_ctx.device->createShaderModuleUnique(createInfo);
 
     return shaderModule;
 }
@@ -577,44 +571,40 @@ void HelloTriangleApplication::createGraphicsPipeline()
     auto vertShaderModule = createShaderModule(vertShaderCode);
     auto fragShaderModule = createShaderModule(fragShaderCode);
 
-    VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-    vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vertShaderStageInfo.module = vertShaderModule;
+    vk::PipelineShaderStageCreateInfo vertShaderStageInfo{};
+    vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
+    vertShaderStageInfo.module = *vertShaderModule;
     // entry point -- means we can add multiple entry points in one module - yays!
     vertShaderStageInfo.pName = "main";
 
     // Note: pSpecializationInfo can be used to set compile time constants - kinda like macros in an
     // online compilation?
 
-    VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragShaderStageInfo.module = fragShaderModule;
+    vk::PipelineShaderStageCreateInfo fragShaderStageInfo{};
+    fragShaderStageInfo.stage = vk::ShaderStageFlagBits::eFragment;
+    fragShaderStageInfo.module = *fragShaderModule;
     fragShaderStageInfo.pName = "main";
 
-    VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+    vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
     //****************** Vertex Input ******************
     auto bindingDescription = Vertex::getBindingDescription();
     auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
     vertexInputInfo.vertexAttributeDescriptionCount =
         static_cast<uint32_t>(attributeDescriptions.size());
     vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
+    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
     inputAssembly.primitiveRestartEnable =
-        VK_FALSE; // allows to break primitive lists with 0xFFFF index
+        false; // allows to break primitive lists with 0xFFFF index
 
     //****************** Viewport & Scissor ******************
-    VkViewport viewport{};
+    vk::Viewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
     viewport.width = (float)m_swapChainExtent.width;
@@ -622,75 +612,70 @@ void HelloTriangleApplication::createGraphicsPipeline()
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
+    vk::Rect2D scissor{};
+    scissor.offset = vk::Offset2D{0, 0};
     scissor.extent = m_swapChainExtent;
 
-    VkPipelineViewportStateCreateInfo viewportState{};
-    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    vk::PipelineViewportStateCreateInfo viewportState{};
     viewportState.viewportCount = 1;
     viewportState.pViewports = &viewport;
     viewportState.scissorCount = 1;
     viewportState.pScissors = &scissor;
 
     //****************** Rasterizer ******************
-    VkPipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizer.depthClampEnable = VK_FALSE; // depth clamp: depth is clamped for fragments instead
-                                            // of discarding them. might be useful for shadow maps?
-    rasterizer.rasterizerDiscardEnable =
-        VK_FALSE; // completely disable rasterizer/framebuffer output
-    rasterizer.polygonMode =
-        VK_POLYGON_MODE_FILL; // _LINE and _POINT are alternatives, but require enabling GPU feature
-    rasterizer.lineWidth = 1.0f; // >1.0 requires 'wideLines' GPU feature
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    rasterizer.depthBiasEnable = VK_FALSE;
+    vk::PipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.depthClampEnable = false; // depth clamp: depth is clamped for fragments instead
+                                         // of discarding them. might be useful for shadow maps?
+    rasterizer.rasterizerDiscardEnable = false; // completely disable rasterizer/framebuffer output
+    rasterizer.polygonMode = vk::PolygonMode::eFill; // _LINE and _POINT are alternatives, but
+                                                     // require enabling GPU feature
+    rasterizer.lineWidth = 1.0f;                     // >1.0 requires 'wideLines' GPU feature
+    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
+    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
+    rasterizer.depthBiasEnable = false;
     rasterizer.depthBiasConstantFactor = 0.0f;
     rasterizer.depthBiasClamp = 0.0f;
     rasterizer.depthBiasSlopeFactor = 0.0f;
 
     //****************** Multisampling ******************
-    VkPipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.sampleShadingEnable = VK_TRUE;
-    multisampling.rasterizationSamples = VkSampleCountFlagBits(m_msaaSamples);
+    vk::PipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sampleShadingEnable = false;
+    multisampling.rasterizationSamples = m_msaaSamples;
     multisampling.minSampleShading = 0.2f; // controls how smooth the msaa
     multisampling.pSampleMask = nullptr;   // ?
-    multisampling.alphaToCoverageEnable = VK_FALSE;
-    multisampling.alphaToOneEnable = VK_FALSE;
+    multisampling.alphaToCoverageEnable = false;
+    multisampling.alphaToOneEnable = false;
 
     //****************** Depth and Stencil ******************
-    VkPipelineDepthStencilStateCreateInfo depthStencil{};
-    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    vk::PipelineDepthStencilStateCreateInfo depthStencil{};
     depthStencil.depthTestEnable = VK_TRUE;
     depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.depthCompareOp = vk::CompareOp::eLess;
+    depthStencil.depthBoundsTestEnable = false;
     depthStencil.minDepthBounds = 0.0f;
     depthStencil.maxDepthBounds = 1.0f;
-    depthStencil.stencilTestEnable = VK_FALSE;
-    depthStencil.front = {};
-    depthStencil.back = {};
+    depthStencil.stencilTestEnable = false;
+    depthStencil.front = vk::StencilOpState{};
+    depthStencil.back = vk::StencilOpState{};
 
     //****************** Color Blending ******************
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                          VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable = VK_FALSE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+    colorBlendAttachment.blendEnable = false;
+    colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eOne;
+    colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eZero;
+    colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
+    colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+    colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
+    colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
 
     // note: you can only do EITHER color blending per attachment, or logic blending. enabling logic
     // blending will override/disable the blend ops above
-    VkPipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.logicOpEnable = VK_FALSE;
-    colorBlending.logicOp = VK_LOGIC_OP_COPY;
+    vk::PipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.logicOpEnable = false;
+    colorBlending.logicOp = vk::LogicOp::eCopy;
     colorBlending.attachmentCount = 1;
     colorBlending.pAttachments = &colorBlendAttachment;
     colorBlending.blendConstants[0] = 0.0f;
@@ -700,28 +685,22 @@ void HelloTriangleApplication::createGraphicsPipeline()
 
     //****************** Dynamic State ******************
     // Specifies which pipeline states can be changed dynamically without recreating the pipeline
-    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH};
-    VkPipelineDynamicStateCreateInfo dynamicState{};
-    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    vk::DynamicState dynamicStates[] = {vk::DynamicState::eViewport, vk::DynamicState::eLineWidth};
+    vk::PipelineDynamicStateCreateInfo dynamicState{};
     dynamicState.dynamicStateCount = 2;
     dynamicState.pDynamicStates = dynamicStates;
 
     //****************** Pipeline Layout ******************
     // stores/manages shader uniform values
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+    pipelineLayoutInfo.pSetLayouts = &*m_descriptorSetLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
-    if (vkCreatePipelineLayout(*m_ctx.device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("Could not create pipeline layout!");
-    }
+    m_pipelineLayout = m_ctx.device->createPipelineLayoutUnique(pipelineLayoutInfo);
 
-    VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    vk::GraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.stageCount = 2;
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputInfo;
@@ -732,20 +711,25 @@ void HelloTriangleApplication::createGraphicsPipeline()
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = nullptr; // skipped for now --why tho?
-    pipelineInfo.layout = m_pipelineLayout;
+    pipelineInfo.layout = *m_pipelineLayout;
     pipelineInfo.renderPass = m_renderPass;
     pipelineInfo.subpass = 0;
-    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // note: vulkan can have "base" and "derived"
-                                                      // pipelines when they are similar
+    pipelineInfo.basePipelineHandle = nullptr; // note: vulkan can have "base" and "derived"
+                                               // pipelines when they are similar
     pipelineInfo.basePipelineIndex = -1;
 
-    if (vkCreateGraphicsPipelines(*m_ctx.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
-                                  &m_graphicsPipeline) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create graphics pipeline");
+    auto [result, pipeline] =
+        m_ctx.device->createGraphicsPipelineUnique(nullptr, pipelineInfo).asTuple();
+    switch (result) {
+    case vk::Result::eSuccess:
+        m_graphicsPipeline = std::move(pipeline);
+        break;
+    case vk::Result::ePipelineCompileRequiredEXT:
+        throw std::runtime_error(fmt::format("Could not create pipeline: {}", result));
+        break;
+    default:
+        assert(false); // should never happen
     }
-
-    vkDestroyShaderModule(*m_ctx.device, vertShaderModule, nullptr);
-    vkDestroyShaderModule(*m_ctx.device, fragShaderModule, nullptr);
 }
 
 void HelloTriangleApplication::createRenderPass()
@@ -862,8 +846,9 @@ void HelloTriangleApplication::createAppCommandPool()
 
     vk::CommandPoolCreateInfo poolInfo{};
     poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-    poolInfo.flags = vk::CommandPoolCreateFlagBits(0); // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
-                        // or VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT might be necessary
+    poolInfo.flags = vk::CommandPoolCreateFlagBits(
+        0); // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+            // or VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT might be necessary
 
     m_commandPool = m_ctx.device->createCommandPoolUnique(poolInfo);
 }
@@ -875,17 +860,17 @@ void HelloTriangleApplication::createCommandBuffers()
     vk::CommandBufferAllocateInfo allocInfo{};
     allocInfo.commandPool = *m_commandPool;
     allocInfo.level = vk::CommandBufferLevel::ePrimary; // _SECONDARY cannot be directly submitted
-                                                       // but can be called from other cmd buffer
+                                                        // but can be called from other cmd buffer
     allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
     m_commandBuffers = m_ctx.device->allocateCommandBuffersUnique(allocInfo);
-    
+
     // begin all command buffers
     for (size_t i = 0; i < m_commandBuffers.size(); i++) {
         auto cmdBuf = *m_commandBuffers[i];
 
         vk::CommandBufferBeginInfo beginInfo{};
         beginInfo.flags = vk::CommandBufferUsageFlagBits(0);
-             // ONE_TIME_SUBMIT for transient cmdbuffers that are rerecorded every frame
+        // ONE_TIME_SUBMIT for transient cmdbuffers that are rerecorded every frame
         beginInfo.pInheritanceInfo = nullptr; // Optional
 
         cmdBuf.begin(beginInfo);
@@ -908,15 +893,15 @@ void HelloTriangleApplication::createCommandBuffers()
         cmdBuf.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
         // bind graphics pipeline
-        cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
+        cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_graphicsPipeline);
 
         // bind the vertex and index buffers
         cmdBuf.bindVertexBuffers(0, {m_vertexBuffer.buffer()}, {0});
         cmdBuf.bindIndexBuffer(m_indexBuffer.buffer(), 0, vk::IndexType::eUint16);
-        
+
         // bind the descriptor sets
-        cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0,
-                                   {descriptorSets[i]}, {});
+        cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipelineLayout, 0,
+                                  {m_descriptorSets[i]}, {});
 
         // draw the vertices
         cmdBuf.drawIndexed(m_numVertices, 1, 0, 0, 0);
@@ -991,11 +976,7 @@ void HelloTriangleApplication::cleanupSwapChain()
     for (auto framebuffer : m_swapChainFramebuffers) {
         vkDestroyFramebuffer(*m_ctx.device, framebuffer, nullptr);
     }
-    vkDestroyDescriptorPool(*m_ctx.device, m_descriptorPool, nullptr);
 
-    
-    vkDestroyPipeline(*m_ctx.device, m_graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(*m_ctx.device, m_pipelineLayout, nullptr);
     vkDestroyRenderPass(*m_ctx.device, m_renderPass, nullptr);
 
     for (auto imageView : m_swapChainImageViews) {
@@ -1146,8 +1127,7 @@ void HelloTriangleApplication::drawFrame()
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    VkCommandBuffer tmpCommandBuffer =
-        static_cast<VkCommandBuffer>(*m_commandBuffers[imageIndex]);
+    VkCommandBuffer tmpCommandBuffer = static_cast<VkCommandBuffer>(*m_commandBuffers[imageIndex]);
     submitInfo.pCommandBuffers = &tmpCommandBuffer;
 
     // vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
@@ -1213,14 +1193,13 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
 
 void HelloTriangleApplication::createDescriptorPool()
 {
-    std::array<VkDescriptorPoolSize, 2> poolSizes;
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    std::array<vk::DescriptorPoolSize, 2> poolSizes;
+    poolSizes[0].type = vk::DescriptorType::eUniformBuffer;
     poolSizes[0].descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[1].type = vk::DescriptorType::eCombinedImageSampler;
     poolSizes[1].descriptorCount = static_cast<uint32_t>(m_swapChainImages.size());
 
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    vk::DescriptorPoolCreateInfo poolInfo{};
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
     poolInfo.maxSets = static_cast<uint32_t>(m_swapChainImages.size());
@@ -1228,69 +1207,59 @@ void HelloTriangleApplication::createDescriptorPool()
     // now
     // poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
-    if (vkCreateDescriptorPool(*m_ctx.device, &poolInfo, nullptr, &m_descriptorPool) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("Could not create descriptor pool");
-    }
+    m_descriptorPool = m_ctx.device->createDescriptorPoolUnique(poolInfo);
 }
 
 void HelloTriangleApplication::createDescriptorSets()
 {
-    std::vector<VkDescriptorSetLayout> layouts(m_swapChainImages.size(), m_descriptorSetLayout);
+    std::vector<vk::DescriptorSetLayout> layouts(m_swapChainImages.size(), *m_descriptorSetLayout);
 
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = m_descriptorPool;
+    vk::DescriptorSetAllocateInfo allocInfo{};
+    allocInfo.descriptorPool = *m_descriptorPool;
     allocInfo.descriptorSetCount = static_cast<uint32_t>(m_swapChainImages.size());
     allocInfo.pSetLayouts = layouts.data();
 
     // NOTE: descriptor sets are freed implicitly when the pool is freed.
-    descriptorSets.resize(m_swapChainImages.size());
-    if (vkAllocateDescriptorSets(*m_ctx.device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-        throw std::runtime_error("Could not allocate descriptor sets");
-    }
+    m_descriptorSets = m_ctx.device->allocateDescriptorSets(allocInfo);
 
     // populate every descriptor
     for (size_t i{}; i < m_swapChainImages.size(); ++i) {
-        VkDescriptorBufferInfo bufferInfo{};
+        vk::DescriptorBufferInfo bufferInfo{};
         bufferInfo.buffer = m_uniformBuffers[i].buffer();
         bufferInfo.offset = 0;
         bufferInfo.range = sizeof(UniformBufferObject); // access range, could be VK_WHOLE_SIZE
 
-        std::array<VkDescriptorImageInfo, 2> imageInfos;
+        std::array<vk::DescriptorImageInfo, 2> imageInfos;
         imageInfos[0].imageView = m_texture.view();
-        imageInfos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[0].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
         imageInfos[0].sampler = m_texture.sampler();
 
         imageInfos[1].imageView = m_texture2.view();
-        imageInfos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfos[1].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
         imageInfos[1].sampler = m_texture2.sampler();
 
-        std::array<VkWriteDescriptorSet, 2> descriptorWrites;
-        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet = descriptorSets[i];
+        std::array<vk::WriteDescriptorSet, 2> descriptorWrites;
+        descriptorWrites[0].dstSet = m_descriptorSets[i];
         descriptorWrites[0].dstBinding = 0;
         descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
         descriptorWrites[0].descriptorCount = 1;
         descriptorWrites[0].pBufferInfo = &bufferInfo;
         descriptorWrites[0].pImageInfo = nullptr;
         descriptorWrites[0].pTexelBufferView = nullptr;
         descriptorWrites[0].pNext = nullptr;
 
-        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[1].dstSet = descriptorSets[i];
+        descriptorWrites[1].dstSet = m_descriptorSets[i];
         descriptorWrites[1].dstBinding = 1;
         descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[1].descriptorType = vk::DescriptorType::eCombinedImageSampler;
         descriptorWrites[1].descriptorCount = static_cast<uint32_t>(imageInfos.size());
         descriptorWrites[1].pBufferInfo = nullptr;
         descriptorWrites[1].pImageInfo = imageInfos.data();
         descriptorWrites[1].pTexelBufferView = nullptr;
         descriptorWrites[1].pNext = nullptr;
 
-        vkUpdateDescriptorSets(*m_ctx.device, static_cast<uint32_t>(descriptorWrites.size()),
-                               descriptorWrites.data(), 0, nullptr);
+        m_ctx.device->updateDescriptorSets(descriptorWrites, {});
     }
 }
 
@@ -1409,30 +1378,27 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
 
 void HelloTriangleApplication::createDescriptorSetLayout()
 {
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    vk::DescriptorSetLayoutBinding uboLayoutBinding{};
     uboLayoutBinding.binding = 0;
-    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
     uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                                  VK_SHADER_STAGE_FRAGMENT_BIT; // or VK_SHADER_STAGE_ALL_GRAPHICS
+    uboLayoutBinding.stageFlags =
+        vk::ShaderStageFlagBits::eVertex |
+        vk::ShaderStageFlagBits::eFragment;        // or VK_SHADER_STAGE_ALL_GRAPHICS
     uboLayoutBinding.pImmutableSamplers = nullptr; // idk, something with image sampling
 
-    VkDescriptorSetLayoutBinding samplerBinding{};
+    vk::DescriptorSetLayoutBinding samplerBinding{};
     samplerBinding.binding = 1;
     samplerBinding.descriptorCount = 2;
-    samplerBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    samplerBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    samplerBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+    samplerBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
     samplerBinding.pImmutableSamplers = nullptr;
 
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerBinding};
+    std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerBinding};
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    vk::DescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
-    if (vkCreateDescriptorSetLayout(*m_ctx.device, &layoutInfo, nullptr, &m_descriptorSetLayout) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("failed to create descriptor set layout");
-    }
+    m_descriptorSetLayout = m_ctx.device->createDescriptorSetLayoutUnique(layoutInfo);
 }

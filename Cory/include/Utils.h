@@ -240,6 +240,8 @@ class device_image {
     vk::ImageView m_imageView{};
     vk::Sampler m_sampler{};
     vk::SampleCountFlagBits m_samples{vk::SampleCountFlagBits::e1};
+
+    std::string m_name;
 };
 
 class device_texture : public device_image {

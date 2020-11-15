@@ -5,6 +5,15 @@
 #include <fmt/format.h>
 #include <stdexcept>
 
+#if defined(_MSC_VER) && !defined(_WIN64)
+#define NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(type, x) static_cast<type>(x)
+#else
+#define NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(type, x)                                            \
+    reinterpret_cast<uint64_t>(static_cast<type>(x))
+#endif
+
+#include <spdlog/spdlog.h>
+
 uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties)
 {
@@ -80,6 +89,14 @@ void device_buffer::create(graphics_context &ctx, vk::DeviceSize size, vk::Buffe
     if (usage == vk::BufferUsageFlagBits::eUniformBuffer) {
         m_mappedMemory = allocInfo.pMappedData;
     }
+
+    #ifndef NDEBUG
+        std::string name = fmt::format("Buffer [{}]", formatBytes(m_size));
+        vk::DebugUtilsObjectNameInfoEXT debugUtilsObjectNameInfo(
+            vk::ObjectType::eBuffer, NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(VkBuffer, m_buffer),
+            name.c_str());
+        ctx.device->setDebugUtilsObjectNameEXT(debugUtilsObjectNameInfo, ctx.dl);
+    #endif
 }
 
 void device_buffer::destroy(graphics_context &ctx)
@@ -306,6 +323,14 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     samplerInfo.maxLod = static_cast<float>(m_mipLevels);
 
     m_sampler = ctx.device->createSampler(samplerInfo);
+
+#ifndef NDEBUG
+    m_name = fmt::format("Texture {}x{}x{}", m_size.x, m_size.y, m_size.z);
+    vk::DebugUtilsObjectNameInfoEXT debugUtilsObjectNameInfo(
+        vk::ObjectType::eImage, NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(VkImage, m_image),
+        m_name.c_str());
+    ctx.device->setDebugUtilsObjectNameEXT(debugUtilsObjectNameInfo, ctx.dl);
+#endif
 }
 
 void device_texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
@@ -475,6 +500,14 @@ void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format for
     viewInfo.subresourceRange.layerCount = 1;
 
     m_imageView = ctx.device->createImageView(viewInfo);
+
+#ifndef NDEBUG
+    m_name = fmt::format("Depth Buffer [{}x{}]", m_size.x, m_size.y);
+    vk::DebugUtilsObjectNameInfoEXT debugUtilsObjectNameInfo(
+        vk::ObjectType::eImage, NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(VkImage, m_image),
+        m_name.c_str());
+    ctx.device->setDebugUtilsObjectNameEXT(debugUtilsObjectNameInfo, ctx.dl);
+#endif
 }
 
 void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
@@ -525,4 +558,12 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format fo
     viewInfo.subresourceRange.layerCount = 1;
 
     m_imageView = ctx.device->createImageView(viewInfo);
+
+#ifndef NDEBUG
+    m_name = fmt::format("Render Buffer [{}x{}]", m_size.x, m_size.y);
+    vk::DebugUtilsObjectNameInfoEXT debugUtilsObjectNameInfo(
+        vk::ObjectType::eImage, NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(VkImage, m_image),
+        m_name.c_str());
+    ctx.device->setDebugUtilsObjectNameEXT(debugUtilsObjectNameInfo, ctx.dl);
+#endif
 }

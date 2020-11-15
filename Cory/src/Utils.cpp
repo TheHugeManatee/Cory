@@ -422,35 +422,32 @@ void device_texture::generate_mipmaps(graphics_context &ctx, VkImageLayout dstLa
 SingleTimeCommandBuffer::SingleTimeCommandBuffer(graphics_context &ctx)
     : m_ctx{ctx}
 {
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = m_ctx.transientCmdPool;
+    vk::CommandBufferAllocateInfo allocInfo{};
+    allocInfo.level = vk::CommandBufferLevel::ePrimary;
+    allocInfo.commandPool = *m_ctx.transientCmdPool;
     allocInfo.commandBufferCount = 1;
 
-    vkAllocateCommandBuffers(*m_ctx.device, &allocInfo, &m_commandBuffer);
+    m_commandBuffer = std::move(m_ctx.device->allocateCommandBuffersUnique(allocInfo)[0]);
 
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vk::CommandBufferBeginInfo beginInfo{};
 
-    vkBeginCommandBuffer(m_commandBuffer, &beginInfo);
+    m_commandBuffer->begin(beginInfo);
 }
 
 SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
 {
+    m_commandBuffer->end();
 
-    vkEndCommandBuffer(m_commandBuffer);
-
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    vk::SubmitInfo submitInfo{};
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &m_commandBuffer;
+    submitInfo.pCommandBuffers = &m_commandBuffer.get();
 
-    vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(m_ctx.graphicsQueue);
+    m_ctx.graphicsQueue.submit({submitInfo}, vk::Fence{});
+    m_ctx.graphicsQueue.waitIdle();
 
-    vkFreeCommandBuffers(*m_ctx.device, m_ctx.transientCmdPool, 1, &m_commandBuffer);
+    //vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    //vkQueueWaitIdle(m_ctx.graphicsQueue);
+
 }
 
 void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat format, VkSampleCountFlagBits msaaSamples)

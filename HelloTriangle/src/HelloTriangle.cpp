@@ -108,16 +108,13 @@ void HelloTriangleApplication::initVulkan()
 void HelloTriangleApplication::createTransientCommandPool()
 {
     // create a second command pool for transient operations
-    VkCommandPoolCreateInfo poolInfo{};
-    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    if (vkCreateCommandPool(*m_ctx.device, &poolInfo, nullptr, &m_ctx.transientCmdPool) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("Could not create transient command pool!");
-    }
+    vk::CommandPoolCreateInfo poolInfo{};
+    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
+
+    m_ctx.transientCmdPool = m_ctx.device->createCommandPoolUnique(poolInfo);
 }
 
 void HelloTriangleApplication::setupInstance()
@@ -211,9 +208,6 @@ void HelloTriangleApplication::cleanup()
         vkDestroySemaphore(*m_ctx.device, m_imageAvailableSemaphores[i], nullptr);
         vkDestroyFence(*m_ctx.device, m_inFlightFences[i], nullptr);
     }
-
-    vkDestroyCommandPool(*m_ctx.device, m_commandPool, nullptr);
-    vkDestroyCommandPool(*m_ctx.device, m_ctx.transientCmdPool, nullptr);
 
     vkDestroySurfaceKHR(m_ctx.instance->operator VkInstance(), m_surface, nullptr);
 
@@ -866,86 +860,69 @@ void HelloTriangleApplication::createAppCommandPool()
 {
     QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
 
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    vk::CommandPoolCreateInfo poolInfo{};
     poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-    poolInfo.flags = 0; // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+    poolInfo.flags = vk::CommandPoolCreateFlagBits(0); // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
                         // or VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT might be necessary
 
-    if (vkCreateCommandPool(*m_ctx.device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create command pool!");
-    }
+    m_commandPool = m_ctx.device->createCommandPoolUnique(poolInfo);
 }
 
 void HelloTriangleApplication::createCommandBuffers()
 {
     // we need one command buffer per frame buffer
     m_commandBuffers.resize(m_swapChainFramebuffers.size());
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = m_commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // _SECONDARY cannot be directly submitted
+    vk::CommandBufferAllocateInfo allocInfo{};
+    allocInfo.commandPool = *m_commandPool;
+    allocInfo.level = vk::CommandBufferLevel::ePrimary; // _SECONDARY cannot be directly submitted
                                                        // but can be called from other cmd buffer
     allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
-
-    if (vkAllocateCommandBuffers(*m_ctx.device, &allocInfo, m_commandBuffers.data()) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("Could not allocate command buffers");
-    }
-
+    m_commandBuffers = m_ctx.device->allocateCommandBuffersUnique(allocInfo);
+    
     // begin all command buffers
     for (size_t i = 0; i < m_commandBuffers.size(); i++) {
-        auto &cmdBuf = m_commandBuffers[i];
+        auto cmdBuf = *m_commandBuffers[i];
 
-        VkCommandBufferBeginInfo beginInfo{};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags =
-            0; // ONE_TIME_SUBMIT for transient cmdbuffers that are rerecorded every frame
+        vk::CommandBufferBeginInfo beginInfo{};
+        beginInfo.flags = vk::CommandBufferUsageFlagBits(0);
+             // ONE_TIME_SUBMIT for transient cmdbuffers that are rerecorded every frame
         beginInfo.pInheritanceInfo = nullptr; // Optional
 
-        if (vkBeginCommandBuffer(cmdBuf, &beginInfo) != VK_SUCCESS) {
-            throw std::runtime_error("failed to begin recording command buffer!");
-        }
+        cmdBuf.begin(beginInfo);
 
         // start render pass
-        VkRenderPassBeginInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        vk::RenderPassBeginInfo renderPassInfo{};
         renderPassInfo.renderPass = m_renderPass;
         renderPassInfo.framebuffer = m_swapChainFramebuffers[i];
-        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.offset = vk::Offset2D{0, 0};
         renderPassInfo.renderArea.extent = m_swapChainExtent; // should match size of attachments
 
         // defines what is used for VK_ATTACHMENT_LOAD_OP_CLEAR
-        std::array<VkClearValue, 2> clearColors;
-        clearColors[0] = {0.2f, 0.2f, 0.2f, 1.0f};
-        clearColors[1] = {1.0f, 0.0f};
+        std::array<vk::ClearValue, 2> clearColors;
+        clearColors[0].color.setFloat32({0.2f, 0.2f, 0.2f, 1.0f});
+        clearColors[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearColors.size());
         renderPassInfo.pClearValues = clearColors.data();
 
-        vkCmdBeginRenderPass(cmdBuf, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+        cmdBuf.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
         // bind graphics pipeline
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphicsPipeline);
+        cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
-        // bind the vertex buffer
-        VkBuffer vertexBuffers[] = {m_vertexBuffer.buffer()};
-        VkDeviceSize offsets[] = {0};
-        vkCmdBindVertexBuffers(cmdBuf, 0, 1, vertexBuffers, offsets);
+        // bind the vertex and index buffers
+        cmdBuf.bindVertexBuffers(0, {m_vertexBuffer.buffer()}, {0});
+        cmdBuf.bindIndexBuffer(m_indexBuffer.buffer(), 0, vk::IndexType::eUint16);
+        
+        // bind the descriptor sets
+        cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout, 0,
+                                   {descriptorSets[i]}, {});
 
-        vkCmdBindIndexBuffer(cmdBuf, m_indexBuffer.buffer(), 0, VK_INDEX_TYPE_UINT16);
+        // draw the vertices
+        cmdBuf.drawIndexed(m_numVertices, 1, 0, 0, 0);
 
-        vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1,
-                                &descriptorSets[i], 0, nullptr);
-
-        // draw three vertices
-        vkCmdDrawIndexed(cmdBuf, m_numVertices, 1, 0, 0, 0);
-
-        vkCmdEndRenderPass(cmdBuf);
-
-        if (vkEndCommandBuffer(cmdBuf) != VK_SUCCESS) {
-            throw std::runtime_error("failed to record command buffer");
-        }
+        cmdBuf.endRenderPass();
+        cmdBuf.end();
     }
 }
 
@@ -1016,9 +993,7 @@ void HelloTriangleApplication::cleanupSwapChain()
     }
     vkDestroyDescriptorPool(*m_ctx.device, m_descriptorPool, nullptr);
 
-    vkFreeCommandBuffers(*m_ctx.device, m_commandPool,
-                         static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
-
+    
     vkDestroyPipeline(*m_ctx.device, m_graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(*m_ctx.device, m_pipelineLayout, nullptr);
     vkDestroyRenderPass(*m_ctx.device, m_renderPass, nullptr);
@@ -1171,7 +1146,9 @@ void HelloTriangleApplication::drawFrame()
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &m_commandBuffers[imageIndex];
+    VkCommandBuffer tmpCommandBuffer =
+        static_cast<VkCommandBuffer>(*m_commandBuffers[imageIndex]);
+    submitInfo.pCommandBuffers = &tmpCommandBuffer;
 
     // vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
     VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphores[m_currentFrame]};

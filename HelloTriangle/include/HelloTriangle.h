@@ -132,8 +132,8 @@ class HelloTriangleApplication {
     VkPipeline m_graphicsPipeline;
     std::vector<VkFramebuffer> m_swapChainFramebuffers;
 
-    VkCommandPool m_commandPool;
-    std::vector<VkCommandBuffer> m_commandBuffers;
+    vk::UniqueCommandPool m_commandPool;
+    std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
     std::vector<device_buffer> m_uniformBuffers;
 
     size_t m_currentFrame{};

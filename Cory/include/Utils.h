@@ -56,10 +56,10 @@ struct graphics_context {
     vk::UniqueInstance instance{};
     vk::PhysicalDevice physicalDevice{};
     vk::UniqueDevice device{};
-    VkCommandPool transientCmdPool{};
+    vk::UniqueCommandPool transientCmdPool{};
 
-    VkQueue graphicsQueue{};
-    VkQueue presentQueue{};
+    vk::Queue graphicsQueue{};
+    vk::Queue presentQueue{};
 };
 
 struct QueueFamilyIndices {
@@ -337,9 +337,9 @@ class SingleTimeCommandBuffer {
     SingleTimeCommandBuffer(graphics_context &ctx);
     ~SingleTimeCommandBuffer();
 
-    VkCommandBuffer &buffer() { return m_commandBuffer; }
+    vk::CommandBuffer &buffer() { return *m_commandBuffer; }
 
   private:
     graphics_context &m_ctx;
-    VkCommandBuffer m_commandBuffer;
+    vk::UniqueCommandBuffer m_commandBuffer;
 };

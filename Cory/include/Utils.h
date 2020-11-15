@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan\vulkan.hpp>
+#include <vulkan/vulkan.hpp>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -37,8 +37,6 @@ struct graphics_context {
     
     vk::UniqueDevice device{};
     vk::UniqueCommandPool transientCmdPool{};
-
-
 
     vk::Queue graphicsQueue{};
     vk::Queue presentQueue{};
@@ -148,6 +146,16 @@ class host_buffer {
     std::unique_ptr<uint8_t[]> m_data;
 };
 
+enum class DeviceMemoryUsage : std::underlying_type<VmaMemoryUsage>::type {
+    eUnknown = VMA_MEMORY_USAGE_UNKNOWN,                ///< should not be used
+    eGpuOnly = VMA_MEMORY_USAGE_GPU_ONLY,               ///< textures, images used as attachments
+    eCpuOnly = VMA_MEMORY_USAGE_CPU_ONLY,               ///< staging buffers
+    eCpuToGpu = VMA_MEMORY_USAGE_CPU_TO_GPU,            ///< dynamic resources, i.e. vertex/uniform buffers, dynamic textures
+    eGpuToCpu = VMA_MEMORY_USAGE_GPU_TO_CPU,            ///< transform feedback, screenshots etc.
+    eCpuCopy = VMA_MEMORY_USAGE_CPU_COPY,               ///< staging custom paging/residency
+    eGpuLazilyAllocated = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED ///< transient attachment images, might not be available for desktop GPUs
+};
+
 class device_buffer {
   public:
     device_buffer();
@@ -162,7 +170,8 @@ class device_buffer {
     device_buffer &operator=(device_buffer &&rhs) = default;
 
     void create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
-                vk::MemoryPropertyFlags properties);
+                DeviceMemoryUsage memUsage);
+
     void destroy(graphics_context &ctx);
 
     void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
@@ -173,14 +182,12 @@ class device_buffer {
     void copy_to(graphics_context &ctx, const device_image &rhs);
 
     vk::Buffer buffer() { return m_buffer; };
-    vk::DeviceMemory memory() { return m_bufferMemory; }
 
   private:
     vk::Buffer m_buffer{};
-    vk::DeviceMemory m_bufferMemory{};
     vk::DeviceSize m_size{};
-    vk::BufferUsageFlags m_usage{};         // maybe not needed
-    vk::MemoryPropertyFlags m_properties{}; // maybe not needed
+    VmaAllocation m_allocation {};
+    void* m_mappedMemory { };
 };
 
 class device_image {

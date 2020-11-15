@@ -1027,15 +1027,14 @@ void HelloTriangleApplication::createVertexBuffers(const std::vector<Vertex> &ve
 
     device_buffer stagingBuffer;
     stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
-                         vk::MemoryPropertyFlagBits::eHostVisible |
-                             vk::MemoryPropertyFlagBits::eHostCoherent);
+                         DeviceMemoryUsage::eCpuOnly);
 
     stagingBuffer.upload(m_ctx, vertices.data(), bufferSize);
 
-    m_vertexBuffer.create(
-        m_ctx, bufferSize,
-        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    m_vertexBuffer.create(m_ctx, bufferSize,
+                          vk::BufferUsageFlagBits::eTransferDst |
+                              vk::BufferUsageFlagBits::eVertexBuffer,
+                          DeviceMemoryUsage::eGpuOnly);
 
     stagingBuffer.copy_to(m_ctx, m_vertexBuffer, bufferSize);
 
@@ -1048,15 +1047,14 @@ void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &in
 
     device_buffer stagingBuffer;
     stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
-                         vk::MemoryPropertyFlagBits::eHostVisible |
-                             vk::MemoryPropertyFlagBits::eHostCoherent);
+                         DeviceMemoryUsage::eCpuOnly);
 
     stagingBuffer.upload(m_ctx, indices.data(), bufferSize);
 
     m_indexBuffer.create(m_ctx, bufferSize,
                          vk::BufferUsageFlagBits::eTransferDst |
                              vk::BufferUsageFlagBits::eIndexBuffer,
-                         vk::MemoryPropertyFlagBits::eDeviceLocal);
+                         DeviceMemoryUsage::eGpuOnly);
 
     stagingBuffer.copy_to(m_ctx, m_indexBuffer, bufferSize);
 
@@ -1071,8 +1069,7 @@ void HelloTriangleApplication::createUniformBuffers()
 
     for (size_t i{}; i < m_swapChainImages.size(); ++i) {
         m_uniformBuffers[i].create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
-                                   vk::MemoryPropertyFlagBits::eHostVisible |
-                                       vk::MemoryPropertyFlagBits::eHostCoherent);
+                                   DeviceMemoryUsage::eCpuOnly);
     }
 }
 
@@ -1358,8 +1355,7 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
 
     device_buffer stagingBuffer;
     stagingBuffer.create(m_ctx, image.size(), vk::BufferUsageFlagBits::eTransferSrc,
-                         vk::MemoryPropertyFlagBits::eHostVisible |
-                             vk::MemoryPropertyFlagBits::eHostCoherent);
+                         DeviceMemoryUsage::eCpuOnly);
 
     stagingBuffer.upload(m_ctx, image.data, image.size());
 

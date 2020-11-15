@@ -5,12 +5,10 @@
 #include <fmt/format.h>
 #include <stdexcept>
 
-uint32_t findMemoryType(
-    vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
+uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties)
 {
-    vk::PhysicalDeviceMemoryProperties memProperties =
-        physicalDevice.getMemoryProperties();
+    vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
 
     for (uint32_t i{}; i < memProperties.memoryTypeCount; ++i) {
         if ((typeFilter & (1 << i)) &&
@@ -52,49 +50,56 @@ device_buffer::device_buffer() {}
 device_buffer::~device_buffer() {}
 
 void device_buffer::create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
-                           vk::MemoryPropertyFlags properties)
+                           DeviceMemoryUsage memUsage)
 {
-    // Note: ideally, we would not allocate each buffer individually but instead allocate a big
-    // chunk and assign it to individual buffers using the vkBindBufferMemory see also
-    // https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator
     m_size = size;
-    m_usage = usage;
-    m_properties = properties;
 
-    vk::BufferCreateInfo bufferInfo{};
+    VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode =
-        vk::SharingMode::eExclusive; // sharing between queue families - we don't do that atm
+    bufferInfo.usage = static_cast<VkBufferUsageFlags>(usage);
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    // vk::SharingMode::eExclusive; // sharing between queue families - we don't do that atm
 
-    m_buffer = ctx.device->createBuffer(bufferInfo);
+    VmaAllocationCreateInfo allocCreateInfo = {};
+    allocCreateInfo.usage = static_cast<VmaMemoryUsage>(memUsage);
+    if (usage == vk::BufferUsageFlagBits::eUniformBuffer) {
+        allocCreateInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    }
 
-    // get the device memory requirements
-    vk::MemoryRequirements memRequirements = ctx.device->getBufferMemoryRequirements(m_buffer);
+    VmaAllocationInfo allocInfo;
 
-    // allocate the physical device memory
-    vk::MemoryAllocateInfo allocInfo{};
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex =
-        findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits, properties);
+    VkBuffer buffer;
+    VkResult result = vmaCreateBuffer(ctx.allocator, &bufferInfo, &allocCreateInfo, &buffer,
+                                      &m_allocation, &allocInfo);
 
-    m_bufferMemory = ctx.device->allocateMemory(allocInfo);
-    ctx.device->bindBufferMemory(m_buffer, m_bufferMemory, 0);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Could not allocate buffer from memory allocator!");
+    }
+
+    m_buffer = buffer;
+    if (usage == vk::BufferUsageFlagBits::eUniformBuffer) {
+        m_mappedMemory = allocInfo.pMappedData;
+    }
 }
 
 void device_buffer::destroy(graphics_context &ctx)
 {
-    ctx.device->destroyBuffer(m_buffer);
-    ctx.device->freeMemory(m_bufferMemory);
+    vmaDestroyBuffer(ctx.allocator, m_buffer, m_allocation);
 }
 
 void device_buffer::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
                            vk::DeviceSize offset /*= 0*/)
 {
-    void *mappedData =
-        ctx.device->mapMemory(m_bufferMemory, offset, size); // alternately use VK_WHOLE_SIZE
+    // uniform buffers might already be mapped
+    if (m_mappedMemory) {
+        memcpy(m_mappedMemory, srcData, (size_t)size);
+        return;
+    }
+
+    void *mappedData;
+    vmaMapMemory(ctx.allocator, m_allocation, &mappedData);
     memcpy(mappedData, srcData, (size_t)size);
-    ctx.device->unmapMemory(m_bufferMemory);
+    vmaUnmapMemory(ctx.allocator, m_allocation);
 
     // NOTE: writes are not necessarily visible on the device bc/ caches.
     // either: use memory heap that is HOST_COHERENT
@@ -497,8 +502,7 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format fo
     m_image = ctx.device->createImage(imageInfo);
 
     // create and bind image memory
-    vk::MemoryRequirements memRequirements =
-        ctx.device->getImageMemoryRequirements(m_image);
+    vk::MemoryRequirements memRequirements = ctx.device->getImageMemoryRequirements(m_image);
 
     vk::MemoryAllocateInfo allocInfo{};
     allocInfo.allocationSize = memRequirements.size;

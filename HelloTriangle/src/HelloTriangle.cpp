@@ -1147,10 +1147,15 @@ void HelloTriangleApplication::drawFrame()
     presentInfo.pResults =
         nullptr; // can be used to check every individual swap chain is successful
 
-    result = m_ctx.presentQueue.presentKHR(presentInfo);
+    try {
+        result = m_ctx.presentQueue.presentKHR(presentInfo);
+    }
+    catch (vk::OutOfDateKHRError) {
+        framebufferResized = false;
+        recreateSwapChain();
+    }
 
-    if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR ||
-        framebufferResized) {
+    if (result == vk::Result::eSuboptimalKHR || framebufferResized) {
         framebufferResized = false;
         recreateSwapChain();
     }

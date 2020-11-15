@@ -96,7 +96,7 @@ class HelloTriangleApplication {
     void createIndexBuffer(const std::vector<uint16_t> &indices);
     void createUniformBuffers();
     void createDescriptorSetLayout();
-    device_texture createTextureImage(std::string textureFilename, VkFilter filter, VkSamplerAddressMode addressMode);
+    device_texture createTextureImage(std::string textureFilename, vk::Filter filter, vk::SamplerAddressMode addressMode);
 
     void drawFrame();
 
@@ -130,7 +130,7 @@ class HelloTriangleApplication {
     std::vector<vk::DescriptorSet> m_descriptorSets;
     vk::UniquePipelineLayout m_pipelineLayout;
     vk::UniquePipeline m_graphicsPipeline;
-    std::vector<VkFramebuffer> m_swapChainFramebuffers;
+    std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
     vk::UniqueCommandPool m_commandPool;
     std::vector<vk::UniqueCommandBuffer> m_commandBuffers;

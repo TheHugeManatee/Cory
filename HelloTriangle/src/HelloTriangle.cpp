@@ -89,10 +89,10 @@ void HelloTriangleApplication::initVulkan()
     createFramebuffers();
     createSyncObjects();
 
-    m_texture = createTextureImage(RESOURCE_DIR "/viking_room.png", VK_FILTER_LINEAR,
-                                   VK_SAMPLER_ADDRESS_MODE_REPEAT);
-    m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", VK_FILTER_NEAREST,
-                                    VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
+    m_texture = createTextureImage(RESOURCE_DIR "/viking_room.png", vk::Filter::eLinear,
+                                   vk::SamplerAddressMode::eRepeat);
+    m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", vk::Filter::eLinear,
+                                    vk::SamplerAddressMode::eClampToBorder);
     createGeometry();
 
     createDescriptorSetLayout();
@@ -860,7 +860,7 @@ void HelloTriangleApplication::createCommandBuffers()
         auto cmdBuf = *m_commandBuffers[i];
 
         vk::CommandBufferBeginInfo beginInfo{};
-        beginInfo.flags = vk::CommandBufferUsageFlagBits(0);
+        beginInfo.flags = {};
         // ONE_TIME_SUBMIT for transient cmdbuffers that are rerecorded every frame
         beginInfo.pInheritanceInfo = nullptr; // Optional
 
@@ -1017,18 +1017,19 @@ void HelloTriangleApplication::createGeometry()
 
 void HelloTriangleApplication::createVertexBuffers(const std::vector<Vertex> &vertices)
 {
-    VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+    vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
     device_buffer stagingBuffer;
-    stagingBuffer.create(m_ctx, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
+                         vk::MemoryPropertyFlagBits::eHostVisible |
+                             vk::MemoryPropertyFlagBits::eHostCoherent);
 
     stagingBuffer.upload(m_ctx, vertices.data(), bufferSize);
 
     m_vertexBuffer.create(
-        m_ctx, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        m_ctx, bufferSize,
+        vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 
     stagingBuffer.copy_to(m_ctx, m_vertexBuffer, bufferSize);
 
@@ -1037,18 +1038,19 @@ void HelloTriangleApplication::createVertexBuffers(const std::vector<Vertex> &ve
 
 void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &indices)
 {
-    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
     device_buffer stagingBuffer;
-    stagingBuffer.create(m_ctx, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
+                         vk::MemoryPropertyFlagBits::eHostVisible |
+                             vk::MemoryPropertyFlagBits::eHostCoherent);
 
     stagingBuffer.upload(m_ctx, indices.data(), bufferSize);
 
     m_indexBuffer.create(m_ctx, bufferSize,
-                         VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                         vk::BufferUsageFlagBits::eTransferDst |
+                             vk::BufferUsageFlagBits::eIndexBuffer,
+                         vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     stagingBuffer.copy_to(m_ctx, m_indexBuffer, bufferSize);
 
@@ -1057,14 +1059,14 @@ void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &in
 
 void HelloTriangleApplication::createUniformBuffers()
 {
-    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+    vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
 
     m_uniformBuffers.resize(m_swapChainImages.size());
 
     for (size_t i{}; i < m_swapChainImages.size(); ++i) {
-        m_uniformBuffers[i].create(m_ctx, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        m_uniformBuffers[i].create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+                                   vk::MemoryPropertyFlagBits::eHostVisible |
+                                       vk::MemoryPropertyFlagBits::eHostCoherent);
     }
 }
 
@@ -1250,7 +1252,7 @@ void HelloTriangleApplication::createDescriptorSets()
 void HelloTriangleApplication::createColorResources()
 {
     m_renderTarget.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1},
-                          VkFormat(m_swapChainImageFormat), VkSampleCountFlagBits(m_msaaSamples));
+                          m_swapChainImageFormat, m_msaaSamples);
 }
 
 void HelloTriangleApplication::createDepthResources()
@@ -1258,9 +1260,9 @@ void HelloTriangleApplication::createDepthResources()
 
     vk::Format depthFormat = findDepthFormat(m_ctx.physicalDevice);
 
-    m_depthBuffer.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1},
-                         VkFormat(depthFormat), VkSampleCountFlagBits(m_msaaSamples));
-    m_depthBuffer.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    m_depthBuffer.create(m_ctx, {m_swapChainExtent.width, m_swapChainExtent.height, 1}, depthFormat,
+                         m_msaaSamples);
+    m_depthBuffer.transitionLayout(m_ctx, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 }
 
 bool HelloTriangleApplication::isDeviceSuitable(const vk::PhysicalDevice &device)
@@ -1295,8 +1297,6 @@ bool HelloTriangleApplication::isDeviceSuitable(const vk::PhysicalDevice &device
 
 vk::SampleCountFlagBits HelloTriangleApplication::getMaxUsableSampleCount()
 {
-    // VkPhysicalDeviceProperties physicalDeviceProperties;
-    // vkGetPhysicalDeviceProperties(m_ctx.physicalDevice, &physicalDeviceProperties);
     auto physicalDeviceProperties = m_ctx.physicalDevice.getProperties();
 
     vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
@@ -1324,8 +1324,8 @@ vk::SampleCountFlagBits HelloTriangleApplication::getMaxUsableSampleCount()
 }
 
 device_texture HelloTriangleApplication::createTextureImage(std::string textureFilename,
-                                                            VkFilter filter,
-                                                            VkSamplerAddressMode addressMode)
+                                                            vk::Filter filter,
+                                                            vk::SamplerAddressMode addressMode)
 {
     stbi_image image(textureFilename);
     device_texture texture;
@@ -1335,26 +1335,26 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
     }
 
     device_buffer stagingBuffer;
-    stagingBuffer.create(m_ctx, image.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    stagingBuffer.create(m_ctx, image.size(), vk::BufferUsageFlagBits::eTransferSrc,
+                         vk::MemoryPropertyFlagBits::eHostVisible |
+                             vk::MemoryPropertyFlagBits::eHostCoherent);
 
     stagingBuffer.upload(m_ctx, image.data, image.size());
 
     uint32_t mipLevels =
         static_cast<uint32_t>(std::floor(std::log2(std::max(image.width, image.height)))) + 1;
-    texture.create(m_ctx, {image.width, image.height, 1}, mipLevels, VK_IMAGE_TYPE_2D,
-                   VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, filter, addressMode,
-                   VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
-                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    texture.create(m_ctx, {image.width, image.height, 1}, mipLevels, vk::ImageType::e2D,
+                   vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, filter, addressMode,
+                   vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled |
+                       vk::ImageUsageFlagBits::eTransferSrc,
+                   vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    texture.transitionLayout(m_ctx, vk::ImageLayout::eTransferDstOptimal);
     stagingBuffer.copy_to(m_ctx, texture);
     stagingBuffer.destroy(m_ctx);
 
-    texture.generate_mipmaps(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                             VK_ACCESS_SHADER_READ_BIT);
+    texture.generate_mipmaps(m_ctx, vk::ImageLayout::eShaderReadOnlyOptimal,
+                             vk::AccessFlagBits::eShaderRead);
     // texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     return texture;

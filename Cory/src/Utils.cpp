@@ -5,11 +5,12 @@
 #include <fmt/format.h>
 #include <stdexcept>
 
-uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
-                        VkMemoryPropertyFlags properties)
+uint32_t findMemoryType(
+    vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
+                        vk::MemoryPropertyFlags properties)
 {
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+    vk::PhysicalDeviceMemoryProperties memProperties =
+        physicalDevice.getMemoryProperties();
 
     for (uint32_t i{}; i < memProperties.memoryTypeCount; ++i) {
         if ((typeFilter & (1 << i)) &&
@@ -22,8 +23,8 @@ uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
 }
 
 vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
-                             const std::vector<vk::Format> &candidates, vk::ImageTiling tiling,
-                             vk::FormatFeatureFlags features)
+                               const std::vector<vk::Format> &candidates, vk::ImageTiling tiling,
+                               vk::FormatFeatureFlags features)
 {
     for (const vk::Format &format : candidates) {
         vk::FormatProperties props = physicalDevice.getFormatProperties(format);
@@ -33,7 +34,7 @@ vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
             return format;
         }
         if (tiling == vk::ImageTiling::eOptimal &&
-                 (props.optimalTilingFeatures & features) == features) {
+            (props.optimalTilingFeatures & features) == features) {
             return format;
         }
     }
@@ -43,16 +44,15 @@ vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
 vk::Format findDepthFormat(vk::PhysicalDevice physicalDevice)
 {
     return findSupportedFormat(
-        physicalDevice,
-        {vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
+        physicalDevice, {vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
         vk::ImageTiling::eOptimal, vk::FormatFeatureFlagBits::eDepthStencilAttachment);
 }
 
 device_buffer::device_buffer() {}
 device_buffer::~device_buffer() {}
 
-void device_buffer::create(graphics_context &ctx, VkDeviceSize size, VkBufferUsageFlags usage,
-                           VkMemoryPropertyFlags properties)
+void device_buffer::create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
+                           vk::MemoryPropertyFlags properties)
 {
     // Note: ideally, we would not allocate each buffer individually but instead allocate a big
     // chunk and assign it to individual buffers using the vkBindBufferMemory see also
@@ -61,49 +61,40 @@ void device_buffer::create(graphics_context &ctx, VkDeviceSize size, VkBufferUsa
     m_usage = usage;
     m_properties = properties;
 
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    vk::BufferCreateInfo bufferInfo{};
     bufferInfo.size = size;
     bufferInfo.usage = usage;
     bufferInfo.sharingMode =
-        VK_SHARING_MODE_EXCLUSIVE; // sharing between queue families - we don't do that atm
+        vk::SharingMode::eExclusive; // sharing between queue families - we don't do that atm
 
-    if (vkCreateBuffer(*ctx.device, &bufferInfo, nullptr, &m_buffer) != VK_SUCCESS) {
-        throw std::runtime_error("Could not allocate buffer!");
-    }
+    m_buffer = ctx.device->createBuffer(bufferInfo);
 
     // get the device memory requirements
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(*ctx.device, m_buffer, &memRequirements);
+    vk::MemoryRequirements memRequirements = ctx.device->getBufferMemoryRequirements(m_buffer);
 
     // allocate the physical device memory
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    vk::MemoryAllocateInfo allocInfo{};
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex =
         findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_bufferMemory) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate buffer memory!");
-    }
-
-    vkBindBufferMemory(*ctx.device, m_buffer, m_bufferMemory, 0);
+    m_bufferMemory = ctx.device->allocateMemory(allocInfo);
+    ctx.device->bindBufferMemory(m_buffer, m_bufferMemory, 0);
 }
 
 void device_buffer::destroy(graphics_context &ctx)
 {
-    vkDestroyBuffer(*ctx.device, m_buffer, nullptr);
-    vkFreeMemory(*ctx.device, m_bufferMemory, nullptr);
+    ctx.device->destroyBuffer(m_buffer);
+    ctx.device->freeMemory(m_bufferMemory);
 }
 
-void device_buffer::upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
-                           VkDeviceSize offset /*= 0*/)
+void device_buffer::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
+                           vk::DeviceSize offset /*= 0*/)
 {
-    void *mappedData;
-    vkMapMemory(*ctx.device, m_bufferMemory, offset, size, 0,
-                &mappedData); // alternately use VK_WHOLE_SIZE
+    void *mappedData =
+        ctx.device->mapMemory(m_bufferMemory, offset, size); // alternately use VK_WHOLE_SIZE
     memcpy(mappedData, srcData, (size_t)size);
-    vkUnmapMemory(*ctx.device, m_bufferMemory);
+    ctx.device->unmapMemory(m_bufferMemory);
 
     // NOTE: writes are not necessarily visible on the device bc/ caches.
     // either: use memory heap that is HOST_COHERENT
@@ -119,33 +110,33 @@ void device_buffer::download(graphics_context &ctx, host_buffer &buf)
     throw std::runtime_error("Function not implemented.");
 }
 
-void device_buffer::copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size)
+void device_buffer::copy_to(graphics_context &ctx, device_buffer &rhs, vk::DeviceSize size)
 {
     SingleTimeCommandBuffer copyCmdBuffer(ctx);
 
-    VkBufferCopy copyRegion{};
+    vk::BufferCopy copyRegion{};
     copyRegion.size = size;
-    vkCmdCopyBuffer(copyCmdBuffer.buffer(), buffer(), rhs.buffer(), 1, &copyRegion);
+    copyCmdBuffer.buffer().copyBuffer(m_buffer, rhs.buffer(), {copyRegion});
 }
 
 void device_buffer::copy_to(graphics_context &ctx, const device_image &rhs)
 {
     SingleTimeCommandBuffer cmdBuf(ctx);
 
-    VkBufferImageCopy region{};
+    vk::BufferImageCopy region{};
     region.bufferOffset = 0;
     region.bufferRowLength = 0;
     region.bufferImageHeight = 0;
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
     region.imageSubresource.mipLevel = 0;
     region.imageSubresource.baseArrayLayer = 0;
     region.imageSubresource.layerCount = 1;
 
-    region.imageOffset = {0, 0, 0};
-    region.imageExtent = {rhs.size().x, rhs.size().y, 1};
+    region.imageOffset = vk::Offset3D{0, 0, 0};
+    region.imageExtent = vk::Extent3D{rhs.size().x, rhs.size().y, 1};
 
-    vkCmdCopyBufferToImage(cmdBuf.buffer(), m_buffer, rhs.image(),
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    cmdBuf.buffer().copyBufferToImage(m_buffer, rhs.image(), vk::ImageLayout::eTransferDstOptimal,
+                                      {region});
 }
 
 stbi_image::stbi_image(const std::string &file)
@@ -169,15 +160,14 @@ void device_image::destroy(graphics_context &ctx)
         vkFreeMemory(*ctx.device, m_imageMemory, nullptr);
 }
 
-void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayout)
+void device_image::transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout)
 {
     if (m_currentLayout == newLayout)
         return;
 
     SingleTimeCommandBuffer cmdBuf(ctx);
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    vk::ImageMemoryBarrier barrier{};
     barrier.oldLayout = m_currentLayout;
     barrier.newLayout = newLayout;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -189,49 +179,49 @@ void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayo
     barrier.subresourceRange.layerCount = 1;
     barrier.subresourceRange.levelCount = m_mipLevels;
 
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+    if (newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
+        barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
         if (hasStencilComponent(vk::Format(m_format))) {
-            barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+            barrier.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
         }
     }
 
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
+    vk::PipelineStageFlags sourceStage;
+    vk::PipelineStageFlags destinationStage;
 
-    if (m_currentLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    if (m_currentLayout == vk::ImageLayout::eUndefined &&
+        newLayout == vk::ImageLayout::eTransferDstOptimal) {
+        barrier.srcAccessMask = {};
+        barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
 
-        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eTransfer;
     }
-    else if (m_currentLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-             newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    else if (m_currentLayout == vk::ImageLayout::eTransferDstOptimal &&
+             newLayout == vk::ImageLayout::eShaderReadOnlyOptimal) {
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+        barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 
-        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        sourceStage = vk::PipelineStageFlagBits::eTransfer;
+        destinationStage = vk::PipelineStageFlagBits::eFragmentShader;
     }
-    else if (m_currentLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-             newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    else if (m_currentLayout == vk::ImageLayout::eUndefined &&
+             newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal) {
+        barrier.srcAccessMask = {};
+        barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead |
+                                vk::AccessFlagBits::eDepthStencilAttachmentWrite;
 
-        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        sourceStage = vk::PipelineStageFlagBits::eTopOfPipe;
+        destinationStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
     }
     else {
         throw std::runtime_error(fmt::format("unsupported layout transition: from {} to {}",
                                              m_currentLayout, newLayout));
     }
 
-    vkCmdPipelineBarrier(cmdBuf.buffer(), sourceStage, destinationStage, 0, 0, nullptr, 0, nullptr,
-                         1, &barrier);
+    cmdBuf.buffer().pipelineBarrier(sourceStage, destinationStage, vk::DependencyFlags{}, {}, {},
+                                    {barrier});
 
     m_currentLayout = newLayout;
 }
@@ -239,18 +229,17 @@ void device_image::transitionLayout(graphics_context &ctx, VkImageLayout newLayo
 device_image::~device_image() {}
 
 void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels,
-                            VkImageType type, VkFormat format, VkImageTiling tiling,
-                            VkFilter filter, VkSamplerAddressMode addressMode,
-                            VkImageUsageFlags usage, VkMemoryPropertyFlags properties)
+                            vk::ImageType type, vk::Format format, vk::ImageTiling tiling,
+                            vk::Filter filter, vk::SamplerAddressMode addressMode,
+                            vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties)
 {
     m_size = size;
     m_mipLevels = mipLevels;
     m_format = format;
-    m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_currentLayout = vk::ImageLayout::eUndefined;
 
     // create image object
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    vk::ImageCreateInfo imageInfo{};
     imageInfo.imageType = type; // i.e. 1D/2D/3D
     imageInfo.extent.width = size.x;
     imageInfo.extent.height = size.y;
@@ -261,105 +250,90 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     imageInfo.tiling = tiling;
     imageInfo.initialLayout = m_currentLayout;
     imageInfo.usage = usage;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.samples = vk::SampleCountFlagBits::e1;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    if (vkCreateImage(*ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create image!");
-    }
+    m_image = ctx.device->createImage(imageInfo);
 
     // create and bind image memory
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(*ctx.device, m_image, &memRequirements);
+    vk::MemoryRequirements memRequirements = ctx.device->getImageMemoryRequirements(m_image);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    vk::MemoryAllocateInfo allocInfo{};
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex =
         findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate image memory!");
-    }
+    m_imageMemory = ctx.device->allocateMemory(allocInfo);
 
-    vkBindImageMemory(*ctx.device, m_image, m_imageMemory, 0);
+    ctx.device->bindImageMemory(m_image, m_imageMemory, 0);
 
     // image view
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vk::ImageViewCreateInfo viewInfo{};
     viewInfo.format = m_format;
     viewInfo.image = m_image;
-    assert(type == VK_IMAGE_TYPE_2D &&
+    assert(type == vk::ImageType::e2D &&
            "TODO: creating views for image types other than 2D not implemented!");
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.viewType = vk::ImageViewType::e2D;
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = m_mipLevels;
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(*ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create image view");
-    }
+    m_imageView = ctx.device->createImageView(viewInfo);
 
     // image sampler
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    vk::SamplerCreateInfo samplerInfo{};
     samplerInfo.magFilter = filter;
     samplerInfo.minFilter = filter;
     samplerInfo.addressModeU = addressMode;
     samplerInfo.addressModeV = addressMode;
     samplerInfo.addressModeW = addressMode;
-    samplerInfo.anisotropyEnable = VK_TRUE;
+    samplerInfo.anisotropyEnable = true;
     samplerInfo.maxAnisotropy = 16.0f;
-    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE; // [0,1] or [0, numberOfTexels]
-    samplerInfo.compareEnable = VK_FALSE;           // necessary for PCF shadow maps
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.borderColor = vk::BorderColor::eIntOpaqueBlack;
+    samplerInfo.unnormalizedCoordinates = false; // [0,1] or [0, numberOfTexels]
+    samplerInfo.compareEnable = false;           // necessary for PCF shadow maps
+    samplerInfo.compareOp = vk::CompareOp::eAlways;
+    samplerInfo.mipmapMode = vk::SamplerMipmapMode::eLinear;
     samplerInfo.mipLodBias = 0.0f;
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = static_cast<float>(m_mipLevels);
 
-    if (vkCreateSampler(*ctx.device, &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create texture sampler!");
-    }
+    m_sampler = ctx.device->createSampler(samplerInfo);
 }
 
-void device_texture::upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
-                            VkDeviceSize offset /*= 0*/)
+void device_texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
+                            vk::DeviceSize offset /*= 0*/)
 {
-    void *mappedData;
-    vkMapMemory(*ctx.device, m_imageMemory, offset, size, 0,
-                &mappedData); // alternately use VK_WHOLE_SIZE
+    void *mappedData = ctx.device->mapMemory(m_imageMemory, offset, size);
     memcpy(mappedData, srcData, (size_t)size);
-    vkUnmapMemory(*ctx.device, m_imageMemory);
+    ctx.device->unmapMemory(m_imageMemory);
 }
 
-void device_texture::generate_mipmaps(graphics_context &ctx, VkImageLayout dstLayout,
-                                      VkAccessFlags dstAccess)
+void device_texture::generate_mipmaps(graphics_context &ctx, vk::ImageLayout dstLayout,
+                                      vk::AccessFlags dstAccess)
 {
     // check if format actually supports linear blitting
-    VkFormatProperties formatProperties;
-    vkGetPhysicalDeviceFormatProperties(ctx.physicalDevice, m_format, &formatProperties);
+    vk::FormatProperties formatProperties = ctx.physicalDevice.getFormatProperties(m_format);
+
     if (!(formatProperties.optimalTilingFeatures &
-          VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT)) {
+          vk::FormatFeatureFlagBits::eSampledImageFilterLinear)) {
         throw std::runtime_error("Image format does not support linear blitting!");
         // fallback options: compute mipmap layers in software (either CPU-side with
         // stb_image_resize etc, or GPU-side with compute shaders etc.)
     }
 
     // make sure everything is transitioned to TRANSFER_DST_OPTIMAL
-    transitionLayout(ctx, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    transitionLayout(ctx, vk::ImageLayout::eTransferDstOptimal);
 
     SingleTimeCommandBuffer cmdBuf(ctx);
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    vk::ImageMemoryBarrier barrier{};
     barrier.image = m_image;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.layerCount = 1;
     barrier.subresourceRange.levelCount = 1;
@@ -367,40 +341,39 @@ void device_texture::generate_mipmaps(graphics_context &ctx, VkImageLayout dstLa
     glm::ivec3 mipSize = m_size;
     for (uint32_t i = 1; i < m_mipLevels; ++i) {
         barrier.subresourceRange.baseMipLevel = i - 1;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        vkCmdPipelineBarrier(cmdBuf.buffer(), VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                             &barrier);
+        barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+        barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+        barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+        cmdBuf->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                                vk::PipelineStageFlagBits::eTransfer, vk::DependencyFlagBits{}, {},
+                                {}, {barrier});
 
-        VkImageBlit blit{};
-        blit.srcOffsets[0] = {0, 0, 0};
-        blit.srcOffsets[1] = {mipSize.x, mipSize.y, 1};
-        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        vk::ImageBlit blit{};
+        blit.srcOffsets[0] = vk::Offset3D{0, 0, 0};
+        blit.srcOffsets[1] = vk::Offset3D{mipSize.x, mipSize.y, 1};
+        blit.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
         blit.srcSubresource.mipLevel = i - 1;
         blit.srcSubresource.baseArrayLayer = 0;
         blit.srcSubresource.layerCount = 1;
-        blit.dstOffsets[0] = {0, 0, 0};
-        blit.dstOffsets[1] = {mipSize.x > 1 ? mipSize.x / 2 : 1, mipSize.y > 1 ? mipSize.y / 2 : 1,
-                              1};
-        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstOffsets[0] = vk::Offset3D{0, 0, 0};
+        blit.dstOffsets[1] =
+            vk::Offset3D{mipSize.x > 1 ? mipSize.x / 2 : 1, mipSize.y > 1 ? mipSize.y / 2 : 1, 1};
+        blit.dstSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
         blit.dstSubresource.mipLevel = i;
         blit.dstSubresource.baseArrayLayer = 0;
         blit.dstSubresource.layerCount = 1;
 
-        vkCmdBlitImage(cmdBuf.buffer(), m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_image,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+        cmdBuf->blitImage(m_image, vk::ImageLayout::eTransferSrcOptimal, m_image,
+                          vk::ImageLayout::eTransferDstOptimal, {blit}, vk::Filter::eLinear);
 
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
         barrier.newLayout = dstLayout;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
         barrier.dstAccessMask = dstAccess;
-
-        vkCmdPipelineBarrier(cmdBuf.buffer(), VK_PIPELINE_STAGE_TRANSFER_BIT,
-                             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                             &barrier);
+        cmdBuf->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                                vk::PipelineStageFlagBits::eFragmentShader, vk::DependencyFlags{},
+                                {}, {}, {barrier});
 
         if (mipSize.x > 1)
             mipSize.x /= 2;
@@ -409,14 +382,14 @@ void device_texture::generate_mipmaps(graphics_context &ctx, VkImageLayout dstLa
     }
 
     barrier.subresourceRange.baseMipLevel = m_mipLevels - 1;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
     barrier.newLayout = dstLayout;
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
     barrier.dstAccessMask = dstAccess;
 
-    vkCmdPipelineBarrier(cmdBuf.buffer(), VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1,
-                         &barrier);
+    cmdBuf->pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                            vk::PipelineStageFlagBits::eFragmentShader, vk::DependencyFlags{}, {},
+                            {}, {barrier});
 }
 
 SingleTimeCommandBuffer::SingleTimeCommandBuffer(graphics_context &ctx)
@@ -445,132 +418,107 @@ SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
     m_ctx.graphicsQueue.submit({submitInfo}, vk::Fence{});
     m_ctx.graphicsQueue.waitIdle();
 
-    //vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    //vkQueueWaitIdle(m_ctx.graphicsQueue);
-
+    // vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    // vkQueueWaitIdle(m_ctx.graphicsQueue);
 }
 
-void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, VkFormat format, VkSampleCountFlagBits msaaSamples)
+void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+                          vk::SampleCountFlagBits msaaSamples)
 {
     m_size = size;
     m_mipLevels = 1;
     m_format = format;
-    m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_currentLayout = vk::ImageLayout::eUndefined;
     m_samples = msaaSamples;
 
     // create image object
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = size.x;
-    imageInfo.extent.height = size.y;
-    imageInfo.extent.depth = size.z;
+    vk::ImageCreateInfo imageInfo{};
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.extent = vk::Extent3D{size.x, size.y, size.z};
     imageInfo.mipLevels = m_mipLevels;
     imageInfo.arrayLayers = 1;
     imageInfo.format = m_format;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
     imageInfo.initialLayout = m_currentLayout;
-    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    imageInfo.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
     imageInfo.samples = m_samples;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    if (vkCreateImage(*ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create image!");
-    }
+    m_image = ctx.device->createImage(imageInfo);
 
     // create and bind image memory
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(*ctx.device, m_image, &memRequirements);
+    vk::MemoryRequirements memRequirements = ctx.device->getImageMemoryRequirements(m_image);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    vk::MemoryAllocateInfo allocInfo{};
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
-                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                                               vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate image memory!");
-    }
-
-    vkBindImageMemory(*ctx.device, m_image, m_imageMemory, 0);
+    m_imageMemory = ctx.device->allocateMemory(allocInfo);
+    ctx.device->bindImageMemory(m_image, m_imageMemory, 0);
 
     // image view
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vk::ImageViewCreateInfo viewInfo{};
     viewInfo.format = m_format;
     viewInfo.image = m_image;
 
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    viewInfo.viewType = vk::ImageViewType::e2D;
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(*ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create image view");
-    }
+    m_imageView = ctx.device->createImageView(viewInfo);
 }
 
-void render_target::create(graphics_context &ctx, glm::uvec3 size,
-                           VkFormat format, VkSampleCountFlagBits msaaSamples)
+void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+                           vk::SampleCountFlagBits msaaSamples)
 {
     m_size = size;
     m_mipLevels = 1;
     m_format = format;
-    m_currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_currentLayout = vk::ImageLayout::eUndefined;
     m_samples = msaaSamples;
 
     // create image object
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = size.x;
-    imageInfo.extent.height = size.y;
-    imageInfo.extent.depth = size.z;
+    vk::ImageCreateInfo imageInfo{};
+    imageInfo.imageType = vk::ImageType::e2D;
+    imageInfo.extent = vk::Extent3D{size.x, size.y, size.z};
     imageInfo.mipLevels = m_mipLevels;
     imageInfo.arrayLayers = 1;
     imageInfo.format = m_format;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.tiling = vk::ImageTiling::eOptimal;
     imageInfo.initialLayout = m_currentLayout;
-    imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    imageInfo.usage = vk::ImageUsageFlagBits::eColorAttachment;
     imageInfo.samples = m_samples;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    if (vkCreateImage(*ctx.device, &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create image!");
-    }
+    m_image = ctx.device->createImage(imageInfo);
 
     // create and bind image memory
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(*ctx.device, m_image, &memRequirements);
+    vk::MemoryRequirements memRequirements =
+        ctx.device->getImageMemoryRequirements(m_image);
 
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    vk::MemoryAllocateInfo allocInfo{};
     allocInfo.allocationSize = memRequirements.size;
     allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
-                                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                                               vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    if (vkAllocateMemory(*ctx.device, &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate image memory!");
-    }
-
-    vkBindImageMemory(*ctx.device, m_image, m_imageMemory, 0);
+    m_imageMemory = ctx.device->allocateMemory(allocInfo);
+    ctx.device->bindImageMemory(m_image, m_imageMemory, 0);
 
     // image view
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vk::ImageViewCreateInfo viewInfo{};
     viewInfo.format = m_format;
     viewInfo.image = m_image;
 
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.viewType = vk::ImageViewType::e2D;
+    viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(*ctx.device, &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create image view");
-    }
+    m_imageView = ctx.device->createImageView(viewInfo);
 }

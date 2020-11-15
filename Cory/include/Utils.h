@@ -27,30 +27,6 @@ class device_buffer;
 class device_image;
 struct stbi_image;
 
-inline VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
-                                             const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-                                             const VkAllocationCallbacks *pAllocator,
-                                             VkDebugUtilsMessengerEXT *pDebugMessenger)
-{
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-        instance, "vkCreateDebugUtilsMessengerEXT");
-    if (func != nullptr) {
-        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    }
-    return VK_ERROR_EXTENSION_NOT_PRESENT;
-}
-
-inline void DestroyDebugUtilsMessengerEXT(VkInstance instance,
-                                          VkDebugUtilsMessengerEXT debugMessenger,
-                                          const VkAllocationCallbacks *pAllocator)
-{
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-        instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (func != nullptr) {
-        func(instance, debugMessenger, pAllocator);
-    }
-}
-
 struct graphics_context {
     vk::DispatchLoaderDynamic dl; // the vulkan dynamic dispatch loader
     vk::UniqueInstance instance{};
@@ -86,7 +62,8 @@ struct Vertex {
 
         bindingDescription.binding = 0;
         bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = vk::VertexInputRate::eVertex; // alternative: INPUT_RATE_INSTANCE
+        bindingDescription.inputRate =
+            vk::VertexInputRate::eVertex; // alternative: INPUT_RATE_INSTANCE
 
         return bindingDescription;
     }
@@ -138,8 +115,8 @@ struct Vertex {
     };
 };
 
-uint32_t findMemoryType(VkPhysicalDevice physicalDevice, uint32_t typeFilter,
-                        VkMemoryPropertyFlags properties);
+uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
+                        vk::MemoryPropertyFlags properties);
 vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
                                const std::vector<vk::Format> &candidates, vk::ImageTiling tiling,
                                vk::FormatFeatureFlags features);
@@ -178,26 +155,26 @@ class device_buffer {
     device_buffer(device_buffer &&rhs) = default;
     device_buffer &operator=(device_buffer &&rhs) = default;
 
-    void create(graphics_context &ctx, VkDeviceSize size, VkBufferUsageFlags usage,
-                VkMemoryPropertyFlags properties);
+    void create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
+                vk::MemoryPropertyFlags properties);
     void destroy(graphics_context &ctx);
 
-    void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
-                VkDeviceSize offset = 0);
+    void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
+                vk::DeviceSize offset = 0);
     void download(graphics_context &ctx, host_buffer &buf);
 
-    void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
+    void copy_to(graphics_context &ctx, device_buffer &rhs, vk::DeviceSize size);
     void copy_to(graphics_context &ctx, const device_image &rhs);
 
-    VkBuffer buffer() { return m_buffer; };
-    VkDeviceMemory memory() { return m_bufferMemory; }
+    vk::Buffer buffer() { return m_buffer; };
+    vk::DeviceMemory memory() { return m_bufferMemory; }
 
   private:
-    VkBuffer m_buffer{};
-    VkDeviceMemory m_bufferMemory{};
-    VkDeviceSize m_size{};
-    VkBufferUsageFlags m_usage{};         // maybe not needed
-    VkMemoryPropertyFlags m_properties{}; // maybe not needed
+    vk::Buffer m_buffer{};
+    vk::DeviceMemory m_bufferMemory{};
+    vk::DeviceSize m_size{};
+    vk::BufferUsageFlags m_usage{};         // maybe not needed
+    vk::MemoryPropertyFlags m_properties{}; // maybe not needed
 };
 
 class device_image {
@@ -215,59 +192,59 @@ class device_image {
 
     void destroy(graphics_context &ctx);
 
-    void transitionLayout(graphics_context &ctx, VkImageLayout newLayout);
+    void transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout);
 
-    VkImage image() const { return m_image; };
-    VkDeviceMemory memory() const { return m_imageMemory; }
-    VkImageView view() const { return m_imageView; }
-    VkSampler sampler() const { return m_sampler; }
+    vk::Image image() const { return m_image; };
+    vk::DeviceMemory memory() const { return m_imageMemory; }
+    vk::ImageView view() const { return m_imageView; }
+    vk::Sampler sampler() const { return m_sampler; }
     glm::uvec3 size() const { return m_size; }
 
   protected:
-    VkImage m_image{};
-    VkDeviceMemory m_imageMemory{};
+    vk::Image m_image{};
+    vk::DeviceMemory m_imageMemory{};
     glm::uvec3 m_size{};
     uint32_t m_mipLevels{};
-    VkFormat m_format{};
-    VkImageLayout m_currentLayout{};
-    VkImageView m_imageView{};
-    VkSampler m_sampler{};
-    VkSampleCountFlagBits m_samples{VK_SAMPLE_COUNT_1_BIT};
+    vk::Format m_format{};
+    vk::ImageLayout m_currentLayout{};
+    vk::ImageView m_imageView{};
+    vk::Sampler m_sampler{};
+    vk::SampleCountFlagBits m_samples{vk::SampleCountFlagBits::e1};
 };
 
 class device_texture : public device_image {
   public:
-    void create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels, VkImageType type,
-                VkFormat format, VkImageTiling tiling, VkFilter filter,
-                VkSamplerAddressMode addressMode, VkImageUsageFlags usage,
-                VkMemoryPropertyFlags properties);
+    void create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels, vk::ImageType type,
+                vk::Format format, vk::ImageTiling tiling, vk::Filter filter,
+                vk::SamplerAddressMode addressMode, vk::ImageUsageFlags usage,
+                vk::MemoryPropertyFlags properties);
 
-    void upload(graphics_context &ctx, const void *srcData, VkDeviceSize size,
-                VkDeviceSize offset = 0);
+    void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
+                vk::DeviceSize offset = 0);
     // void download(graphics_context &ctx, host_buffer &buf);
-    // void copy_to(graphics_context &ctx, device_buffer &rhs, VkDeviceSize size);
+    // void copy_to(graphics_context &ctx, device_buffer &rhs, vk::DeviceSize size);
 
     /**
      * generates mipmaps for a texture. dstLayout and dstAccess specify the configuration that the
      * texture should be transitioned to after the mipmap generation
      */
     void generate_mipmaps(graphics_context &ctx,
-                          VkImageLayout dstLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT);
+                          vk::ImageLayout dstLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+                          vk::AccessFlags dstAccess = vk::AccessFlagBits::eShaderRead);
 
   private:
 };
 
 class render_target : public device_image {
   public:
-    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format,
-                VkSampleCountFlagBits msaaSamples);
+    void create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+                vk::SampleCountFlagBits msaaSamples);
 };
 
 class depth_buffer : public device_image {
   public:
-    void create(graphics_context &ctx, glm::uvec3 size, VkFormat format,
-                VkSampleCountFlagBits msaaSamples);
+    void create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+                vk::SampleCountFlagBits msaaSamples);
 };
 
 namespace primitives {
@@ -337,6 +314,8 @@ class SingleTimeCommandBuffer {
     ~SingleTimeCommandBuffer();
 
     vk::CommandBuffer &buffer() { return *m_commandBuffer; }
+
+    vk::CommandBuffer *operator->() { return &*m_commandBuffer; };
 
   private:
     graphics_context &m_ctx;

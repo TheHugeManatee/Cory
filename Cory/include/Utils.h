@@ -191,8 +191,7 @@ class device_buffer {
 
     void destroy(graphics_context &ctx);
 
-    void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
-                vk::DeviceSize offset = 0);
+    void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size);
     void download(graphics_context &ctx, host_buffer &buf);
 
     void copy_to(graphics_context &ctx, device_buffer &rhs, vk::DeviceSize size);
@@ -252,8 +251,7 @@ class device_texture : public device_image {
                 vk::SamplerAddressMode addressMode, vk::ImageUsageFlags usage,
                 DeviceMemoryUsage memoryUsage);
 
-    void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
-                vk::DeviceSize offset = 0);
+    void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size);
     // void download(graphics_context &ctx, host_buffer &buf);
     // void copy_to(graphics_context &ctx, device_buffer &rhs, vk::DeviceSize size);
 

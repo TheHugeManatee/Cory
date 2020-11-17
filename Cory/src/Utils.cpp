@@ -104,8 +104,7 @@ void device_buffer::destroy(graphics_context &ctx)
     vmaDestroyBuffer(ctx.allocator, m_buffer, m_allocation);
 }
 
-void device_buffer::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
-                           vk::DeviceSize offset /*= 0*/)
+void device_buffer::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size)
 {
     // uniform buffers might already be mapped
     if (m_mappedMemory) {
@@ -117,11 +116,6 @@ void device_buffer::upload(graphics_context &ctx, const void *srcData, vk::Devic
     vmaMapMemory(ctx.allocator, m_allocation, &mappedData);
     memcpy(mappedData, srcData, (size_t)size);
     vmaUnmapMemory(ctx.allocator, m_allocation);
-
-    // NOTE: writes are not necessarily visible on the device bc/ caches.
-    // either: use memory heap that is HOST_COHERENT
-    // or: use vkFlushMappedMemoryRanges after writing mapped range and
-    // vkInvalidateMappedMemoryRanges before reading on GPU
 
     // NOTE 2: CPU-GPU transfer happens in the background and is guaranteed to complete before the
     // next vkQueueSubmit()
@@ -268,9 +262,7 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     // create image object
     vk::ImageCreateInfo imageInfo{};
     imageInfo.imageType = type; // i.e. 1D/2D/3D
-    imageInfo.extent.width = size.x;
-    imageInfo.extent.height = size.y;
-    imageInfo.extent.depth = size.z;
+    imageInfo.extent = vk::Extent3D{size.x, size.y, size.z};
     imageInfo.mipLevels = m_mipLevels;
     imageInfo.arrayLayers = 1;
     imageInfo.format = m_format;
@@ -338,8 +330,7 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
 #endif
 }
 
-void device_texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
-                            vk::DeviceSize offset /*= 0*/)
+void device_texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size)
 {
     void *mappedData;
     vmaMapMemory(ctx.allocator, m_allocation, &mappedData);
@@ -453,9 +444,6 @@ SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
 
     m_ctx.graphicsQueue.submit({submitInfo}, vk::Fence{});
     m_ctx.graphicsQueue.waitIdle();
-
-    // vkQueueSubmit(m_ctx.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    // vkQueueWaitIdle(m_ctx.graphicsQueue);
 }
 
 void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,

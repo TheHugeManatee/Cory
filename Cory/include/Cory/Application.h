@@ -2,4 +2,7 @@
 
 namespace Cory {
 
+class Application {
+};
+
 }

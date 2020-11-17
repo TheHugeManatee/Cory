@@ -1,17 +1,11 @@
 #include "HelloTriangle.h"
 
-#include "Mesh.h"
+#include "Cory/Mesh.h"
 
+#include <glm.h>
 #include <spdlog/spdlog.h>
-
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-#include <vk_mem_alloc.h>
 #include <tiny_obj_loader.h>
+#include <vk_mem_alloc.h>
 
 #include <algorithm>
 #include <chrono>

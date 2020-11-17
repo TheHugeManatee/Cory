@@ -4,7 +4,7 @@
 
 #include <array>
 #include <functional>
-#include <glm/glm.hpp>
+#include <glm.h>
 
 namespace Cory {
 

@@ -2,11 +2,12 @@
 
 #include <vulkan/vulkan.hpp>
 
-#include <Buffer.h>
-#include <Image.h>
-#include <Utils.h>
-#include <VkUtils.h>
-#include <Mesh.h>
+#include <Cory/Application.h>
+#include <Cory/Buffer.h>
+#include <Cory/Image.h>
+#include <Cory/Utils.h>
+#include <Cory/VkUtils.h>
+#include <Cory/Mesh.h>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -17,10 +18,10 @@
 
 using namespace Cory;
 
-class HelloTriangleApplication {
+class HelloTriangleApplication : public Application {
   public:
     static constexpr uint32_t WIDTH{800};
-    static constexpr uint32_t HEIGHT = {600};
+    static constexpr uint32_t HEIGHT{600};
 
 #ifdef NDEBUG
     static constexpr bool enableValidationLayers = false;

@@ -40,7 +40,7 @@ generate_export_header(${TARGET_NAME} EXPORT_FILE_NAME "${TARGET_HEADER_SUBDIR}$
 # CMake scripts extensions
 target_set_warnings(${TARGET_NAME} ENABLE ALL DISABLE Annoying)
 #target_enable_lto(${TARGET_NAME} optimized) #enable lto if available for non-debug configurations
-target_compile_features(${TARGET_NAME} PRIVATE cxx_std_17)
+target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)
 
 # group this lib into the 'libs' group for some IDEs
 set_target_properties (${TARGET_NAME} PROPERTIES FOLDER libs)
@@ -53,7 +53,10 @@ target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 # Set the include directories of this library
 target_include_directories(${TARGET_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+  $<INSTALL_INTERFACE:include>
+PRIVATE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Cory>
+)
 
 ###### INSTALLATION
 

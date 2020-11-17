@@ -21,7 +21,7 @@ target_link_libraries(${TARGET_NAME}
         ${CONAN_LIBS}
 )
 
-target_compile_features(${TARGET_NAME} PRIVATE cxx_std_17)
+target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)
 
 # CMake scripts extensions
 target_set_warnings(${TARGET_NAME} ENABLE ALL DISABLE Annoying) # Helper that can set default warning flags for you

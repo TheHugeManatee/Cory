@@ -101,6 +101,8 @@ function(target_set_warnings)
         list(APPEND WarningFlags "/wd4201") # warning C4201: nonstandard extension used: nameless struct/union
         list(APPEND WarningFlags "/wd4100") # unreferenced formal parameter
         list(APPEND WarningFlags "/wd4099") # warning LNK4099: PDB <lib.pdb> was not found with <lib.lib>; linking object as if no debug info
+        list(APPEND WarningFlags "/wd4324") # structure was padded due to alignment specifier
+        
         #list(APPEND WarningFlags "/wd4514" "/wd4710" "/wd4711")
         #list(APPEND WarningFlags "/wd4365") #signed/unsigned mismatch
         #list(APPEND WarningFlags "/wd4668") # is not defined as a preprocessor macro, replacing with '0' for

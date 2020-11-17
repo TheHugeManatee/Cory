@@ -4,7 +4,7 @@
 #include "VkUtils.h"
 
 #include <cstdint>
-#include <glm/glm.hpp>
+#include <glm.h>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.hpp>
 

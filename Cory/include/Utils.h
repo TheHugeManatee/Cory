@@ -224,15 +224,16 @@ class device_image {
 
     void transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout);
 
-    vk::Image image() const { return m_image; };
-    vk::DeviceMemory memory() const { return m_imageMemory; }
+    const vk::Image image() const { return m_image; };
+    vk::DeviceMemory memory() const { return m_deviceMemory; }
     vk::ImageView view() const { return m_imageView; }
     vk::Sampler sampler() const { return m_sampler; }
     glm::uvec3 size() const { return m_size; }
 
   protected:
     vk::Image m_image{};
-    vk::DeviceMemory m_imageMemory{};
+    vk::DeviceMemory m_deviceMemory{};
+    VmaAllocation m_allocation{};
     glm::uvec3 m_size{};
     uint32_t m_mipLevels{};
     vk::Format m_format{};
@@ -249,7 +250,7 @@ class device_texture : public device_image {
     void create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels, vk::ImageType type,
                 vk::Format format, vk::ImageTiling tiling, vk::Filter filter,
                 vk::SamplerAddressMode addressMode, vk::ImageUsageFlags usage,
-                vk::MemoryPropertyFlags properties);
+                DeviceMemoryUsage memoryUsage);
 
     void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
                 vk::DeviceSize offset = 0);

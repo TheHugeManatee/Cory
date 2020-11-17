@@ -50,6 +50,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL HelloTriangleApplication::debugCallback(
 
 void HelloTriangleApplication::run()
 {
+    spdlog::set_level(spdlog::level::trace);
+
     initWindow();
     initVulkan();
     mainLoop();
@@ -1365,7 +1367,7 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
                    vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, filter, addressMode,
                    vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled |
                        vk::ImageUsageFlagBits::eTransferSrc,
-                   vk::MemoryPropertyFlagBits::eDeviceLocal);
+                   DeviceMemoryUsage::eGpuOnly);
 
     texture.transitionLayout(m_ctx, vk::ImageLayout::eTransferDstOptimal);
     stagingBuffer.copy_to(m_ctx, texture);

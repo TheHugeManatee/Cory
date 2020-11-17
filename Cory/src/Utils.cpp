@@ -90,13 +90,13 @@ void device_buffer::create(graphics_context &ctx, vk::DeviceSize size, vk::Buffe
         m_mappedMemory = allocInfo.pMappedData;
     }
 
-    #ifndef NDEBUG
-        std::string name = fmt::format("Buffer [{}]", formatBytes(m_size));
-        vk::DebugUtilsObjectNameInfoEXT debugUtilsObjectNameInfo(
-            vk::ObjectType::eBuffer, NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(VkBuffer, m_buffer),
-            name.c_str());
-        ctx.device->setDebugUtilsObjectNameEXT(debugUtilsObjectNameInfo, ctx.dl);
-    #endif
+#ifndef NDEBUG
+    std::string name = fmt::format("Buffer [{}]", formatBytes(m_size));
+    vk::DebugUtilsObjectNameInfoEXT debugUtilsObjectNameInfo(
+        vk::ObjectType::eBuffer, NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(VkBuffer, m_buffer),
+        name.c_str());
+    ctx.device->setDebugUtilsObjectNameEXT(debugUtilsObjectNameInfo, ctx.dl);
+#endif
 }
 
 void device_buffer::destroy(graphics_context &ctx)
@@ -176,10 +176,15 @@ void device_image::destroy(graphics_context &ctx)
         vkDestroySampler(*ctx.device, m_sampler, nullptr);
     if (m_imageView)
         vkDestroyImageView(*ctx.device, m_imageView, nullptr);
+
+    if (m_allocation != VmaAllocation{}) {
+        vmaDestroyImage(ctx.allocator, m_image, m_allocation);
+        return;
+    }
     if (m_image)
         vkDestroyImage(*ctx.device, m_image, nullptr);
-    if (m_imageMemory)
-        vkFreeMemory(*ctx.device, m_imageMemory, nullptr);
+    if (m_deviceMemory)
+        vkFreeMemory(*ctx.device, m_deviceMemory, nullptr);
 }
 
 void device_image::transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout)
@@ -253,7 +258,7 @@ device_image::~device_image() {}
 void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels,
                             vk::ImageType type, vk::Format format, vk::ImageTiling tiling,
                             vk::Filter filter, vk::SamplerAddressMode addressMode,
-                            vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties)
+                            vk::ImageUsageFlags usage, DeviceMemoryUsage memoryUsage)
 {
     m_size = size;
     m_mipLevels = mipLevels;
@@ -275,19 +280,19 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
     imageInfo.samples = vk::SampleCountFlagBits::e1;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    m_image = ctx.device->createImage(imageInfo);
+    VmaAllocationCreateInfo allocCreateInfo{};
+    allocCreateInfo.usage = static_cast<VmaMemoryUsage>(memoryUsage);
 
-    // create and bind image memory
-    vk::MemoryRequirements memRequirements = ctx.device->getImageMemoryRequirements(m_image);
+    VmaAllocationInfo allocInfo;
+    VkResult result =
+        vmaCreateImage(ctx.allocator, (VkImageCreateInfo *)&imageInfo, &allocCreateInfo,
+                       (VkImage *)&m_image, &m_allocation, &allocInfo);
 
-    vk::MemoryAllocateInfo allocInfo{};
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex =
-        findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits, properties);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Could not allocate image device memory from memory allocator");
+    }
 
-    m_imageMemory = ctx.device->allocateMemory(allocInfo);
-
-    ctx.device->bindImageMemory(m_image, m_imageMemory, 0);
+    m_deviceMemory = allocInfo.deviceMemory;
 
     // image view
     vk::ImageViewCreateInfo viewInfo{};
@@ -336,9 +341,10 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
 void device_texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size,
                             vk::DeviceSize offset /*= 0*/)
 {
-    void *mappedData = ctx.device->mapMemory(m_imageMemory, offset, size);
+    void *mappedData;
+    vmaMapMemory(ctx.allocator, m_allocation, &mappedData);
     memcpy(mappedData, srcData, (size_t)size);
-    ctx.device->unmapMemory(m_imageMemory);
+    vmaUnmapMemory(ctx.allocator, m_allocation);
 }
 
 void device_texture::generate_mipmaps(graphics_context &ctx, vk::ImageLayout dstLayout,
@@ -484,8 +490,8 @@ void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format for
     allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
                                                vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    m_imageMemory = ctx.device->allocateMemory(allocInfo);
-    ctx.device->bindImageMemory(m_image, m_imageMemory, 0);
+    m_deviceMemory = ctx.device->allocateMemory(allocInfo);
+    ctx.device->bindImageMemory(m_image, m_deviceMemory, 0);
 
     // image view
     vk::ImageViewCreateInfo viewInfo{};
@@ -542,8 +548,8 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format fo
     allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
                                                vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    m_imageMemory = ctx.device->allocateMemory(allocInfo);
-    ctx.device->bindImageMemory(m_image, m_imageMemory, 0);
+    m_deviceMemory = ctx.device->allocateMemory(allocInfo);
+    ctx.device->bindImageMemory(m_image, m_deviceMemory, 0);
 
     // image view
     vk::ImageViewCreateInfo viewInfo{};

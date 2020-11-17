@@ -1,9 +1,11 @@
 #pragma once
 
-#include <vulkan/vulkan.hpp>
-#include <vk_mem_alloc.h>
-#include <optional>
 #include <cstdint>
+#include <optional>
+#include <vk_mem_alloc.h>
+#include <vulkan/vulkan.hpp>
+
+namespace Cory {
 
 struct graphics_context {
     vk::DispatchLoaderDynamic dl; // the vulkan dynamic dispatch loader
@@ -30,3 +32,5 @@ struct SwapChainSupportDetails {
     std::vector<vk::SurfaceFormatKHR> formats;
     std::vector<vk::PresentModeKHR> presentModes;
 };
+
+} // namespace Cory

@@ -1,5 +1,9 @@
 #include "VkUtils.h"
 
+#include "Context.h"
+
+namespace Cory {
+
 uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties)
 {
@@ -67,3 +71,5 @@ SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
     m_ctx.graphicsQueue.submit({submitInfo}, vk::Fence{});
     m_ctx.graphicsQueue.waitIdle();
 }
+
+} // namespace Cory

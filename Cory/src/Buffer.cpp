@@ -1,5 +1,8 @@
 #include "Buffer.h"
+
 #include "Image.h"
+
+#include <fmt/format.h>
 
 #if defined(_MSC_VER) && !defined(_WIN64)
 #define NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(type, x) static_cast<type>(x)
@@ -7,6 +10,8 @@
 #define NON_DISPATCHABLE_HANDLE_TO_UINT64_CAST(type, x)                                            \
     reinterpret_cast<uint64_t>(static_cast<type>(x))
 #endif
+
+namespace Cory {
 
 device_buffer::device_buffer() {}
 device_buffer::~device_buffer() {}
@@ -107,3 +112,5 @@ void device_buffer::copy_to(graphics_context &ctx, const device_image &rhs)
     cmdBuf.buffer().copyBufferToImage(m_buffer, rhs.image(), vk::ImageLayout::eTransferDstOptimal,
                                       {region});
 }
+
+} // namespace Cory

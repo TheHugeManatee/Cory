@@ -1,39 +1,15 @@
 #pragma once
 
-#include <vulkan/vulkan.hpp>
-
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
-#define GLM_ENABLE_EXPERIMENTAL
-#include <glm/glm.hpp>
-#include <glm/gtx/hash.hpp>
-
-#include <vk_mem_alloc.h>
-
-#include <array>
 #include <cstdint>
-#include <memory>
-#include <optional>
-#include <string>
-#include <utility>
-#include <vector>
-
-// single-header includes
+#include <glm/glm.hpp>
 #include <stb_image.h>
-#include <tiny_obj_loader.h>
 
-struct Vertex;
-class host_buffer;
-class device_buffer;
-class device_image;
-struct stbi_image;
+#include <string>
+#include <memory>
 
-#include <fmt/format.h>
+namespace Cory {
+
 std::string formatBytes(size_t bytes);
-
-
-
 
 class host_buffer {
   public:
@@ -49,8 +25,6 @@ class host_buffer {
     size_t m_size;
     std::unique_ptr<uint8_t[]> m_data;
 };
-
-
 
 struct UniformBufferObject {
     glm::mat4 model;
@@ -69,3 +43,5 @@ struct stbi_image {
     int channels{};
     unsigned char *data{};
 };
+
+} // namespace Cory

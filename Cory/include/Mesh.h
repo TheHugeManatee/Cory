@@ -6,6 +6,8 @@
 #include <functional>
 #include <glm/glm.hpp>
 
+namespace Cory {
+
 struct Vertex {
     glm::vec3 pos;
     glm::vec3 color;
@@ -36,3 +38,5 @@ mesh quad();
 mesh doublequad();
 
 } // namespace primitives
+
+} // namespace Cory

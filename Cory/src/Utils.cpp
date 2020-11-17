@@ -1,12 +1,14 @@
-
 #include "Utils.h"
 
-#include <cassert>
 #include <fmt/format.h>
-#include <stdexcept>
-
 #include <spdlog/spdlog.h>
 
+#include <cassert>
+#include <stdexcept>
+#include <string_view>
+#include <array>
+
+namespace Cory {
 std::string formatBytes(size_t bytes)
 {
     const static std::array<std::string_view, 5> suffix{"b", "KiB", "MiB", "GiB", "TiB"};
@@ -29,3 +31,5 @@ stbi_image::stbi_image(const std::string &file)
 }
 
 stbi_image::~stbi_image() { stbi_image_free(data); }
+
+}

@@ -8,6 +8,8 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.hpp>
 
+namespace Cory {
+
 class device_image {
   public:
     device_image();
@@ -79,3 +81,5 @@ class depth_buffer : public device_image {
     void create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
                 vk::SampleCountFlagBits msaaSamples);
 };
+
+} // namespace Cory

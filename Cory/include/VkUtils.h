@@ -1,10 +1,12 @@
 #pragma once
 
-#include "Context.h"
-
-#include <vulkan/vulkan.hpp>
 #include <type_traits>
 #include <vk_mem_alloc.h>
+#include <vulkan/vulkan.hpp>
+
+namespace Cory {
+
+class graphics_context;
 
 enum class DeviceMemoryUsage : std::underlying_type<VmaMemoryUsage>::type {
     eUnknown = VMA_MEMORY_USAGE_UNKNOWN,     ///< should not be used
@@ -26,13 +28,11 @@ vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
                                vk::FormatFeatureFlags features);
 vk::Format findDepthFormat(vk::PhysicalDevice physicalDevice);
 
-
 inline bool hasStencilComponent(vk::Format format)
 {
     return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD16UnormS8Uint ||
            format == vk::Format::eD24UnormS8Uint || format == vk::Format::eS8Uint;
 }
-
 
 class SingleTimeCommandBuffer {
   public:
@@ -47,3 +47,5 @@ class SingleTimeCommandBuffer {
     graphics_context &m_ctx;
     vk::UniqueCommandBuffer m_commandBuffer;
 };
+
+} // namespace Cory

@@ -4,6 +4,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 
+namespace Cory {
+
 size_t Vertex::hasher::operator()(Vertex const &vertex) const
 {
     return ((std::hash<glm::vec3>()(vertex.pos) ^ (std::hash<glm::vec3>()(vertex.color) << 1)) >>
@@ -94,3 +96,4 @@ mesh doublequad()
     return {vertices, indices};
 }
 } // namespace primitives
+} // namespace Cory

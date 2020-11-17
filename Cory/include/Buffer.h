@@ -1,10 +1,12 @@
 #pragma once
 
-#include "Utils.h"
 #include "Context.h"
+#include "Utils.h"
 #include "VkUtils.h"
 
 #include <vulkan/vulkan.hpp>
+
+namespace Cory {
 
 class device_image;
 
@@ -40,3 +42,5 @@ class device_buffer {
     VmaAllocation m_allocation{};
     void *m_mappedMemory{};
 };
+
+} // namespace Cory

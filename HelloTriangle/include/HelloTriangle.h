@@ -2,17 +2,20 @@
 
 #include <vulkan/vulkan.hpp>
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
+#include <Buffer.h>
+#include <Image.h>
 #include <Utils.h>
 #include <VkUtils.h>
-#include <Image.h>
-#include <Buffer.h>
+#include <Mesh.h>
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 
 #include <cstdint>
 #include <memory>
 #include <vector>
+
+using namespace Cory;
 
 class HelloTriangleApplication {
   public:
@@ -68,13 +71,14 @@ class HelloTriangleApplication {
     void pickPhysicalDevice();
 
     // figure out which queue families are supported (like memory transfer, compute, graphics etc.)
-    QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice & device);
+    QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice &device);
 
     // set up the logical device. this creates the queues and instantiates the features
     void createLogicalDevice();
 
     bool checkDeviceExtensionSupport(const vk::PhysicalDevice &device);
-    SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device, vk::SurfaceKHR surface);
+    SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device,
+                                                  vk::SurfaceKHR surface);
     vk::SurfaceFormatKHR
     chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats);
     vk::PresentModeKHR
@@ -99,7 +103,8 @@ class HelloTriangleApplication {
     void createIndexBuffer(const std::vector<uint16_t> &indices);
     void createUniformBuffers();
     void createDescriptorSetLayout();
-    device_texture createTextureImage(std::string textureFilename, vk::Filter filter, vk::SamplerAddressMode addressMode);
+    device_texture createTextureImage(std::string textureFilename, vk::Filter filter,
+                                      vk::SamplerAddressMode addressMode);
 
     void drawFrame();
 
@@ -110,7 +115,7 @@ class HelloTriangleApplication {
     void createColorResources();
     void createDepthResources();
 
-void createMemoryAllocator();
+    void createMemoryAllocator();
 
   private:
     bool isDeviceSuitable(const vk::PhysicalDevice &device);

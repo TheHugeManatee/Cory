@@ -9,6 +9,8 @@
     reinterpret_cast<uint64_t>(static_cast<type>(x))
 #endif
 
+namespace Cory {
+
 device_image::device_image() {}
 
 void device_image::destroy(graphics_context &ctx)
@@ -266,7 +268,6 @@ void device_texture::generate_mipmaps(graphics_context &ctx, vk::ImageLayout dst
                             {}, {barrier});
 }
 
-
 void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
                           vk::SampleCountFlagBits msaaSamples)
 {
@@ -386,3 +387,5 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format fo
     ctx.device->setDebugUtilsObjectNameEXT(debugUtilsObjectNameInfo, ctx.dl);
 #endif
 }
+
+} // namespace Cory

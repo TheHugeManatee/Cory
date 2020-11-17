@@ -5,9 +5,9 @@
 #include <Cory/Application.h>
 #include <Cory/Buffer.h>
 #include <Cory/Image.h>
+#include <Cory/Mesh.h>
 #include <Cory/Utils.h>
 #include <Cory/VkUtils.h>
-#include <Cory/Mesh.h>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -23,32 +23,11 @@ class HelloTriangleApplication : public Application {
     static constexpr uint32_t WIDTH{800};
     static constexpr uint32_t HEIGHT{600};
 
-#ifdef NDEBUG
-    static constexpr bool enableValidationLayers = false;
-#else
-    static constexpr bool enableValidationLayers = true;
-#endif
-
-    static const std::vector<const char *> validationLayers;
-    static const std::vector<const char *> deviceExtensions;
-
     static const int MAX_FRAMES_IN_FLIGHT{2};
-
-    static VKAPI_ATTR VkBool32 VKAPI_CALL
-    debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                  VkDebugUtilsMessageTypeFlagsEXT messageType,
-                  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData);
 
     void run();
 
-  public:
-    // handling window resizes happens automatically based on the result values of
-    // vkAcquireNextFrameKHR and vkQueuePresentKHR. however, it might not be reliable on some
-    // drivers, so we use this flag to check the glfw resize events explicitly
-    bool framebufferResized{};
-
   private:
-    void initWindow();
     void initVulkan();
 
     void createTransientCommandPool();
@@ -56,28 +35,14 @@ class HelloTriangleApplication : public Application {
     void mainLoop();
     void cleanup();
 
-    void setupInstance();
-
-    // setup of validation layers
-    bool checkValidationLayerSupport();
-    std::vector<const char *> getRequiredExtensions();
-
     // set up of debug callback
     void setupDebugMessenger();
-    void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo);
 
     void createSurface();
 
     // list all vulkan devices and pick one that is suitable for our purposes.
     void pickPhysicalDevice();
 
-    // figure out which queue families are supported (like memory transfer, compute, graphics etc.)
-    QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice &device);
-
-    // set up the logical device. this creates the queues and instantiates the features
-    void createLogicalDevice();
-
-    bool checkDeviceExtensionSupport(const vk::PhysicalDevice &device);
     SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device,
                                                   vk::SurfaceKHR surface);
     vk::SurfaceFormatKHR
@@ -123,12 +88,8 @@ class HelloTriangleApplication : public Application {
     vk::SampleCountFlagBits getMaxUsableSampleCount();
 
   private:
-    GLFWwindow *m_window;
-    graphics_context m_ctx;
-
     vk::SampleCountFlagBits m_msaaSamples{vk::SampleCountFlagBits::e1};
 
-    vk::SurfaceKHR m_surface;
     vk::SwapchainKHR m_swapChain;
     std::vector<vk::Image> m_swapChainImages;
     vk::Format m_swapChainImageFormat;

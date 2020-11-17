@@ -1,6 +1,7 @@
 #include "HelloTriangle.h"
 
 #include "Cory/Mesh.h"
+#include "Cory/VkUtils.h"
 
 #include <glm.h>
 #include <spdlog/spdlog.h>
@@ -11,12 +12,6 @@
 #include <chrono>
 #include <fstream>
 #include <set>
-
-const std::vector<const char *> HelloTriangleApplication::validationLayers = {
-    "VK_LAYER_KHRONOS_validation"};
-
-const std::vector<const char *> HelloTriangleApplication::deviceExtensions = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 static std::vector<char> readFile(const std::string &filename)
 {
@@ -34,41 +29,21 @@ static std::vector<char> readFile(const std::string &filename)
     return buffer;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL HelloTriangleApplication::debugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
-{
-
-    spdlog::error("validation layer: {}", pCallbackData->pMessage);
-
-    return false;
-}
 
 void HelloTriangleApplication::run()
 {
     spdlog::set_level(spdlog::level::trace);
 
-    initWindow();
+    requestLayers({"VK_LAYER_KHRONOS_validation"});
+    requestExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME});
+
+    initWindow({WIDTH, HEIGHT});
+
     initVulkan();
+
     mainLoop();
 
     cleanup();
-}
-
-void HelloTriangleApplication::initWindow()
-{
-    glfwInit();
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-
-    m_window = glfwCreateWindow(WIDTH, HEIGHT, "VK Tutorial", nullptr, nullptr);
-    glfwSetWindowUserPointer(m_window, this);
-
-    glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow *window, int width, int height) {
-        auto app = reinterpret_cast<HelloTriangleApplication *>(glfwGetWindowUserPointer(window));
-        app->framebufferResized = true;
-    });
 }
 
 void HelloTriangleApplication::initVulkan()
@@ -113,68 +88,11 @@ void HelloTriangleApplication::createTransientCommandPool()
     // create a second command pool for transient operations
 
     vk::CommandPoolCreateInfo poolInfo{};
-    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
+    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
     poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
     poolInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
 
     m_ctx.transientCmdPool = m_ctx.device->createCommandPoolUnique(poolInfo);
-}
-
-void HelloTriangleApplication::setupInstance()
-{
-
-    vk::ApplicationInfo appInfo("Hello Triangle", VK_MAKE_VERSION(1, 0, 0), "No Engine",
-                                VK_MAKE_VERSION(1, 0, 0), VK_API_VERSION_1_1);
-
-    vk::InstanceCreateInfo createInfo({}, &appInfo);
-
-    uint32_t glfwExtensionCount = 0;
-    const char **glfwExtensions;
-
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-    spdlog::info("GLFW requires {} extensions", glfwExtensionCount);
-
-    createInfo.enabledExtensionCount = glfwExtensionCount;
-    createInfo.ppEnabledExtensionNames = glfwExtensions;
-    createInfo.enabledLayerCount = 0;
-
-    auto extensions = vk::enumerateInstanceExtensionProperties();
-
-    spdlog::info("available extensions:");
-    for (const auto &extension : extensions) {
-        spdlog::info("\t{}", extension.extensionName);
-    }
-
-    // enable optional extensions
-    auto requiredExtensions = getRequiredExtensions();
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
-    createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-
-    // validation layers
-    vk::DebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-
-    if (enableValidationLayers && !checkValidationLayerSupport()) {
-        throw std::runtime_error("validation layers requested, but not available!");
-    }
-    if (enableValidationLayers) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-        createInfo.ppEnabledLayerNames = validationLayers.data();
-
-        populateDebugMessengerCreateInfo(debugCreateInfo);
-        createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
-    }
-    else {
-        createInfo.enabledLayerCount = 0;
-
-        createInfo.pNext = nullptr;
-    }
-
-    m_ctx.instance = vk::createInstanceUnique(createInfo);
-
-    vk::DynamicLoader dl;
-    PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr =
-        dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
-    m_ctx.dl = vk::DispatchLoaderDynamic(*m_ctx.instance, vkGetInstanceProcAddr);
 }
 
 void HelloTriangleApplication::mainLoop()
@@ -216,59 +134,6 @@ void HelloTriangleApplication::cleanup()
     spdlog::info("Application shut down.");
 }
 
-bool HelloTriangleApplication::checkValidationLayerSupport()
-{
-    auto availableLayers = vk::enumerateInstanceLayerProperties();
-
-    spdlog::info("Supported Vulkan Layers:");
-    for (const char *layerName : validationLayers) {
-        bool layerFound = false;
-
-        spdlog::info("  {0}", layerName);
-
-        for (const auto &layerProperties : availableLayers) {
-            if (strcmp(layerName, layerProperties.layerName) == 0) {
-                layerFound = true;
-            }
-        }
-
-        if (!layerFound) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-std::vector<const char *> HelloTriangleApplication::getRequiredExtensions()
-{
-    uint32_t glfwExtensionCount = 0;
-    const char **glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-    std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-
-    if (enableValidationLayers) {
-        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
-
-    return extensions;
-}
-
-void HelloTriangleApplication::populateDebugMessengerCreateInfo(
-    vk::DebugUtilsMessengerCreateInfoEXT &createInfo)
-{
-    createInfo.messageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-                                 vk::DebugUtilsMessageSeverityFlagBitsEXT::eError |
-                                 vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose;
-
-    createInfo.messageType = vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-                             vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
-                             vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
-
-    createInfo.pfnUserCallback = debugCallback;
-}
-
 void HelloTriangleApplication::createSurface()
 {
     VkSurfaceKHR surface;
@@ -308,98 +173,6 @@ void HelloTriangleApplication::pickPhysicalDevice()
     if (m_ctx.physicalDevice == vk::PhysicalDevice()) {
         throw std::runtime_error("failed to find a suitable GPU!");
     }
-}
-
-QueueFamilyIndices HelloTriangleApplication::findQueueFamilies(const vk::PhysicalDevice &device)
-{
-    auto queueFamilies = device.getQueueFamilyProperties();
-
-    QueueFamilyIndices indices;
-
-    int i = 0;
-    for (const auto &queueFamily : queueFamilies) {
-        if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics) {
-            indices.graphicsFamily = i;
-        }
-        if (queueFamily.queueFlags & vk::QueueFlagBits::eCompute) {
-            indices.computeFamily = i;
-        }
-        if (queueFamily.queueFlags & vk::QueueFlagBits::eTransfer) {
-            indices.transferFamily = i;
-        }
-
-        if (device.getSurfaceSupportKHR(i, m_surface)) {
-            indices.presentFamily = i;
-        }
-        i++;
-    }
-
-    return indices;
-}
-
-void HelloTriangleApplication::createLogicalDevice()
-{
-    QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice);
-
-    std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
-                                              indices.presentFamily.value()};
-
-    float queuePriority = 1.0f;
-
-    for (uint32_t queueFamily : uniqueQueueFamilies) {
-        vk::DeviceQueueCreateInfo queueCreateInfo;
-        queueCreateInfo.queueFamilyIndex = queueFamily;
-        queueCreateInfo.queueCount = 1;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
-
-        queueCreateInfos.push_back(queueCreateInfo);
-    }
-
-    vk::PhysicalDeviceFeatures deviceFeatures{};
-    // specify device features here
-    deviceFeatures.samplerAnisotropy = VK_TRUE;
-    deviceFeatures.sampleRateShading = VK_TRUE;
-
-    vk::DeviceCreateInfo createInfo;
-
-    createInfo.pQueueCreateInfos = queueCreateInfos.data();
-    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-
-    createInfo.pEnabledFeatures = &deviceFeatures;
-
-    // device-specific extensions
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-    createInfo.ppEnabledExtensionNames = deviceExtensions.data();
-
-    // device-specific layers - these are already covered by the instance layers, not
-    // strictly needed again here but seems to be good practice.
-    if (enableValidationLayers) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-        createInfo.ppEnabledLayerNames = validationLayers.data();
-    }
-    else {
-        createInfo.enabledLayerCount = 0;
-    }
-
-    m_ctx.device = m_ctx.physicalDevice.createDeviceUnique(createInfo);
-
-    // store the handle to the graphics and present queues
-    m_ctx.graphicsQueue = m_ctx.device->getQueue(indices.graphicsFamily.value(), 0);
-    m_ctx.presentQueue = m_ctx.device->getQueue(indices.presentFamily.value(), 0);
-}
-
-bool HelloTriangleApplication::checkDeviceExtensionSupport(const vk::PhysicalDevice &device)
-{
-    auto availableExtensions = device.enumerateDeviceExtensionProperties();
-
-    std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
-
-    for (const auto &extension : availableExtensions) {
-        requiredExtensions.erase(extension.extensionName);
-    }
-
-    return requiredExtensions.empty();
 }
 
 SwapChainSupportDetails HelloTriangleApplication::querySwapChainSupport(vk::PhysicalDevice device,
@@ -487,7 +260,7 @@ void HelloTriangleApplication::createSwapChain()
         vk::ImageUsageFlagBits::eColorAttachment; // for off-screen rendering, it is possible to use
                                                   // VK_IMAGE_USAGE_TRANSFER_DST_BIT instead
 
-    QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice);
+    QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
     uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
 
     // if the swap and present queues are different, the swap chain images have to be shareable
@@ -838,7 +611,7 @@ void HelloTriangleApplication::createFramebuffers()
 
 void HelloTriangleApplication::createAppCommandPool()
 {
-    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice);
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
 
     vk::CommandPoolCreateInfo poolInfo{};
     poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
@@ -1147,12 +920,12 @@ void HelloTriangleApplication::drawFrame()
         result = m_ctx.presentQueue.presentKHR(presentInfo);
     }
     catch (vk::OutOfDateKHRError) {
-        framebufferResized = false;
+        m_framebufferResized = false;
         recreateSwapChain();
     }
 
-    if (result == vk::Result::eSuboptimalKHR || framebufferResized) {
-        framebufferResized = false;
+    if (result == vk::Result::eSuboptimalKHR || m_framebufferResized) {
+        m_framebufferResized = false;
         recreateSwapChain();
     }
     else if (result != vk::Result::eSuccess) {
@@ -1292,7 +1065,7 @@ bool HelloTriangleApplication::isDeviceSuitable(const vk::PhysicalDevice &device
     // spdlog::info("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion,
     // deviceProperties.apiVersion);
 
-    auto qfi = findQueueFamilies(device);
+    auto qfi = findQueueFamilies(device, m_surface);
     spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}, Present {}",
                  qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(),
                  qfi.transferFamily.has_value(), qfi.presentFamily.has_value());

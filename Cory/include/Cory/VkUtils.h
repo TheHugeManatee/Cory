@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.hpp>
+#include <optional>
 
 namespace Cory {
 
@@ -20,6 +21,23 @@ enum class DeviceMemoryUsage : std::underlying_type<VmaMemoryUsage>::type {
         VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED ///< transient attachment images, might not be
                                               ///< available for desktop GPUs
 };
+
+
+struct QueueFamilyIndices {
+    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> computeFamily;
+    std::optional<uint32_t> transferFamily;
+    std::optional<uint32_t> presentFamily;
+};
+
+struct SwapChainSupportDetails {
+    vk::SurfaceCapabilitiesKHR capabilities;
+    std::vector<vk::SurfaceFormatKHR> formats;
+    std::vector<vk::PresentModeKHR> presentModes;
+};
+
+// figure out which queue families are supported (like memory transfer, compute, graphics etc.)
+QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice &device, vk::SurfaceKHR surface);
 
 uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties);

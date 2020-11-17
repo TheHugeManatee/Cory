@@ -4,6 +4,33 @@
 
 namespace Cory {
 
+QueueFamilyIndices findQueueFamilies(const vk::PhysicalDevice &device, vk::SurfaceKHR surface)
+{
+    auto queueFamilies = device.getQueueFamilyProperties();
+
+    QueueFamilyIndices indices;
+
+    int i = 0;
+    for (const auto &queueFamily : queueFamilies) {
+        if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics) {
+            indices.graphicsFamily = i;
+        }
+        if (queueFamily.queueFlags & vk::QueueFlagBits::eCompute) {
+            indices.computeFamily = i;
+        }
+        if (queueFamily.queueFlags & vk::QueueFlagBits::eTransfer) {
+            indices.transferFamily = i;
+        }
+
+        if (device.getSurfaceSupportKHR(i, surface)) {
+            indices.presentFamily = i;
+        }
+        i++;
+    }
+
+    return indices;
+}
+
 uint32_t findMemoryType(vk::PhysicalDevice physicalDevice, uint32_t typeFilter,
                         vk::MemoryPropertyFlags properties)
 {

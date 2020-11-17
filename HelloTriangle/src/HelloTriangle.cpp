@@ -1,5 +1,7 @@
 #include "HelloTriangle.h"
 
+#include "Mesh.h"
+
 #include <spdlog/spdlog.h>
 
 #define GLM_FORCE_RADIANS

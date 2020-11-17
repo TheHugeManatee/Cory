@@ -5,7 +5,13 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
 add_library(${TARGET_NAME} STATIC
+  src/Application.cpp
+  src/Buffer.cpp
+  src/Context.cpp
+  src/Image.cpp
+  src/Mesh.cpp
   src/Utils.cpp
+  src/VkUtils.cpp
 )
 
 target_include_directories (${TARGET_NAME} 

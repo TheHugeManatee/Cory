@@ -5,7 +5,10 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include "Utils.h"
+#include <Utils.h>
+#include <VkUtils.h>
+#include <Image.h>
+#include <Buffer.h>
 
 #include <cstdint>
 #include <memory>

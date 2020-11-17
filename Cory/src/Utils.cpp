@@ -480,18 +480,19 @@ void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format for
     imageInfo.samples = m_samples;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    m_image = ctx.device->createImage(imageInfo);
+    VmaAllocationCreateInfo allocCreateInfo{};
+    allocCreateInfo.usage = VmaMemoryUsage::VMA_MEMORY_USAGE_GPU_ONLY;
 
-    // create and bind image memory
-    vk::MemoryRequirements memRequirements = ctx.device->getImageMemoryRequirements(m_image);
+    VmaAllocationInfo allocInfo;
+    VkResult result =
+        vmaCreateImage(ctx.allocator, (VkImageCreateInfo *)&imageInfo, &allocCreateInfo,
+                       (VkImage *)&m_image, &m_allocation, &allocInfo);
 
-    vk::MemoryAllocateInfo allocInfo{};
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
-                                               vk::MemoryPropertyFlagBits::eDeviceLocal);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Could not allocate image device memory from memory allocator");
+    }
 
-    m_deviceMemory = ctx.device->allocateMemory(allocInfo);
-    ctx.device->bindImageMemory(m_image, m_deviceMemory, 0);
+    m_deviceMemory = allocInfo.deviceMemory;
 
     // image view
     vk::ImageViewCreateInfo viewInfo{};
@@ -538,18 +539,20 @@ void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format fo
     imageInfo.samples = m_samples;
     imageInfo.sharingMode = vk::SharingMode::eExclusive;
 
-    m_image = ctx.device->createImage(imageInfo);
-
     // create and bind image memory
-    vk::MemoryRequirements memRequirements = ctx.device->getImageMemoryRequirements(m_image);
+    VmaAllocationCreateInfo allocCreateInfo{};
+    allocCreateInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
-    vk::MemoryAllocateInfo allocInfo{};
-    allocInfo.allocationSize = memRequirements.size;
-    allocInfo.memoryTypeIndex = findMemoryType(ctx.physicalDevice, memRequirements.memoryTypeBits,
-                                               vk::MemoryPropertyFlagBits::eDeviceLocal);
+    VmaAllocationInfo allocInfo;
+    VkResult result =
+        vmaCreateImage(ctx.allocator, (VkImageCreateInfo *)&imageInfo, &allocCreateInfo,
+                       (VkImage *)&m_image, &m_allocation, &allocInfo);
 
-    m_deviceMemory = ctx.device->allocateMemory(allocInfo);
-    ctx.device->bindImageMemory(m_image, m_deviceMemory, 0);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Could not allocate render target device memory from memory allocator");
+    }
+
+    m_deviceMemory = allocInfo.deviceMemory;
 
     // image view
     vk::ImageViewCreateInfo viewInfo{};

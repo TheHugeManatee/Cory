@@ -61,7 +61,7 @@ void HelloTriangleApplication::initVulkan()
 
     createMemoryAllocator();
 
-    createTransientCommandPool();
+    createCommandPools();
 
     createSwapChain();
     createImageViews();
@@ -84,21 +84,11 @@ void HelloTriangleApplication::initVulkan()
     createDescriptorSets();
     createGraphicsPipeline();
 
-    createAppCommandPool();
+
     createCommandBuffers();
 }
 
-void HelloTriangleApplication::createTransientCommandPool()
-{
-    // create a second command pool for transient operations
 
-    vk::CommandPoolCreateInfo poolInfo{};
-    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-    poolInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
-
-    m_ctx.transientCmdPool = m_ctx.device->createCommandPoolUnique(poolInfo);
-}
 
 void HelloTriangleApplication::mainLoop()
 {
@@ -549,25 +539,12 @@ void HelloTriangleApplication::createFramebuffers()
     }
 }
 
-void HelloTriangleApplication::createAppCommandPool()
-{
-    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
-
-    vk::CommandPoolCreateInfo poolInfo{};
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-    poolInfo.flags = vk::CommandPoolCreateFlagBits(
-        0); // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
-            // or VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT might be necessary
-
-    m_commandPool = m_ctx.device->createCommandPoolUnique(poolInfo);
-}
-
 void HelloTriangleApplication::createCommandBuffers()
 {
     // we need one command buffer per frame buffer
     m_commandBuffers.resize(m_swapChainFramebuffers.size());
     vk::CommandBufferAllocateInfo allocInfo{};
-    allocInfo.commandPool = *m_commandPool;
+    allocInfo.commandPool = *m_ctx.permanentCmdPool;
     allocInfo.level = vk::CommandBufferLevel::ePrimary; // _SECONDARY cannot be directly submitted
                                                         // but can be called from other cmd buffer
     allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();

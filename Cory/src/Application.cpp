@@ -169,6 +169,25 @@ void Application::populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreate
     createInfo.pfnUserCallback = debugCallback;
 }
 
+void Application::createCommandPools()
+{
+    // create a second command pool for transient operations
+    vk::CommandPoolCreateInfo poolInfo{};
+    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
+
+    m_ctx.transientCmdPool = m_ctx.device->createCommandPoolUnique(poolInfo);
+
+    // permanent command pool
+    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.flags = vk::CommandPoolCreateFlagBits(
+        0); // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+            // or VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT might be necessary
+
+    m_ctx.permanentCmdPool = m_ctx.device->createCommandPoolUnique(poolInfo);
+}
+
 void Application::setupDebugMessenger()
 {
     if (!enableValidationLayers)

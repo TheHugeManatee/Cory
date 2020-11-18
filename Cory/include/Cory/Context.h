@@ -14,6 +14,7 @@ struct graphics_context {
 
     vk::UniqueDevice device{};
     vk::UniqueCommandPool transientCmdPool{};
+    vk::UniqueCommandPool permanentCmdPool{};
 
     vk::Queue graphicsQueue{};
     vk::Queue presentQueue{};

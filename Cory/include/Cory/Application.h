@@ -35,9 +35,10 @@ class Application {
     void createLogicalDevice();
     bool checkDeviceExtensionSupport(const vk::PhysicalDevice &device);
 
+    void setupDebugMessenger();
     void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo);
 
-    void setupDebugMessenger();
+    void createCommandPools();
 
     void createSurface();
 
@@ -51,18 +52,18 @@ class Application {
   protected: // members
     GLFWwindow *m_window{};
 
-    graphics_context m_ctx;
+    graphics_context m_ctx{};
 
     // per frame resources
     vk::SampleCountFlagBits m_msaaSamples{vk::SampleCountFlagBits::e1};
-    vk::SurfaceKHR m_surface;
+    vk::SurfaceKHR m_surface{};
 
     // handling window resizes happens automatically based on the result values of
     // vkAcquireNextFrameKHR and vkQueuePresentKHR. however, it might not be reliable on some
     // drivers, so we use this flag to check the glfw resize events explicitly
     bool m_framebufferResized{};
 
-    vk::DebugUtilsMessengerEXT m_debugMessenger;
+    vk::DebugUtilsMessengerEXT m_debugMessenger{};
   private:
     // setup of validation layers
     bool checkValidationLayerSupport();

@@ -797,7 +797,7 @@ void HelloTriangleApplication::createVertexBuffers(const std::vector<Vertex> &ve
 {
     vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
-    device_buffer stagingBuffer;
+    Buffer stagingBuffer;
     stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
                          DeviceMemoryUsage::eCpuOnly);
 
@@ -808,7 +808,7 @@ void HelloTriangleApplication::createVertexBuffers(const std::vector<Vertex> &ve
                               vk::BufferUsageFlagBits::eVertexBuffer,
                           DeviceMemoryUsage::eGpuOnly);
 
-    stagingBuffer.copy_to(m_ctx, m_vertexBuffer, bufferSize);
+    stagingBuffer.copyTo(m_ctx, m_vertexBuffer, bufferSize);
 
     stagingBuffer.destroy(m_ctx);
 }
@@ -817,7 +817,7 @@ void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &in
 {
     vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
-    device_buffer stagingBuffer;
+    Buffer stagingBuffer;
     stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
                          DeviceMemoryUsage::eCpuOnly);
 
@@ -828,7 +828,7 @@ void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &in
                              vk::BufferUsageFlagBits::eIndexBuffer,
                          DeviceMemoryUsage::eGpuOnly);
 
-    stagingBuffer.copy_to(m_ctx, m_indexBuffer, bufferSize);
+    stagingBuffer.copyTo(m_ctx, m_indexBuffer, bufferSize);
 
     stagingBuffer.destroy(m_ctx);
 }
@@ -1114,18 +1114,18 @@ vk::SampleCountFlagBits HelloTriangleApplication::getMaxUsableSampleCount()
     return vk::SampleCountFlagBits::e1;
 }
 
-device_texture HelloTriangleApplication::createTextureImage(std::string textureFilename,
+Texture HelloTriangleApplication::createTextureImage(std::string textureFilename,
                                                             vk::Filter filter,
                                                             vk::SamplerAddressMode addressMode)
 {
     stbi_image image(textureFilename);
-    device_texture texture;
+    Texture texture;
 
     if (!image.data) {
         throw std::runtime_error("Could not load texture image from file!");
     }
 
-    device_buffer stagingBuffer;
+    Buffer stagingBuffer;
     stagingBuffer.create(m_ctx, image.size(), vk::BufferUsageFlagBits::eTransferSrc,
                          DeviceMemoryUsage::eCpuOnly);
 
@@ -1140,10 +1140,10 @@ device_texture HelloTriangleApplication::createTextureImage(std::string textureF
                    DeviceMemoryUsage::eGpuOnly);
 
     texture.transitionLayout(m_ctx, vk::ImageLayout::eTransferDstOptimal);
-    stagingBuffer.copy_to(m_ctx, texture);
+    stagingBuffer.copyTo(m_ctx, texture);
     stagingBuffer.destroy(m_ctx);
 
-    texture.generate_mipmaps(m_ctx, vk::ImageLayout::eShaderReadOnlyOptimal,
+    texture.generateMipmaps(m_ctx, vk::ImageLayout::eShaderReadOnlyOptimal,
                              vk::AccessFlagBits::eShaderRead);
     // texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 

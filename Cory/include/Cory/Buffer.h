@@ -8,20 +8,20 @@
 
 namespace Cory {
 
-class device_image;
+class Image;
 
-class device_buffer {
+class Buffer {
   public:
-    device_buffer();
-    ~device_buffer();
+    Buffer();
+    ~Buffer();
 
     // don't copy this thing
-    device_buffer(const device_buffer &rhs) = delete;
-    device_buffer &operator=(const device_buffer &rhs) = delete;
+    Buffer(const Buffer &rhs) = delete;
+    Buffer &operator=(const Buffer &rhs) = delete;
 
     // we could move technically
-    device_buffer(device_buffer &&rhs) = default;
-    device_buffer &operator=(device_buffer &&rhs) = default;
+    Buffer(Buffer &&rhs) = default;
+    Buffer &operator=(Buffer &&rhs) = default;
 
     void create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
                 DeviceMemoryUsage memUsage);
@@ -31,8 +31,8 @@ class device_buffer {
     void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size);
     void download(graphics_context &ctx, host_buffer &buf);
 
-    void copy_to(graphics_context &ctx, device_buffer &rhs, vk::DeviceSize size);
-    void copy_to(graphics_context &ctx, const device_image &rhs);
+    void copyTo(graphics_context &ctx, Buffer &rhs, vk::DeviceSize size);
+    void copyTo(graphics_context &ctx, const Image &rhs);
 
     vk::Buffer buffer() { return m_buffer; };
 

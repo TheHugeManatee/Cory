@@ -10,18 +10,18 @@
 
 namespace Cory {
 
-class device_image {
+class Image {
   public:
-    device_image();
-    ~device_image();
+    Image();
+    ~Image();
 
     // don't copy this thing
-    device_image(const device_image &rhs) = delete;
-    device_image &operator=(const device_image &rhs) = delete;
+    Image(const Image &rhs) = delete;
+    Image &operator=(const Image &rhs) = delete;
 
     // we could move technically
-    device_image(device_image &&rhs) = default;
-    device_image &operator=(device_image &&rhs) = default;
+    Image(Image &&rhs) = default;
+    Image &operator=(Image &&rhs) = default;
 
     void destroy(graphics_context &ctx);
 
@@ -48,7 +48,7 @@ class device_image {
     std::string m_name;
 };
 
-class device_texture : public device_image {
+class Texture : public Image {
   public:
     void create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels, vk::ImageType type,
                 vk::Format format, vk::ImageTiling tiling, vk::Filter filter,
@@ -63,20 +63,20 @@ class device_texture : public device_image {
      * generates mipmaps for a texture. dstLayout and dstAccess specify the configuration that the
      * texture should be transitioned to after the mipmap generation
      */
-    void generate_mipmaps(graphics_context &ctx,
+    void generateMipmaps(graphics_context &ctx,
                           vk::ImageLayout dstLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
                           vk::AccessFlags dstAccess = vk::AccessFlagBits::eShaderRead);
 
   private:
 };
 
-class render_target : public device_image {
+class RenderBuffer : public Image {
   public:
     void create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
                 vk::SampleCountFlagBits msaaSamples);
 };
 
-class depth_buffer : public device_image {
+class DepthBuffer : public Image {
   public:
     void create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
                 vk::SampleCountFlagBits msaaSamples);

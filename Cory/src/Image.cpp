@@ -11,9 +11,9 @@
 
 namespace Cory {
 
-device_image::device_image() {}
+Image::Image() {}
 
-void device_image::destroy(graphics_context &ctx)
+void Image::destroy(graphics_context &ctx)
 {
     if (m_sampler)
         vkDestroySampler(*ctx.device, m_sampler, nullptr);
@@ -30,7 +30,7 @@ void device_image::destroy(graphics_context &ctx)
         vkFreeMemory(*ctx.device, m_deviceMemory, nullptr);
 }
 
-void device_image::transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout)
+void Image::transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout)
 {
     if (m_currentLayout == newLayout)
         return;
@@ -96,9 +96,9 @@ void device_image::transitionLayout(graphics_context &ctx, vk::ImageLayout newLa
     m_currentLayout = newLayout;
 }
 
-device_image::~device_image() {}
+Image::~Image() {}
 
-void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels,
+void Texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels,
                             vk::ImageType type, vk::Format format, vk::ImageTiling tiling,
                             vk::Filter filter, vk::SamplerAddressMode addressMode,
                             vk::ImageUsageFlags usage, DeviceMemoryUsage memoryUsage)
@@ -179,7 +179,7 @@ void device_texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mip
 #endif
 }
 
-void device_texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size)
+void Texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size)
 {
     void *mappedData;
     vmaMapMemory(ctx.allocator, m_allocation, &mappedData);
@@ -187,7 +187,7 @@ void device_texture::upload(graphics_context &ctx, const void *srcData, vk::Devi
     vmaUnmapMemory(ctx.allocator, m_allocation);
 }
 
-void device_texture::generate_mipmaps(graphics_context &ctx, vk::ImageLayout dstLayout,
+void Texture::generateMipmaps(graphics_context &ctx, vk::ImageLayout dstLayout,
                                       vk::AccessFlags dstAccess)
 {
     // check if format actually supports linear blitting
@@ -268,7 +268,7 @@ void device_texture::generate_mipmaps(graphics_context &ctx, vk::ImageLayout dst
                             {}, {barrier});
 }
 
-void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+void DepthBuffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
                           vk::SampleCountFlagBits msaaSamples)
 {
     m_size = size;
@@ -327,7 +327,7 @@ void depth_buffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format for
 #endif
 }
 
-void render_target::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+void RenderBuffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
                            vk::SampleCountFlagBits msaaSamples)
 {
     m_size = size;

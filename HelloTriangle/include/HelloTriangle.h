@@ -69,7 +69,7 @@ class HelloTriangleApplication : public Application {
     void createIndexBuffer(const std::vector<uint16_t> &indices);
     void createUniformBuffers();
     void createDescriptorSetLayout();
-    device_texture createTextureImage(std::string textureFilename, vk::Filter filter,
+    Texture createTextureImage(std::string textureFilename, vk::Filter filter,
                                       vk::SamplerAddressMode addressMode);
 
     void drawFrame();
@@ -106,7 +106,7 @@ class HelloTriangleApplication : public Application {
 
     vk::UniqueCommandPool m_commandPool;
     std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
-    std::vector<device_buffer> m_uniformBuffers;
+    std::vector<Buffer> m_uniformBuffers;
 
     size_t m_currentFrame{};
 
@@ -116,13 +116,13 @@ class HelloTriangleApplication : public Application {
     std::vector<vk::Fence> m_imagesInFlight;
 
     uint32_t m_numVertices;
-    device_buffer m_vertexBuffer;
-    device_buffer m_indexBuffer;
+    Buffer m_vertexBuffer;
+    Buffer m_indexBuffer;
 
-    depth_buffer m_depthBuffer;
-    render_target m_renderTarget;
-    device_texture m_texture;
-    device_texture m_texture2;
+    DepthBuffer m_depthBuffer;
+    RenderBuffer m_renderTarget;
+    Texture m_texture;
+    Texture m_texture2;
 
     vk::DebugUtilsMessengerEXT m_debugMessenger;
 };

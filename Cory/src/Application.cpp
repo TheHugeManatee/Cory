@@ -103,6 +103,15 @@ void Application::setupInstance()
     m_ctx.dl = vk::DispatchLoaderDynamic(*m_ctx.instance, vkGetInstanceProcAddr);
 }
 
+void Application::createSurface()
+{
+    VkSurfaceKHR surface;
+    if (glfwCreateWindowSurface(*m_ctx.instance, m_window, nullptr, &surface) != VK_SUCCESS) {
+        throw std::runtime_error("Could not create window surface!");
+    }
+    m_surface = vk::SurfaceKHR(surface);
+}
+
 void Application::createLogicalDevice()
 {
     QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
@@ -167,6 +176,17 @@ void Application::populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreate
                              vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
 
     createInfo.pfnUserCallback = debugCallback;
+}
+
+void Application::createMemoryAllocator()
+{
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_1;
+    allocatorInfo.physicalDevice = m_ctx.physicalDevice;
+    allocatorInfo.device = *m_ctx.device;
+    allocatorInfo.instance = *m_ctx.instance;
+
+    vmaCreateAllocator(&allocatorInfo, &m_ctx.allocator);
 }
 
 void Application::createCommandPools()
@@ -253,15 +273,6 @@ bool Application::checkValidationLayerSupport()
     return true;
 }
 
-void Application::createSurface()
-{
-    VkSurfaceKHR surface;
-    if (glfwCreateWindowSurface(*m_ctx.instance, m_window, nullptr, &surface) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create window surface!");
-    }
-    m_surface = vk::SurfaceKHR(surface);
-}
-
 void Application::pickPhysicalDevice()
 {
     auto devices = m_ctx.instance->enumeratePhysicalDevices();
@@ -311,15 +322,6 @@ bool Application::isDeviceSuitable(const vk::PhysicalDevice &device)
 
     return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported &&
            swapChainAdequate && supportedFeatures.samplerAnisotropy;
-}
-
-vk::PresentModeKHR Application::chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes)
-{
-    // preferably use Mailbox, otherwise fall back to the first one
-    if (std::ranges::count(availablePresentModes, vk::PresentModeKHR::eMailbox))
-        return vk::PresentModeKHR::eMailbox;
-
-    return availablePresentModes[0];
 }
 
 } // namespace Cory

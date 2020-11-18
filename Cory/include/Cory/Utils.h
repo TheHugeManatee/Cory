@@ -4,12 +4,15 @@
 #include <glm.h>
 #include <stb_image.h>
 
-#include <string>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace Cory {
 
 std::string formatBytes(size_t bytes);
+
+std::vector<char> readFile(const std::string &filename);
 
 class host_buffer {
   public:

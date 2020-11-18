@@ -30,7 +30,9 @@ class Application {
     void initWindow(vk::Extent2D extent);
 
     void setupInstance();
+    void createSurface();
 
+    void pickPhysicalDevice();
     // set up the logical device. this creates the queues and instantiates the features
     void createLogicalDevice();
     bool checkDeviceExtensionSupport(const vk::PhysicalDevice &device);
@@ -38,25 +40,22 @@ class Application {
     void setupDebugMessenger();
     void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo);
 
+    void createMemoryAllocator();
+
     void createCommandPools();
 
-    void createSurface();
-
-    void pickPhysicalDevice();
-
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
-
-    vk::PresentModeKHR
-    chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
 
   protected: // members
     GLFWwindow *m_window{};
 
     graphics_context m_ctx{};
 
+    vk::SurfaceKHR m_surface{};
+    std::unique_ptr<SwapChain> m_swapChain;
+
     // per frame resources
     vk::SampleCountFlagBits m_msaaSamples{vk::SampleCountFlagBits::e1};
-    vk::SurfaceKHR m_surface{};
 
     // handling window resizes happens automatically based on the result values of
     // vkAcquireNextFrameKHR and vkQueuePresentKHR. however, it might not be reliable on some
@@ -64,6 +63,7 @@ class Application {
     bool m_framebufferResized{};
 
     vk::DebugUtilsMessengerEXT m_debugMessenger{};
+
   private:
     // setup of validation layers
     bool checkValidationLayerSupport();
@@ -71,7 +71,6 @@ class Application {
 
     std::vector<const char *> m_requestedLayers;     // requested validation layers
     std::vector<const char *> m_requestedExtensions; // requested device extensions
-
 };
 
 } // namespace Cory

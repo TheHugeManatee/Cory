@@ -3,10 +3,11 @@
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
+#include <array>
 #include <cassert>
 #include <stdexcept>
 #include <string_view>
-#include <array>
+#include <fstream>
 
 namespace Cory {
 std::string formatBytes(size_t bytes)
@@ -25,6 +26,22 @@ std::string formatBytes(size_t bytes)
     return fmt::format("{:.2f} {}", float(bytes) + float(remaind) / 1024.f, suffix[suff]);
 }
 
+std::vector<char> readFile(const std::string &filename)
+{
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open()) {
+        throw std::runtime_error(fmt::format("failed to open file {}", filename));
+    }
+    size_t fileSize = (size_t)file.tellg();
+    std::vector<char> buffer(fileSize);
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+    file.close();
+
+    return buffer;
+}
+
 stbi_image::stbi_image(const std::string &file)
 {
     data = stbi_load(file.c_str(), &width, &height, &channels, STBI_rgb_alpha);
@@ -32,4 +49,4 @@ stbi_image::stbi_image(const std::string &file)
 
 stbi_image::~stbi_image() { stbi_image_free(data); }
 
-}
+} // namespace Cory

@@ -30,25 +30,14 @@ class HelloTriangleApplication : public Application {
   private:
     void initVulkan();
 
-    void createTransientCommandPool();
-
     void mainLoop();
     void cleanup();
-
-    vk::SurfaceFormatKHR
-    chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats);
-
-    vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities);
-
-    void createSwapChain();
-    void createImageViews();
 
     vk::UniqueShaderModule createShaderModule(const std::vector<char> &code);
 
     void createGraphicsPipeline();
     void createRenderPass();
     void createFramebuffers();
-    void createAppCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
     void recreateSwapChain();
@@ -70,15 +59,7 @@ class HelloTriangleApplication : public Application {
     void createColorResources();
     void createDepthResources();
 
-    void createMemoryAllocator();
-
   private:
-    vk::SwapchainKHR m_swapChain;
-    std::vector<vk::Image> m_swapChainImages;
-    vk::Format m_swapChainImageFormat;
-    vk::Extent2D m_swapChainExtent;
-    std::vector<vk::ImageView> m_swapChainImageViews;
-
     vk::RenderPass m_renderPass;
     vk::UniqueDescriptorSetLayout m_descriptorSetLayout;
     vk::UniqueDescriptorPool m_descriptorPool;

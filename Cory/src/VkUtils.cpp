@@ -72,6 +72,51 @@ vk::Format findDepthFormat(vk::PhysicalDevice physicalDevice)
         vk::ImageTiling::eOptimal, vk::FormatFeatureFlagBits::eDepthStencilAttachment);
 }
 
+bool hasStencilComponent(vk::Format format)
+{
+    return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD16UnormS8Uint ||
+           format == vk::Format::eD24UnormS8Uint || format == vk::Format::eS8Uint;
+}
+
+vk::SampleCountFlagBits getMaxUsableSampleCount(vk::PhysicalDevice physicalDevice)
+{
+    auto physicalDeviceProperties = physicalDevice.getProperties();
+
+    vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
+                                  physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+
+    if (counts & vk::SampleCountFlagBits::e64)
+        return vk::SampleCountFlagBits::e64;
+
+    if (counts & vk::SampleCountFlagBits::e32)
+        return vk::SampleCountFlagBits::e32;
+
+    if (counts & vk::SampleCountFlagBits::e16)
+        return vk::SampleCountFlagBits::e16;
+
+    if (counts & vk::SampleCountFlagBits::e8)
+        return vk::SampleCountFlagBits::e8;
+
+    if (counts & vk::SampleCountFlagBits::e4)
+        return vk::SampleCountFlagBits::e4;
+
+    if (counts & vk::SampleCountFlagBits::e2)
+        return vk::SampleCountFlagBits::e2;
+
+    return vk::SampleCountFlagBits::e1;
+}
+
+Cory::SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device,
+                                                    vk::SurfaceKHR surface)
+{
+    SwapChainSupportDetails details;
+    details.capabilities = device.getSurfaceCapabilitiesKHR(surface);
+    details.formats = device.getSurfaceFormatsKHR(surface);
+    details.presentModes = device.getSurfacePresentModesKHR(surface);
+
+    return details;
+}
+
 SingleTimeCommandBuffer::SingleTimeCommandBuffer(graphics_context &ctx)
     : m_ctx{ctx}
 {

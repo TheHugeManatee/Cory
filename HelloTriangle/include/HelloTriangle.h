@@ -35,20 +35,9 @@ class HelloTriangleApplication : public Application {
     void mainLoop();
     void cleanup();
 
-    // set up of debug callback
-    void setupDebugMessenger();
-
-    void createSurface();
-
-    // list all vulkan devices and pick one that is suitable for our purposes.
-    void pickPhysicalDevice();
-
-    SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device,
-                                                  vk::SurfaceKHR surface);
     vk::SurfaceFormatKHR
     chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats);
-    vk::PresentModeKHR
-    chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
+
     vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities);
 
     void createSwapChain();
@@ -84,12 +73,6 @@ class HelloTriangleApplication : public Application {
     void createMemoryAllocator();
 
   private:
-    bool isDeviceSuitable(const vk::PhysicalDevice &device);
-    vk::SampleCountFlagBits getMaxUsableSampleCount();
-
-  private:
-    vk::SampleCountFlagBits m_msaaSamples{vk::SampleCountFlagBits::e1};
-
     vk::SwapchainKHR m_swapChain;
     std::vector<vk::Image> m_swapChainImages;
     vk::Format m_swapChainImageFormat;
@@ -124,5 +107,5 @@ class HelloTriangleApplication : public Application {
     Texture m_texture;
     Texture m_texture2;
 
-    vk::DebugUtilsMessengerEXT m_debugMessenger;
+
 };

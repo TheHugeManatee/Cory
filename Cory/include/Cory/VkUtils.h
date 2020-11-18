@@ -1,9 +1,9 @@
 #pragma once
 
+#include <optional>
 #include <type_traits>
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.hpp>
-#include <optional>
 
 namespace Cory {
 
@@ -21,7 +21,6 @@ enum class DeviceMemoryUsage : std::underlying_type<VmaMemoryUsage>::type {
         VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED ///< transient attachment images, might not be
                                               ///< available for desktop GPUs
 };
-
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -46,11 +45,11 @@ vk::Format findSupportedFormat(vk::PhysicalDevice physicalDevice,
                                vk::FormatFeatureFlags features);
 vk::Format findDepthFormat(vk::PhysicalDevice physicalDevice);
 
-inline bool hasStencilComponent(vk::Format format)
-{
-    return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD16UnormS8Uint ||
-           format == vk::Format::eD24UnormS8Uint || format == vk::Format::eS8Uint;
-}
+bool hasStencilComponent(vk::Format format);
+
+vk::SampleCountFlagBits getMaxUsableSampleCount(vk::PhysicalDevice physicalDevice);
+
+SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device, vk::SurfaceKHR surface);
 
 class SingleTimeCommandBuffer {
   public:

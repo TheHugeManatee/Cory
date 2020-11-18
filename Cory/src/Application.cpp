@@ -169,6 +169,17 @@ void Application::populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreate
     createInfo.pfnUserCallback = debugCallback;
 }
 
+void Application::setupDebugMessenger()
+{
+    if (!enableValidationLayers)
+        return;
+
+    vk::DebugUtilsMessengerCreateInfoEXT createInfo;
+    populateDebugMessengerCreateInfo(createInfo);
+
+    m_debugMessenger = m_ctx.instance->createDebugUtilsMessengerEXT(createInfo, nullptr, m_ctx.dl);
+}
+
 std::vector<const char *> Application::getRequiredExtensions()
 {
     uint32_t glfwExtensionCount = 0;
@@ -221,6 +232,75 @@ bool Application::checkValidationLayerSupport()
     }
 
     return true;
+}
+
+void Application::createSurface()
+{
+    VkSurfaceKHR surface;
+    if (glfwCreateWindowSurface(*m_ctx.instance, m_window, nullptr, &surface) != VK_SUCCESS) {
+        throw std::runtime_error("Could not create window surface!");
+    }
+    m_surface = vk::SurfaceKHR(surface);
+}
+
+void Application::pickPhysicalDevice()
+{
+    auto devices = m_ctx.instance->enumeratePhysicalDevices();
+    if (devices.empty()) {
+        throw std::runtime_error("failed to find GPUs with Vulkan support!");
+    }
+    spdlog::info("Found {} vulkan devices", devices.size());
+
+    for (const auto &device : devices) {
+        if (isDeviceSuitable(device)) {
+            m_ctx.physicalDevice = device;
+            m_msaaSamples = getMaxUsableSampleCount(m_ctx.physicalDevice);
+            break;
+        }
+    }
+
+    if (m_ctx.physicalDevice == vk::PhysicalDevice()) {
+        throw std::runtime_error("failed to find a suitable GPU!");
+    }
+}
+
+bool Application::isDeviceSuitable(const vk::PhysicalDevice &device)
+{
+    auto properties = device.getProperties();
+    auto features = device.getFeatures();
+
+    spdlog::info("Found vulkan device: {}", properties.deviceName);
+    // spdlog::info("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion,
+    // deviceProperties.apiVersion);
+
+    auto qfi = findQueueFamilies(device, m_surface);
+    spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}, Present {}",
+                 qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(),
+                 qfi.transferFamily.has_value(), qfi.presentFamily.has_value());
+
+    bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+    bool swapChainAdequate = false;
+    if (extensionsSupported) {
+        auto swapChainDetails = querySwapChainSupport(device, m_surface);
+        swapChainAdequate =
+            !swapChainDetails.formats.empty() && !swapChainDetails.presentModes.empty();
+    }
+
+    // supported features
+    vk::PhysicalDeviceFeatures supportedFeatures = device.getFeatures();
+
+    return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported &&
+           swapChainAdequate && supportedFeatures.samplerAnisotropy;
+}
+
+vk::PresentModeKHR Application::chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes)
+{
+    // preferably use Mailbox, otherwise fall back to the first one
+    if (std::ranges::count(availablePresentModes, vk::PresentModeKHR::eMailbox))
+        return vk::PresentModeKHR::eMailbox;
+
+    return availablePresentModes[0];
 }
 
 } // namespace Cory

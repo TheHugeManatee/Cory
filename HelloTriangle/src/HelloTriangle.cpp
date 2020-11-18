@@ -12,6 +12,7 @@
 #include <chrono>
 #include <fstream>
 #include <set>
+#include <ranges>
 
 static std::vector<char> readFile(const std::string &filename)
 {
@@ -44,6 +45,10 @@ void HelloTriangleApplication::run()
     mainLoop();
 
     cleanup();
+
+    if (enableValidationLayers) {
+        m_ctx.instance->destroyDebugUtilsMessengerEXT(m_debugMessenger, nullptr, m_ctx.dl);
+    }
 }
 
 void HelloTriangleApplication::initVulkan()
@@ -124,66 +129,10 @@ void HelloTriangleApplication::cleanup()
 
     vmaDestroyAllocator(m_ctx.allocator);
 
-    if (enableValidationLayers) {
-        m_ctx.instance->destroyDebugUtilsMessengerEXT(m_debugMessenger, nullptr, m_ctx.dl);
-    }
-
     glfwDestroyWindow(m_window);
     glfwTerminate();
 
     spdlog::info("Application shut down.");
-}
-
-void HelloTriangleApplication::createSurface()
-{
-    VkSurfaceKHR surface;
-    if (glfwCreateWindowSurface(*m_ctx.instance, m_window, nullptr, &surface) != VK_SUCCESS) {
-        throw std::runtime_error("Could not create window surface!");
-    }
-    m_surface = vk::SurfaceKHR(surface);
-}
-
-void HelloTriangleApplication::setupDebugMessenger()
-{
-    if (!enableValidationLayers)
-        return;
-
-    vk::DebugUtilsMessengerCreateInfoEXT createInfo;
-    populateDebugMessengerCreateInfo(createInfo);
-
-    m_debugMessenger = m_ctx.instance->createDebugUtilsMessengerEXT(createInfo, nullptr, m_ctx.dl);
-}
-
-void HelloTriangleApplication::pickPhysicalDevice()
-{
-    auto devices = m_ctx.instance->enumeratePhysicalDevices();
-    if (devices.empty()) {
-        throw std::runtime_error("failed to find GPUs with Vulkan support!");
-    }
-    spdlog::info("Found {} vulkan devices", devices.size());
-
-    for (const auto &device : devices) {
-        if (isDeviceSuitable(device)) {
-            m_ctx.physicalDevice = device;
-            m_msaaSamples = getMaxUsableSampleCount();
-            break;
-        }
-    }
-
-    if (m_ctx.physicalDevice == vk::PhysicalDevice()) {
-        throw std::runtime_error("failed to find a suitable GPU!");
-    }
-}
-
-SwapChainSupportDetails HelloTriangleApplication::querySwapChainSupport(vk::PhysicalDevice device,
-                                                                        vk::SurfaceKHR surface)
-{
-    SwapChainSupportDetails details;
-    details.capabilities = device.getSurfaceCapabilitiesKHR(surface);
-    details.formats = device.getSurfaceFormatsKHR(surface);
-    details.presentModes = device.getSurfacePresentModesKHR(surface);
-
-    return details;
 }
 
 vk::SurfaceFormatKHR HelloTriangleApplication::chooseSwapSurfaceFormat(
@@ -199,16 +148,7 @@ vk::SurfaceFormatKHR HelloTriangleApplication::chooseSwapSurfaceFormat(
     return availableFormats[0];
 }
 
-vk::PresentModeKHR HelloTriangleApplication::chooseSwapPresentMode(
-    const std::vector<vk::PresentModeKHR> &availablePresentModes)
-{
-    for (const auto &availableMode : availablePresentModes) {
-        if (availableMode == vk::PresentModeKHR::eMailbox) {
-            return availableMode;
-        }
-    }
-    return availablePresentModes[0];
-}
+
 
 vk::Extent2D
 HelloTriangleApplication::chooseSwapExtent(const vk::SurfaceCapabilitiesKHR &capabilities)
@@ -1054,64 +994,6 @@ void HelloTriangleApplication::createMemoryAllocator()
     allocatorInfo.instance = *m_ctx.instance;
 
     vmaCreateAllocator(&allocatorInfo, &m_ctx.allocator);
-}
-
-bool HelloTriangleApplication::isDeviceSuitable(const vk::PhysicalDevice &device)
-{
-    auto properties = device.getProperties();
-    auto features = device.getFeatures();
-
-    spdlog::info("Found vulkan device: {}", properties.deviceName);
-    // spdlog::info("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion,
-    // deviceProperties.apiVersion);
-
-    auto qfi = findQueueFamilies(device, m_surface);
-    spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}, Present {}",
-                 qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(),
-                 qfi.transferFamily.has_value(), qfi.presentFamily.has_value());
-
-    bool extensionsSupported = checkDeviceExtensionSupport(device);
-
-    bool swapChainAdequate = false;
-    if (extensionsSupported) {
-        auto swapChainDetails = querySwapChainSupport(device, m_surface);
-        swapChainAdequate =
-            !swapChainDetails.formats.empty() && !swapChainDetails.presentModes.empty();
-    }
-
-    // supported features
-    vk::PhysicalDeviceFeatures supportedFeatures = device.getFeatures();
-
-    return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported &&
-           swapChainAdequate && supportedFeatures.samplerAnisotropy;
-}
-
-vk::SampleCountFlagBits HelloTriangleApplication::getMaxUsableSampleCount()
-{
-    auto physicalDeviceProperties = m_ctx.physicalDevice.getProperties();
-
-    vk::SampleCountFlags counts = physicalDeviceProperties.limits.framebufferColorSampleCounts &
-                                  physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-    if (counts & vk::SampleCountFlagBits::e64) {
-        return vk::SampleCountFlagBits::e64;
-    }
-    if (counts & vk::SampleCountFlagBits::e32) {
-        return vk::SampleCountFlagBits::e32;
-    }
-    if (counts & vk::SampleCountFlagBits::e16) {
-        return vk::SampleCountFlagBits::e16;
-    }
-    if (counts & vk::SampleCountFlagBits::e8) {
-        return vk::SampleCountFlagBits::e8;
-    }
-    if (counts & vk::SampleCountFlagBits::e4) {
-        return vk::SampleCountFlagBits::e4;
-    }
-    if (counts & vk::SampleCountFlagBits::e2) {
-        return vk::SampleCountFlagBits::e2;
-    }
-
-    return vk::SampleCountFlagBits::e1;
 }
 
 Texture HelloTriangleApplication::createTextureImage(std::string textureFilename,

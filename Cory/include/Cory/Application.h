@@ -2,6 +2,7 @@
 
 #include "Context.h"
 
+#include <ranges>
 #include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
@@ -14,7 +15,6 @@ class Application {
     debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                   VkDebugUtilsMessageTypeFlagsEXT messageType,
                   const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData);
-
 
 #ifdef NDEBUG
     static constexpr bool enableValidationLayers = false;
@@ -37,12 +37,24 @@ class Application {
 
     void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo);
 
+    void setupDebugMessenger();
+
+    void createSurface();
+
+    void pickPhysicalDevice();
+
+    bool isDeviceSuitable(const vk::PhysicalDevice &device);
+
+    vk::PresentModeKHR
+    chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availablePresentModes);
+
   protected: // members
     GLFWwindow *m_window{};
 
     graphics_context m_ctx;
 
     // per frame resources
+    vk::SampleCountFlagBits m_msaaSamples{vk::SampleCountFlagBits::e1};
     vk::SurfaceKHR m_surface;
 
     // handling window resizes happens automatically based on the result values of
@@ -50,14 +62,15 @@ class Application {
     // drivers, so we use this flag to check the glfw resize events explicitly
     bool m_framebufferResized{};
 
+    vk::DebugUtilsMessengerEXT m_debugMessenger;
   private:
-
     // setup of validation layers
     bool checkValidationLayerSupport();
     std::vector<const char *> getRequiredExtensions();
 
     std::vector<const char *> m_requestedLayers;     // requested validation layers
     std::vector<const char *> m_requestedExtensions; // requested device extensions
+
 };
 
 } // namespace Cory

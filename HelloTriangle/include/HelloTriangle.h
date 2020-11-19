@@ -33,11 +33,8 @@ class HelloTriangleApplication : public Application {
     void mainLoop();
     void cleanup();
 
-    vk::UniqueShaderModule createShaderModule(const std::vector<char> &code);
-
     void createGraphicsPipeline();
     void createRenderPass();
-    void createFramebuffers();
     void createCommandBuffers();
     void createSyncObjects();
     void recreateSwapChain();
@@ -58,6 +55,7 @@ class HelloTriangleApplication : public Application {
     void createDescriptorSets();
     void createColorResources();
     void createDepthResources();
+    void createFramebuffers();
 
   private:
     vk::RenderPass m_renderPass;

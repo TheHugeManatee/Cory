@@ -18,11 +18,9 @@ SwapChain::SwapChain(graphics_context &ctx, GLFWwindow *window, vk::SurfaceKHR s
 SwapChain::~SwapChain() {
     for (auto imageView : m_swapChainImageViews) {
         m_ctx.device->destroyImageView(imageView);
-        // vkDestroyImageView(*m_ctx.device, imageView, nullptr);
     }
 
     m_ctx.device->destroySwapchainKHR(m_swapChain);
-    // vkDestroySwapchainKHR(*m_ctx.device, m_swapChain, nullptr);
 }
 
 void SwapChain::createSwapchain(vk::SurfaceKHR surface)
@@ -127,6 +125,7 @@ SwapChain::chooseSwapPresentMode(const std::vector<vk::PresentModeKHR> &availabl
 vk::SurfaceFormatKHR
 SwapChain::chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats)
 {
+    //     // BRGA8 and SRGB are the preferred formats, otherwise fall back to any available one
     if (std::ranges::count_if(availableFormats, [](const auto &fmt) {
             return fmt.format == vk::Format::eB8G8R8A8Srgb &&
                    fmt.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
@@ -135,14 +134,6 @@ SwapChain::chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &avai
     }
 
     return availableFormats[0];
-    //     // BRGA8 and SRGB are the preferred formats
-    //     for (const auto &availableFormat : availableFormats) {
-    //         if (availableFormat.format == vk::Format::eB8G8R8A8Srgb &&
-    //             availableFormat.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
-    //             return availableFormat;
-    //         }
-    //     }
-    //     return availableFormats[0];
 }
 
 void SwapChain::createImageViews()

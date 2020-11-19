@@ -10,6 +10,7 @@ add_library(${TARGET_NAME} STATIC
   src/Context.cpp
   src/Image.cpp
   src/Mesh.cpp
+  src/Shader.cpp
   src/Utils.cpp
   src/VkUtils.cpp
 )

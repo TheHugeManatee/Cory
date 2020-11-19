@@ -144,4 +144,127 @@ SingleTimeCommandBuffer::~SingleTimeCommandBuffer()
     m_ctx.graphicsQueue.waitIdle();
 }
 
+vk::Viewport VkDefaults::Viewport(vk::Extent2D swapChainExtent)
+{
+    return vk::Viewport{
+        0.0f, /*x*/
+        0.0f, /*x*/
+        (float)swapChainExtent.width,
+        (float)swapChainExtent.height,
+        0.0f, /*minDepth*/
+        1.0f  /*maxDepth*/
+    };
+}
+
+vk::PipelineViewportStateCreateInfo VkDefaults::ViewportState(vk::Viewport &viewport,
+                                                              vk::Rect2D scissor)
+{
+    vk::PipelineViewportStateCreateInfo viewportState{};
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    return viewportState;
+}
+
+vk::PipelineRasterizationStateCreateInfo VkDefaults::Rasterizer()
+{
+    vk::PipelineRasterizationStateCreateInfo rasterizer{};
+    rasterizer.depthClampEnable = false; // depth clamp: depth is clamped for fragments instead
+                                         // of discarding them. might be useful for shadow maps?
+    rasterizer.rasterizerDiscardEnable = false; // completely disable rasterizer/framebuffer output
+    rasterizer.polygonMode = vk::PolygonMode::eFill; // _LINE and _POINT are alternatives, but
+                                                     // require enabling GPU feature
+    rasterizer.lineWidth = 1.0f;                     // >1.0 requires 'wideLines' GPU feature
+    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
+    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
+    rasterizer.depthBiasEnable = false;
+    rasterizer.depthBiasConstantFactor = 0.0f;
+    rasterizer.depthBiasClamp = 0.0f;
+    rasterizer.depthBiasSlopeFactor = 0.0f;
+    return rasterizer;
+}
+
+vk::PipelineMultisampleStateCreateInfo
+VkDefaults::Multisampling(vk::SampleCountFlagBits samples /*= vk::SampleCountFlagBits::e1*/)
+{
+    vk::PipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sampleShadingEnable = false;
+    multisampling.rasterizationSamples = samples;
+    multisampling.minSampleShading = 0.2f; // controls how smooth the msaa
+    multisampling.pSampleMask = nullptr;   // ?
+    multisampling.alphaToCoverageEnable = false;
+    multisampling.alphaToOneEnable = false;
+    return multisampling;
+}
+
+vk::PipelineDepthStencilStateCreateInfo VkDefaults::DepthStencil()
+{
+    vk::PipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = vk::CompareOp::eLess;
+    depthStencil.depthBoundsTestEnable = false;
+    depthStencil.minDepthBounds = 0.0f;
+    depthStencil.maxDepthBounds = 1.0f;
+    depthStencil.stencilTestEnable = false;
+    depthStencil.front = vk::StencilOpState{};
+    depthStencil.back = vk::StencilOpState{};
+    return depthStencil;
+}
+
+vk::PipelineColorBlendAttachmentState VkDefaults::AttachmentBlendDisabled()
+{
+    vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
+    colorBlendAttachment.colorWriteMask =
+        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
+        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+    colorBlendAttachment.blendEnable = false;
+    colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eOne;
+    colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eZero;
+    colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
+    colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+    colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
+    colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
+
+    return colorBlendAttachment;
+}
+
+vk::PipelineColorBlendStateCreateInfo
+VkDefaults::BlendState(std::vector<vk::PipelineColorBlendAttachmentState> *attachmentStages)
+{
+    // note: you can only do EITHER color blending per attachment, or logic blending. enabling logic
+    // blending will override/disable the blend ops above
+    vk::PipelineColorBlendStateCreateInfo colorBlending{};
+    colorBlending.logicOpEnable = false;
+    colorBlending.logicOp = vk::LogicOp::eCopy;
+    if (!attachmentStages) {
+        colorBlending.attachmentCount = 0;
+        colorBlending.pAttachments = nullptr;
+    }
+    else {
+        colorBlending.attachmentCount = static_cast<uint32_t>(attachmentStages->size());
+        colorBlending.pAttachments = attachmentStages->data();
+    }
+    colorBlending.blendConstants[0] = 0.0f;
+    colorBlending.blendConstants[1] = 0.0f;
+    colorBlending.blendConstants[2] = 0.0f;
+    colorBlending.blendConstants[3] = 0.0f;
+
+    return colorBlending;
+}
+
+vk::PipelineLayoutCreateInfo VkDefaults::PipelineLayout(vk::DescriptorSetLayout &layout)
+{
+    // stores/manages shader uniform values
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &layout;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+    return pipelineLayoutInfo;
+}
+
 } // namespace Cory

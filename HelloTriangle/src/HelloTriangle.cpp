@@ -2,6 +2,7 @@
 
 #include "Cory/Mesh.h"
 #include "Cory/VkUtils.h"
+#include "Cory/Shader.h"
 
 #include <glm.h>
 #include <spdlog/spdlog.h>
@@ -111,31 +112,18 @@ void HelloTriangleApplication::cleanup()
 }
 
 
-
-
-vk::UniqueShaderModule HelloTriangleApplication::createShaderModule(const std::vector<char> &code)
-{
-    vk::ShaderModuleCreateInfo createInfo{};
-    createInfo.codeSize = code.size();
-    createInfo.pCode = reinterpret_cast<const uint32_t *>(code.data());
-
-    auto shaderModule = m_ctx.device->createShaderModuleUnique(createInfo);
-
-    return shaderModule;
-}
-
 void HelloTriangleApplication::createGraphicsPipeline()
 {
     //****************** Shaders ******************
-    auto vertShaderCode = readFile(RESOURCE_DIR "/default-vert.spv");
-    auto fragShaderCode = readFile(RESOURCE_DIR "/manatee.spv");
+    const auto vertShaderCode = readFile(RESOURCE_DIR "/default-vert.spv");
+    const auto fragShaderCode = readFile(RESOURCE_DIR "/manatee.spv");
 
-    auto vertShaderModule = createShaderModule(vertShaderCode);
-    auto fragShaderModule = createShaderModule(fragShaderCode);
+    auto vertShader = Shader(m_ctx, vertShaderCode);
+    auto fragShader = Shader(m_ctx, fragShaderCode);
 
     vk::PipelineShaderStageCreateInfo vertShaderStageInfo{};
     vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
-    vertShaderStageInfo.module = *vertShaderModule;
+    vertShaderStageInfo.module = vertShader.module();
     // entry point -- means we can add multiple entry points in one module - yays!
     vertShaderStageInfo.pName = "main";
 
@@ -144,7 +132,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
 
     vk::PipelineShaderStageCreateInfo fragShaderStageInfo{};
     fragShaderStageInfo.stage = vk::ShaderStageFlagBits::eFragment;
-    fragShaderStageInfo.module = *fragShaderModule;
+    fragShaderStageInfo.module = fragShader.module();
     fragShaderStageInfo.pName = "main";
 
     vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
@@ -166,84 +154,15 @@ void HelloTriangleApplication::createGraphicsPipeline()
         false; // allows to break primitive lists with 0xFFFF index
 
     //****************** Viewport & Scissor ******************
-    vk::Viewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = (float)m_swapChain->extent().width;
-    viewport.height = (float)m_swapChain->extent().height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
+    vk::Viewport viewport = Cory::VkDefaults::Viewport(m_swapChain->extent());
+    vk::Rect2D scissor{{0, 0}, {m_swapChain->extent()}};
+    auto viewportState = Cory::VkDefaults::ViewportState(viewport, scissor);
 
-    vk::Rect2D scissor{};
-    scissor.offset = vk::Offset2D{0, 0};
-    scissor.extent = m_swapChain->extent();
-
-    vk::PipelineViewportStateCreateInfo viewportState{};
-    viewportState.viewportCount = 1;
-    viewportState.pViewports = &viewport;
-    viewportState.scissorCount = 1;
-    viewportState.pScissors = &scissor;
-
-    //****************** Rasterizer ******************
-    vk::PipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.depthClampEnable = false; // depth clamp: depth is clamped for fragments instead
-                                         // of discarding them. might be useful for shadow maps?
-    rasterizer.rasterizerDiscardEnable = false; // completely disable rasterizer/framebuffer output
-    rasterizer.polygonMode = vk::PolygonMode::eFill; // _LINE and _POINT are alternatives, but
-                                                     // require enabling GPU feature
-    rasterizer.lineWidth = 1.0f;                     // >1.0 requires 'wideLines' GPU feature
-    rasterizer.cullMode = vk::CullModeFlagBits::eBack;
-    rasterizer.frontFace = vk::FrontFace::eCounterClockwise;
-    rasterizer.depthBiasEnable = false;
-    rasterizer.depthBiasConstantFactor = 0.0f;
-    rasterizer.depthBiasClamp = 0.0f;
-    rasterizer.depthBiasSlopeFactor = 0.0f;
-
-    //****************** Multisampling ******************
-    vk::PipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.sampleShadingEnable = false;
-    multisampling.rasterizationSamples = m_msaaSamples;
-    multisampling.minSampleShading = 0.2f; // controls how smooth the msaa
-    multisampling.pSampleMask = nullptr;   // ?
-    multisampling.alphaToCoverageEnable = false;
-    multisampling.alphaToOneEnable = false;
-
-    //****************** Depth and Stencil ******************
-    vk::PipelineDepthStencilStateCreateInfo depthStencil{};
-    depthStencil.depthTestEnable = VK_TRUE;
-    depthStencil.depthWriteEnable = VK_TRUE;
-    depthStencil.depthCompareOp = vk::CompareOp::eLess;
-    depthStencil.depthBoundsTestEnable = false;
-    depthStencil.minDepthBounds = 0.0f;
-    depthStencil.maxDepthBounds = 1.0f;
-    depthStencil.stencilTestEnable = false;
-    depthStencil.front = vk::StencilOpState{};
-    depthStencil.back = vk::StencilOpState{};
-
-    //****************** Color Blending ******************
-    vk::PipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask =
-        vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG |
-        vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
-    colorBlendAttachment.blendEnable = false;
-    colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eOne;
-    colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eZero;
-    colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
-    colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
-    colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
-    colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
-
-    // note: you can only do EITHER color blending per attachment, or logic blending. enabling logic
-    // blending will override/disable the blend ops above
-    vk::PipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.logicOpEnable = false;
-    colorBlending.logicOp = vk::LogicOp::eCopy;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
-    colorBlending.blendConstants[0] = 0.0f;
-    colorBlending.blendConstants[1] = 0.0f;
-    colorBlending.blendConstants[2] = 0.0f;
-    colorBlending.blendConstants[3] = 0.0f;
+    auto rasterizer = Cory::VkDefaults::Rasterizer();
+    auto multisampling = Cory::VkDefaults::Multisampling(m_msaaSamples);
+    auto depthStencil = Cory::VkDefaults::DepthStencil();
+    auto attachmentBlends = std::vector{Cory::VkDefaults::AttachmentBlendDisabled()};
+    auto colorBlending = Cory::VkDefaults::BlendState(&attachmentBlends);
 
     //****************** Dynamic State ******************
     // Specifies which pipeline states can be changed dynamically without recreating the pipeline
@@ -253,12 +172,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     dynamicState.pDynamicStates = dynamicStates;
 
     //****************** Pipeline Layout ******************
-    // stores/manages shader uniform values
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &*m_descriptorSetLayout;
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
-    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+    auto pipelineLayoutInfo = Cory::VkDefaults::PipelineLayout(*m_descriptorSetLayout);
 
     m_pipelineLayout = m_ctx.device->createPipelineLayoutUnique(pipelineLayoutInfo);
 

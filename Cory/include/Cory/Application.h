@@ -41,8 +41,8 @@ class Application {
     void populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo);
 
     void createMemoryAllocator();
-
     void createCommandPools();
+
 
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
 

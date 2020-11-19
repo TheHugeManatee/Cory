@@ -65,4 +65,19 @@ class SingleTimeCommandBuffer {
     vk::UniqueCommandBuffer m_commandBuffer;
 };
 
+namespace VkDefaults {
+
+vk::Viewport Viewport(vk::Extent2D swapChainExtent);
+vk::PipelineViewportStateCreateInfo ViewportState(vk::Viewport& viewport, vk::Rect2D scissor); 
+vk::PipelineRasterizationStateCreateInfo Rasterizer();
+vk::PipelineMultisampleStateCreateInfo
+Multisampling(vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1);
+vk::PipelineDepthStencilStateCreateInfo DepthStencil();
+vk::PipelineColorBlendAttachmentState AttachmentBlendDisabled();
+vk::PipelineColorBlendStateCreateInfo
+BlendState(std::vector<vk::PipelineColorBlendAttachmentState> *attachmentStages);
+vk::PipelineLayoutCreateInfo PipelineLayout(vk::DescriptorSetLayout &layout);
+
+} // namespace VkDefaults
+
 } // namespace Cory

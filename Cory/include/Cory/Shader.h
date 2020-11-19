@@ -7,11 +7,11 @@
 
 namespace Cory {
 
-    class graphics_context;
+    class GraphicsContext;
 
 class Shader {
   public:
-    Shader(graphics_context& ctx, const std::vector<char> &code);
+    Shader(GraphicsContext& ctx, const std::vector<char> &code);
 
     auto module() { return m_module.get(); }
 

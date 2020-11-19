@@ -8,7 +8,7 @@ class GLFWwindow;
 
 namespace Cory {
 
-struct graphics_context {
+struct GraphicsContext {
     vk::DispatchLoaderDynamic dl; // the vulkan dynamic dispatch loader
     vk::UniqueInstance instance{};
     vk::PhysicalDevice physicalDevice{};
@@ -24,7 +24,7 @@ struct graphics_context {
 
 class SwapChain {
   public:
-    SwapChain(graphics_context &ctx, GLFWwindow *window, vk::SurfaceKHR surface);
+    SwapChain(GraphicsContext &ctx, GLFWwindow *window, vk::SurfaceKHR surface);
     ~SwapChain();
 
     auto swapchain() { return m_swapChain; }
@@ -47,7 +47,7 @@ class SwapChain {
     chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR> &availableFormats);
 
   private:
-    graphics_context &m_ctx;
+    GraphicsContext &m_ctx;
 
     GLFWwindow *m_window;
     vk::SwapchainKHR m_swapChain{};

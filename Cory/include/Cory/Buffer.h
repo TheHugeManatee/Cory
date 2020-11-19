@@ -23,16 +23,16 @@ class Buffer {
     Buffer(Buffer &&rhs) = default;
     Buffer &operator=(Buffer &&rhs) = default;
 
-    void create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
+    void create(GraphicsContext &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
                 DeviceMemoryUsage memUsage);
 
-    void destroy(graphics_context &ctx);
+    void destroy(GraphicsContext &ctx);
 
-    void upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size);
-    void download(graphics_context &ctx, host_buffer &buf);
+    void upload(GraphicsContext &ctx, const void *srcData, vk::DeviceSize size);
+    void download(GraphicsContext &ctx, host_buffer &buf);
 
-    void copyTo(graphics_context &ctx, Buffer &rhs, vk::DeviceSize size);
-    void copyTo(graphics_context &ctx, const Image &rhs);
+    void copyTo(GraphicsContext &ctx, Buffer &rhs, vk::DeviceSize size);
+    void copyTo(GraphicsContext &ctx, const Image &rhs);
 
     vk::Buffer buffer() { return m_buffer; };
 

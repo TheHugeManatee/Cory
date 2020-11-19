@@ -117,7 +117,7 @@ Cory::SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device,
     return details;
 }
 
-SingleTimeCommandBuffer::SingleTimeCommandBuffer(graphics_context &ctx)
+SingleTimeCommandBuffer::SingleTimeCommandBuffer(GraphicsContext &ctx)
     : m_ctx{ctx}
 {
     vk::CommandBufferAllocateInfo allocInfo{};

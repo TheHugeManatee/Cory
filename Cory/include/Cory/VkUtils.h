@@ -7,7 +7,7 @@
 
 namespace Cory {
 
-class graphics_context;
+class GraphicsContext;
 
 enum class DeviceMemoryUsage : std::underlying_type<VmaMemoryUsage>::type {
     eUnknown = VMA_MEMORY_USAGE_UNKNOWN,     ///< should not be used
@@ -53,7 +53,7 @@ SwapChainSupportDetails querySwapChainSupport(vk::PhysicalDevice device, vk::Sur
 
 class SingleTimeCommandBuffer {
   public:
-    SingleTimeCommandBuffer(graphics_context &ctx);
+    SingleTimeCommandBuffer(GraphicsContext &ctx);
     ~SingleTimeCommandBuffer();
 
     vk::CommandBuffer &buffer() { return *m_commandBuffer; }
@@ -61,7 +61,7 @@ class SingleTimeCommandBuffer {
     vk::CommandBuffer *operator->() { return &*m_commandBuffer; };
 
   private:
-    graphics_context &m_ctx;
+    GraphicsContext &m_ctx;
     vk::UniqueCommandBuffer m_commandBuffer;
 };
 

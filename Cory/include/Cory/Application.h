@@ -49,7 +49,7 @@ class Application {
   protected: // members
     GLFWwindow *m_window{};
 
-    graphics_context m_ctx{};
+    GraphicsContext m_ctx{};
 
     vk::SurfaceKHR m_surface{};
     std::unique_ptr<SwapChain> m_swapChain;

@@ -13,7 +13,7 @@ namespace Cory {
 
 Image::Image() {}
 
-void Image::destroy(graphics_context &ctx)
+void Image::destroy(GraphicsContext &ctx)
 {
     if (m_sampler)
         vkDestroySampler(*ctx.device, m_sampler, nullptr);
@@ -30,7 +30,7 @@ void Image::destroy(graphics_context &ctx)
         vkFreeMemory(*ctx.device, m_deviceMemory, nullptr);
 }
 
-void Image::transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout)
+void Image::transitionLayout(GraphicsContext &ctx, vk::ImageLayout newLayout)
 {
     if (m_currentLayout == newLayout)
         return;
@@ -98,7 +98,7 @@ void Image::transitionLayout(graphics_context &ctx, vk::ImageLayout newLayout)
 
 Image::~Image() {}
 
-void Texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels,
+void Texture::create(GraphicsContext &ctx, glm::uvec3 size, uint32_t mipLevels,
                             vk::ImageType type, vk::Format format, vk::ImageTiling tiling,
                             vk::Filter filter, vk::SamplerAddressMode addressMode,
                             vk::ImageUsageFlags usage, DeviceMemoryUsage memoryUsage)
@@ -179,7 +179,7 @@ void Texture::create(graphics_context &ctx, glm::uvec3 size, uint32_t mipLevels,
 #endif
 }
 
-void Texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size)
+void Texture::upload(GraphicsContext &ctx, const void *srcData, vk::DeviceSize size)
 {
     void *mappedData;
     vmaMapMemory(ctx.allocator, m_allocation, &mappedData);
@@ -187,7 +187,7 @@ void Texture::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize 
     vmaUnmapMemory(ctx.allocator, m_allocation);
 }
 
-void Texture::generateMipmaps(graphics_context &ctx, vk::ImageLayout dstLayout,
+void Texture::generateMipmaps(GraphicsContext &ctx, vk::ImageLayout dstLayout,
                                       vk::AccessFlags dstAccess)
 {
     // check if format actually supports linear blitting
@@ -268,7 +268,7 @@ void Texture::generateMipmaps(graphics_context &ctx, vk::ImageLayout dstLayout,
                             {}, {barrier});
 }
 
-void DepthBuffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+void DepthBuffer::create(GraphicsContext &ctx, glm::uvec3 size, vk::Format format,
                           vk::SampleCountFlagBits msaaSamples)
 {
     m_size = size;
@@ -327,7 +327,7 @@ void DepthBuffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format form
 #endif
 }
 
-void RenderBuffer::create(graphics_context &ctx, glm::uvec3 size, vk::Format format,
+void RenderBuffer::create(GraphicsContext &ctx, glm::uvec3 size, vk::Format format,
                            vk::SampleCountFlagBits msaaSamples)
 {
     m_size = size;

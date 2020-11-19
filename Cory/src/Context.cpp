@@ -7,7 +7,7 @@
 
 namespace Cory {
 
-SwapChain::SwapChain(graphics_context &ctx, GLFWwindow *window, vk::SurfaceKHR surface)
+SwapChain::SwapChain(GraphicsContext &ctx, GLFWwindow *window, vk::SurfaceKHR surface)
     : m_ctx{ctx}
     , m_window{window}
 {

@@ -16,7 +16,7 @@ namespace Cory {
 Buffer::Buffer() {}
 Buffer::~Buffer() {}
 
-void Buffer::create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
+void Buffer::create(GraphicsContext &ctx, vk::DeviceSize size, vk::BufferUsageFlags usage,
                            DeviceMemoryUsage memUsage)
 {
     m_size = size;
@@ -57,12 +57,12 @@ void Buffer::create(graphics_context &ctx, vk::DeviceSize size, vk::BufferUsageF
 #endif
 }
 
-void Buffer::destroy(graphics_context &ctx)
+void Buffer::destroy(GraphicsContext &ctx)
 {
     vmaDestroyBuffer(ctx.allocator, m_buffer, m_allocation);
 }
 
-void Buffer::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize size)
+void Buffer::upload(GraphicsContext &ctx, const void *srcData, vk::DeviceSize size)
 {
     // uniform buffers might already be mapped
     if (m_mappedMemory) {
@@ -79,12 +79,12 @@ void Buffer::upload(graphics_context &ctx, const void *srcData, vk::DeviceSize s
     // next vkQueueSubmit()
 }
 
-void Buffer::download(graphics_context &ctx, host_buffer &buf)
+void Buffer::download(GraphicsContext &ctx, host_buffer &buf)
 {
     throw std::runtime_error("Function not implemented.");
 }
 
-void Buffer::copyTo(graphics_context &ctx, Buffer &rhs, vk::DeviceSize size)
+void Buffer::copyTo(GraphicsContext &ctx, Buffer &rhs, vk::DeviceSize size)
 {
     SingleTimeCommandBuffer copyCmdBuffer(ctx);
 
@@ -93,7 +93,7 @@ void Buffer::copyTo(graphics_context &ctx, Buffer &rhs, vk::DeviceSize size)
     copyCmdBuffer.buffer().copyBuffer(m_buffer, rhs.buffer(), {copyRegion});
 }
 
-void Buffer::copyTo(graphics_context &ctx, const Image &rhs)
+void Buffer::copyTo(GraphicsContext &ctx, const Image &rhs)
 {
     SingleTimeCommandBuffer cmdBuf(ctx);
 

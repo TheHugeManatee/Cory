@@ -5,7 +5,7 @@
 namespace Cory {
 
 
-Shader::Shader(graphics_context &ctx, const std::vector<char> &code)
+Shader::Shader(GraphicsContext &ctx, const std::vector<char> &code)
 {
     vk::ShaderModuleCreateInfo createInfo{};
     createInfo.codeSize = code.size();

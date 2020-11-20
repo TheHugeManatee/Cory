@@ -1,8 +1,8 @@
 #include "HelloTriangle.h"
 
 #include "Cory/Mesh.h"
-#include "Cory/VkUtils.h"
 #include "Cory/Shader.h"
+#include "Cory/VkUtils.h"
 
 #include <glm.h>
 #include <spdlog/spdlog.h>
@@ -12,8 +12,8 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
-#include <set>
 #include <ranges>
+#include <set>
 
 void HelloTriangleApplication::run()
 {
@@ -70,10 +70,8 @@ void HelloTriangleApplication::initVulkan()
     createDescriptorSets();
     createGraphicsPipeline();
 
-
     createCommandBuffers();
 }
-
 
 void HelloTriangleApplication::mainLoop()
 {
@@ -95,7 +93,7 @@ void HelloTriangleApplication::cleanup()
     cleanupSwapChain();
     m_swapChain = {};
 
-    m_ctx.instance->destroySurfaceKHR(m_surface); 
+    m_ctx.instance->destroySurfaceKHR(m_surface);
 
     m_vertexBuffer.destroy(m_ctx);
     m_indexBuffer.destroy(m_ctx);
@@ -111,101 +109,36 @@ void HelloTriangleApplication::cleanup()
     spdlog::info("Application shut down.");
 }
 
-
 void HelloTriangleApplication::createGraphicsPipeline()
 {
     //****************** Shaders ******************
     const auto vertShaderCode = readFile(RESOURCE_DIR "/default-vert.spv");
     const auto fragShaderCode = readFile(RESOURCE_DIR "/manatee.spv");
 
-    auto vertShader = Shader(m_ctx, vertShaderCode);
-    auto fragShader = Shader(m_ctx, fragShaderCode);
+    // start pipeline initialization
+    VkDefaults::PipelineCreator creator;
+    std::vector<Shader> shaders;
+    shaders.emplace_back(m_ctx, vertShaderCode, ShaderType::eVertex);
+    shaders.emplace_back(m_ctx, fragShaderCode, ShaderType::eFragment);
+    creator.setShaders(std::move(shaders));
 
-    vk::PipelineShaderStageCreateInfo vertShaderStageInfo{};
-    vertShaderStageInfo.stage = vk::ShaderStageFlagBits::eVertex;
-    vertShaderStageInfo.module = vertShader.module();
-    // entry point -- means we can add multiple entry points in one module - yays!
-    vertShaderStageInfo.pName = "main";
+    creator.setVertexInput<Vertex>();
+    creator.setViewport(m_swapChain->extent());
+    creator.setDefaultRasterizer();
+    creator.setMultisampling(m_msaaSamples);
+    creator.setDefaultDepthStencil();
+    creator.setAttachmentBlendStates({Cory::VkDefaults::AttachmentBlendDisabled()});
+    creator.setDefaultDynamicStates();
 
-    // Note: pSpecializationInfo can be used to set compile time constants - kinda like macros in an
-    // online compilation?
-
-    vk::PipelineShaderStageCreateInfo fragShaderStageInfo{};
-    fragShaderStageInfo.stage = vk::ShaderStageFlagBits::eFragment;
-    fragShaderStageInfo.module = fragShader.module();
-    fragShaderStageInfo.pName = "main";
-
-    vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
-
-    //****************** Vertex Input ******************
-    auto bindingDescription = Vertex::getBindingDescription();
-    auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
-    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.vertexBindingDescriptionCount = 1;
-    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount =
-        static_cast<uint32_t>(attributeDescriptions.size());
-    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
-
-    vk::PipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.topology = vk::PrimitiveTopology::eTriangleList;
-    inputAssembly.primitiveRestartEnable =
-        false; // allows to break primitive lists with 0xFFFF index
-
-    //****************** Viewport & Scissor ******************
-    vk::Viewport viewport = Cory::VkDefaults::Viewport(m_swapChain->extent());
-    vk::Rect2D scissor{{0, 0}, {m_swapChain->extent()}};
-    auto viewportState = Cory::VkDefaults::ViewportState(viewport, scissor);
-
-    auto rasterizer = Cory::VkDefaults::Rasterizer();
-    auto multisampling = Cory::VkDefaults::Multisampling(m_msaaSamples);
-    auto depthStencil = Cory::VkDefaults::DepthStencil();
-    auto attachmentBlends = std::vector{Cory::VkDefaults::AttachmentBlendDisabled()};
-    auto colorBlending = Cory::VkDefaults::BlendState(&attachmentBlends);
-
-    //****************** Dynamic State ******************
-    // Specifies which pipeline states can be changed dynamically without recreating the pipeline
-    vk::DynamicState dynamicStates[] = {vk::DynamicState::eViewport, vk::DynamicState::eLineWidth};
-    vk::PipelineDynamicStateCreateInfo dynamicState{};
-    dynamicState.dynamicStateCount = 2;
-    dynamicState.pDynamicStates = dynamicStates;
-
-    //****************** Pipeline Layout ******************
+    // pipeline layout
     auto pipelineLayoutInfo = Cory::VkDefaults::PipelineLayout(*m_descriptorSetLayout);
-
     m_pipelineLayout = m_ctx.device->createPipelineLayoutUnique(pipelineLayoutInfo);
+    creator.setPipelineLayout(*m_pipelineLayout);
 
-    vk::GraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.stageCount = 2;
-    pipelineInfo.pStages = shaderStages;
-    pipelineInfo.pVertexInputState = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState = &multisampling;
-    pipelineInfo.pDepthStencilState = &depthStencil;
-    pipelineInfo.pColorBlendState = &colorBlending;
-    pipelineInfo.pDynamicState = nullptr; // skipped for now --why tho?
-    pipelineInfo.layout = *m_pipelineLayout;
-    pipelineInfo.renderPass = m_renderPass;
-    pipelineInfo.subpass = 0;
-    pipelineInfo.basePipelineHandle = nullptr; // note: vulkan can have "base" and "derived"
-                                               // pipelines when they are similar
-    pipelineInfo.basePipelineIndex = -1;
+    creator.setRenderPass(m_renderPass);
 
-    auto [result, pipeline] =
-        m_ctx.device->createGraphicsPipelineUnique(nullptr, pipelineInfo).asTuple();
-    switch (result) {
-    case vk::Result::eSuccess:
-        m_graphicsPipeline = std::move(pipeline);
-        break;
-    case vk::Result::ePipelineCompileRequiredEXT:
-        throw std::runtime_error(fmt::format("Could not create pipeline: {}", result));
-        break;
-    default:
-        assert(false); // should never happen
-    }
+    //finally, create the pipeline
+    m_graphicsPipeline = creator.create(m_ctx);
 }
 
 void HelloTriangleApplication::createRenderPass()
@@ -343,7 +276,8 @@ void HelloTriangleApplication::createCommandBuffers()
         renderPassInfo.renderPass = m_renderPass;
         renderPassInfo.framebuffer = m_swapChainFramebuffers[i];
         renderPassInfo.renderArea.offset = vk::Offset2D{0, 0};
-        renderPassInfo.renderArea.extent = m_swapChain->extent(); // should match size of attachments
+        renderPassInfo.renderArea.extent =
+            m_swapChain->extent(); // should match size of attachments
 
         // defines what is used for VK_ATTACHMENT_LOAD_OP_CLEAR
         std::array<vk::ClearValue, 2> clearColors;
@@ -637,9 +571,9 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
         glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj =
-        glm::perspective(glm::radians(45.0f),
-                         m_swapChain->extent().width / (float)m_swapChain->extent().height, 0.1f, 10.0f);
+    ubo.proj = glm::perspective(glm::radians(45.0f),
+                                m_swapChain->extent().width / (float)m_swapChain->extent().height,
+                                0.1f, 10.0f);
     ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted.
                           // otherwise image will be upside down :)
 
@@ -729,14 +663,13 @@ void HelloTriangleApplication::createDepthResources()
 
     vk::Format depthFormat = findDepthFormat(m_ctx.physicalDevice);
 
-    m_depthBuffer.create(m_ctx, {m_swapChain->extent().width, m_swapChain->extent().height, 1}, depthFormat,
-                         m_msaaSamples);
+    m_depthBuffer.create(m_ctx, {m_swapChain->extent().width, m_swapChain->extent().height, 1},
+                         depthFormat, m_msaaSamples);
     m_depthBuffer.transitionLayout(m_ctx, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 }
 
-Texture HelloTriangleApplication::createTextureImage(std::string textureFilename,
-                                                            vk::Filter filter,
-                                                            vk::SamplerAddressMode addressMode)
+Texture HelloTriangleApplication::createTextureImage(std::string textureFilename, vk::Filter filter,
+                                                     vk::SamplerAddressMode addressMode)
 {
     stbi_image image(textureFilename);
     Texture texture;
@@ -764,7 +697,7 @@ Texture HelloTriangleApplication::createTextureImage(std::string textureFilename
     stagingBuffer.destroy(m_ctx);
 
     texture.generateMipmaps(m_ctx, vk::ImageLayout::eShaderReadOnlyOptimal,
-                             vk::AccessFlagBits::eShaderRead);
+                            vk::AccessFlagBits::eShaderRead);
     // texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     return texture;

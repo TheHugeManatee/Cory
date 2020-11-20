@@ -15,7 +15,7 @@ struct Vertex {
 
     static vk::VertexInputBindingDescription getBindingDescription();
 
-    static std::array<vk::VertexInputAttributeDescription, 3> getAttributeDescriptions();
+    static std::vector<vk::VertexInputAttributeDescription> getAttributeDescriptions();
 
     bool operator==(const Vertex &rhs) const;
 

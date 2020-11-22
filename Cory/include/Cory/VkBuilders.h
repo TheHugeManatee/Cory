@@ -9,28 +9,28 @@ namespace Cory {
 class GraphicsContext;
 class Mesh;
 
-class PipelineCreator {
+class PipelineBuilder {
   public:
-    PipelineCreator() = default;
+    PipelineBuilder() = default;
 
-    PipelineCreator &setShaders(std::vector<Shader> shaders);
+    PipelineBuilder &setShaders(std::vector<Shader> shaders);
 
-    PipelineCreator &setVertexInput(const Mesh &mesh);
+    PipelineBuilder &setVertexInput(const Mesh &mesh);
 
-    PipelineCreator &
+    PipelineBuilder &
     setVertexInput(const vk::VertexInputBindingDescription &bindingDescriptor,
                    const std::vector<vk::VertexInputAttributeDescription> &attributeDescriptors,
                    vk::PrimitiveTopology topology = vk::PrimitiveTopology::eTriangleList);
 
-    PipelineCreator &setViewport(vk::Extent2D swapChainExtent);
-    PipelineCreator &setDefaultRasterizer();
-    PipelineCreator &setMultisampling(vk::SampleCountFlagBits samples);
-    PipelineCreator &setDefaultDepthStencil();
-    PipelineCreator &
+    PipelineBuilder &setViewport(vk::Extent2D swapChainExtent);
+    PipelineBuilder &setDefaultRasterizer();
+    PipelineBuilder &setMultisampling(vk::SampleCountFlagBits samples);
+    PipelineBuilder &setDefaultDepthStencil();
+    PipelineBuilder &
     setAttachmentBlendStates(std::vector<vk::PipelineColorBlendAttachmentState> blendStates);
-    PipelineCreator &setDefaultDynamicStates();
-    PipelineCreator &setPipelineLayout(vk::PipelineLayout pipelineLayout);
-    PipelineCreator &setRenderPass(vk::RenderPass renderPass);
+    PipelineBuilder &setDefaultDynamicStates();
+    PipelineBuilder &setPipelineLayout(vk::PipelineLayout pipelineLayout);
+    PipelineBuilder &setRenderPass(vk::RenderPass renderPass);
 
     vk::UniquePipeline create(GraphicsContext &ctx);
 

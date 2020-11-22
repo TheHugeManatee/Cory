@@ -8,7 +8,7 @@
 #include <ranges>
 
 namespace Cory {
-PipelineCreator &PipelineCreator::setShaders(std::vector<Shader> shaders)
+PipelineBuilder &PipelineBuilder::setShaders(std::vector<Shader> shaders)
 {
     m_shaders = std::move(shaders);
     m_shaderCreateInfos.clear();
@@ -20,12 +20,12 @@ PipelineCreator &PipelineCreator::setShaders(std::vector<Shader> shaders)
     return *this;
 }
 
-Cory::PipelineCreator &PipelineCreator::setVertexInput(const Mesh &mesh)
+Cory::PipelineBuilder &PipelineBuilder::setVertexInput(const Mesh &mesh)
 {
     return setVertexInput(mesh.bindingDescription(), mesh.attributeDescriptions(), mesh.topology());
 }
 
-Cory::PipelineCreator &PipelineCreator::setVertexInput(
+Cory::PipelineBuilder &PipelineBuilder::setVertexInput(
     const vk::VertexInputBindingDescription &bindingDescriptor,
     const std::vector<vk::VertexInputAttributeDescription> &attributeDescriptors,
     vk::PrimitiveTopology topology /*= vk::PrimitiveTopology::eTriangleList*/)
@@ -45,7 +45,7 @@ Cory::PipelineCreator &PipelineCreator::setVertexInput(
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setViewport(vk::Extent2D swapChainExtent)
+PipelineBuilder &PipelineBuilder::setViewport(vk::Extent2D swapChainExtent)
 {
     m_viewport = VkDefaults::Viewport(swapChainExtent);
     m_scissor = {{0, 0}, {swapChainExtent}};
@@ -53,25 +53,25 @@ PipelineCreator &PipelineCreator::setViewport(vk::Extent2D swapChainExtent)
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setDefaultRasterizer()
+PipelineBuilder &PipelineBuilder::setDefaultRasterizer()
 {
     m_rasterizer = VkDefaults::Rasterizer();
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setMultisampling(vk::SampleCountFlagBits samples)
+PipelineBuilder &PipelineBuilder::setMultisampling(vk::SampleCountFlagBits samples)
 {
     m_multisampling = VkDefaults::Multisampling(samples);
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setDefaultDepthStencil()
+PipelineBuilder &PipelineBuilder::setDefaultDepthStencil()
 {
     m_depthStencil = VkDefaults::DepthStencil();
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setAttachmentBlendStates(
+PipelineBuilder &PipelineBuilder::setAttachmentBlendStates(
     std::vector<vk::PipelineColorBlendAttachmentState> blendStates)
 {
     m_attachmentBlendStates = blendStates;
@@ -79,7 +79,7 @@ PipelineCreator &PipelineCreator::setAttachmentBlendStates(
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setDefaultDynamicStates()
+PipelineBuilder &PipelineBuilder::setDefaultDynamicStates()
 {
     m_dynamicStates = {vk::DynamicState::eViewport, vk::DynamicState::eLineWidth};
 
@@ -89,19 +89,19 @@ PipelineCreator &PipelineCreator::setDefaultDynamicStates()
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setPipelineLayout(vk::PipelineLayout pipelineLayout)
+PipelineBuilder &PipelineBuilder::setPipelineLayout(vk::PipelineLayout pipelineLayout)
 {
     m_pipelineLayout = pipelineLayout;
     return *this;
 }
 
-PipelineCreator &PipelineCreator::setRenderPass(vk::RenderPass renderPass)
+PipelineBuilder &PipelineBuilder::setRenderPass(vk::RenderPass renderPass)
 {
     m_renderPass = renderPass;
     return *this;
 }
 
-vk::UniquePipeline PipelineCreator::create(GraphicsContext &ctx)
+vk::UniquePipeline PipelineBuilder::create(GraphicsContext &ctx)
 {
     vk::GraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.stageCount = static_cast<uint32_t>(m_shaderCreateInfos.size());

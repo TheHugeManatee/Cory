@@ -116,7 +116,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     const auto fragShaderCode = readFile(RESOURCE_DIR "/manatee.spv");
 
     // start pipeline initialization
-    PipelineCreator creator;
+    PipelineBuilder creator;
     std::vector<Shader> shaders;
     shaders.emplace_back(m_ctx, vertShaderCode, ShaderType::eVertex);
     shaders.emplace_back(m_ctx, fragShaderCode, ShaderType::eFragment);

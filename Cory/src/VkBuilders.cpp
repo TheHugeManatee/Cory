@@ -108,4 +108,107 @@ vk::UniquePipeline PipelineCreator::create(GraphicsContext &ctx)
         return {};
     }
 }
+
+void RenderPassBuilder::addColorAttachment(vk::Format format, vk::SampleCountFlagBits samples)
+{
+    vk::AttachmentDescription colorAttachment{};
+    colorAttachment.format = format;
+    colorAttachment.samples = samples;
+    colorAttachment.loadOp = vk::AttachmentLoadOp::eClear; // care about color
+    colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+    colorAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare; // don't care about stencil
+    colorAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    colorAttachment.initialLayout = vk::ImageLayout::eUndefined;
+    colorAttachment.finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
+
+    auto attachmentRef = addAttachment(colorAttachment, vk::ImageLayout::eColorAttachmentOptimal);
+    m_colorAttachmentRefs.push_back(attachmentRef);
+}
+
+void RenderPassBuilder::addDepthAttachment(vk::Format format, vk::SampleCountFlagBits samples)
+{
+    assert(m_depthStencilAttachmentRef == vk::AttachmentReference{} &&
+           "DepthStencil attachment is already set!");
+
+    vk::AttachmentDescription depthAttachment{};
+    depthAttachment.format = format;
+    depthAttachment.samples = samples;
+    depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+    depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
+    depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
+    depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+
+    m_depthStencilAttachmentRef =
+        addAttachment(depthAttachment, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+}
+
+void RenderPassBuilder::addResolveAttachment(vk::Format format)
+{
+    vk::AttachmentDescription colorAttachmentResolve{};
+    colorAttachmentResolve.format = format;
+    colorAttachmentResolve.samples = vk::SampleCountFlagBits::e1;
+    colorAttachmentResolve.loadOp = vk::AttachmentLoadOp::eDontCare;
+    colorAttachmentResolve.storeOp = vk::AttachmentStoreOp::eStore;
+    colorAttachmentResolve.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    colorAttachmentResolve.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    colorAttachmentResolve.initialLayout = vk::ImageLayout::eUndefined;
+    colorAttachmentResolve.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+
+    auto attachmentRef =
+        addAttachment(colorAttachmentResolve, vk::ImageLayout::eColorAttachmentOptimal);
+    m_resolveAttachmentRefs.push_back(attachmentRef);
+}
+
+vk::RenderPass RenderPassBuilder::create(GraphicsContext &ctx)
+{
+    vk::SubpassDescription subpass{};
+    subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+    subpass.colorAttachmentCount = static_cast<uint32_t>(m_colorAttachmentRefs.size());
+    subpass.pColorAttachments = m_colorAttachmentRefs.data();
+    subpass.pDepthStencilAttachment = &m_depthStencilAttachmentRef;
+    subpass.pResolveAttachments = m_resolveAttachmentRefs.data();
+    // NOTE: the order of attachments directly corresponds to the 'layout(location=0) out vec4
+    // color' index in the fragment shader pInputAttachments: attachments that are read from a
+    // shader pResolveAttachments: attachments used for multisampling color attachments
+    // pDepthStencilAttachment: attachment for depth and stencil data
+    // pPreserveAttachments: attachments that are not currently used by the subpass but for
+    // which the data needs to be preserved.
+
+    //****************** Subpass dependencies ******************
+    // this sets up the render pass to wait for the STAGE_COLOR_ATTACHMENT_OUTPUT stage to
+    // ensure the images are available and the swap chain is not still reading the image
+    vk::SubpassDependency dependency{};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                              vk::PipelineStageFlagBits::eEarlyFragmentTests;
+    dependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentRead; // not sure here..
+    dependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                              vk::PipelineStageFlagBits::eEarlyFragmentTests;
+    dependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite |
+                               vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+
+    vk::RenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.attachmentCount = static_cast<uint32_t>(m_attachments.size());
+    renderPassInfo.pAttachments = m_attachments.data();
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 1;
+    renderPassInfo.pDependencies = &dependency;
+
+    return ctx.device->createRenderPass(renderPassInfo);
+}
+
+vk::AttachmentReference RenderPassBuilder::addAttachment(vk::AttachmentDescription desc, vk::ImageLayout layout)
+{
+    uint32_t attachmentID = static_cast<uint32_t>(m_attachments.size());
+    m_attachments.push_back(desc);
+    vk::AttachmentReference attachmentRef{};
+    attachmentRef.attachment = attachmentID;
+    attachmentRef.layout = layout;
+    return attachmentRef;
+}
+
 } // namespace Cory

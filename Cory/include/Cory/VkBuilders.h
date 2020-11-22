@@ -71,4 +71,25 @@ class PipelineCreator {
     vk::RenderPass m_renderPass;
     vk::PipelineLayout m_pipelineLayout;
 };
+
+class RenderPassBuilder {
+  public:
+    void addColorAttachment(vk::Format format, vk::SampleCountFlagBits samples);
+
+    void addDepthAttachment(vk::Format format, vk::SampleCountFlagBits samples);
+
+    void addResolveAttachment(vk::Format format);
+
+    vk::RenderPass create(GraphicsContext &ctx);
+
+  private:
+    vk::AttachmentReference addAttachment(vk::AttachmentDescription desc, vk::ImageLayout layout);
+
+  private:
+    std::vector<vk::AttachmentDescription> m_attachments;
+    std::vector<vk::AttachmentReference> m_colorAttachmentRefs;
+    std::vector<vk::AttachmentReference> m_resolveAttachmentRefs;
+    vk::AttachmentReference m_depthStencilAttachmentRef;
+};
+
 } // namespace Cory

@@ -79,6 +79,9 @@ vk::PipelineColorBlendAttachmentState AttachmentBlendDisabled();
 vk::PipelineColorBlendStateCreateInfo
 BlendState(std::vector<vk::PipelineColorBlendAttachmentState> *attachmentStages);
 vk::PipelineLayoutCreateInfo PipelineLayout(vk::DescriptorSetLayout &layout);
+
+
+
 } // namespace VkDefaults
 
 } // namespace Cory

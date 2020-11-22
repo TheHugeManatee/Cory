@@ -2,8 +2,8 @@
 
 #include "Cory/Mesh.h"
 #include "Cory/Shader.h"
-#include "Cory/VkUtils.h"
 #include "Cory/VkBuilders.h"
+#include "Cory/VkUtils.h"
 
 #include <glm.h>
 #include <spdlog/spdlog.h>
@@ -138,96 +138,19 @@ void HelloTriangleApplication::createGraphicsPipeline()
 
     creator.setRenderPass(m_renderPass);
 
-    //finally, create the pipeline
+    // finally, create the pipeline
     m_graphicsPipeline = creator.create(m_ctx);
 }
 
 void HelloTriangleApplication::createRenderPass()
 {
-    vk::AttachmentDescription colorAttachment{};
-    colorAttachment.format = m_swapChain->format();
-    colorAttachment.samples = m_msaaSamples;
-    colorAttachment.loadOp = vk::AttachmentLoadOp::eClear; // care about color
-    colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
-    colorAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare; // don't care about stencil
-    colorAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    colorAttachment.initialLayout = vk::ImageLayout::eUndefined;
-    colorAttachment.finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    RenderPassBuilder builder;
 
-    vk::AttachmentDescription depthAttachment{};
-    depthAttachment.format = findDepthFormat(m_ctx.physicalDevice);
-    depthAttachment.samples = m_msaaSamples;
-    depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
-    depthAttachment.storeOp = vk::AttachmentStoreOp::eDontCare;
-    depthAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    depthAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    depthAttachment.initialLayout = vk::ImageLayout::eUndefined;
-    depthAttachment.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
+    builder.addColorAttachment(m_swapChain->format(), m_msaaSamples);
+    builder.addDepthAttachment(findDepthFormat(m_ctx.physicalDevice), m_msaaSamples);
+    builder.addResolveAttachment(m_swapChain->format());
 
-    vk::AttachmentDescription colorAttachmentResolve{};
-    colorAttachmentResolve.format = m_swapChain->format();
-    colorAttachmentResolve.samples = vk::SampleCountFlagBits::e1;
-    colorAttachmentResolve.loadOp = vk::AttachmentLoadOp::eDontCare;
-    colorAttachmentResolve.storeOp = vk::AttachmentStoreOp::eStore;
-    colorAttachmentResolve.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
-    colorAttachmentResolve.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
-    colorAttachmentResolve.initialLayout = vk::ImageLayout::eUndefined;
-    colorAttachmentResolve.finalLayout = vk::ImageLayout::ePresentSrcKHR;
-
-    //****************** Subpasses ******************
-    // describe which layout each attachment should be transitioned to
-    vk::AttachmentReference colorAttachmentRef{};
-    colorAttachmentRef.attachment = 0;
-    colorAttachmentRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
-
-    vk::AttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 1;
-    depthAttachmentRef.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
-
-    vk::AttachmentReference colorAttachmentResolveRef{};
-    colorAttachmentResolveRef.attachment = 2;
-    colorAttachmentResolveRef.layout = vk::ImageLayout::eColorAttachmentOptimal;
-
-    vk::SubpassDescription subpass{};
-    subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colorAttachmentRef;
-    subpass.pDepthStencilAttachment = &depthAttachmentRef;
-    subpass.pResolveAttachments = &colorAttachmentResolveRef;
-    // NOTE: the order of attachments directly corresponds to the 'layout(location=0) out vec4
-    // color' index in the fragment shader pInputAttachments: attachments that are read from a
-    // shader pResolveAttachments: attachments used for multisampling color attachments
-    // pDepthStencilAttachment: attachment for depth and stencil data
-    // pPreserveAttachments: attachments that are not currently used by the subpass but for which
-    // the data needs to be preserved.
-
-    //****************** Render Pass ******************
-    std::array<vk::AttachmentDescription, 3> attachments = {colorAttachment, depthAttachment,
-                                                            colorAttachmentResolve};
-    vk::RenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-    renderPassInfo.pAttachments = attachments.data();
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-
-    //****************** Subpass dependencies ******************
-    // this sets up the render pass to wait for the STAGE_COLOR_ATTACHMENT_OUTPUT stage to ensure
-    // the images are available and the swap chain is not still reading the image
-    vk::SubpassDependency dependency{};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
-                              vk::PipelineStageFlagBits::eEarlyFragmentTests;
-    dependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentRead; // not sure here..
-    dependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
-                              vk::PipelineStageFlagBits::eEarlyFragmentTests;
-    dependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite |
-                               vk::AccessFlagBits::eDepthStencilAttachmentWrite;
-
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &dependency;
-
-    m_renderPass = m_ctx.device->createRenderPass(renderPassInfo);
+    m_renderPass = builder.create(m_ctx);
 }
 
 void HelloTriangleApplication::createFramebuffers()

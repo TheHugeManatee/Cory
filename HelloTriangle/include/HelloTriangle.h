@@ -36,7 +36,7 @@ class HelloTriangleApplication : public Application {
     void createGraphicsPipeline();
     void createRenderPass();
     void createCommandBuffers();
-    void createSyncObjects();
+
     void recreateSwapChain();
     void cleanupSwapChain();
     void createGeometry();
@@ -53,9 +53,7 @@ class HelloTriangleApplication : public Application {
 
     void createDescriptorPool();
     void createDescriptorSets();
-    void createColorResources();
-    void createDepthResources();
-    void createFramebuffers();
+
 
   private:
     vk::RenderPass m_renderPass;
@@ -64,7 +62,6 @@ class HelloTriangleApplication : public Application {
     std::vector<vk::DescriptorSet> m_descriptorSets;
     vk::UniquePipelineLayout m_pipelineLayout;
     vk::UniquePipeline m_graphicsPipeline;
-    std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
     vk::UniqueCommandPool m_commandPool;
     std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
@@ -72,17 +69,10 @@ class HelloTriangleApplication : public Application {
 
     size_t m_currentFrame{};
 
-    std::vector<vk::UniqueSemaphore> m_imageAvailableSemaphores;
-    std::vector<vk::UniqueSemaphore> m_renderFinishedSemaphores;
-    std::vector<vk::UniqueFence> m_inFlightFences;
-    std::vector<vk::Fence> m_imagesInFlight;
-
     uint32_t m_numVertices;
     Buffer m_vertexBuffer;
     Buffer m_indexBuffer;
 
-    DepthBuffer m_depthBuffer;
-    RenderBuffer m_renderTarget;
     Texture m_texture;
     Texture m_texture2;
 

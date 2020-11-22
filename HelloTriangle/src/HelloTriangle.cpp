@@ -56,8 +56,8 @@ void HelloTriangleApplication::initVulkan()
 
     createColorResources();
     createDepthResources();
-    createFramebuffers();
-    createSyncObjects();
+    createFramebuffers(m_renderPass);
+    createSyncObjects(MAX_FRAMES_IN_FLIGHT);
 
     m_texture = createTextureImage(RESOURCE_DIR "/viking_room.png", vk::Filter::eLinear,
                                    vk::SamplerAddressMode::eRepeat);
@@ -153,25 +153,7 @@ void HelloTriangleApplication::createRenderPass()
     m_renderPass = builder.create(m_ctx);
 }
 
-void HelloTriangleApplication::createFramebuffers()
-{
-    m_swapChainFramebuffers.resize(m_swapChain->views().size());
 
-    for (size_t i{0}; i < m_swapChain->views().size(); ++i) {
-        std::array<vk::ImageView, 3> attachments = {m_renderTarget.view(), m_depthBuffer.view(),
-                                                    m_swapChain->views()[i]};
-
-        vk::FramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.renderPass = m_renderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();
-        framebufferInfo.width = m_swapChain->extent().width;
-        framebufferInfo.height = m_swapChain->extent().height;
-        framebufferInfo.layers = 1;
-
-        m_swapChainFramebuffers[i] = m_ctx.device->createFramebuffer(framebufferInfo);
-    }
-}
 
 void HelloTriangleApplication::createCommandBuffers()
 {
@@ -232,24 +214,6 @@ void HelloTriangleApplication::createCommandBuffers()
     }
 }
 
-void HelloTriangleApplication::createSyncObjects()
-{
-    m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
-    m_imagesInFlight.resize(m_swapChain->images().size());
-
-    vk::SemaphoreCreateInfo semaphoreInfo{};
-    vk::FenceCreateInfo fenceInfo{};
-    fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
-
-    for (size_t i{}; i < MAX_FRAMES_IN_FLIGHT; ++i) {
-        m_imageAvailableSemaphores[i] = m_ctx.device->createSemaphoreUnique(semaphoreInfo);
-        m_renderFinishedSemaphores[i] = m_ctx.device->createSemaphoreUnique(semaphoreInfo);
-        m_inFlightFences[i] = m_ctx.device->createFenceUnique(fenceInfo);
-    }
-}
-
 void HelloTriangleApplication::recreateSwapChain()
 {
     // window might be minimized
@@ -274,7 +238,7 @@ void HelloTriangleApplication::recreateSwapChain()
     createGraphicsPipeline();
     createColorResources();
     createDepthResources();
-    createFramebuffers();
+    createFramebuffers(m_renderPass);
     createUniformBuffers();
     createDescriptorPool();
     createDescriptorSets();
@@ -576,21 +540,7 @@ void HelloTriangleApplication::createDescriptorSets()
     }
 }
 
-void HelloTriangleApplication::createColorResources()
-{
-    m_renderTarget.create(m_ctx, {m_swapChain->extent().width, m_swapChain->extent().height, 1},
-                          m_swapChain->format(), m_msaaSamples);
-}
 
-void HelloTriangleApplication::createDepthResources()
-{
-
-    vk::Format depthFormat = findDepthFormat(m_ctx.physicalDevice);
-
-    m_depthBuffer.create(m_ctx, {m_swapChain->extent().width, m_swapChain->extent().height, 1},
-                         depthFormat, m_msaaSamples);
-    m_depthBuffer.transitionLayout(m_ctx, vk::ImageLayout::eDepthStencilAttachmentOptimal);
-}
 
 Texture HelloTriangleApplication::createTextureImage(std::string textureFilename, vk::Filter filter,
                                                      vk::SamplerAddressMode addressMode)

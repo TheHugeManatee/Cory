@@ -208,6 +208,64 @@ void Application::createCommandPools()
     m_ctx.permanentCmdPool = m_ctx.device->createCommandPoolUnique(poolInfo);
 }
 
+void Application::createSyncObjects(uint32_t maxFramesInFlight)
+{
+    m_imageAvailableSemaphores.resize(maxFramesInFlight);
+    m_renderFinishedSemaphores.resize(maxFramesInFlight);
+    m_inFlightFences.resize(maxFramesInFlight);
+    m_imagesInFlight.resize(m_swapChain->images().size());
+
+    vk::SemaphoreCreateInfo semaphoreInfo{};
+    vk::FenceCreateInfo fenceInfo{};
+    fenceInfo.flags = vk::FenceCreateFlagBits::eSignaled;
+
+    for (size_t i{}; i < maxFramesInFlight; ++i) {
+        m_imageAvailableSemaphores[i] = m_ctx.device->createSemaphoreUnique(semaphoreInfo);
+        m_renderFinishedSemaphores[i] = m_ctx.device->createSemaphoreUnique(semaphoreInfo);
+        m_inFlightFences[i] = m_ctx.device->createFenceUnique(fenceInfo);
+    }
+}
+
+void Application::createColorResources()
+{
+    m_renderTarget.create(m_ctx, {m_swapChain->extent().width, m_swapChain->extent().height, 1},
+                          m_swapChain->format(), m_msaaSamples);
+}
+
+void Application::createDepthResources()
+{
+    vk::Format depthFormat = findDepthFormat(m_ctx.physicalDevice);
+
+    m_depthBuffer.create(m_ctx, {m_swapChain->extent().width, m_swapChain->extent().height, 1},
+                         depthFormat, m_msaaSamples);
+    m_depthBuffer.transitionLayout(m_ctx, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+}
+
+void Application::createFramebuffers(vk::RenderPass renderPass)
+{
+    if (!m_swapChainFramebuffers.empty()) {
+        for (auto framebuffer : m_swapChainFramebuffers) {
+            m_ctx.device->destroyFramebuffer(framebuffer);
+        }
+    }
+    m_swapChainFramebuffers.resize(m_swapChain->views().size());
+
+    for (size_t i{0}; i < m_swapChain->views().size(); ++i) {
+        std::array<vk::ImageView, 3> attachments = {m_renderTarget.view(), m_depthBuffer.view(),
+                                                    m_swapChain->views()[i]};
+
+        vk::FramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        framebufferInfo.pAttachments = attachments.data();
+        framebufferInfo.width = m_swapChain->extent().width;
+        framebufferInfo.height = m_swapChain->extent().height;
+        framebufferInfo.layers = 1;
+
+        m_swapChainFramebuffers[i] = m_ctx.device->createFramebuffer(framebufferInfo);
+    }
+}
+
 void Application::setupDebugMessenger()
 {
     if (!enableValidationLayers)

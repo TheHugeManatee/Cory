@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Context.h"
+#include "Image.h"
 
 #include <ranges>
 #include <vulkan/vulkan.hpp>
@@ -43,6 +44,11 @@ class Application {
     void createMemoryAllocator();
     void createCommandPools();
 
+    void createSyncObjects(uint32_t maxFramesInFlight);
+
+    void createColorResources();
+    void createDepthResources();
+    void createFramebuffers(vk::RenderPass renderPass);
 
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
 
@@ -61,6 +67,16 @@ class Application {
     // vkAcquireNextFrameKHR and vkQueuePresentKHR. however, it might not be reliable on some
     // drivers, so we use this flag to check the glfw resize events explicitly
     bool m_framebufferResized{};
+
+    DepthBuffer m_depthBuffer;
+    RenderBuffer m_renderTarget;
+
+    std::vector<vk::Framebuffer> m_swapChainFramebuffers;
+
+    std::vector<vk::UniqueSemaphore> m_imageAvailableSemaphores;
+    std::vector<vk::UniqueSemaphore> m_renderFinishedSemaphores;
+    std::vector<vk::UniqueFence> m_inFlightFences;
+    std::vector<vk::Fence> m_imagesInFlight;
 
     vk::DebugUtilsMessengerEXT m_debugMessenger{};
 

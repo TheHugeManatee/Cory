@@ -3,6 +3,7 @@
 #include "Cory/Mesh.h"
 #include "Cory/Shader.h"
 #include "Cory/VkUtils.h"
+#include "Cory/VkBuilders.h"
 
 #include <glm.h>
 #include <spdlog/spdlog.h>
@@ -116,7 +117,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     const auto fragShaderCode = readFile(RESOURCE_DIR "/manatee.spv");
 
     // start pipeline initialization
-    VkDefaults::PipelineCreator creator;
+    PipelineCreator creator;
     std::vector<Shader> shaders;
     shaders.emplace_back(m_ctx, vertShaderCode, ShaderType::eVertex);
     shaders.emplace_back(m_ctx, fragShaderCode, ShaderType::eFragment);

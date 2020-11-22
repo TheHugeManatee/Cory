@@ -12,6 +12,7 @@ add_library(${TARGET_NAME} STATIC
   src/Mesh.cpp
   src/Shader.cpp
   src/Utils.cpp
+  src/VkBuilders.cpp
   src/VkUtils.cpp
 )
 

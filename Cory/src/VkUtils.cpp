@@ -159,7 +159,7 @@ vk::Viewport VkDefaults::Viewport(vk::Extent2D swapChainExtent)
 }
 
 vk::PipelineViewportStateCreateInfo VkDefaults::ViewportState(vk::Viewport &viewport,
-                                                              vk::Rect2D scissor)
+                                                              vk::Rect2D &scissor)
 {
     vk::PipelineViewportStateCreateInfo viewportState{};
     viewportState.viewportCount = 1;
@@ -269,8 +269,7 @@ vk::PipelineLayoutCreateInfo VkDefaults::PipelineLayout(vk::DescriptorSetLayout 
     return pipelineLayoutInfo;
 }
 
-VkDefaults::PipelineCreator &
-VkDefaults::PipelineCreator::setShaders(std::vector<Shader> shaders)
+VkDefaults::PipelineCreator &VkDefaults::PipelineCreator::setShaders(std::vector<Shader> shaders)
 {
     m_shaders = std::move(shaders);
     m_shaderCreateInfos.clear();
@@ -282,8 +281,7 @@ VkDefaults::PipelineCreator::setShaders(std::vector<Shader> shaders)
     return *this;
 }
 
-VkDefaults::PipelineCreator &
-VkDefaults::PipelineCreator::setViewport(vk::Extent2D swapChainExtent)
+VkDefaults::PipelineCreator &VkDefaults::PipelineCreator::setViewport(vk::Extent2D swapChainExtent)
 {
     m_viewport = Cory::VkDefaults::Viewport(swapChainExtent);
     m_scissor = {{0, 0}, {swapChainExtent}};
@@ -335,8 +333,7 @@ VkDefaults::PipelineCreator::setPipelineLayout(vk::PipelineLayout pipelineLayout
     return *this;
 }
 
-VkDefaults::PipelineCreator &
-VkDefaults::PipelineCreator::setRenderPass(vk::RenderPass renderPass)
+VkDefaults::PipelineCreator &VkDefaults::PipelineCreator::setRenderPass(vk::RenderPass renderPass)
 {
     m_renderPass = renderPass;
     return *this;

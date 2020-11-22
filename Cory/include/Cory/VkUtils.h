@@ -74,7 +74,8 @@ class PipelineCreator {
   public:
     PipelineCreator() {}
 
-    PipelineCreator &setShaders(std::vector<Shader> shaders);;
+    PipelineCreator &setShaders(std::vector<Shader> shaders);
+    ;
 
     template <class VertexClass>
     PipelineCreator &
@@ -106,13 +107,14 @@ class PipelineCreator {
     PipelineCreator &
     setAttachmentBlendStates(std::vector<vk::PipelineColorBlendAttachmentState> blendStates);
 
-    PipelineCreator &setDefaultDynamicStates();;
+    PipelineCreator &setDefaultDynamicStates();
+    ;
 
     PipelineCreator &setPipelineLayout(vk::PipelineLayout pipelineLayout);
 
-    PipelineCreator& setRenderPass(vk::RenderPass renderPass);
+    PipelineCreator &setRenderPass(vk::RenderPass renderPass);
 
-    vk::UniquePipeline create(GraphicsContext& ctx);
+    vk::UniquePipeline create(GraphicsContext &ctx);
 
   private:
     // shaders
@@ -141,9 +143,8 @@ class PipelineCreator {
     vk::PipelineLayout m_pipelineLayout;
 };
 
-
 vk::Viewport Viewport(vk::Extent2D swapChainExtent);
-vk::PipelineViewportStateCreateInfo ViewportState(vk::Viewport &viewport, vk::Rect2D scissor);
+vk::PipelineViewportStateCreateInfo ViewportState(vk::Viewport &viewport, vk::Rect2D &scissor);
 vk::PipelineRasterizationStateCreateInfo Rasterizer();
 vk::PipelineMultisampleStateCreateInfo
 Multisampling(vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1);

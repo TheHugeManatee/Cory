@@ -96,8 +96,7 @@ void HelloTriangleApplication::cleanup()
 
     m_ctx.instance->destroySurfaceKHR(m_surface);
 
-    m_vertexBuffer.destroy(m_ctx);
-    m_indexBuffer.destroy(m_ctx);
+    m_mesh = {}; // deinit the mesh data
 
     m_texture.destroy(m_ctx);
     m_texture2.destroy(m_ctx);
@@ -123,7 +122,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     shaders.emplace_back(m_ctx, fragShaderCode, ShaderType::eFragment);
     creator.setShaders(std::move(shaders));
 
-    creator.setVertexInput<Vertex>();
+    creator.setVertexInput(*m_mesh);
     creator.setViewport(m_swapChain->extent());
     creator.setDefaultRasterizer();
     creator.setMultisampling(m_msaaSamples);
@@ -152,8 +151,6 @@ void HelloTriangleApplication::createRenderPass()
 
     m_renderPass = builder.create(m_ctx);
 }
-
-
 
 void HelloTriangleApplication::createCommandBuffers()
 {
@@ -199,15 +196,15 @@ void HelloTriangleApplication::createCommandBuffers()
         cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_graphicsPipeline);
 
         // bind the vertex and index buffers
-        cmdBuf.bindVertexBuffers(0, {m_vertexBuffer.buffer()}, {0});
-        cmdBuf.bindIndexBuffer(m_indexBuffer.buffer(), 0, vk::IndexType::eUint16);
+        cmdBuf.bindVertexBuffers(0, {m_mesh->vertexBuffer().buffer()}, {0});
+        cmdBuf.bindIndexBuffer(m_mesh->indexBuffer().buffer(), 0, m_mesh->indexType());
 
         // bind the descriptor sets
         cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipelineLayout, 0,
                                   {m_descriptorSets[i]}, {});
 
         // draw the vertices
-        cmdBuf.drawIndexed(m_numVertices, 1, 0, 0, 0);
+        cmdBuf.drawIndexed(m_mesh->numVertices(), 1, 0, 0, 0);
 
         cmdBuf.endRenderPass();
         cmdBuf.end();
@@ -298,50 +295,8 @@ void HelloTriangleApplication::createGeometry()
             indices.push_back(uniqueVertices[v]);
         }
     }
-    m_numVertices = static_cast<uint32_t>(indices.size());
 
-    createVertexBuffers(vertices);
-    createIndexBuffer(indices);
-}
-
-void HelloTriangleApplication::createVertexBuffers(const std::vector<Vertex> &vertices)
-{
-    vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-
-    Buffer stagingBuffer;
-    stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
-                         DeviceMemoryUsage::eCpuOnly);
-
-    stagingBuffer.upload(m_ctx, vertices.data(), bufferSize);
-
-    m_vertexBuffer.create(m_ctx, bufferSize,
-                          vk::BufferUsageFlagBits::eTransferDst |
-                              vk::BufferUsageFlagBits::eVertexBuffer,
-                          DeviceMemoryUsage::eGpuOnly);
-
-    stagingBuffer.copyTo(m_ctx, m_vertexBuffer, bufferSize);
-
-    stagingBuffer.destroy(m_ctx);
-}
-
-void HelloTriangleApplication::createIndexBuffer(const std::vector<uint16_t> &indices)
-{
-    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-    Buffer stagingBuffer;
-    stagingBuffer.create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eTransferSrc,
-                         DeviceMemoryUsage::eCpuOnly);
-
-    stagingBuffer.upload(m_ctx, indices.data(), bufferSize);
-
-    m_indexBuffer.create(m_ctx, bufferSize,
-                         vk::BufferUsageFlagBits::eTransferDst |
-                             vk::BufferUsageFlagBits::eIndexBuffer,
-                         DeviceMemoryUsage::eGpuOnly);
-
-    stagingBuffer.copyTo(m_ctx, m_indexBuffer, bufferSize);
-
-    stagingBuffer.destroy(m_ctx);
+    m_mesh = std::make_unique<Mesh>(m_ctx, vertices, indices, vk::PrimitiveTopology::eTriangleList);
 }
 
 void HelloTriangleApplication::createUniformBuffers()
@@ -539,8 +494,6 @@ void HelloTriangleApplication::createDescriptorSets()
         m_ctx.device->updateDescriptorSets(descriptorWrites, {});
     }
 }
-
-
 
 Texture HelloTriangleApplication::createTextureImage(std::string textureFilename, vk::Filter filter,
                                                      vk::SamplerAddressMode addressMode)

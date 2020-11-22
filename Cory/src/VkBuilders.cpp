@@ -2,6 +2,7 @@
 
 #include "VkUtils.h"
 #include "Context.h"
+#include "Mesh.h"
 
 #include <fmt/format.h>
 #include <ranges>
@@ -16,6 +17,31 @@ PipelineCreator &PipelineCreator::setShaders(std::vector<Shader> shaders)
 
     // TODO: push constants here? Note: pSpecializationInfo can be used to set compile time
     // constants - kinda like macros in an online compilation?
+    return *this;
+}
+
+Cory::PipelineCreator &PipelineCreator::setVertexInput(const Mesh &mesh)
+{
+    return setVertexInput(mesh.bindingDescription(), mesh.attributeDescriptions(), mesh.topology());
+}
+
+Cory::PipelineCreator &PipelineCreator::setVertexInput(
+    const vk::VertexInputBindingDescription &bindingDescriptor,
+    const std::vector<vk::VertexInputAttributeDescription> &attributeDescriptors,
+    vk::PrimitiveTopology topology /*= vk::PrimitiveTopology::eTriangleList*/)
+{
+    m_vertexBindingDescription = bindingDescriptor;
+    m_vertexAttributeDescriptions = attributeDescriptors;
+
+    m_vertexInputInfo.vertexBindingDescriptionCount = 1;
+    m_vertexInputInfo.pVertexBindingDescriptions = &m_vertexBindingDescription;
+    m_vertexInputInfo.vertexAttributeDescriptionCount =
+        static_cast<uint32_t>(m_vertexAttributeDescriptions.size());
+    m_vertexInputInfo.pVertexAttributeDescriptions = m_vertexAttributeDescriptions.data();
+
+    m_inputAssembly.topology = topology;
+    m_inputAssembly.primitiveRestartEnable =
+        false; // allows to break primitive lists with 0xFFFF index
     return *this;
 }
 

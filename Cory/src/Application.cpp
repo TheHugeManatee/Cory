@@ -243,11 +243,6 @@ void Application::createDepthResources()
 
 void Application::createFramebuffers(vk::RenderPass renderPass)
 {
-    if (!m_swapChainFramebuffers.empty()) {
-        for (auto framebuffer : m_swapChainFramebuffers) {
-            m_ctx.device->destroyFramebuffer(framebuffer);
-        }
-    }
     m_swapChainFramebuffers.resize(m_swapChain->views().size());
 
     for (size_t i{0}; i < m_swapChain->views().size(); ++i) {

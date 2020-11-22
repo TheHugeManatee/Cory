@@ -11,7 +11,7 @@ size_t Vertex::hasher::operator()(Vertex const &vertex) const
            (std::hash<glm::vec2>()(vertex.texCoord) << 1);
 }
 
-vk::VertexInputBindingDescription Vertex::getBindingDescription()
+vk::VertexInputBindingDescription Vertex::GetBindingDescription()
 {
     vk::VertexInputBindingDescription bindingDescription{};
 
@@ -22,7 +22,7 @@ vk::VertexInputBindingDescription Vertex::getBindingDescription()
     return bindingDescription;
 }
 
-std::vector<vk::VertexInputAttributeDescription> Vertex::getAttributeDescriptions()
+std::vector<vk::VertexInputAttributeDescription> Vertex::GetAttributeDescriptions()
 {
     std::vector<vk::VertexInputAttributeDescription> attributeDescriptions(3);
 
@@ -67,7 +67,7 @@ std::vector<Vertex> triangle()
                                {{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
 }
 
-mesh primitives::quad()
+meshdata primitives::quad()
 {
     std::vector<Vertex> vertices{{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                                  {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
@@ -77,7 +77,7 @@ mesh primitives::quad()
     return {vertices, indices};
 }
 
-mesh doublequad()
+meshdata doublequad()
 {
     std::vector<Vertex> vertices{{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
                                  {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
@@ -94,4 +94,41 @@ mesh doublequad()
     return {vertices, indices};
 }
 } // namespace primitives
+
+void Mesh::createVertexBuffer(const void *vertexData, const vk::DeviceSize dataSize)
+{
+    Buffer stagingBuffer;
+    stagingBuffer.create(m_ctx, dataSize, vk::BufferUsageFlagBits::eTransferSrc,
+                         DeviceMemoryUsage::eCpuOnly);
+
+    stagingBuffer.upload(m_ctx, vertexData, dataSize);
+
+    m_vertexBuffer.create(m_ctx, dataSize,
+                          vk::BufferUsageFlagBits::eTransferDst |
+                              vk::BufferUsageFlagBits::eVertexBuffer,
+                          DeviceMemoryUsage::eGpuOnly);
+
+    stagingBuffer.copyTo(m_ctx, m_vertexBuffer, dataSize);
+
+    stagingBuffer.destroy(m_ctx);
+}
+
+void Mesh::createIndexBuffer(const void *indexData, vk::DeviceSize dataSize)
+{
+    Buffer stagingBuffer;
+    stagingBuffer.create(m_ctx, dataSize, vk::BufferUsageFlagBits::eTransferSrc,
+                         DeviceMemoryUsage::eCpuOnly);
+
+    stagingBuffer.upload(m_ctx, indexData, dataSize);
+
+    m_indexBuffer.create(m_ctx, dataSize,
+                         vk::BufferUsageFlagBits::eTransferDst |
+                             vk::BufferUsageFlagBits::eIndexBuffer,
+                         DeviceMemoryUsage::eGpuOnly);
+
+    stagingBuffer.copyTo(m_ctx, m_indexBuffer, dataSize);
+
+    stagingBuffer.destroy(m_ctx);
+}
+
 } // namespace Cory

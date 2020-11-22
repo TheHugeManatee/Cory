@@ -79,12 +79,12 @@ void Buffer::upload(GraphicsContext &ctx, const void *srcData, vk::DeviceSize si
     // next vkQueueSubmit()
 }
 
-void Buffer::download(GraphicsContext &ctx, host_buffer &buf)
+void Buffer::download(GraphicsContext &ctx, host_buffer &buf) const
 {
     throw std::runtime_error("Function not implemented.");
 }
 
-void Buffer::copyTo(GraphicsContext &ctx, Buffer &rhs, vk::DeviceSize size)
+void Buffer::copyTo(GraphicsContext &ctx, Buffer &rhs, vk::DeviceSize size) const
 {
     SingleTimeCommandBuffer copyCmdBuffer(ctx);
 
@@ -93,7 +93,7 @@ void Buffer::copyTo(GraphicsContext &ctx, Buffer &rhs, vk::DeviceSize size)
     copyCmdBuffer.buffer().copyBuffer(m_buffer, rhs.buffer(), {copyRegion});
 }
 
-void Buffer::copyTo(GraphicsContext &ctx, const Image &rhs)
+void Buffer::copyTo(GraphicsContext &ctx, const Image &rhs) const
 {
     SingleTimeCommandBuffer cmdBuf(ctx);
 

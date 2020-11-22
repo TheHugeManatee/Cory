@@ -7,6 +7,7 @@
 
 namespace Cory {
 class GraphicsContext;
+class Mesh;
 
 class PipelineCreator {
   public:
@@ -14,24 +15,12 @@ class PipelineCreator {
 
     PipelineCreator &setShaders(std::vector<Shader> shaders);
 
-    template <class VertexClass>
+    PipelineCreator &setVertexInput(const Mesh &mesh);
+
     PipelineCreator &
-    setVertexInput(vk::PrimitiveTopology topology = vk::PrimitiveTopology::eTriangleList)
-    {
-        m_vertexBindingDescription = typename VertexClass::getBindingDescription();
-        m_vertexAttributeDescriptions = typename VertexClass::getAttributeDescriptions();
-
-        m_vertexInputInfo.vertexBindingDescriptionCount = 1;
-        m_vertexInputInfo.pVertexBindingDescriptions = &m_vertexBindingDescription;
-        m_vertexInputInfo.vertexAttributeDescriptionCount =
-            static_cast<uint32_t>(m_vertexAttributeDescriptions.size());
-        m_vertexInputInfo.pVertexAttributeDescriptions = m_vertexAttributeDescriptions.data();
-
-        m_inputAssembly.topology = topology;
-        m_inputAssembly.primitiveRestartEnable =
-            false; // allows to break primitive lists with 0xFFFF index
-        return *this;
-    }
+    setVertexInput(const vk::VertexInputBindingDescription &bindingDescriptor,
+                   const std::vector<vk::VertexInputAttributeDescription> &attributeDescriptors,
+                   vk::PrimitiveTopology topology = vk::PrimitiveTopology::eTriangleList);
 
     PipelineCreator &setViewport(vk::Extent2D swapChainExtent);
     PipelineCreator &setDefaultRasterizer();

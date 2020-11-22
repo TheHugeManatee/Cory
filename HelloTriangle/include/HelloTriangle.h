@@ -40,8 +40,7 @@ class HelloTriangleApplication : public Application {
     void recreateSwapChain();
     void cleanupSwapChain();
     void createGeometry();
-    void createVertexBuffers(const std::vector<Vertex> &vertices);
-    void createIndexBuffer(const std::vector<uint16_t> &indices);
+
     void createUniformBuffers();
     void createDescriptorSetLayout();
     Texture createTextureImage(std::string textureFilename, vk::Filter filter,
@@ -69,9 +68,7 @@ class HelloTriangleApplication : public Application {
 
     size_t m_currentFrame{};
 
-    uint32_t m_numVertices;
-    Buffer m_vertexBuffer;
-    Buffer m_indexBuffer;
+    std::unique_ptr<Mesh> m_mesh;
 
     Texture m_texture;
     Texture m_texture2;

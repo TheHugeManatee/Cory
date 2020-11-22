@@ -29,11 +29,12 @@ class Buffer {
     void destroy(GraphicsContext &ctx);
 
     void upload(GraphicsContext &ctx, const void *srcData, vk::DeviceSize size);
-    void download(GraphicsContext &ctx, host_buffer &buf);
+    void download(GraphicsContext &ctx, host_buffer &buf) const;
 
-    void copyTo(GraphicsContext &ctx, Buffer &rhs, vk::DeviceSize size);
-    void copyTo(GraphicsContext &ctx, const Image &rhs);
+    void copyTo(GraphicsContext &ctx, Buffer &rhs, vk::DeviceSize size) const;
+    void copyTo(GraphicsContext &ctx, const Image &rhs) const;
 
+    const vk::Buffer buffer() const { return m_buffer; };
     vk::Buffer buffer() { return m_buffer; };
 
   private:

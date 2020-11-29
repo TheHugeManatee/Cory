@@ -4,6 +4,7 @@
 
 #include <Cory/Application.h>
 #include <Cory/Buffer.h>
+#include <Cory/Descriptor.h>
 #include <Cory/Image.h>
 #include <Cory/Mesh.h>
 #include <Cory/Utils.h>
@@ -17,6 +18,14 @@
 #include <vector>
 
 using namespace Cory;
+
+
+struct CameraUBOData{
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
+
 
 class HelloTriangleApplication : public Application {
   public:
@@ -64,7 +73,7 @@ class HelloTriangleApplication : public Application {
 
     vk::UniqueCommandPool m_commandPool;
     std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
-    std::vector<Buffer> m_uniformBuffers;
+    std::vector<UniformBuffer<CameraUBOData>> m_uniformBuffers;
 
     size_t m_currentFrame{};
 

@@ -29,12 +29,6 @@ class host_buffer {
     std::unique_ptr<uint8_t[]> m_data;
 };
 
-struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
-};
-
 struct stbi_image {
   public:
     explicit stbi_image(const std::string &file);

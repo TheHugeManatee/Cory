@@ -163,7 +163,7 @@ void HelloTriangleApplication::createCommandBuffers()
     allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
     m_commandBuffers = m_ctx.device->allocateCommandBuffersUnique(allocInfo);
 
-    // begin all command buffers
+
     for (size_t i = 0; i < m_commandBuffers.size(); i++) {
         auto cmdBuf = *m_commandBuffers[i];
 
@@ -301,13 +301,11 @@ void HelloTriangleApplication::createGeometry()
 
 void HelloTriangleApplication::createUniformBuffers()
 {
-    vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
-
     m_uniformBuffers.resize(m_swapChain->size());
 
     for (size_t i{}; i < m_swapChain->size(); ++i) {
-        m_uniformBuffers[i].create(m_ctx, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
-                                   DeviceMemoryUsage::eCpuOnly);
+        m_uniformBuffers[i].create(m_ctx);
+        //, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, DeviceMemoryUsage::eCpuOnly);
     }
 }
 
@@ -409,7 +407,7 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     float time =
         std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-    UniformBufferObject ubo;
+    CameraUBOData &ubo = m_uniformBuffers[imageIndex].data();
     ubo.model =
         glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f),
@@ -420,7 +418,7 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted.
                           // otherwise image will be upside down :)
 
-    m_uniformBuffers[imageIndex].upload(m_ctx, &ubo, sizeof(ubo));
+    m_uniformBuffers[imageIndex].update(m_ctx);
 }
 
 void HelloTriangleApplication::createDescriptorPool()
@@ -459,7 +457,7 @@ void HelloTriangleApplication::createDescriptorSets()
         vk::DescriptorBufferInfo bufferInfo{};
         bufferInfo.buffer = m_uniformBuffers[i].buffer();
         bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(UniformBufferObject); // access range, could be VK_WHOLE_SIZE
+        bufferInfo.range = sizeof(CameraUBOData); // access range, could be VK_WHOLE_SIZE
 
         std::array<vk::DescriptorImageInfo, 2> imageInfos;
         imageInfos[0].imageView = m_texture.view();

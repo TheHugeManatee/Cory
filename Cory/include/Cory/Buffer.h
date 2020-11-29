@@ -36,6 +36,7 @@ class Buffer {
 
     const vk::Buffer buffer() const { return m_buffer; };
     vk::Buffer buffer() { return m_buffer; };
+    vk::DeviceSize size() const { return m_size; }
 
   private:
     vk::Buffer m_buffer{};

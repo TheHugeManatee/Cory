@@ -65,9 +65,7 @@ void HelloTriangleApplication::initVulkan()
                                     vk::SamplerAddressMode::eClampToBorder);
     createGeometry();
 
-    createDescriptorSetLayout();
     createUniformBuffers();
-    createDescriptorPool();
     createDescriptorSets();
     createGraphicsPipeline();
 
@@ -131,7 +129,7 @@ void HelloTriangleApplication::createGraphicsPipeline()
     creator.setDefaultDynamicStates();
 
     // pipeline layout
-    auto pipelineLayoutInfo = Cory::VkDefaults::PipelineLayout(*m_descriptorSetLayout);
+    auto pipelineLayoutInfo = Cory::VkDefaults::PipelineLayout(m_descriptorSet.layout());
     m_pipelineLayout = m_ctx.device->createPipelineLayoutUnique(pipelineLayoutInfo);
     creator.setPipelineLayout(*m_pipelineLayout);
 
@@ -201,7 +199,7 @@ void HelloTriangleApplication::createCommandBuffers()
 
         // bind the descriptor sets
         cmdBuf.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *m_pipelineLayout, 0,
-                                  {m_descriptorSets[i]}, {});
+                                  {m_descriptorSet.descriptorSet(i)}, {});
 
         // draw the vertices
         cmdBuf.drawIndexed(m_mesh->numVertices(), 1, 0, 0, 0);
@@ -237,7 +235,6 @@ void HelloTriangleApplication::recreateSwapChain()
     createDepthResources();
     createFramebuffers(m_renderPass);
     createUniformBuffers();
-    createDescriptorPool();
     createDescriptorSets();
     createCommandBuffers();
 }
@@ -409,8 +406,8 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
 
     CameraUBOData &ubo = m_uniformBuffers[imageIndex].data();
     ubo.model =
-        glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = glm::lookAt(glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::rotate(glm::mat4(1.f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(glm::radians(45.0f),
                                 m_swapChain->extent().width / (float)m_swapChain->extent().height,
@@ -421,76 +418,18 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     m_uniformBuffers[imageIndex].update(m_ctx);
 }
 
-void HelloTriangleApplication::createDescriptorPool()
-{
-    std::array<vk::DescriptorPoolSize, 2> poolSizes;
-    poolSizes[0].type = vk::DescriptorType::eUniformBuffer;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(m_swapChain->size());
-    poolSizes[1].type = vk::DescriptorType::eCombinedImageSampler;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(m_swapChain->size());
-
-    vk::DescriptorPoolCreateInfo poolInfo{};
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-    poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(m_swapChain->size());
-    // enables creation and freeing of individual descriptor sets -- we don't care for that right
-    // now
-    // poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-
-    m_descriptorPool = m_ctx.device->createDescriptorPoolUnique(poolInfo);
-}
 
 void HelloTriangleApplication::createDescriptorSets()
 {
-    std::vector<vk::DescriptorSetLayout> layouts(m_swapChain->size(), *m_descriptorSetLayout);
+    m_descriptorSet.create(m_ctx, static_cast<uint32_t>(m_swapChain->size()), 1, 2);
 
-    vk::DescriptorSetAllocateInfo allocInfo{};
-    allocInfo.descriptorPool = *m_descriptorPool;
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(m_swapChain->size());
-    allocInfo.pSetLayouts = layouts.data();
-
-    // NOTE: descriptor sets are freed implicitly when the pool is freed.
-    m_descriptorSets = m_ctx.device->allocateDescriptorSets(allocInfo);
-
-    // populate every descriptor
-    for (size_t i{}; i < m_swapChain->size(); ++i) {
-        vk::DescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = m_uniformBuffers[i].buffer();
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(CameraUBOData); // access range, could be VK_WHOLE_SIZE
-
-        std::array<vk::DescriptorImageInfo, 2> imageInfos;
-        imageInfos[0].imageView = m_texture.view();
-        imageInfos[0].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-        imageInfos[0].sampler = m_texture.sampler();
-
-        imageInfos[1].imageView = m_texture2.view();
-        imageInfos[1].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-        imageInfos[1].sampler = m_texture2.sampler();
-
-        std::array<vk::WriteDescriptorSet, 2> descriptorWrites;
-        descriptorWrites[0].dstSet = m_descriptorSets[i];
-        descriptorWrites[0].dstBinding = 0;
-        descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo = &bufferInfo;
-        descriptorWrites[0].pImageInfo = nullptr;
-        descriptorWrites[0].pTexelBufferView = nullptr;
-        descriptorWrites[0].pNext = nullptr;
-
-        descriptorWrites[1].dstSet = m_descriptorSets[i];
-        descriptorWrites[1].dstBinding = 1;
-        descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        descriptorWrites[1].descriptorCount = static_cast<uint32_t>(imageInfos.size());
-        descriptorWrites[1].pBufferInfo = nullptr;
-        descriptorWrites[1].pImageInfo = imageInfos.data();
-        descriptorWrites[1].pTexelBufferView = nullptr;
-        descriptorWrites[1].pNext = nullptr;
-
-        m_ctx.device->updateDescriptorSets(descriptorWrites, {});
+    std::vector<std::vector<const UniformBufferBase*>> uniformBuffers(m_swapChain->size());
+    std::vector<std::vector<const Texture *>> samplers(m_swapChain->size());
+    for (int i = 0; i < m_swapChain->size(); ++i) {
+        uniformBuffers[i].push_back(&m_uniformBuffers[i]);
+        samplers[i] = { &m_texture, &m_texture2 };
     }
+    m_descriptorSet.setDescriptors(m_ctx, uniformBuffers, samplers);
 }
 
 Texture HelloTriangleApplication::createTextureImage(std::string textureFilename, vk::Filter filter,
@@ -526,31 +465,4 @@ Texture HelloTriangleApplication::createTextureImage(std::string textureFilename
     // texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     return texture;
-}
-
-void HelloTriangleApplication::createDescriptorSetLayout()
-{
-    vk::DescriptorSetLayoutBinding uboLayoutBinding{};
-    uboLayoutBinding.binding = 0;
-    uboLayoutBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-    uboLayoutBinding.descriptorCount = 1;
-    uboLayoutBinding.stageFlags =
-        vk::ShaderStageFlagBits::eVertex |
-        vk::ShaderStageFlagBits::eFragment;        // or VK_SHADER_STAGE_ALL_GRAPHICS
-    uboLayoutBinding.pImmutableSamplers = nullptr; // idk, something with image sampling
-
-    vk::DescriptorSetLayoutBinding samplerBinding{};
-    samplerBinding.binding = 1;
-    samplerBinding.descriptorCount = 2;
-    samplerBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-    samplerBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
-    samplerBinding.pImmutableSamplers = nullptr;
-
-    std::array<vk::DescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerBinding};
-
-    vk::DescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
-
-    m_descriptorSetLayout = m_ctx.device->createDescriptorSetLayoutUnique(layoutInfo);
 }

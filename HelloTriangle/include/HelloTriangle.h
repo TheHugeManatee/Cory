@@ -51,7 +51,6 @@ class HelloTriangleApplication : public Application {
     void createGeometry();
 
     void createUniformBuffers();
-    void createDescriptorSetLayout();
     Texture createTextureImage(std::string textureFilename, vk::Filter filter,
                                       vk::SamplerAddressMode addressMode);
 
@@ -59,15 +58,14 @@ class HelloTriangleApplication : public Application {
 
     void updateUniformBuffer(uint32_t imageIndex);
 
-    void createDescriptorPool();
     void createDescriptorSets();
 
 
   private:
     vk::RenderPass m_renderPass;
-    vk::UniqueDescriptorSetLayout m_descriptorSetLayout;
-    vk::UniqueDescriptorPool m_descriptorPool;
-    std::vector<vk::DescriptorSet> m_descriptorSets;
+    
+    DescriptorSet m_descriptorSet;
+
     vk::UniquePipelineLayout m_pipelineLayout;
     vk::UniquePipeline m_graphicsPipeline;
 

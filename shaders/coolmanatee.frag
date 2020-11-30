@@ -6,7 +6,9 @@ layout(location = 1) in vec2 fragTexCoord;
 
 layout(location = 0) out vec4 outColor;
 
-layout(binding = 1) uniform sampler2D texSampler[2];
+layout(binding = 1) uniform sampler2D texSamplers[2];
+#define texSampler texSamplers[0]
+#define overlaySampler texSamplers[1]
 
 const vec2 overlayTL = vec2(54, 14) / 256;
 const vec2 overlayBR = vec2(54+86, 14+86)/256;
@@ -17,8 +19,8 @@ void main() {
     //outColor = vec4(fragTexCoord, 0.0, 1.0);
     vec2 overlayTexCoord = (fragTexCoord - overlayTL) / (overlayBR - overlayTL);
 
-    vec4 tex1 = texture(texSampler[0], fragTexCoord);
-    vec4 tex2 = texture(texSampler[1], overlayTexCoord);
+    vec4 tex1 = texture(texSampler, fragTexCoord);
+    vec4 tex2 = texture(overlaySampler, overlayTexCoord);
 
     outColor = vec4(mix(tex1.rgb, tex2.rgb, tex2.a), tex2.a + (1 - tex2.a)*tex1.a);
 }

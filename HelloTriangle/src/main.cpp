@@ -1,4 +1,5 @@
-#include <spdlog/spdlog.h>
+
+#include "Cory/Log.h"
 
 #include <cstdlib>
 
@@ -12,7 +13,7 @@ int main()
         app.run();
     }
     catch (const std::exception &e) {
-        spdlog::critical("Unhandled exception: {}", e.what());
+        CO_APP_FATAL("Unhandled exception: {}", e.what());
 
         return EXIT_FAILURE;
     }

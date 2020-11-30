@@ -10,6 +10,7 @@ add_library(${TARGET_NAME} STATIC
   src/Context.cpp
   src/Descriptor.cpp
   src/Image.cpp
+  src/Log.cpp
   src/Mesh.cpp
   src/Shader.cpp
   src/Utils.cpp

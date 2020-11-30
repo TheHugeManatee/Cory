@@ -1,12 +1,12 @@
 #include "HelloTriangle.h"
 
+#include "Cory/Log.h"
 #include "Cory/Mesh.h"
 #include "Cory/Shader.h"
 #include "Cory/VkBuilders.h"
 #include "Cory/VkUtils.h"
 
 #include <glm.h>
-#include <spdlog/spdlog.h>
 #include <tiny_obj_loader.h>
 #include <vk_mem_alloc.h>
 
@@ -18,7 +18,8 @@
 
 HelloTriangleApplication::HelloTriangleApplication()
 {
-    spdlog::set_level(spdlog::level::trace);
+    Cory::Log::SetAppLevel(spdlog::level::trace);
+    Cory::Log::SetCoreLevel(spdlog::level::trace);
 
     requestLayers({"VK_LAYER_KHRONOS_validation"});
     requestExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME});
@@ -145,6 +146,7 @@ void HelloTriangleApplication::createCommandBuffers()
 
 void HelloTriangleApplication::createGeometry()
 {
+    CO_APP_INFO("Loading mesh...");
     //     auto [vertices, indices] = primitives::doublequad();
     //     m_numVertices = static_cast<uint32_t>(indices.size());
 
@@ -158,6 +160,7 @@ void HelloTriangleApplication::createGeometry()
         throw std::runtime_error(fmt::format("Could not load 3D model: {} {}", warn, err));
     }
 
+    CO_APP_DEBUG("Collapsing common vertices..");
     std::vector<Vertex> vertices;
     std::vector<uint16_t> indices;
     std::unordered_map<Vertex, uint16_t, Vertex::hasher> uniqueVertices;
@@ -182,6 +185,9 @@ void HelloTriangleApplication::createGeometry()
     }
 
     m_mesh = std::make_unique<Mesh>(ctx(), vertices, indices, vk::PrimitiveTopology::eTriangleList);
+
+    CO_APP_INFO("Mesh loading finished. {} vertices, {} indices after common vertex collapse.",
+                vertices.size(), indices.size());
 }
 
 void HelloTriangleApplication::createUniformBuffers()
@@ -248,8 +254,6 @@ void HelloTriangleApplication::createFramebuffers(vk::RenderPass renderPass)
         m_swapChainFramebuffers[i] = ctx().device->createFramebuffer(framebufferInfo);
     }
 }
-
-
 
 void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {

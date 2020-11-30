@@ -35,6 +35,8 @@ class Application {
             imageInFlightFence; // fence of the image in flight, to be signaled by the final submit
     };
 
+    Application();
+
     /**
      * Main entry point
      */

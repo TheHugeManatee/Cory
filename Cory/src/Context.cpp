@@ -1,9 +1,9 @@
 #include "Context.h"
 
+#include "Log.h"
 #include "VkUtils.h"
 
 #include <GLFW/glfw3.h>
-#include <spdlog/spdlog.h>
 
 namespace Cory {
 
@@ -15,7 +15,8 @@ SwapChain::SwapChain(GraphicsContext &ctx, GLFWwindow *window, vk::SurfaceKHR su
     createImageViews();
 }
 
-SwapChain::~SwapChain() {
+SwapChain::~SwapChain()
+{
     for (auto imageView : m_swapChainImageViews) {
         m_ctx.device->destroyImageView(imageView);
     }
@@ -33,11 +34,11 @@ void SwapChain::createSwapchain(vk::SurfaceKHR surface)
     m_swapChainExtent = chooseSwapExtent(swapChainSupport.capabilities);
     m_swapChainImageFormat = surfaceFormat.format;
 
-    spdlog::debug("SwapChain configuration:");
-    spdlog::debug("    Surface Format:    {}, {}", to_string(surfaceFormat.format),
+    CO_CORE_DEBUG("SwapChain configuration:");
+    CO_CORE_DEBUG("    Surface Format:    {}, {}", to_string(surfaceFormat.format),
                   surfaceFormat.colorSpace);
-    spdlog::debug("    Present Mode:      {}", to_string(presentMode));
-    spdlog::debug("    Extent:            {}x{}", m_swapChainExtent.width,
+    CO_CORE_DEBUG("    Present Mode:      {}", to_string(presentMode));
+    CO_CORE_DEBUG("    Extent:            {}x{}", m_swapChainExtent.width,
                   m_swapChainExtent.height);
 
     // we use one more image as a buffer to avoid stalls when waiting for the next image to

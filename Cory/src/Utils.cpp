@@ -1,7 +1,6 @@
 #include "Utils.h"
 
 #include <fmt/format.h>
-#include <spdlog/spdlog.h>
 
 #include <array>
 #include <cassert>

@@ -1,11 +1,10 @@
 #include "Application.h"
 
+#include "Log.h"
 #include "VkUtils.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-
-#include <spdlog/spdlog.h>
 
 #include <set>
 
@@ -16,9 +15,17 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
 {
-    spdlog::error("validation layer: {}", pCallbackData->pMessage);
+    CO_CORE_ERROR("validation layer: {}", pCallbackData->pMessage);
 
     return false;
+}
+
+Application::Application()
+{
+
+    // Cory framework init
+    Log::Init();
+    CO_CORE_INFO("Cory framework initialized.");
 }
 
 void Application::run()
@@ -64,7 +71,7 @@ void Application::initVulkan()
 
 void Application::mainLoop()
 {
-    spdlog::info("Entering main loop.");
+    CO_CORE_INFO("Entering main loop.");
     while (!glfwWindowShouldClose(m_window)) {
         glfwPollEvents();
         drawFrame();
@@ -72,12 +79,12 @@ void Application::mainLoop()
 
     m_ctx.device->waitIdle();
 
-    spdlog::info("Leaving main loop.");
+    CO_CORE_DEBUG("Leaving main loop.");
 }
 
 void Application::cleanup()
 {
-    spdlog::info("Cleaning up Vulkan and GLFW..");
+    CO_CORE_INFO("Cleaning up Vulkan and GLFW..");
 
     cleanupSwapChain();
     m_swapChain = {};
@@ -91,7 +98,7 @@ void Application::cleanup()
     glfwDestroyWindow(m_window);
     glfwTerminate();
 
-    spdlog::info("Application shut down.");
+    CO_CORE_INFO("Application shut down.");
 }
 
 void Application::requestLayers(std::vector<const char *> layers)
@@ -137,7 +144,7 @@ void Application::setupInstance()
     const char **glfwExtensions;
 
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-    spdlog::info("GLFW requires {} extensions", glfwExtensionCount);
+    CO_CORE_INFO("GLFW requires {} extensions", glfwExtensionCount);
 
     createInfo.enabledExtensionCount = glfwExtensionCount;
     createInfo.ppEnabledExtensionNames = glfwExtensions;
@@ -145,9 +152,9 @@ void Application::setupInstance()
 
     auto extensions = vk::enumerateInstanceExtensionProperties();
 
-    spdlog::info("available extensions:");
+    CO_CORE_INFO("available extensions:");
     for (const auto &extension : extensions) {
-        spdlog::info("\t{}", extension.extensionName);
+        CO_CORE_INFO("\t{}", extension.extensionName);
     }
 
     // enable optional extensions
@@ -413,12 +420,12 @@ void Application::recreateSwapChain()
     int width = 0, height = 0;
     glfwGetFramebufferSize(m_window, &width, &height);
     if (width == height == 0)
-        spdlog::info("Window minimized");
+        CO_CORE_DEBUG("Window minimized");
     while (width == 0 || height == 0) {
         glfwGetFramebufferSize(m_window, &width, &height);
         glfwWaitEvents();
     }
-    spdlog::info("Framebuffer resized");
+    CO_CORE_DEBUG("Framebuffer resized");
 
     vkDeviceWaitIdle(*m_ctx.device);
 
@@ -478,11 +485,11 @@ bool Application::checkValidationLayerSupport()
     auto availableLayers = vk::enumerateInstanceLayerProperties();
 
     // TODO: refactor using std::includes maybe?
-    spdlog::debug("Supported Vulkan Layers:");
+    CO_CORE_DEBUG("Supported Vulkan Layers:");
     for (const char *layerName : m_requestedLayers) {
         bool layerFound = false;
 
-        spdlog::debug("  {0}", layerName);
+        CO_CORE_DEBUG("  {0}", layerName);
 
         for (const auto &layerProperties : availableLayers) {
             if (strcmp(layerName, layerProperties.layerName) == 0) {
@@ -504,7 +511,7 @@ void Application::pickPhysicalDevice()
     if (devices.empty()) {
         throw std::runtime_error("failed to find GPUs with Vulkan support!");
     }
-    spdlog::info("Found {} vulkan devices", devices.size());
+    CO_CORE_INFO("Found {} vulkan devices", devices.size());
 
     for (const auto &device : devices) {
         if (isDeviceSuitable(device)) {
@@ -524,14 +531,14 @@ bool Application::isDeviceSuitable(const vk::PhysicalDevice &device)
     auto properties = device.getProperties();
     auto features = device.getFeatures();
 
-    spdlog::info("Found vulkan device: {}", properties.deviceName);
-    // spdlog::info("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion,
+    CO_CORE_INFO("Found vulkan device: {}", properties.deviceName);
+    // CO_CORE_INFO("  {} Driver {}, API {}", deviceProperties, deviceProperties.driverVersion,
     // deviceProperties.apiVersion);
 
     auto qfi = findQueueFamilies(device, m_surface);
-    spdlog::info("  Queue Families: Graphics {}, Compute {}, Transfer {}, Present {}",
-                 qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(),
-                 qfi.transferFamily.has_value(), qfi.presentFamily.has_value());
+    CO_CORE_DEBUG("  Queue Families: Graphics {}, Compute {}, Transfer {}, Present {}",
+                  qfi.graphicsFamily.has_value(), qfi.computeFamily.has_value(),
+                  qfi.transferFamily.has_value(), qfi.presentFamily.has_value());
 
     bool extensionsSupported = checkDeviceExtensionSupport(device);
 

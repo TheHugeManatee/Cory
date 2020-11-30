@@ -21,6 +21,79 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
     return false;
 }
 
+void Application::run()
+{
+    initWindow();
+
+    initVulkan();
+
+    mainLoop();
+
+    cleanup();
+
+    if (enableValidationLayers) {
+        m_ctx.instance->destroyDebugUtilsMessengerEXT(m_debugMessenger, nullptr, m_ctx.dl);
+    }
+}
+
+void Application::initVulkan()
+{
+    setupInstance();
+    setupDebugMessenger();
+
+    createSurface();
+
+    pickPhysicalDevice();
+    createLogicalDevice();
+
+    createMemoryAllocator();
+
+    createCommandPools();
+
+    m_swapChain = std::make_unique<SwapChain>(m_ctx, m_window, m_surface);
+    createSyncObjects(MAX_FRAMES_IN_FLIGHT);
+
+    createColorResources();
+    createDepthResources();
+
+    // app resources
+    init();
+
+    createSwapchainDependentResources();
+}
+
+void Application::mainLoop()
+{
+    spdlog::info("Entering main loop.");
+    while (!glfwWindowShouldClose(m_window)) {
+        glfwPollEvents();
+        drawFrame();
+    }
+
+    m_ctx.device->waitIdle();
+
+    spdlog::info("Leaving main loop.");
+}
+
+void Application::cleanup()
+{
+    spdlog::info("Cleaning up Vulkan and GLFW..");
+
+    cleanupSwapChain();
+    m_swapChain = {};
+
+    m_ctx.instance->destroySurfaceKHR(m_surface);
+
+    deinit();
+
+    vmaDestroyAllocator(m_ctx.allocator);
+
+    glfwDestroyWindow(m_window);
+    glfwTerminate();
+
+    spdlog::info("Application shut down.");
+}
+
 void Application::requestLayers(std::vector<const char *> layers)
 {
     m_requestedLayers.insert(end(m_requestedLayers), begin(layers), end(layers));
@@ -31,13 +104,19 @@ void Application::requestExtensions(std::vector<const char *> extensions)
     m_requestedExtensions.insert(end(m_requestedExtensions), begin(extensions), end(extensions));
 }
 
-void Application::initWindow(vk::Extent2D extent)
+void Application::setInitialWindowSize(uint32_t width, uint32_t height)
+{
+    m_initialWindowSize = vk::Extent2D{width, height};
+}
+
+void Application::initWindow()
 {
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    m_window = glfwCreateWindow(extent.width, extent.height, "Cory Application", nullptr, nullptr);
+    m_window = glfwCreateWindow(m_initialWindowSize.width, m_initialWindowSize.height,
+                                "Cory Application", nullptr, nullptr);
     glfwSetWindowUserPointer(m_window, this);
 
     glfwSetFramebufferSizeCallback(m_window, [](GLFWwindow *window, int width, int height) {
@@ -325,7 +404,7 @@ void Application::cleanupSwapChain()
     m_depthBuffer.destroy(m_ctx);
     m_renderTarget.destroy(m_ctx);
 
-    destroySwapchainData();
+    destroySwapchainDependentResources();
 }
 
 void Application::recreateSwapChain()
@@ -351,7 +430,7 @@ void Application::recreateSwapChain()
     createColorResources();
     createDepthResources();
 
-    createSwapchainData();
+    createSwapchainDependentResources();
 }
 
 void Application::setupDebugMessenger()

@@ -32,17 +32,16 @@ class HelloTriangleApplication : public Application {
     static constexpr uint32_t WIDTH{800};
     static constexpr uint32_t HEIGHT{600};
 
-    void run();
+    HelloTriangleApplication();
 
     void drawSwapchainFrame(FrameUpdateInfo &fui) override;
-    void createSwapchainData() override;
-    void destroySwapchainData() override;
+    void createSwapchainDependentResources() override;
+    void destroySwapchainDependentResources() override;
 
   private:
-    void initVulkan();
-
-    void mainLoop();
-    void cleanup();
+    
+    void init() override;
+    void deinit() override;
 
     void createGraphicsPipeline();
     void createRenderPass();
@@ -53,7 +52,6 @@ class HelloTriangleApplication : public Application {
     void createUniformBuffers();
     Texture createTextureImage(std::string textureFilename, vk::Filter filter,
                                       vk::SamplerAddressMode addressMode);
-
 
     void updateUniformBuffer(uint32_t imageIndex);
 
@@ -69,6 +67,8 @@ class HelloTriangleApplication : public Application {
 
     vk::UniquePipelineLayout m_pipelineLayout;
     vk::UniquePipeline m_graphicsPipeline;
+
+    std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
     vk::UniqueCommandPool m_commandPool;
     std::vector<vk::UniqueCommandBuffer> m_commandBuffers;

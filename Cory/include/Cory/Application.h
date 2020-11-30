@@ -3,7 +3,6 @@
 #include "Context.h"
 #include "Image.h"
 
-#include <ranges>
 #include <vulkan/vulkan.hpp>
 
 class GLFWwindow;
@@ -37,21 +36,77 @@ class Application {
     };
 
     /**
-     * This function has to be overriden by an application implementation in order to draw a frame
+     * Main entry point
+     */
+    void run();
+
+    /**
+     * This function has to be overridden by an application implementation in order to draw a frame
      * It should wait for the imageAvailableSemaphore before writing to the swap chain image, and it
      * must signal the renderFinishedSemaphore with a VkQueueSubmit or explicitly.
      */
     virtual void drawSwapchainFrame(FrameUpdateInfo &fui) = 0;
 
-    virtual void destroySwapchainData() = 0;
-    virtual void createSwapchainData() = 0;
+    /**
+     * This function is designated to allocate and initialize any resoruces that are dependent on
+     * the number of swap chain images and potentially needs references to the swap chain. All of
+     * the resources that are created here should be destroyed in
+     * `destroySwapChainDependentResources`.
+     * This pair of functions will be called at app startup as well as every time the window is
+     * resized, thus it should only (re-)create resources that actually depend on the window size
+     * and nothing else.
+     */
+    virtual void createSwapchainDependentResources() = 0;
+    /**
+     * @see `createSwapchainDependentResources`
+     */
+    virtual void destroySwapchainDependentResources() = 0;
 
-  protected:
+    /**
+     * This function should be used by an application to initialize itself and allocate permanent
+     * resources, for example load textures, shaders and other resources. These resources should be
+     * destroyed in `deinit`, as the vulkan context does not exist anymore at the time of
+     * destruction of the app
+     */
+    virtual void init() = 0;
+    /**
+     * @see `init`
+     */
+    virtual void deinit() = 0;
+
+  public: /// Startup configuration API, i.e. only to be called before initVulkan, i.e. in the
+          /// client app constructor
     void requestLayers(std::vector<const char *> layers);
     void requestExtensions(std::vector<const char *> extensions);
+    void setInitialWindowSize(uint32_t width, uint32_t height);
 
-  protected: // soon to be private after refactoring is complete
-    void initWindow(vk::Extent2D extent);
+  protected: // accessors that should only be available to app implementations
+    auto &swapChain() { return *m_swapChain; }
+    auto &ctx() { return m_ctx; }
+    auto msaaSamples() const { return m_msaaSamples; }
+    auto &colorBuffer() const { return m_renderTarget; }
+    auto &depthBuffer() const { return m_depthBuffer; }
+
+  private:
+    /**
+     * Internal vulkan initialization
+     */
+    void initVulkan();
+
+    /**
+     * The main loop, consisting of:
+     * 1. Input polling and processing
+     * 2. Logic update
+     * 3. Frame update
+     */
+    void mainLoop();
+
+    /**
+     * Clean up all the resources, including vulkan resources and
+     */
+    void cleanup();
+
+    void initWindow();
 
     void setupInstance();
     void createSurface();
@@ -79,10 +134,11 @@ class Application {
 
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
 
-  protected: // members
-    GLFWwindow *m_window{};
-
+  protected:
     GraphicsContext m_ctx{};
+
+  private: // members
+    GLFWwindow *m_window{};
 
     vk::SurfaceKHR m_surface{};
     std::unique_ptr<SwapChain> m_swapChain;
@@ -97,8 +153,6 @@ class Application {
 
     DepthBuffer m_depthBuffer;
     RenderBuffer m_renderTarget;
-
-    std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
     std::vector<vk::UniqueSemaphore> m_imageAvailableSemaphores;
     std::vector<vk::UniqueSemaphore> m_renderFinishedSemaphores;
@@ -116,6 +170,7 @@ class Application {
 
     std::vector<const char *> m_requestedLayers;     // requested validation layers
     std::vector<const char *> m_requestedExtensions; // requested device extensions
+    vk::Extent2D m_initialWindowSize;
 };
 
 } // namespace Cory

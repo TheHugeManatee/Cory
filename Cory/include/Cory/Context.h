@@ -29,10 +29,10 @@ class SwapChain {
 
     auto swapchain() { return m_swapChain; }
     auto images() { return m_swapChainImages; }
-    auto format() { return m_swapChainImageFormat; }
-    auto extent() { return m_swapChainExtent; }
+    auto format() const { return m_swapChainImageFormat; }
+    auto extent() const { return m_swapChainExtent; }
     auto views() { return m_swapChainImageViews; }
-    auto size() { return m_swapChainImages.size(); }
+    auto size() const { return m_swapChainImages.size(); }
 
   private:
     void createSwapchain(vk::SurfaceKHR surface);

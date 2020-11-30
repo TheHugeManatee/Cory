@@ -16,99 +16,31 @@
 #include <ranges>
 #include <set>
 
-void HelloTriangleApplication::run()
+HelloTriangleApplication::HelloTriangleApplication()
 {
     spdlog::set_level(spdlog::level::trace);
 
     requestLayers({"VK_LAYER_KHRONOS_validation"});
     requestExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME});
 
-    initWindow({WIDTH, HEIGHT});
-
-    initVulkan();
-
-    mainLoop();
-
-    cleanup();
-
-    if (enableValidationLayers) {
-        m_ctx.instance->destroyDebugUtilsMessengerEXT(m_debugMessenger, nullptr, m_ctx.dl);
-    }
+    setInitialWindowSize(WIDTH, HEIGHT);
 }
 
-void HelloTriangleApplication::initVulkan()
+void HelloTriangleApplication::init()
 {
-    setupInstance();
-    setupDebugMessenger();
-
-    createSurface();
-
-    pickPhysicalDevice();
-    createLogicalDevice();
-
-    createMemoryAllocator();
-
-    createCommandPools();
-
-    m_swapChain = std::make_unique<SwapChain>(m_ctx, m_window, m_surface);
-    createSyncObjects(MAX_FRAMES_IN_FLIGHT);
-
-    createColorResources();
-    createDepthResources();
-
-    // app resources
     m_texture = createTextureImage(RESOURCE_DIR "/viking_room.png", vk::Filter::eLinear,
                                    vk::SamplerAddressMode::eRepeat);
     m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", vk::Filter::eLinear,
                                     vk::SamplerAddressMode::eClampToBorder);
     createGeometry();
-
-    // per swapchain dependent resources
-    createRenderPass();
-
-    createFramebuffers(m_renderPass);
-
-
-    createUniformBuffers();
-    createDescriptorSets();
-    createGraphicsPipeline();
-
-    createCommandBuffers();
 }
 
-void HelloTriangleApplication::mainLoop()
+void HelloTriangleApplication::deinit()
 {
-    spdlog::info("Entering main loop.");
-    while (!glfwWindowShouldClose(m_window)) {
-        glfwPollEvents();
-        drawFrame();
-    }
-
-    m_ctx.device->waitIdle();
-
-    spdlog::info("Leaving main loop.");
-}
-
-void HelloTriangleApplication::cleanup()
-{
-    spdlog::info("Cleaning up Vulkan and GLFW..");
-
-    cleanupSwapChain();
-    m_swapChain = {};
-
-    m_ctx.instance->destroySurfaceKHR(m_surface);
-
     m_mesh = {}; // deinit the mesh data
 
-    m_texture.destroy(m_ctx);
-    m_texture2.destroy(m_ctx);
-
-    vmaDestroyAllocator(m_ctx.allocator);
-
-    glfwDestroyWindow(m_window);
-    glfwTerminate();
-
-    spdlog::info("Application shut down.");
+    m_texture.destroy(ctx());
+    m_texture2.destroy(ctx());
 }
 
 void HelloTriangleApplication::createGraphicsPipeline()
@@ -120,38 +52,38 @@ void HelloTriangleApplication::createGraphicsPipeline()
     // start pipeline initialization
     PipelineBuilder creator;
     std::vector<Shader> shaders;
-    shaders.emplace_back(m_ctx, vertShaderCode, ShaderType::eVertex);
-    shaders.emplace_back(m_ctx, fragShaderCode, ShaderType::eFragment);
+    shaders.emplace_back(ctx(), vertShaderCode, ShaderType::eVertex);
+    shaders.emplace_back(ctx(), fragShaderCode, ShaderType::eFragment);
     creator.setShaders(std::move(shaders));
 
     creator.setVertexInput(*m_mesh);
-    creator.setViewport(m_swapChain->extent());
+    creator.setViewport(swapChain().extent());
     creator.setDefaultRasterizer();
-    creator.setMultisampling(m_msaaSamples);
+    creator.setMultisampling(msaaSamples());
     creator.setDefaultDepthStencil();
     creator.setAttachmentBlendStates({Cory::VkDefaults::AttachmentBlendDisabled()});
     creator.setDefaultDynamicStates();
 
     // pipeline layout
     auto pipelineLayoutInfo = Cory::VkDefaults::PipelineLayout(m_descriptorSet.layout());
-    m_pipelineLayout = m_ctx.device->createPipelineLayoutUnique(pipelineLayoutInfo);
+    m_pipelineLayout = ctx().device->createPipelineLayoutUnique(pipelineLayoutInfo);
     creator.setPipelineLayout(*m_pipelineLayout);
 
     creator.setRenderPass(m_renderPass);
 
     // finally, create the pipeline
-    m_graphicsPipeline = creator.create(m_ctx);
+    m_graphicsPipeline = creator.create(ctx());
 }
 
 void HelloTriangleApplication::createRenderPass()
 {
     RenderPassBuilder builder;
 
-    builder.addColorAttachment(m_swapChain->format(), m_msaaSamples);
-    builder.addDepthAttachment(findDepthFormat(m_ctx.physicalDevice), m_msaaSamples);
-    builder.addResolveAttachment(m_swapChain->format());
+    builder.addColorAttachment(swapChain().format(), msaaSamples());
+    builder.addDepthAttachment(findDepthFormat(ctx().physicalDevice), msaaSamples());
+    builder.addResolveAttachment(swapChain().format());
 
-    m_renderPass = builder.create(m_ctx);
+    m_renderPass = builder.create(ctx());
 }
 
 void HelloTriangleApplication::createCommandBuffers()
@@ -159,11 +91,11 @@ void HelloTriangleApplication::createCommandBuffers()
     // we need one command buffer per frame buffer
     m_commandBuffers.resize(m_swapChainFramebuffers.size());
     vk::CommandBufferAllocateInfo allocInfo{};
-    allocInfo.commandPool = *m_ctx.permanentCmdPool;
+    allocInfo.commandPool = *ctx().permanentCmdPool;
     allocInfo.level = vk::CommandBufferLevel::ePrimary; // _SECONDARY cannot be directly submitted
                                                         // but can be called from other cmd buffer
     allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
-    m_commandBuffers = m_ctx.device->allocateCommandBuffersUnique(allocInfo);
+    m_commandBuffers = ctx().device->allocateCommandBuffersUnique(allocInfo);
 
     for (size_t i = 0; i < m_commandBuffers.size(); i++) {
         auto cmdBuf = *m_commandBuffers[i];
@@ -180,8 +112,7 @@ void HelloTriangleApplication::createCommandBuffers()
         renderPassInfo.renderPass = m_renderPass;
         renderPassInfo.framebuffer = m_swapChainFramebuffers[i];
         renderPassInfo.renderArea.offset = vk::Offset2D{0, 0};
-        renderPassInfo.renderArea.extent =
-            m_swapChain->extent(); // should match size of attachments
+        renderPassInfo.renderArea.extent = swapChain().extent(); // should match size of attachments
 
         // defines what is used for VK_ATTACHMENT_LOAD_OP_CLEAR
         std::array<vk::ClearValue, 2> clearColors;
@@ -250,15 +181,15 @@ void HelloTriangleApplication::createGeometry()
         }
     }
 
-    m_mesh = std::make_unique<Mesh>(m_ctx, vertices, indices, vk::PrimitiveTopology::eTriangleList);
+    m_mesh = std::make_unique<Mesh>(ctx(), vertices, indices, vk::PrimitiveTopology::eTriangleList);
 }
 
 void HelloTriangleApplication::createUniformBuffers()
 {
-    m_uniformBuffers.resize(m_swapChain->size());
+    m_uniformBuffers.resize(swapChain().size());
 
-    for (size_t i{}; i < m_swapChain->size(); ++i) {
-        m_uniformBuffers[i].create(m_ctx);
+    for (size_t i{}; i < swapChain().size(); ++i) {
+        m_uniformBuffers[i].create(ctx());
         //, bufferSize, vk::BufferUsageFlagBits::eUniformBuffer, DeviceMemoryUsage::eCpuOnly);
     }
 }
@@ -277,46 +208,48 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
                            glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(glm::radians(45.0f),
-                                m_swapChain->extent().width / (float)m_swapChain->extent().height,
+                                swapChain().extent().width / (float)swapChain().extent().height,
                                 0.1f, 10.0f);
     ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted.
                           // otherwise image will be upside down :)
 
-    m_uniformBuffers[imageIndex].update(m_ctx);
+    m_uniformBuffers[imageIndex].update(ctx());
 }
 
 void HelloTriangleApplication::createDescriptorSets()
 {
-    m_descriptorSet.create(m_ctx, static_cast<uint32_t>(m_swapChain->size()), 1, 2);
+    m_descriptorSet.create(ctx(), static_cast<uint32_t>(swapChain().size()), 1, 2);
 
-    std::vector<std::vector<const UniformBufferBase *>> uniformBuffers(m_swapChain->size());
-    std::vector<std::vector<const Texture *>> samplers(m_swapChain->size());
-    for (int i = 0; i < m_swapChain->size(); ++i) {
+    std::vector<std::vector<const UniformBufferBase *>> uniformBuffers(swapChain().size());
+    std::vector<std::vector<const Texture *>> samplers(swapChain().size());
+    for (int i = 0; i < swapChain().size(); ++i) {
         uniformBuffers[i].push_back(&m_uniformBuffers[i]);
         samplers[i] = {&m_texture, &m_texture2};
     }
-    m_descriptorSet.setDescriptors(m_ctx, uniformBuffers, samplers);
+    m_descriptorSet.setDescriptors(ctx(), uniformBuffers, samplers);
 }
 
 void HelloTriangleApplication::createFramebuffers(vk::RenderPass renderPass)
 {
-    m_swapChainFramebuffers.resize(m_swapChain->views().size());
+    m_swapChainFramebuffers.resize(swapChain().views().size());
 
-    for (size_t i{0}; i < m_swapChain->views().size(); ++i) {
-        std::array<vk::ImageView, 3> attachments = {m_renderTarget.view(), m_depthBuffer.view(),
-                                                    m_swapChain->views()[i]};
+    for (size_t i{0}; i < swapChain().views().size(); ++i) {
+        std::array<vk::ImageView, 3> attachments = {colorBuffer().view(), depthBuffer().view(),
+                                                    swapChain().views()[i]};
 
         vk::FramebufferCreateInfo framebufferInfo{};
         framebufferInfo.renderPass = renderPass;
         framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
         framebufferInfo.pAttachments = attachments.data();
-        framebufferInfo.width = m_swapChain->extent().width;
-        framebufferInfo.height = m_swapChain->extent().height;
+        framebufferInfo.width = swapChain().extent().width;
+        framebufferInfo.height = swapChain().extent().height;
         framebufferInfo.layers = 1;
 
-        m_swapChainFramebuffers[i] = m_ctx.device->createFramebuffer(framebufferInfo);
+        m_swapChainFramebuffers[i] = ctx().device->createFramebuffer(framebufferInfo);
     }
 }
+
+
 
 void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {
@@ -340,28 +273,29 @@ void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-    m_ctx.graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
+    ctx().graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
 }
 
-void HelloTriangleApplication::createSwapchainData()
+void HelloTriangleApplication::createSwapchainDependentResources()
 {
     createRenderPass();
-    createGraphicsPipeline();
     createFramebuffers(m_renderPass);
     createUniformBuffers();
     createDescriptorSets();
+    createGraphicsPipeline();
     createCommandBuffers();
 }
 
-void HelloTriangleApplication::destroySwapchainData() {
+void HelloTriangleApplication::destroySwapchainDependentResources()
+{
     for (auto framebuffer : m_swapChainFramebuffers) {
-        m_ctx.device->destroyFramebuffer(framebuffer);
+        ctx().device->destroyFramebuffer(framebuffer);
     }
 
-    m_ctx.device->destroyRenderPass(m_renderPass);
+    ctx().device->destroyRenderPass(m_renderPass);
 
     for (auto &buffer : m_uniformBuffers) {
-        buffer.destroy(m_ctx);
+        buffer.destroy(ctx());
     }
 }
 
@@ -376,26 +310,26 @@ Texture HelloTriangleApplication::createTextureImage(std::string textureFilename
     }
 
     Buffer stagingBuffer;
-    stagingBuffer.create(m_ctx, image.size(), vk::BufferUsageFlagBits::eTransferSrc,
+    stagingBuffer.create(ctx(), image.size(), vk::BufferUsageFlagBits::eTransferSrc,
                          DeviceMemoryUsage::eCpuOnly);
 
-    stagingBuffer.upload(m_ctx, image.data, image.size());
+    stagingBuffer.upload(ctx(), image.data, image.size());
 
     uint32_t mipLevels =
         static_cast<uint32_t>(std::floor(std::log2(std::max(image.width, image.height)))) + 1;
-    texture.create(m_ctx, {image.width, image.height, 1}, mipLevels, vk::ImageType::e2D,
+    texture.create(ctx(), {image.width, image.height, 1}, mipLevels, vk::ImageType::e2D,
                    vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, filter, addressMode,
                    vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled |
                        vk::ImageUsageFlagBits::eTransferSrc,
                    DeviceMemoryUsage::eGpuOnly);
 
-    texture.transitionLayout(m_ctx, vk::ImageLayout::eTransferDstOptimal);
-    stagingBuffer.copyTo(m_ctx, texture);
-    stagingBuffer.destroy(m_ctx);
+    texture.transitionLayout(ctx(), vk::ImageLayout::eTransferDstOptimal);
+    stagingBuffer.copyTo(ctx(), texture);
+    stagingBuffer.destroy(ctx());
 
-    texture.generateMipmaps(m_ctx, vk::ImageLayout::eShaderReadOnlyOptimal,
+    texture.generateMipmaps(ctx(), vk::ImageLayout::eShaderReadOnlyOptimal,
                             vk::AccessFlagBits::eShaderRead);
-    // texture.transitionLayout(m_ctx, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    // texture.transitionLayout(ctx(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     return texture;
 }

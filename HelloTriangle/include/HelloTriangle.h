@@ -32,9 +32,11 @@ class HelloTriangleApplication : public Application {
     static constexpr uint32_t WIDTH{800};
     static constexpr uint32_t HEIGHT{600};
 
-    static const int MAX_FRAMES_IN_FLIGHT{2};
-
     void run();
+
+    void drawSwapchainFrame(FrameUpdateInfo &fui) override;
+    void createSwapchainData() override;
+    void destroySwapchainData() override;
 
   private:
     void initVulkan();
@@ -46,19 +48,18 @@ class HelloTriangleApplication : public Application {
     void createRenderPass();
     void createCommandBuffers();
 
-    void recreateSwapChain();
-    void cleanupSwapChain();
     void createGeometry();
 
     void createUniformBuffers();
     Texture createTextureImage(std::string textureFilename, vk::Filter filter,
                                       vk::SamplerAddressMode addressMode);
 
-    void drawFrame();
 
     void updateUniformBuffer(uint32_t imageIndex);
 
     void createDescriptorSets();
+
+    void createFramebuffers(vk::RenderPass renderPass);
 
 
   private:
@@ -73,12 +74,8 @@ class HelloTriangleApplication : public Application {
     std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
     std::vector<UniformBuffer<CameraUBOData>> m_uniformBuffers;
 
-    size_t m_currentFrame{};
-
     std::unique_ptr<Mesh> m_mesh;
 
     Texture m_texture;
     Texture m_texture2;
-
-
 };

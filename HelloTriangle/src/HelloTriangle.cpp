@@ -51,19 +51,23 @@ void HelloTriangleApplication::initVulkan()
     createCommandPools();
 
     m_swapChain = std::make_unique<SwapChain>(m_ctx, m_window, m_surface);
-
-    createRenderPass();
+    createSyncObjects(MAX_FRAMES_IN_FLIGHT);
 
     createColorResources();
     createDepthResources();
-    createFramebuffers(m_renderPass);
-    createSyncObjects(MAX_FRAMES_IN_FLIGHT);
 
+    // app resources
     m_texture = createTextureImage(RESOURCE_DIR "/viking_room.png", vk::Filter::eLinear,
                                    vk::SamplerAddressMode::eRepeat);
     m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", vk::Filter::eLinear,
                                     vk::SamplerAddressMode::eClampToBorder);
     createGeometry();
+
+    // per swapchain dependent resources
+    createRenderPass();
+
+    createFramebuffers(m_renderPass);
+
 
     createUniformBuffers();
     createDescriptorSets();
@@ -161,7 +165,6 @@ void HelloTriangleApplication::createCommandBuffers()
     allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
     m_commandBuffers = m_ctx.device->allocateCommandBuffersUnique(allocInfo);
 
-
     for (size_t i = 0; i < m_commandBuffers.size(); i++) {
         auto cmdBuf = *m_commandBuffers[i];
 
@@ -206,52 +209,6 @@ void HelloTriangleApplication::createCommandBuffers()
 
         cmdBuf.endRenderPass();
         cmdBuf.end();
-    }
-}
-
-void HelloTriangleApplication::recreateSwapChain()
-{
-    // window might be minimized
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(m_window, &width, &height);
-    if (width == height == 0)
-        spdlog::info("Window minimized");
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(m_window, &width, &height);
-        glfwWaitEvents();
-    }
-    spdlog::info("Framebuffer resized");
-
-    vkDeviceWaitIdle(*m_ctx.device);
-
-    cleanupSwapChain();
-
-    m_swapChain = {}; // first get rid of the old swap chain before creating the new one
-    m_swapChain = std::make_unique<SwapChain>(m_ctx, m_window, m_surface);
-
-    createRenderPass();
-    createGraphicsPipeline();
-    createColorResources();
-    createDepthResources();
-    createFramebuffers(m_renderPass);
-    createUniformBuffers();
-    createDescriptorSets();
-    createCommandBuffers();
-}
-
-void HelloTriangleApplication::cleanupSwapChain()
-{
-    m_depthBuffer.destroy(m_ctx);
-    m_renderTarget.destroy(m_ctx);
-
-    for (auto framebuffer : m_swapChainFramebuffers) {
-        m_ctx.device->destroyFramebuffer(framebuffer);
-    }
-
-    m_ctx.device->destroyRenderPass(m_renderPass);
-
-    for (auto &buffer : m_uniformBuffers) {
-        buffer.destroy(m_ctx);
     }
 }
 
@@ -306,96 +263,6 @@ void HelloTriangleApplication::createUniformBuffers()
     }
 }
 
-void HelloTriangleApplication::drawFrame()
-{
-    // fences to sync per-frame draw resources
-    auto perFrameFenceResult =
-        m_ctx.device->waitForFences({*m_inFlightFences[m_currentFrame]}, true, UINT64_MAX);
-    if (perFrameFenceResult != vk::Result::eSuccess) {
-        throw std::runtime_error(fmt::format("failed to wait for inFlightFences[{}], error: {}",
-                                             m_currentFrame, perFrameFenceResult));
-    }
-
-    // acquire image
-    auto [result, imageIndex] = m_ctx.device->acquireNextImageKHR(
-        m_swapChain->swapchain(), UINT64_MAX, *m_imageAvailableSemaphores[m_currentFrame], nullptr);
-
-    if (result == vk::Result::eErrorOutOfDateKHR) {
-        recreateSwapChain();
-        return;
-    }
-
-    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
-        throw std::runtime_error("failed to acquire swap chain image");
-    }
-
-    // Check if a previous frame is using this image (i.e. there is its fence to wait on)
-    if (m_imagesInFlight[imageIndex] != vk::Fence{}) {
-        result = m_ctx.device->waitForFences({m_imagesInFlight[imageIndex]}, true, UINT64_MAX);
-        if (result != vk::Result::eSuccess) {
-            throw std::runtime_error(fmt::format("failed to wait for inFlightFences[{}], error: {}",
-                                                 imageIndex, result));
-        }
-    }
-    // Mark the image as now being in use by this frame
-    m_imagesInFlight[imageIndex] = *m_inFlightFences[m_currentFrame];
-
-    updateUniformBuffer(imageIndex);
-
-    // execute command buffer with that image as attachment
-    vk::SubmitInfo submitInfo{};
-
-    // vkQueueSubmit allows to wait for a specific semaphore, which in our case waits until the
-    // image is signaled available
-    vk::Semaphore waitSemaphores[] = {*m_imageAvailableSemaphores[m_currentFrame]};
-    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &*m_commandBuffers[imageIndex];
-
-    // vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
-    vk::Semaphore signalSemaphores[] = {*m_renderFinishedSemaphores[m_currentFrame]};
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
-
-    // make sure to reset the frame-respective fence
-    m_ctx.device->resetFences(*m_inFlightFences[m_currentFrame]);
-
-    m_ctx.graphicsQueue.submit(submitInfo, *m_inFlightFences[m_currentFrame]);
-
-    // return image to the swap chain
-    vk::PresentInfoKHR presentInfo{};
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = signalSemaphores; // wait for queue to finish
-
-    vk::SwapchainKHR swapChains[] = {m_swapChain->swapchain()};
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
-    presentInfo.pImageIndices = &imageIndex;
-    presentInfo.pResults =
-        nullptr; // can be used to check every individual swap chain is successful
-
-    try {
-        result = m_ctx.presentQueue.presentKHR(presentInfo);
-    }
-    catch (vk::OutOfDateKHRError) {
-        m_framebufferResized = false;
-        recreateSwapChain();
-    }
-
-    if (result == vk::Result::eSuboptimalKHR || m_framebufferResized) {
-        m_framebufferResized = false;
-        recreateSwapChain();
-    }
-    else if (result != vk::Result::eSuccess) {
-        throw std::runtime_error("failed to present swap chain image");
-    }
-
-    m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
 void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
 {
     static auto startTime = std::chrono::high_resolution_clock::now();
@@ -418,18 +285,84 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     m_uniformBuffers[imageIndex].update(m_ctx);
 }
 
-
 void HelloTriangleApplication::createDescriptorSets()
 {
     m_descriptorSet.create(m_ctx, static_cast<uint32_t>(m_swapChain->size()), 1, 2);
 
-    std::vector<std::vector<const UniformBufferBase*>> uniformBuffers(m_swapChain->size());
+    std::vector<std::vector<const UniformBufferBase *>> uniformBuffers(m_swapChain->size());
     std::vector<std::vector<const Texture *>> samplers(m_swapChain->size());
     for (int i = 0; i < m_swapChain->size(); ++i) {
         uniformBuffers[i].push_back(&m_uniformBuffers[i]);
-        samplers[i] = { &m_texture, &m_texture2 };
+        samplers[i] = {&m_texture, &m_texture2};
     }
     m_descriptorSet.setDescriptors(m_ctx, uniformBuffers, samplers);
+}
+
+void HelloTriangleApplication::createFramebuffers(vk::RenderPass renderPass)
+{
+    m_swapChainFramebuffers.resize(m_swapChain->views().size());
+
+    for (size_t i{0}; i < m_swapChain->views().size(); ++i) {
+        std::array<vk::ImageView, 3> attachments = {m_renderTarget.view(), m_depthBuffer.view(),
+                                                    m_swapChain->views()[i]};
+
+        vk::FramebufferCreateInfo framebufferInfo{};
+        framebufferInfo.renderPass = renderPass;
+        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+        framebufferInfo.pAttachments = attachments.data();
+        framebufferInfo.width = m_swapChain->extent().width;
+        framebufferInfo.height = m_swapChain->extent().height;
+        framebufferInfo.layers = 1;
+
+        m_swapChainFramebuffers[i] = m_ctx.device->createFramebuffer(framebufferInfo);
+    }
+}
+
+void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
+{
+    updateUniformBuffer(fui.swapChainImageIdx);
+
+    // execute command buffer with that image as attachment
+    vk::SubmitInfo submitInfo{};
+
+    // vkQueueSubmit allows to wait for a specific semaphore, which in our case waits until the
+    // image is signaled available
+    vk::Semaphore waitSemaphores[] = {fui.imageAvailableSemaphore};
+    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &*m_commandBuffers[fui.swapChainImageIdx];
+
+    // vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
+    vk::Semaphore signalSemaphores[] = {fui.renderFinishedSemaphore};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    m_ctx.graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
+}
+
+void HelloTriangleApplication::createSwapchainData()
+{
+    createRenderPass();
+    createGraphicsPipeline();
+    createFramebuffers(m_renderPass);
+    createUniformBuffers();
+    createDescriptorSets();
+    createCommandBuffers();
+}
+
+void HelloTriangleApplication::destroySwapchainData() {
+    for (auto framebuffer : m_swapChainFramebuffers) {
+        m_ctx.device->destroyFramebuffer(framebuffer);
+    }
+
+    m_ctx.device->destroyRenderPass(m_renderPass);
+
+    for (auto &buffer : m_uniformBuffers) {
+        buffer.destroy(m_ctx);
+    }
 }
 
 Texture HelloTriangleApplication::createTextureImage(std::string textureFilename, vk::Filter filter,

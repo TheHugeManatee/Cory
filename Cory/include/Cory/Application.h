@@ -17,11 +17,34 @@ class Application {
                   VkDebugUtilsMessageTypeFlagsEXT messageType,
                   const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData);
 
+    static const int MAX_FRAMES_IN_FLIGHT{2};
+
 #ifdef NDEBUG
     static constexpr bool enableValidationLayers = false;
 #else
     static constexpr bool enableValidationLayers = true;
 #endif
+
+    struct FrameUpdateInfo {
+        uint32_t swapChainImageIdx;            // index of the swap chain image
+        size_t currentFrameIdx;                // current frame index
+        vk::Semaphore imageAvailableSemaphore; // client needs to wait for this semaphore before
+                                               // drawing to the swap chain image
+        vk::Semaphore renderFinishedSemaphore; // this needs to be signaled by last client submit
+                                               // call as the VkPresentKHR call waits on it
+        vk::Fence
+            imageInFlightFence; // fence of the image in flight, to be signaled by the final submit
+    };
+
+    /**
+     * This function has to be overriden by an application implementation in order to draw a frame
+     * It should wait for the imageAvailableSemaphore before writing to the swap chain image, and it
+     * must signal the renderFinishedSemaphore with a VkQueueSubmit or explicitly.
+     */
+    virtual void drawSwapchainFrame(FrameUpdateInfo &fui) = 0;
+
+    virtual void destroySwapchainData() = 0;
+    virtual void createSwapchainData() = 0;
 
   protected:
     void requestLayers(std::vector<const char *> layers);
@@ -48,7 +71,11 @@ class Application {
 
     void createColorResources();
     void createDepthResources();
-    void createFramebuffers(vk::RenderPass renderPass);
+
+    void drawFrame();
+
+    void cleanupSwapChain();
+    void recreateSwapChain();
 
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
 
@@ -81,6 +108,8 @@ class Application {
     vk::DebugUtilsMessengerEXT m_debugMessenger{};
 
   private:
+    size_t m_currentFrame{};
+
     // setup of validation layers
     bool checkValidationLayerSupport();
     std::vector<const char *> getRequiredExtensions();

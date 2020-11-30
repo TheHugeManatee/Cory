@@ -241,24 +241,117 @@ void Application::createDepthResources()
     m_depthBuffer.transitionLayout(m_ctx, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 }
 
-void Application::createFramebuffers(vk::RenderPass renderPass)
+void Application::drawFrame()
 {
-    m_swapChainFramebuffers.resize(m_swapChain->views().size());
-
-    for (size_t i{0}; i < m_swapChain->views().size(); ++i) {
-        std::array<vk::ImageView, 3> attachments = {m_renderTarget.view(), m_depthBuffer.view(),
-                                                    m_swapChain->views()[i]};
-
-        vk::FramebufferCreateInfo framebufferInfo{};
-        framebufferInfo.renderPass = renderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-        framebufferInfo.pAttachments = attachments.data();
-        framebufferInfo.width = m_swapChain->extent().width;
-        framebufferInfo.height = m_swapChain->extent().height;
-        framebufferInfo.layers = 1;
-
-        m_swapChainFramebuffers[i] = m_ctx.device->createFramebuffer(framebufferInfo);
+    // fences to sync per-frame draw resources
+    auto perFrameFenceResult =
+        m_ctx.device->waitForFences({*m_inFlightFences[m_currentFrame]}, true, UINT64_MAX);
+    if (perFrameFenceResult != vk::Result::eSuccess) {
+        throw std::runtime_error(fmt::format("failed to wait for inFlightFences[{}], error: {}",
+                                             m_currentFrame, perFrameFenceResult));
     }
+
+    // acquire image
+    auto [result, imageIndex] = m_ctx.device->acquireNextImageKHR(
+        m_swapChain->swapchain(), UINT64_MAX, *m_imageAvailableSemaphores[m_currentFrame], nullptr);
+
+    if (result == vk::Result::eErrorOutOfDateKHR) {
+        recreateSwapChain();
+        return;
+    }
+
+    if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
+        throw std::runtime_error("failed to acquire swap chain image");
+    }
+
+    // Check if a previous frame is using this image (i.e. there is its fence to wait on)
+    if (m_imagesInFlight[imageIndex] != vk::Fence{}) {
+        result = m_ctx.device->waitForFences({m_imagesInFlight[imageIndex]}, true, UINT64_MAX);
+        if (result != vk::Result::eSuccess) {
+            throw std::runtime_error(fmt::format("failed to wait for inFlightFences[{}], error: {}",
+                                                 imageIndex, result));
+        }
+    }
+    // Mark the image as now being in use by this frame
+    m_imagesInFlight[imageIndex] = *m_inFlightFences[m_currentFrame];
+
+    // make sure to reset the frame-respective fence
+    m_ctx.device->resetFences(*m_inFlightFences[m_currentFrame]);
+
+    FrameUpdateInfo fui;
+    fui.swapChainImageIdx = imageIndex;
+    fui.currentFrameIdx = m_currentFrame;
+    fui.imageAvailableSemaphore = *m_imageAvailableSemaphores[m_currentFrame];
+    fui.renderFinishedSemaphore = *m_renderFinishedSemaphores[m_currentFrame];
+    fui.imageInFlightFence = *m_inFlightFences[m_currentFrame];
+
+    drawSwapchainFrame(fui);
+
+    vk::Semaphore signalSemaphores[] = {*m_renderFinishedSemaphores[m_currentFrame]};
+
+    // return image to the swap chain
+    vk::PresentInfoKHR presentInfo{};
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores; // wait for queue to finish
+
+    vk::SwapchainKHR swapChains[] = {m_swapChain->swapchain()};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pResults =
+        nullptr; // can be used to check every individual swap chain is successful
+
+    try {
+        result = m_ctx.presentQueue.presentKHR(presentInfo);
+    }
+    catch (vk::OutOfDateKHRError) {
+        m_framebufferResized = false;
+        recreateSwapChain();
+    }
+
+    if (result == vk::Result::eSuboptimalKHR || m_framebufferResized) {
+        m_framebufferResized = false;
+        recreateSwapChain();
+    }
+    else if (result != vk::Result::eSuccess) {
+        throw std::runtime_error("failed to present swap chain image");
+    }
+
+    m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void Application::cleanupSwapChain()
+{
+    m_depthBuffer.destroy(m_ctx);
+    m_renderTarget.destroy(m_ctx);
+
+    destroySwapchainData();
+}
+
+void Application::recreateSwapChain()
+{
+    // window might be minimized
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(m_window, &width, &height);
+    if (width == height == 0)
+        spdlog::info("Window minimized");
+    while (width == 0 || height == 0) {
+        glfwGetFramebufferSize(m_window, &width, &height);
+        glfwWaitEvents();
+    }
+    spdlog::info("Framebuffer resized");
+
+    vkDeviceWaitIdle(*m_ctx.device);
+
+    cleanupSwapChain();
+
+    m_swapChain = {}; // first get rid of the old swap chain before creating the new one
+    m_swapChain = std::make_unique<SwapChain>(m_ctx, m_window, m_surface);
+
+    createColorResources();
+    createDepthResources();
+
+    createSwapchainData();
 }
 
 void Application::setupDebugMessenger()

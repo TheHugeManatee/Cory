@@ -21,6 +21,10 @@ I also use it to test more modern C++ features.
  - Implement Monte Carlo Volume Raycasting
  - Play around with ray tracing
 
+### Inspiration / Resources
+ - Engine structure and basic facilities are inspired heavily by the Hazel engine by TheCherno, greatly documented on his Youtube Channel https://www.youtube.com/user/TheChernoProject
+
+
 ### Included Third-Party libraries
 `Cory` pulls some third-party libraries into this repository. They all live in the subdirectory `ThirdParty` and are available under their respective license, included in the respecive directory or at the top of the header files:
  - glm, https://github.com/g-truc/glm, MIT / Happy Bunny License

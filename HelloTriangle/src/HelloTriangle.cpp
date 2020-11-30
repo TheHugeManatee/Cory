@@ -5,6 +5,7 @@
 #include "Cory/Shader.h"
 #include "Cory/VkBuilders.h"
 #include "Cory/VkUtils.h"
+#include "Cory/Profiling.h"
 
 #include <glm.h>
 #include <tiny_obj_loader.h>
@@ -147,6 +148,7 @@ void HelloTriangleApplication::createCommandBuffers()
 void HelloTriangleApplication::createGeometry()
 {
     CO_APP_INFO("Loading mesh...");
+    Cory::ScopeTimer("Geometry");
     //     auto [vertices, indices] = primitives::doublequad();
     //     m_numVertices = static_cast<uint32_t>(indices.size());
 
@@ -257,6 +259,7 @@ void HelloTriangleApplication::createFramebuffers(vk::RenderPass renderPass)
 
 void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {
+    Cory::ScopeTimer("Draw");
     updateUniformBuffer(fui.swapChainImageIdx);
 
     // execute command buffer with that image as attachment

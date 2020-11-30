@@ -1,6 +1,7 @@
 #include "Application.h"
 
 #include "Log.h"
+#include "Profiling.h"
 #include "VkUtils.h"
 
 #define GLFW_INCLUDE_VULKAN
@@ -404,6 +405,22 @@ void Application::drawFrame()
     }
 
     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+    //// debug / performance checking
+    // auto recs = Profiler::GetRecords();
+    // for (const auto [k, v] : recs) {
+    //    auto s = v.stats();
+
+    //    CO_CORE_INFO("{}: {} ({}-{})", k, s.avg, s.min, s.max);
+    //}
+
+    // the main FPS counter
+    static LapTimer fpsCounter;
+    if (fpsCounter.lap()) {
+        auto s = fpsCounter.stats();
+        CO_CORE_INFO("FPS: {:3.2f} ({:3.2f} ms)", float(1'000'000'000) / float(s.avg),
+                     float(s.avg) / 1'000'000);
+    }
 }
 
 void Application::cleanupSwapChain()

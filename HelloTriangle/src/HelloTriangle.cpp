@@ -11,6 +11,9 @@
 #include <tiny_obj_loader.h>
 #include <vk_mem_alloc.h>
 
+#include <imgui.h>
+#include <imgui_impl_vulkan.h>
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -35,6 +38,8 @@ void HelloTriangleApplication::init()
     m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", vk::Filter::eLinear,
                                     vk::SamplerAddressMode::eClampToBorder);
     createGeometry();
+
+
 }
 
 void HelloTriangleApplication::deinit()

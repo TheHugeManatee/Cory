@@ -11,6 +11,7 @@ add_library(${TARGET_NAME} STATIC
   src/Context.cpp
   src/Descriptor.cpp
   src/Image.cpp
+  src/ImGuiLayer.cpp
   src/Log.cpp
   src/Mesh.cpp
   src/Profiling.cpp

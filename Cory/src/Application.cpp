@@ -8,6 +8,7 @@
 #include <GLFW/glfw3.h>
 
 #include <set>
+#include <thread>
 
 namespace Cory {
 
@@ -19,6 +20,73 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
     CO_CORE_ERROR("validation layer: {}", pCallbackData->pMessage);
 
     return false;
+}
+
+void Application::cursorPosCallback(GLFWwindow *window, double mouseX, double mouseY)
+{
+    Cory::CameraManipulator::MouseButton mouseButton =
+        (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+            ? Cory::CameraManipulator::MouseButton::Left
+            : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+                  ? Cory::CameraManipulator::MouseButton::Middle
+                  : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+                        ? Cory::CameraManipulator::MouseButton::Right
+                        : Cory::CameraManipulator::MouseButton::None;
+    if (mouseButton != Cory::CameraManipulator::MouseButton::None) {
+        Cory::CameraManipulator::ModifierFlags modifiers;
+        if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
+            modifiers |= Cory::CameraManipulator::ModifierFlagBits::Alt;
+        }
+        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+            modifiers |= Cory::CameraManipulator::ModifierFlagBits::Ctrl;
+        }
+        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+            modifiers |= Cory::CameraManipulator::ModifierFlagBits::Shift;
+        }
+
+        Cory::CameraManipulator &cameraManipulator =
+            reinterpret_cast<Application *>(glfwGetWindowUserPointer(window))->cameraManipulator;
+        cameraManipulator.mouseMove(glm::ivec2(static_cast<int>(mouseX), static_cast<int>(mouseY)),
+                                    mouseButton, modifiers);
+    }
+}
+
+void Application::framebufferSizeCallback(GLFWwindow *window, int w, int h)
+{
+    Cory::CameraManipulator &cameraManipulator =
+        reinterpret_cast<Application *>(glfwGetWindowUserPointer(window))->cameraManipulator;
+    cameraManipulator.setWindowSize(glm::ivec2(w, h));
+}
+
+void Application::mouseButtonCallback(GLFWwindow *window, int /*button*/, int /*action*/,
+                                      int /*mods*/)
+{
+    double xpos, ypos;
+    glfwGetCursorPos(window, &xpos, &ypos);
+
+    Cory::CameraManipulator &cameraManipulator =
+        reinterpret_cast<Application *>(glfwGetWindowUserPointer(window))->cameraManipulator;
+    cameraManipulator.setMousePosition(glm::ivec2(static_cast<int>(xpos), static_cast<int>(ypos)));
+}
+
+void Application::scrollCallback(GLFWwindow *window, double /*xoffset*/, double yoffset)
+{
+    Cory::CameraManipulator &cameraManipulator =
+        reinterpret_cast<Application *>(glfwGetWindowUserPointer(window))->cameraManipulator;
+    cameraManipulator.wheel(static_cast<int>(yoffset));
+}
+
+void Application::keyCallback(GLFWwindow *window, int key, int /*scancode*/, int action,
+                              int /*mods*/)
+{
+    if (action == GLFW_PRESS) {
+        switch (key) {
+        case GLFW_KEY_ESCAPE:
+        case 'Q':
+            glfwSetWindowShouldClose(window, 1);
+            break;
+        }
+    }
 }
 
 Application::Application()
@@ -131,6 +199,24 @@ void Application::initWindow()
         auto app = reinterpret_cast<Application *>(glfwGetWindowUserPointer(window));
         app->m_framebufferResized = true;
     });
+
+    // install some callbacks
+    glfwSetCursorPosCallback(m_window, cursorPosCallback);
+    glfwSetFramebufferSizeCallback(m_window, framebufferSizeCallback);
+    glfwSetKeyCallback(m_window, keyCallback);
+    glfwSetMouseButtonCallback(m_window, mouseButtonCallback);
+    glfwSetScrollCallback(m_window, scrollCallback);
+
+
+    cameraManipulator.setMode(CameraManipulator::Mode::Examine);
+    cameraManipulator.setWindowSize(
+        glm::u32vec2(m_initialWindowSize.width, m_initialWindowSize.height));
+    glm::vec3 sceneMin{-.5f};
+    glm::vec3 sceneMax{0.5f};
+    glm::vec3 sceneExtents = sceneMax - sceneMin;
+    glm::vec3 diagonal = 3.0f * sceneExtents;
+    cameraManipulator.setLookat(1.0f * diagonal, (sceneMin+sceneMax)/2.f, glm::vec3(0, 1, 0));
+    glfwSetWindowUserPointer(m_window, this);
 }
 
 void Application::setupInstance()

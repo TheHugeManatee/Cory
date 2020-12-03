@@ -7,6 +7,7 @@ find_package(Vulkan REQUIRED FATAL_ERROR)
 add_library(${TARGET_NAME} STATIC
   src/Application.cpp
   src/Buffer.cpp
+  src/Camera.cpp
   src/Context.cpp
   src/Descriptor.cpp
   src/Image.cpp

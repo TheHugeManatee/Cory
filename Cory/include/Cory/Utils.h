@@ -4,6 +4,8 @@
 #include <glm.h>
 #include <stb_image.h>
 
+#include <cmath>
+#include <numbers>
 #include <memory>
 #include <string>
 #include <vector>
@@ -13,6 +15,38 @@ namespace Cory {
 std::string formatBytes(size_t bytes);
 
 std::vector<char> readFile(const std::string &filename);
+
+inline glm::vec3 sphericalToCartesian(const glm::vec3 spherical)
+{
+    auto r = spherical.x;
+    auto theta = spherical.y;
+    auto phi = spherical.z;
+    float x = r * sin(phi) * cos(theta);
+    float y = r * sin(phi) * sin(theta);
+    float z = r * cos(phi);
+    return {x, y, z};
+}
+
+inline glm::vec3 cartesianToSpherical(const glm::vec3 cartesian)
+{
+    float r = glm::length(cartesian);
+    if (cartesian.x == 0.0 && cartesian.y == 0.0)
+        return {r, 0.0, 0.0};
+
+    float theta = atan(cartesian.y / cartesian.x);
+    float phi = atan(sqrt(cartesian.x * cartesian.x + cartesian.y * cartesian.y) / cartesian.z);
+    constexpr auto pif = std::numbers::pi_v<float>;
+    if (cartesian.x < 0.0 && cartesian.y >= 0.0 && theta == 0.0) {
+        theta = pif;
+    }
+    else if (cartesian.x < 0.0 && cartesian.y < 0.0 && theta > 0.0) {
+        theta -= pif;
+    }
+    else if (cartesian.x < 0.0 && cartesian.y > 0.0 && theta < 0.0) {
+        theta += pif;
+    }
+    return {r, theta, phi};
+}
 
 class host_buffer {
   public:

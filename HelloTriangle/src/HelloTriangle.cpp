@@ -2,10 +2,10 @@
 
 #include "Cory/Log.h"
 #include "Cory/Mesh.h"
+#include "Cory/Profiling.h"
 #include "Cory/Shader.h"
 #include "Cory/VkBuilders.h"
 #include "Cory/VkUtils.h"
-#include "Cory/Profiling.h"
 
 #include <glm.h>
 #include <tiny_obj_loader.h>
@@ -211,10 +211,11 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
         std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraUBOData &ubo = m_uniformBuffers[imageIndex].data();
-    ubo.model =
-        glm::rotate(glm::mat4(1.f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-                           glm::vec3(0.0f, 0.0f, 1.0f));
+    //ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(45.f), glm::vec3(0.0f, 1.0f, 0.0f));
+    // ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
+    //                       glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.model = glm::identity<glm::mat4>();
+    ubo.view = cameraManipulator.getMatrix();
     ubo.proj = glm::perspective(glm::radians(45.0f),
                                 swapChain().extent().width / (float)swapChain().extent().height,
                                 0.1f, 10.0f);

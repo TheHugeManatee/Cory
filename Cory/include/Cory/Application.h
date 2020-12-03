@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Camera.h"
 #include "Context.h"
 #include "Image.h"
 
@@ -15,6 +16,14 @@ class Application {
     debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                   VkDebugUtilsMessageTypeFlagsEXT messageType,
                   const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData);
+
+    static void cursorPosCallback(GLFWwindow *window, double mouseX, double mouseY);
+    static void framebufferSizeCallback(GLFWwindow *window, int w, int h);
+    static void mouseButtonCallback(GLFWwindow *window, int /*button*/, int /*action*/,
+                                    int /*mods*/);
+    static void scrollCallback(GLFWwindow *window, double /*xoffset*/, double yoffset);
+    static void keyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/);
+
 
     static const int MAX_FRAMES_IN_FLIGHT{2};
 
@@ -89,6 +98,8 @@ class Application {
     auto &colorBuffer() const { return m_renderTarget; }
     auto &depthBuffer() const { return m_depthBuffer; }
 
+    Cory::CameraManipulator cameraManipulator;
+
   private:
     /**
      * Internal vulkan initialization
@@ -136,10 +147,8 @@ class Application {
 
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
 
-  protected:
-    GraphicsContext m_ctx{};
-
   private: // members
+    GraphicsContext m_ctx{};
     GLFWwindow *m_window{};
 
     vk::SurfaceKHR m_surface{};

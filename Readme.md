@@ -33,6 +33,15 @@ I also use it to test more modern C++ features.
  - Vulkan Memory Allocator, https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator, MIT
  - refl-cpp, https://github.com/veselink1/refl-cpp, MIT license
  - Modified `CameraManipulator` Class, https://github.com/KhronosGroup/Vulkan-Hpp/tree/master/samples/RayTracing, Apache 2.0
+ - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT
+
+### Other referenced third party libraries
+See `conanfile.txt` for the exact versions used, but there is of course always some flexibility.
+ - glfw
+ - glew
+ - spdlog
+ - libfmt
+
 
 ## Cory?
 According to [this very trustworthy-looking web source](http://www.talesbeyondbelief.com/roman-gods/vulcan.htm), *Corynetes* was the son of the roman god Vulcan.

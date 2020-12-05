@@ -5,8 +5,8 @@
 This project is inteded to be a toy rendering engine to familiarize myself with vulkan.
 I also use it to test more modern C++ features.
 
+
 #### Short Term
- - Huge refactoring of the sample code
  - establish basic structures for a reusable rendering lib
 
 #### Mid Term
@@ -20,6 +20,13 @@ I also use it to test more modern C++ features.
 #### Long Term
  - Implement Monte Carlo Volume Raycasting
  - Play around with ray tracing
+
+#### Done
+ - ImGui integration
+ - Performance and Logging classes
+ - Refactoring of vulkan classes towards a reusable code base
+ - conversion towards using vulkan.hpp C++ interface
+ - Vulkan-Tutorial.com
 
 ### Inspiration and Resources
  - Engine structure and basic facilities are inspired heavily by the Hazel engine by TheCherno, greatly documented on his Youtube Channel https://www.youtube.com/user/TheChernoProject

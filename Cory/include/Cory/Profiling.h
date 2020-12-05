@@ -2,16 +2,16 @@
 
 #include <array>
 #include <chrono>
+#include <iterator>
+#include <numeric>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 
 namespace Cory {
 
-class ProfilerRecord {
+template <long long RECORD_HISTORY_SIZE = 64> class ProfilerRecord {
   public:
-    static constexpr std::size_t RECORD_HISTORY_SIZE{64};
-
     ProfilerRecord() { m_data.fill(0); }
 
     struct Stats {
@@ -20,9 +20,39 @@ class ProfilerRecord {
         long long avg;
     };
 
-    void push(long long value);
+    void push(long long value)
+    {
+        m_data[m_currentIdx % RECORD_HISTORY_SIZE] = value;
+        m_currentIdx++;
+    }
 
-    Stats stats() const;
+    Stats stats() const
+    {
+        auto endIter =
+            m_currentIdx > m_data.size() ? m_data.cend() : m_data.cbegin() + m_currentIdx;
+        auto stats =
+            std::accumulate(++m_data.cbegin(), endIter, Stats{m_data[0], m_data[0], m_data[0]},
+                            [](auto acc, const auto &value) {
+                                acc.min = std::min(acc.min, value);
+                                acc.max = std::max(acc.max, value);
+                                acc.avg += value;
+                                return acc;
+                            });
+        stats.avg /= RECORD_HISTORY_SIZE;
+        return stats;
+    }
+
+    std::vector<long long> history() const
+    {
+        auto breakPoint = m_currentIdx % RECORD_HISTORY_SIZE;
+
+        std::vector<long long> hist{m_data.cbegin() + breakPoint, m_data.cend()};
+
+        if (breakPoint > 0)
+            std::copy(m_data.cbegin(), m_data.cbegin() + breakPoint - 1, std::back_inserter(hist));
+
+        return hist;
+    }
 
   private:
     std::array<long long, RECORD_HISTORY_SIZE> m_data;
@@ -31,11 +61,12 @@ class ProfilerRecord {
 
 class Profiler {
   public:
+    using Record = ProfilerRecord<128>;
     static void PushCounter(std::string &name, long long deltaNs);
-    static std::unordered_map<std::string, ProfilerRecord> GetRecords() { return s_records; }
+    static std::unordered_map<std::string, Record> GetRecords() { return s_records; }
 
   private:
-    static std::unordered_map<std::string, ProfilerRecord> s_records;
+    static std::unordered_map<std::string, Record> s_records;
 };
 
 class ScopeTimer {
@@ -51,36 +82,17 @@ class ScopeTimer {
 
 class LapTimer {
   public:
-    LapTimer(std::chrono::milliseconds reportInterval = std::chrono::milliseconds{1000})
-        : m_reportInterval{reportInterval}
-    {
-        m_lastReport = m_lastLap = std::chrono::high_resolution_clock::now();
-    }
+    using Record = ProfilerRecord<256>;
+    LapTimer(std::chrono::milliseconds reportInterval = std::chrono::milliseconds{1000});
 
-    bool lap()
-    {
-        // save the lap time
-        auto now = std::chrono::high_resolution_clock::now();
-        auto lapTime =
-            std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_lastLap).count();
-        m_lapTimes.push(lapTime);
-        m_lastLap = now;
+    bool lap();
 
-        // reporting logic
-        if (std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_lastReport) >
-            m_reportInterval) {
-            m_lastReport = now;
-            return true;
-        }
-
-        return false;
-    };
-
-    ProfilerRecord::Stats stats() { return m_lapTimes.stats(); };
+    Record::Stats stats() const { return m_lapTimes.stats(); };
+    auto hist() const { return m_lapTimes.history(); }
 
   private:
     std::chrono::high_resolution_clock::time_point m_lastLap;
-    ProfilerRecord m_lapTimes;
+    Record m_lapTimes;
     std::chrono::high_resolution_clock::time_point m_lastReport;
     std::chrono::milliseconds m_reportInterval;
 };

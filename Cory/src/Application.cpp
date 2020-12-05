@@ -482,6 +482,17 @@ void Application::drawFrame()
     }
 
     drawSwapchainFrame(fui);
+
+    // the main FPS counter
+    static LapTimer fpsCounter;
+    if (fpsCounter.lap()) {
+        auto s = fpsCounter.stats();
+        CO_CORE_INFO("FPS: {:3.2f} ({:3.2f} ms)", float(1'000'000'000) / float(s.avg),
+                     float(s.avg) / 1'000'000);
+    }
+
+    processPerfCounters(fpsCounter);
+
     {
         ScopeTimer timer("ImGUI draw");
         m_imgui->drawFrame(ctx(), fui.swapChainImageIdx);
@@ -518,22 +529,34 @@ void Application::drawFrame()
     }
 
     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
 
-    //// debug / performance checking
-    // auto recs = Profiler::GetRecords();
-    // for (const auto [k, v] : recs) {
-    //    auto s = v.stats();
+void Application::processPerfCounters(LapTimer &fpsCounter)
+{
+    auto s = fpsCounter.stats();
+    float fps = float(1'000'000'000) / float(s.avg);
+    float millis = float(s.avg) / 1'000'000;
+    ImGui::Begin("Performance", nullptr, ImGuiWindowFlags_NoTitleBar);
+    ImGui::Text(fmt::format("FPS: {:>4.2f}", fps).c_str());
+    ImGui::Text(fmt::format("ms:  {:>4.2f}", millis).c_str());
+    auto fpsHistory = fpsCounter.hist();
+    std::vector<float> fpsHistoryMs;
+    std::ranges::transform(fpsHistory, std::back_inserter(fpsHistoryMs),
+                           [](long long nanos) { return float(nanos) / 1'000'000; });
+    ImGui::PlotLines("Frame Times", fpsHistoryMs.data(), fpsHistoryMs.size());
 
-    //    CO_CORE_INFO("{}: {} ({}-{})", k, s.avg, s.min, s.max);
-    //}
-
-    // the main FPS counter
-    static LapTimer fpsCounter;
-    if (fpsCounter.lap()) {
-        auto s = fpsCounter.stats();
-        CO_CORE_INFO("FPS: {:3.2f} ({:3.2f} ms)", float(1'000'000'000) / float(s.avg),
-                     float(s.avg) / 1'000'000);
+    // debug / performance counters
+    auto recs = Profiler::GetRecords();
+    for (const auto [k, v] : recs) {
+        auto ps = v.stats();
+        auto txt = fmt::format("{:15} {:3.2f} ({:3.2f}-{:3.2f})", k, float(ps.avg) / 1'000,
+                               float(ps.min) / 1'000, float(ps.max) / 1'000);
+        ImGui::Text(txt.c_str());
     }
+
+    ImGui::End();
+
+    ImGui::ShowDemoWindow();
 }
 
 void Application::cleanupSwapChain()

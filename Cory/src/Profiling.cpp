@@ -1,31 +1,13 @@
 #include "Profiling.h"
 
 #include <chrono>
-#include <numeric>
+
 
 namespace Cory {
 
-void ProfilerRecord::push(long long value)
-{
-    m_data[m_currentIdx % RECORD_HISTORY_SIZE] = value;
-    m_currentIdx++;
-}
 
-ProfilerRecord::Stats ProfilerRecord::stats() const
-{
-    auto endIter = m_currentIdx > m_data.size() ? m_data.cend() : m_data.cbegin() + m_currentIdx;
-    auto stats = std::accumulate(++m_data.cbegin(), endIter, Stats{m_data[0], m_data[0], m_data[0]},
-                                 [](auto acc, const auto &value) {
-                                     acc.min = std::min(acc.min, value);
-                                     acc.max = std::max(acc.max, value);
-                                     acc.avg += value;
-                                     return acc;
-                                 });
-    stats.avg /= RECORD_HISTORY_SIZE;
-    return stats;
-}
 
-std::unordered_map<std::string, ProfilerRecord> Profiler::s_records;
+std::unordered_map<std::string, Profiler::Record> Profiler::s_records;
 
 void Profiler::PushCounter(std::string &name, long long deltaNs) { s_records[name].push(deltaNs); }
 
@@ -42,7 +24,29 @@ ScopeTimer::~ScopeTimer()
     Profiler::PushCounter(m_name, delta);
 }
 
+LapTimer::LapTimer(std::chrono::milliseconds reportInterval)
+    : m_reportInterval{reportInterval}
+{
+    m_lastReport = m_lastLap = std::chrono::high_resolution_clock::now();
+}
 
+bool LapTimer::lap()
+{
+    // save the lap time
+    auto now = std::chrono::high_resolution_clock::now();
+    auto lapTime = std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_lastLap).count();
+    m_lapTimes.push(lapTime);
+    m_lastLap = now;
+
+    // reporting logic
+    if (std::chrono::duration_cast<std::chrono::nanoseconds>(now - m_lastReport) >
+        m_reportInterval) {
+        m_lastReport = now;
+        return true;
+    }
+
+    return false;
+}
 
 } // namespace Cory
 

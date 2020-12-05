@@ -10,6 +10,7 @@ class GLFWwindow;
 
 namespace Cory {
     class ImGuiLayer;
+    class LapTimer;
 
 class Application {
   public:
@@ -143,6 +144,8 @@ class Application {
     void createDepthResources();
 
     void drawFrame();
+
+    void processPerfCounters(LapTimer &fpsCounter);
 
     void cleanupSwapChain();
     void recreateSwapChain();

@@ -56,14 +56,10 @@ void HelloTriangleApplication::createSwapchainDependentResources()
     createDescriptorSets();
     createGraphicsPipeline();
     createCommandBuffers();
-
-    m_imgui.init(window(), ctx(), msaaSamples(), colorBuffer().view(), swapChain());
 }
 
 void HelloTriangleApplication::destroySwapchainDependentResources()
 {
-    m_imgui.deinit(ctx());
-
     for (auto framebuffer : m_swapChainFramebuffers) {
         ctx().device->destroyFramebuffer(framebuffer);
     }
@@ -78,7 +74,6 @@ void HelloTriangleApplication::destroySwapchainDependentResources()
 void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {
     Cory::ScopeTimer("Draw");
-    m_imgui.newFrame(ctx());
 
     updateUniformBuffer(fui.swapChainImageIdx);
 
@@ -101,8 +96,6 @@ void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     ctx().graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
-
-    m_imgui.drawFrame(ctx(), fui.swapChainImageIdx);
 }
 
 void HelloTriangleApplication::createGraphicsPipeline()

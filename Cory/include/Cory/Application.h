@@ -9,6 +9,7 @@
 class GLFWwindow;
 
 namespace Cory {
+    class ImGuiLayer;
 
 class Application {
   public:
@@ -22,8 +23,8 @@ class Application {
     static void mouseButtonCallback(GLFWwindow *window, int /*button*/, int /*action*/,
                                     int /*mods*/);
     static void scrollCallback(GLFWwindow *window, double /*xoffset*/, double yoffset);
-    static void keyCallback(GLFWwindow *window, int key, int /*scancode*/, int action, int /*mods*/);
-
+    static void keyCallback(GLFWwindow *window, int key, int /*scancode*/, int action,
+                            int /*mods*/);
 
     static const int MAX_FRAMES_IN_FLIGHT{2};
 
@@ -183,6 +184,8 @@ class Application {
     std::vector<const char *> m_requestedLayers;     // requested validation layers
     std::vector<const char *> m_requestedExtensions; // requested device extensions
     vk::Extent2D m_initialWindowSize;
+
+    std::unique_ptr<ImGuiLayer> m_imgui;
 };
 
 } // namespace Cory

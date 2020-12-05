@@ -81,6 +81,4 @@ class HelloTriangleApplication : public Application {
 
     Texture m_texture;
     Texture m_texture2;
-
-    ImGuiLayer m_imgui;
 };

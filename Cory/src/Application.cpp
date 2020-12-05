@@ -1,11 +1,13 @@
 #include "Application.h"
 
+#include "ImGuiLayer.h"
 #include "Log.h"
 #include "Profiling.h"
 #include "VkUtils.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <imgui.h>
 
 #include <set>
 #include <thread>
@@ -24,6 +26,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
 
 void Application::cursorPosCallback(GLFWwindow *window, double mouseX, double mouseY)
 {
+    if (ImGui::GetIO().WantCaptureMouse)
+        return;
 
     Cory::CameraManipulator::MouseButton mouseButton =
         (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
@@ -62,6 +66,9 @@ void Application::framebufferSizeCallback(GLFWwindow *window, int w, int h)
 void Application::mouseButtonCallback(GLFWwindow *window, int /*button*/, int /*action*/,
                                       int /*mods*/)
 {
+    if (ImGui::GetIO().WantCaptureMouse)
+        return;
+
     double xpos, ypos;
     glfwGetCursorPos(window, &xpos, &ypos);
 
@@ -72,6 +79,9 @@ void Application::mouseButtonCallback(GLFWwindow *window, int /*button*/, int /*
 
 void Application::scrollCallback(GLFWwindow *window, double /*xoffset*/, double yoffset)
 {
+    if (ImGui::GetIO().WantCaptureMouse)
+        return;
+
     Cory::CameraManipulator &cameraManipulator =
         reinterpret_cast<Application *>(glfwGetWindowUserPointer(window))->cameraManipulator;
     cameraManipulator.wheel(static_cast<int>(yoffset));
@@ -80,6 +90,9 @@ void Application::scrollCallback(GLFWwindow *window, double /*xoffset*/, double 
 void Application::keyCallback(GLFWwindow *window, int key, int /*scancode*/, int action,
                               int /*mods*/)
 {
+    if (ImGui::GetIO().WantCaptureKeyboard)
+        return;
+
     if (action == GLFW_PRESS) {
         switch (key) {
         case GLFW_KEY_ESCAPE:
@@ -103,6 +116,13 @@ void Application::run()
     initWindow();
 
     initVulkan();
+
+    m_imgui = std::make_unique<ImGuiLayer>();
+    m_imgui->init(window(), ctx(), msaaSamples(), colorBuffer().view(), swapChain());
+
+    // client app resources
+    init();
+    createSwapchainDependentResources();
 
     mainLoop();
 
@@ -132,11 +152,6 @@ void Application::initVulkan()
 
     createColorResources();
     createDepthResources();
-
-    // app resources
-    init();
-
-    createSwapchainDependentResources();
 }
 
 void Application::mainLoop()
@@ -333,7 +348,8 @@ void Application::createLogicalDevice()
     m_ctx.device = m_ctx.physicalDevice.createDeviceUnique(createInfo);
 
     // store the handle to the graphics and present queues
-    m_ctx.graphicsQueue = m_ctx.device->getQueue(m_ctx.queueFamilyIndices.graphicsFamily.value(), 0);
+    m_ctx.graphicsQueue =
+        m_ctx.device->getQueue(m_ctx.queueFamilyIndices.graphicsFamily.value(), 0);
     m_ctx.presentQueue = m_ctx.device->getQueue(m_ctx.queueFamilyIndices.presentFamily.value(), 0);
 }
 
@@ -460,7 +476,16 @@ void Application::drawFrame()
     fui.renderFinishedSemaphore = *m_renderFinishedSemaphores[m_currentFrame];
     fui.imageInFlightFence = *m_inFlightFences[m_currentFrame];
 
+    {
+        ScopeTimer timer("ImGui prepare");
+        m_imgui->newFrame(ctx());
+    }
+
     drawSwapchainFrame(fui);
+    {
+        ScopeTimer timer("ImGUI draw");
+        m_imgui->drawFrame(ctx(), fui.swapChainImageIdx);
+    }
 
     vk::Semaphore signalSemaphores[] = {*m_renderFinishedSemaphores[m_currentFrame]};
 
@@ -516,6 +541,8 @@ void Application::cleanupSwapChain()
     m_depthBuffer.destroy(m_ctx);
     m_renderTarget.destroy(m_ctx);
 
+    m_imgui->deinit(ctx());
+
     destroySwapchainDependentResources();
 }
 
@@ -541,6 +568,8 @@ void Application::recreateSwapChain()
 
     createColorResources();
     createDepthResources();
+
+    m_imgui->init(window(), ctx(), msaaSamples(), colorBuffer().view(), swapChain());
 
     createSwapchainDependentResources();
 }

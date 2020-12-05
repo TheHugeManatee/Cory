@@ -43,6 +43,7 @@ I also use it to test more modern C++ features.
  - refl-cpp, https://github.com/veselink1/refl-cpp, MIT license
  - Modified `CameraManipulator` Class, https://github.com/KhronosGroup/Vulkan-Hpp/tree/master/samples/RayTracing, Apache 2.0
  - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT
+ - imGuIZMO.quat for totation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause
 
 ### Other referenced third party libraries
 See `conanfile.txt` for the exact versions used, but there is of course always some flexibility.

@@ -483,6 +483,8 @@ void Application::drawFrame()
 
     drawSwapchainFrame(fui);
 
+    imguiWindows();
+
     // the main FPS counter
     static LapTimer fpsCounter;
     if (fpsCounter.lap()) {
@@ -543,20 +545,25 @@ void Application::processPerfCounters(LapTimer &fpsCounter)
     std::vector<float> fpsHistoryMs;
     std::ranges::transform(fpsHistory, std::back_inserter(fpsHistoryMs),
                            [](long long nanos) { return float(nanos) / 1'000'000; });
-    ImGui::PlotLines("Frame Times", fpsHistoryMs.data(), fpsHistoryMs.size());
+    ImGui::PlotLines("Frame Times", fpsHistoryMs.data(), fpsHistoryMs.size(), 0, nullptr, 0.0f,
+                     FLT_MAX, ImVec2{0, 100});
 
     // debug / performance counters
-    auto recs = Profiler::GetRecords();
-    for (const auto [k, v] : recs) {
-        auto ps = v.stats();
-        auto txt = fmt::format("{:15} {:3.2f} ({:3.2f}-{:3.2f})", k, float(ps.avg) / 1'000,
-                               float(ps.min) / 1'000, float(ps.max) / 1'000);
-        ImGui::Text(txt.c_str());
+    if (ImGui::CollapsingHeader("Perf Markers")) {
+        auto recs = Profiler::GetRecords();
+        ImGui::Text("{avg} {min} {max}, microseconds");
+        for (const auto [k, v] : recs) {
+            auto ps = v.stats();
+            float visStats[3]{float(ps.avg) / 1'000, float(ps.min) / 1'000, float(ps.max) / 1'000};
+            //             auto txt = fmt::format("{:15} {:3.2f} ({:3.2f}-{:3.2f})", k, visStats[0],
+            //             visStats[1],
+            //                                    visStats[2]);
+            //             ImGui::Text(txt.c_str());
+            ImGui::InputFloat3(k.c_str(), visStats, 2, ImGuiInputTextFlags_ReadOnly);
+        }
     }
 
     ImGui::End();
-
-    ImGui::ShowDemoWindow();
 }
 
 void Application::cleanupSwapChain()
@@ -711,6 +718,19 @@ bool Application::isDeviceSuitable(const vk::PhysicalDevice &device)
 
     return qfi.graphicsFamily.has_value() && qfi.presentFamily.has_value() && extensionsSupported &&
            swapChainAdequate && supportedFeatures.samplerAnisotropy;
+}
+
+void Application::imguiWindows()
+{
+    ImGui::Begin("Camera");
+    auto camPos = cameraManipulator.getCameraPosition();
+    auto camFocus = cameraManipulator.getCenterPosition();
+
+    ImGui::InputFloat3("Camera Position", glm::value_ptr(camPos), (int)2,
+                       ImGuiInputTextFlags_ReadOnly);
+    ImGui::InputFloat3("Camera Focus", glm::value_ptr(camFocus), (int)2,
+                       ImGuiInputTextFlags_ReadOnly);
+    ImGui::End();
 }
 
 } // namespace Cory

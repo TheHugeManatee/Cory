@@ -152,6 +152,8 @@ class Application {
 
     bool isDeviceSuitable(const vk::PhysicalDevice &device);
 
+void imguiWindows();
+
   private: // members
     GraphicsContext m_ctx{};
     GLFWwindow *m_window{};

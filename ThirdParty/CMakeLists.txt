@@ -10,6 +10,7 @@ add_library(${TARGET_NAME} STATIC
   src/vk_mem_alloc.cpp
   src/imgui_impl_vulkan.cpp
   src/imgui_impl_glfw.cpp
+  src/imGuIZMOquat.cpp
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC

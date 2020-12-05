@@ -293,13 +293,6 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted.
                           // otherwise image will be upside down :)
 
-    ImGui::Begin("Camera");
-    auto camPos = cameraManipulator.getCameraPosition();
-    ImGui::InputFloat3("Camera Position", glm::value_ptr(camPos), (int)2,
-                       ImGuiInputTextFlags_ReadOnly);
-    ImGui::Text("Camera Position");
-    ImGui::End();
-
     m_uniformBuffers[imageIndex].update(ctx());
 }
 

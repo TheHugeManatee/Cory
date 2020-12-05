@@ -28,6 +28,7 @@ template <long long RECORD_HISTORY_SIZE = 64> class ProfilerRecord {
 
     Stats stats() const
     {
+        // FIXME: stats are wrong when only one item exists?
         auto endIter =
             m_currentIdx > m_data.size() ? m_data.cend() : m_data.cbegin() + m_currentIdx;
         auto stats =

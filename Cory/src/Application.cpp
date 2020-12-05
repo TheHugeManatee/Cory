@@ -207,7 +207,6 @@ void Application::initWindow()
     glfwSetMouseButtonCallback(m_window, mouseButtonCallback);
     glfwSetScrollCallback(m_window, scrollCallback);
 
-
     cameraManipulator.setMode(CameraManipulator::Mode::Examine);
     cameraManipulator.setWindowSize(
         glm::u32vec2(m_initialWindowSize.width, m_initialWindowSize.height));
@@ -215,7 +214,7 @@ void Application::initWindow()
     glm::vec3 sceneMax{0.5f};
     glm::vec3 sceneExtents = sceneMax - sceneMin;
     glm::vec3 diagonal = 3.0f * sceneExtents;
-    cameraManipulator.setLookat(1.0f * diagonal, (sceneMin+sceneMax)/2.f, glm::vec3(0, 1, 0));
+    cameraManipulator.setLookat(1.0f * diagonal, (sceneMin + sceneMax) / 2.f, glm::vec3(0, 1, 0));
     glfwSetWindowUserPointer(m_window, this);
 }
 
@@ -287,11 +286,11 @@ void Application::createSurface()
 
 void Application::createLogicalDevice()
 {
-    QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
+    m_ctx.queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
 
     std::vector<vk::DeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
-                                              indices.presentFamily.value()};
+    std::set<uint32_t> uniqueQueueFamilies = {m_ctx.queueFamilyIndices.graphicsFamily.value(),
+                                              m_ctx.queueFamilyIndices.presentFamily.value()};
 
     float queuePriority = 1.0f;
 
@@ -333,8 +332,8 @@ void Application::createLogicalDevice()
     m_ctx.device = m_ctx.physicalDevice.createDeviceUnique(createInfo);
 
     // store the handle to the graphics and present queues
-    m_ctx.graphicsQueue = m_ctx.device->getQueue(indices.graphicsFamily.value(), 0);
-    m_ctx.presentQueue = m_ctx.device->getQueue(indices.presentFamily.value(), 0);
+    m_ctx.graphicsQueue = m_ctx.device->getQueue(m_ctx.queueFamilyIndices.graphicsFamily.value(), 0);
+    m_ctx.presentQueue = m_ctx.device->getQueue(m_ctx.queueFamilyIndices.presentFamily.value(), 0);
 }
 
 void Application::populateDebugMessengerCreateInfo(vk::DebugUtilsMessengerCreateInfoEXT &createInfo)
@@ -366,14 +365,14 @@ void Application::createCommandPools()
 {
     // create a second command pool for transient operations
     vk::CommandPoolCreateInfo poolInfo{};
-    auto queueFamilyIndices = findQueueFamilies(m_ctx.physicalDevice, m_surface);
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+    poolInfo.queueFamilyIndex = m_ctx.queueFamilyIndices.graphicsFamily.value();
     poolInfo.flags = vk::CommandPoolCreateFlagBits::eTransient;
 
     m_ctx.transientCmdPool = m_ctx.device->createCommandPoolUnique(poolInfo);
 
     // permanent command pool
-    poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+    poolInfo.queueFamilyIndex = m_ctx.queueFamilyIndices.graphicsFamily.value();
     poolInfo.flags = vk::CommandPoolCreateFlagBits(
         0); // for re-recording of command buffers, VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
             // or VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT might be necessary

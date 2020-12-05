@@ -4,7 +4,9 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.hpp>
 
-class GLFWwindow;
+#include "VkUtils.h"
+
+struct GLFWwindow;
 
 namespace Cory {
 
@@ -18,6 +20,7 @@ struct GraphicsContext {
     vk::UniqueCommandPool transientCmdPool{};
     vk::UniqueCommandPool permanentCmdPool{};
 
+    QueueFamilyIndices queueFamilyIndices;
     vk::Queue graphicsQueue{};
     vk::Queue presentQueue{};
 };

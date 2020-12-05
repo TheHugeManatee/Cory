@@ -61,11 +61,11 @@ void SwapChain::createSwapchain(vk::SurfaceKHR surface)
         vk::ImageUsageFlagBits::eColorAttachment; // for off-screen rendering, it is possible to
                                                   // use VK_IMAGE_USAGE_TRANSFER_DST_BIT instead
 
-    QueueFamilyIndices indices = findQueueFamilies(m_ctx.physicalDevice, surface);
-    uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+    uint32_t queueFamilyIndices[] = {m_ctx.queueFamilyIndices.graphicsFamily.value(),
+                                     m_ctx.queueFamilyIndices.presentFamily.value()};
 
     // if the swap and present queues are different, the swap chain images have to be shareable
-    if (indices.graphicsFamily != indices.presentFamily) {
+    if (m_ctx.queueFamilyIndices.graphicsFamily != m_ctx.queueFamilyIndices.presentFamily) {
         createInfo.imageSharingMode = vk::SharingMode::eConcurrent;
         createInfo.queueFamilyIndexCount = 2;
         createInfo.pQueueFamilyIndices = queueFamilyIndices;

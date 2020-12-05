@@ -1,8 +1,8 @@
 #include "VkBuilders.h"
 
-#include "VkUtils.h"
 #include "Context.h"
 #include "Mesh.h"
+#include "VkUtils.h"
 
 #include <fmt/format.h>
 #include <ranges>
@@ -135,7 +135,8 @@ vk::UniquePipeline PipelineBuilder::create(GraphicsContext &ctx)
     }
 }
 
-void RenderPassBuilder::addColorAttachment(vk::Format format, vk::SampleCountFlagBits samples)
+vk::AttachmentReference RenderPassBuilder::addColorAttachment(vk::Format format,
+                                                              vk::SampleCountFlagBits samples)
 {
     vk::AttachmentDescription colorAttachment{};
     colorAttachment.format = format;
@@ -149,12 +150,21 @@ void RenderPassBuilder::addColorAttachment(vk::Format format, vk::SampleCountFla
 
     auto attachmentRef = addAttachment(colorAttachment, vk::ImageLayout::eColorAttachmentOptimal);
     m_colorAttachmentRefs.push_back(attachmentRef);
+    return attachmentRef;
 }
 
-void RenderPassBuilder::addDepthAttachment(vk::Format format, vk::SampleCountFlagBits samples)
+vk::AttachmentReference
+RenderPassBuilder::addColorAttachment(vk::AttachmentDescription colorAttachment)
 {
-    assert(m_depthStencilAttachmentRef == vk::AttachmentReference{} &&
-           "DepthStencil attachment is already set!");
+    auto attachmentRef = addAttachment(colorAttachment, vk::ImageLayout::eColorAttachmentOptimal);
+    m_colorAttachmentRefs.push_back(attachmentRef);
+    return attachmentRef;
+}
+
+vk::AttachmentReference RenderPassBuilder::addDepthAttachment(vk::Format format,
+                                                              vk::SampleCountFlagBits samples)
+{
+    assert(!m_depthStencilAttachmentRef.has_value() && "DepthStencil attachment is already set!");
 
     vk::AttachmentDescription depthAttachment{};
     depthAttachment.format = format;
@@ -168,9 +178,10 @@ void RenderPassBuilder::addDepthAttachment(vk::Format format, vk::SampleCountFla
 
     m_depthStencilAttachmentRef =
         addAttachment(depthAttachment, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+    return *m_depthStencilAttachmentRef;
 }
 
-void RenderPassBuilder::addResolveAttachment(vk::Format format)
+vk::AttachmentReference RenderPassBuilder::addResolveAttachment(vk::Format format, vk::ImageLayout finalLayout)
 {
     vk::AttachmentDescription colorAttachmentResolve{};
     colorAttachmentResolve.format = format;
@@ -180,54 +191,51 @@ void RenderPassBuilder::addResolveAttachment(vk::Format format)
     colorAttachmentResolve.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
     colorAttachmentResolve.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
     colorAttachmentResolve.initialLayout = vk::ImageLayout::eUndefined;
-    colorAttachmentResolve.finalLayout = vk::ImageLayout::ePresentSrcKHR;
+    colorAttachmentResolve.finalLayout = finalLayout;
 
     auto attachmentRef =
         addAttachment(colorAttachmentResolve, vk::ImageLayout::eColorAttachmentOptimal);
     m_resolveAttachmentRefs.push_back(attachmentRef);
+    return attachmentRef;
 }
 
-vk::RenderPass RenderPassBuilder::create(GraphicsContext &ctx)
+uint32_t RenderPassBuilder::addDefaultSubpass()
 {
     vk::SubpassDescription subpass{};
     subpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
     subpass.colorAttachmentCount = static_cast<uint32_t>(m_colorAttachmentRefs.size());
     subpass.pColorAttachments = m_colorAttachmentRefs.data();
-    subpass.pDepthStencilAttachment = &m_depthStencilAttachmentRef;
+    if (m_depthStencilAttachmentRef)
+        subpass.pDepthStencilAttachment = &*m_depthStencilAttachmentRef;
+    else
+        subpass.pDepthStencilAttachment = nullptr;
     subpass.pResolveAttachments = m_resolveAttachmentRefs.data();
-    // NOTE: the order of attachments directly corresponds to the 'layout(location=0) out vec4
-    // color' index in the fragment shader pInputAttachments: attachments that are read from a
-    // shader pResolveAttachments: attachments used for multisampling color attachments
-    // pDepthStencilAttachment: attachment for depth and stencil data
-    // pPreserveAttachments: attachments that are not currently used by the subpass but for
-    // which the data needs to be preserved.
 
-    //****************** Subpass dependencies ******************
-    // this sets up the render pass to wait for the STAGE_COLOR_ATTACHMENT_OUTPUT stage to
-    // ensure the images are available and the swap chain is not still reading the image
-    vk::SubpassDependency dependency{};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
-                              vk::PipelineStageFlagBits::eEarlyFragmentTests;
-    dependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentRead; // not sure here..
-    dependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
-                              vk::PipelineStageFlagBits::eEarlyFragmentTests;
-    dependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite |
-                               vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+    return addSubpass(subpass);
+}
 
+uint32_t RenderPassBuilder::addSubpass(vk::SubpassDescription subpassDesc)
+{
+    uint32_t subpassIdx = static_cast<uint32_t>(m_subpasses.size());
+    m_subpasses.emplace_back(std::move(subpassDesc));
+    return subpassIdx;
+}
+
+vk::RenderPass RenderPassBuilder::create(GraphicsContext &ctx)
+{
     vk::RenderPassCreateInfo renderPassInfo{};
     renderPassInfo.attachmentCount = static_cast<uint32_t>(m_attachments.size());
     renderPassInfo.pAttachments = m_attachments.data();
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &dependency;
+    renderPassInfo.subpassCount = static_cast<uint32_t>(m_subpasses.size());
+    renderPassInfo.pSubpasses = m_subpasses.data();
+    renderPassInfo.dependencyCount = static_cast<uint32_t>(m_subpassDependencies.size());
+    renderPassInfo.pDependencies = m_subpassDependencies.data();
 
     return ctx.device->createRenderPass(renderPassInfo);
 }
 
-vk::AttachmentReference RenderPassBuilder::addAttachment(vk::AttachmentDescription desc, vk::ImageLayout layout)
+vk::AttachmentReference RenderPassBuilder::addAttachment(vk::AttachmentDescription desc,
+                                                         vk::ImageLayout layout)
 {
     uint32_t attachmentID = static_cast<uint32_t>(m_attachments.size());
     m_attachments.push_back(desc);

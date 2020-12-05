@@ -2,6 +2,7 @@
 
 #include "Context.h"
 #include "Log.h"
+#include "VkBuilders.h"
 #include "VkUtils.h"
 
 #include <imgui.h>
@@ -21,30 +22,33 @@ void check_vk_result(VkResult err)
 
 ImGuiLayer::ImGuiLayer() { m_clearValue.color.setFloat32({0.0f, 0.0f, 0.0f, 0.0f}); }
 
-void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, vk::RenderPass renderPass,
-                      uint32_t subpassIdx, vk::SampleCountFlagBits msaaSamples,
-                      uint32_t minImageCount)
+void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, vk::SampleCountFlagBits msaaSamples,
+                      vk::ImageView renderedImage, SwapChain &swapChain)
 {
-    m_renderPass = renderPass;
+    createImguiRenderpass(swapChain.format(), msaaSamples, ctx);
+    createImguiDescriptorPool(ctx);
 
-    vk::DescriptorPoolSize pool_sizes[] = {{vk::DescriptorType::eSampler, 1000},
-                                           {vk::DescriptorType::eCombinedImageSampler, 1000},
-                                           {vk::DescriptorType::eSampledImage, 1000},
-                                           {vk::DescriptorType::eStorageImage, 1000},
-                                           {vk::DescriptorType::eUniformTexelBuffer, 1000},
-                                           {vk::DescriptorType::eStorageTexelBuffer, 1000},
-                                           {vk::DescriptorType::eUniformBuffer, 1000},
-                                           {vk::DescriptorType::eStorageBuffer, 1000},
-                                           {vk::DescriptorType::eUniformBufferDynamic, 1000},
-                                           {vk::DescriptorType::eStorageBufferDynamic, 1000},
-                                           {vk::DescriptorType::eInputAttachment, 1000}};
+    { // create frame buffer for imgui
+        VkImageView attachment[2];
+        VkFramebufferCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        info.renderPass = m_renderPass;
+        info.attachmentCount = 2;
+        info.pAttachments = attachment;
+        info.width = swapChain.extent().width;
+        info.height = swapChain.extent().height;
+        info.layers = 1;
 
-    vk::DescriptorPoolCreateInfo createInfo;
-    createInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
-    createInfo.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
-    createInfo.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
-    createInfo.pPoolSizes = pool_sizes;
-    m_descriptorPool = ctx.device->createDescriptorPool(createInfo);
+        m_framebuffers.resize(swapChain.size());
+        for (size_t i = 0; i < swapChain.size(); i++) {
+            attachment[0] = renderedImage;
+            attachment[1] = swapChain.views()[i];
+            m_framebuffers[i] = ctx.device->createFramebuffer(info);
+        }
+
+        m_targetRect.offset = vk::Offset2D{0, 0};
+        m_targetRect.extent = swapChain.extent();
+    }
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -69,13 +73,13 @@ void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, vk::RenderPass r
     info.PipelineCache = nullptr; // TODO?
     info.DescriptorPool = m_descriptorPool;
     info.Allocator = nullptr;
-    info.MinImageCount = minImageCount;
-    info.ImageCount = minImageCount;
-    info.Subpass = subpassIdx;
+    info.MinImageCount = 2;
+    info.ImageCount = static_cast<uint32_t>(swapChain.size());
+    info.Subpass = 0;
     info.CheckVkResultFn = check_vk_result;
     info.MSAASamples = (VkSampleCountFlagBits)msaaSamples;
 
-    info.MinImageCount = minImageCount;
+    info.MinImageCount = 2;
     ImGui_ImplVulkan_Init(&info, m_renderPass);
 
     // Load Fonts
@@ -132,9 +136,76 @@ void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, vk::RenderPass r
     }
 }
 
+void ImGuiLayer::createImguiDescriptorPool(GraphicsContext &ctx)
+{
+    vk::DescriptorPoolSize pool_sizes[] = {{vk::DescriptorType::eSampler, 1000},
+                                           {vk::DescriptorType::eCombinedImageSampler, 1000},
+                                           {vk::DescriptorType::eSampledImage, 1000},
+                                           {vk::DescriptorType::eStorageImage, 1000},
+                                           {vk::DescriptorType::eUniformTexelBuffer, 1000},
+                                           {vk::DescriptorType::eStorageTexelBuffer, 1000},
+                                           {vk::DescriptorType::eUniformBuffer, 1000},
+                                           {vk::DescriptorType::eStorageBuffer, 1000},
+                                           {vk::DescriptorType::eUniformBufferDynamic, 1000},
+                                           {vk::DescriptorType::eStorageBufferDynamic, 1000},
+                                           {vk::DescriptorType::eInputAttachment, 1000}};
+
+    vk::DescriptorPoolCreateInfo createInfo;
+    createInfo.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet;
+    createInfo.maxSets = 1000 * IM_ARRAYSIZE(pool_sizes);
+    createInfo.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+    createInfo.pPoolSizes = pool_sizes;
+    m_descriptorPool = ctx.device->createDescriptorPool(createInfo);
+}
+
+void ImGuiLayer::createImguiRenderpass(vk::Format format, vk::SampleCountFlagBits msaaSamples,
+                                       GraphicsContext &ctx)
+{
+    RenderPassBuilder builder;
+
+    // input attachment - previously rendered image
+    vk::AttachmentDescription attachment = {};
+    attachment.format = format;
+    attachment.samples = msaaSamples;
+    attachment.loadOp = vk::AttachmentLoadOp::eLoad;
+    attachment.storeOp = vk::AttachmentStoreOp::eStore;
+    attachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    attachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    attachment.initialLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    attachment.finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    auto color_attachment = builder.addColorAttachment(attachment);
+
+    // add resolve attachment
+    auto resolveAttach = builder.addResolveAttachment(format);
+
+    auto imguiPass = builder.addDefaultSubpass();
+
+    vk::SubpassDependency dependency = {};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = imguiPass;
+    dependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+    dependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+    dependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+    builder.addSubpassDependency(dependency);
+
+    // vk::RenderPassCreateInfo info = {};
+    // info.attachmentCount = 1;
+    // info.pAttachments = &attachment;
+    // info.subpassCount = 1;
+    // info.pSubpasses = &subpass;
+    // info.dependencyCount = 1;
+    // info.pDependencies = &dependency;
+    // m_renderPass = ctx.device->createRenderPass(info);
+    m_renderPass = builder.create(ctx);
+}
+
 void ImGuiLayer::Deinit(GraphicsContext &ctx)
 {
     ctx.device->destroyDescriptorPool(m_descriptorPool);
+    ctx.device->destroyRenderPass(m_renderPass);
+    for (auto &fb : m_framebuffers)
+        ctx.device->destroyFramebuffer(fb);
 
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -151,32 +222,17 @@ void ImGuiLayer::NewFrame(GraphicsContext &ctx)
     ImGui::ShowDemoWindow(&show_demo_window);
 }
 
-void ImGuiLayer::DrawFrame(GraphicsContext &ctx, vk::Framebuffer framebuffer,
-                           vk::Extent2D surfaceExtent)
+void ImGuiLayer::DrawFrame(GraphicsContext &ctx, uint32_t currentFrameIdx)
 {
     auto cmdBuf = SingleTimeCommandBuffer(ctx);
     // Rendering
     ImGui::Render();
-    // ImDrawData *draw_data = ImGui::GetDrawData();
-    // const bool is_minimized =
-    //    (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
-    // if (!is_minimized) {
-    //    memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
-    //    FrameRender(wd, draw_data);
-    //    FramePresent(wd);
-    //}
 
-    //********************************
-    //    TODO NEXT STEPS
-    //     - create a render pass that has a proper configuration
-    //     - probably needs to have a subpass for imgui
-    //     - call ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-
-    vk::ClearValue clearValues[] = {m_clearValue, vk::ClearDepthStencilValue(0.0f, 0.0f)};
+    vk::ClearValue clearValues[] = {m_clearValue, vk::ClearDepthStencilValue(0, 0)};
     vk::RenderPassBeginInfo info = {};
     info.renderPass = m_renderPass;
-    info.framebuffer = framebuffer;
-    info.renderArea.extent = surfaceExtent;
+    info.framebuffer = m_framebuffers[currentFrameIdx];
+    info.renderArea = m_targetRect;
     info.clearValueCount = 2;
     info.pClearValues = clearValues;
 

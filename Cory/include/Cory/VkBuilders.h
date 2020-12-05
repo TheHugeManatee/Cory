@@ -2,6 +2,7 @@
 
 #include "Shader.h"
 
+#include <optional>
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
@@ -63,11 +64,48 @@ class PipelineBuilder {
 
 class RenderPassBuilder {
   public:
-    void addColorAttachment(vk::Format format, vk::SampleCountFlagBits samples);
+    vk::AttachmentReference addColorAttachment(vk::Format format, vk::SampleCountFlagBits samples);
+    vk::AttachmentReference addColorAttachment(vk::AttachmentDescription colorAttachment);
 
-    void addDepthAttachment(vk::Format format, vk::SampleCountFlagBits samples);
+    vk::AttachmentReference addDepthAttachment(vk::Format format, vk::SampleCountFlagBits samples);
 
-    void addResolveAttachment(vk::Format format);
+    vk::AttachmentReference addResolveAttachment(vk::Format format, vk::ImageLayout finalLayout = vk::ImageLayout::ePresentSrcKHR);
+
+    /**
+     * Add a default configured graphics subpass that has all color, depth and resolve attachments
+     * that the builder knows about
+     */
+    uint32_t addDefaultSubpass();
+
+    void addPreviousFrameSubpassDepencency() {
+        //****************** Subpass dependencies ******************
+        // this sets up the render pass to wait for the STAGE_COLOR_ATTACHMENT_OUTPUT stage to
+        // ensure the images are available and the swap chain is not still reading the image
+        vk::SubpassDependency dependency{};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                                  vk::PipelineStageFlagBits::eEarlyFragmentTests;
+        dependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentRead; // not sure here..
+        dependency.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput |
+                                  vk::PipelineStageFlagBits::eEarlyFragmentTests;
+        dependency.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite |
+                                   vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+
+        m_subpassDependencies.emplace_back(std::move(dependency));
+    }
+   
+    void addSubpassDependency(vk::SubpassDependency dependency) {
+        m_subpassDependencies.emplace_back(std::move(dependency));
+    }
+
+    // NOTE: the order of attachments directly corresponds to the 'layout(location=0) out vec4
+    // color' index in the fragment shader pInputAttachments: attachments that are read from a
+    // shader pResolveAttachments: attachments used for multisampling color attachments
+    // pDepthStencilAttachment: attachment for depth and stencil data
+    // pPreserveAttachments: attachments that are not currently used by the subpass but for
+    // which the data needs to be preserved.
+    uint32_t addSubpass(vk::SubpassDescription subpassDesc);
 
     vk::RenderPass create(GraphicsContext &ctx);
 
@@ -78,7 +116,10 @@ class RenderPassBuilder {
     std::vector<vk::AttachmentDescription> m_attachments;
     std::vector<vk::AttachmentReference> m_colorAttachmentRefs;
     std::vector<vk::AttachmentReference> m_resolveAttachmentRefs;
-    vk::AttachmentReference m_depthStencilAttachmentRef;
+    std::optional<vk::AttachmentReference> m_depthStencilAttachmentRef;
+    std::vector<vk::SubpassDependency> m_subpassDependencies;
+
+    std::vector<vk::SubpassDescription> m_subpasses;
 };
 
 } // namespace Cory

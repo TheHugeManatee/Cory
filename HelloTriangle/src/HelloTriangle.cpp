@@ -57,7 +57,7 @@ void HelloTriangleApplication::createSwapchainDependentResources()
     createGraphicsPipeline();
     createCommandBuffers();
 
-    m_imgui.Init(window(), ctx(), m_renderPass, 0, msaaSamples(), static_cast<uint32_t>(swapChain().size()));
+    m_imgui.Init(window(), ctx(), msaaSamples(), colorBuffer().view(), swapChain());
 }
 
 void HelloTriangleApplication::destroySwapchainDependentResources()
@@ -102,9 +102,8 @@ void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 
     ctx().graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
 
-    m_imgui.DrawFrame(ctx(), m_swapChainFramebuffers[fui.swapChainImageIdx], swapChain().extent());
+    m_imgui.DrawFrame(ctx(), fui.swapChainImageIdx);
 }
-
 
 void HelloTriangleApplication::createGraphicsPipeline()
 {
@@ -142,9 +141,30 @@ void HelloTriangleApplication::createRenderPass()
 {
     RenderPassBuilder builder;
 
-    builder.addColorAttachment(swapChain().format(), msaaSamples());
-    builder.addDepthAttachment(findDepthFormat(ctx().physicalDevice), msaaSamples());
-    builder.addResolveAttachment(swapChain().format());
+    vk::AttachmentDescription colorAttachmentDesc;
+    colorAttachmentDesc.format = swapChain().format();
+    colorAttachmentDesc.samples = msaaSamples();
+    colorAttachmentDesc.loadOp = vk::AttachmentLoadOp::eClear;
+    colorAttachmentDesc.storeOp = vk::AttachmentStoreOp::eStore;
+    colorAttachmentDesc.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
+    colorAttachmentDesc.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
+    colorAttachmentDesc.initialLayout = vk::ImageLayout::eUndefined;
+    colorAttachmentDesc.finalLayout = vk::ImageLayout::eColorAttachmentOptimal;
+    auto colorAttach = builder.addColorAttachment(colorAttachmentDesc);
+
+    auto depthAttach =
+        builder.addDepthAttachment(findDepthFormat(ctx().physicalDevice), msaaSamples());
+
+    // builder.addDefaultSubpass();
+    vk::SubpassDescription geometrySubpass{};
+    geometrySubpass.pipelineBindPoint = vk::PipelineBindPoint::eGraphics;
+    geometrySubpass.colorAttachmentCount = 1;
+    geometrySubpass.pColorAttachments = &colorAttach;
+    geometrySubpass.pDepthStencilAttachment = &depthAttach;
+    geometrySubpass.pResolveAttachments = nullptr;
+    auto geometrySubpassIdx = builder.addSubpass(geometrySubpass);
+
+    builder.addPreviousFrameSubpassDepencency();
 
     m_renderPass = builder.create(ctx());
 }
@@ -304,8 +324,7 @@ void HelloTriangleApplication::createFramebuffers(vk::RenderPass renderPass)
     m_swapChainFramebuffers.resize(swapChain().views().size());
 
     for (size_t i{0}; i < swapChain().views().size(); ++i) {
-        std::array<vk::ImageView, 3> attachments = {colorBuffer().view(), depthBuffer().view(),
-                                                    swapChain().views()[i]};
+        std::array<vk::ImageView, 2> attachments = {colorBuffer().view(), depthBuffer().view()};
 
         vk::FramebufferCreateInfo framebufferInfo{};
         framebufferInfo.renderPass = renderPass;

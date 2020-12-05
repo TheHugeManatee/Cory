@@ -17,13 +17,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
 {
-    CO_CORE_ERROR("validation layer: {}", pCallbackData->pMessage);
+    CO_CORE_ERROR("Vulkan validation layer: {}", pCallbackData->pMessage);
 
     return false;
 }
 
 void Application::cursorPosCallback(GLFWwindow *window, double mouseX, double mouseY)
 {
+
     Cory::CameraManipulator::MouseButton mouseButton =
         (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
             ? Cory::CameraManipulator::MouseButton::Left

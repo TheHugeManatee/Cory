@@ -22,7 +22,7 @@ void check_vk_result(VkResult err)
 
 ImGuiLayer::ImGuiLayer() { m_clearValue.color.setFloat32({0.0f, 0.0f, 0.0f, 0.0f}); }
 
-void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, vk::SampleCountFlagBits msaaSamples,
+void ImGuiLayer::init(GLFWwindow *window, GraphicsContext &ctx, vk::SampleCountFlagBits msaaSamples,
                       vk::ImageView renderedImage, SwapChain &swapChain)
 {
     createImguiRenderpass(swapChain.format(), msaaSamples, ctx);
@@ -200,7 +200,7 @@ void ImGuiLayer::createImguiRenderpass(vk::Format format, vk::SampleCountFlagBit
     m_renderPass = builder.create(ctx);
 }
 
-void ImGuiLayer::Deinit(GraphicsContext &ctx)
+void ImGuiLayer::deinit(GraphicsContext &ctx)
 {
     ctx.device->destroyDescriptorPool(m_descriptorPool);
     ctx.device->destroyRenderPass(m_renderPass);
@@ -212,17 +212,14 @@ void ImGuiLayer::Deinit(GraphicsContext &ctx)
     ImGui::DestroyContext();
 }
 
-void ImGuiLayer::NewFrame(GraphicsContext &ctx)
+void ImGuiLayer::newFrame(GraphicsContext &ctx)
 {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-
-    static bool show_demo_window{true};
-    ImGui::ShowDemoWindow(&show_demo_window);
 }
 
-void ImGuiLayer::DrawFrame(GraphicsContext &ctx, uint32_t currentFrameIdx)
+void ImGuiLayer::drawFrame(GraphicsContext &ctx, uint32_t currentFrameIdx)
 {
     auto cmdBuf = SingleTimeCommandBuffer(ctx);
     // Rendering

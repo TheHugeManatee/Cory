@@ -13,13 +13,13 @@ class ImGuiLayer {
   public:
     ImGuiLayer();
 
-    void Init(GLFWwindow *window, GraphicsContext &ctx, vk::SampleCountFlagBits msaaSamples,
+    void init(GLFWwindow *window, GraphicsContext &ctx, vk::SampleCountFlagBits msaaSamples,
               vk::ImageView renderedImage, SwapChain &swapChain);
 
-    void Deinit(GraphicsContext &ctx);
+    void deinit(GraphicsContext &ctx);
 
-    void NewFrame(GraphicsContext &ctx);
-    void DrawFrame(GraphicsContext &ctx, uint32_t currentFrameIdx);
+    void newFrame(GraphicsContext &ctx);
+    void drawFrame(GraphicsContext &ctx, uint32_t currentFrameIdx);
 
   private:
     void createImguiDescriptorPool(GraphicsContext &ctx);

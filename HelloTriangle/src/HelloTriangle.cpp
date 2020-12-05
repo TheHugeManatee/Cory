@@ -57,12 +57,12 @@ void HelloTriangleApplication::createSwapchainDependentResources()
     createGraphicsPipeline();
     createCommandBuffers();
 
-    m_imgui.Init(window(), ctx(), msaaSamples(), colorBuffer().view(), swapChain());
+    m_imgui.init(window(), ctx(), msaaSamples(), colorBuffer().view(), swapChain());
 }
 
 void HelloTriangleApplication::destroySwapchainDependentResources()
 {
-    m_imgui.Deinit(ctx());
+    m_imgui.deinit(ctx());
 
     for (auto framebuffer : m_swapChainFramebuffers) {
         ctx().device->destroyFramebuffer(framebuffer);
@@ -78,7 +78,7 @@ void HelloTriangleApplication::destroySwapchainDependentResources()
 void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {
     Cory::ScopeTimer("Draw");
-    m_imgui.NewFrame(ctx());
+    m_imgui.newFrame(ctx());
 
     updateUniformBuffer(fui.swapChainImageIdx);
 
@@ -102,7 +102,7 @@ void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 
     ctx().graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
 
-    m_imgui.DrawFrame(ctx(), fui.swapChainImageIdx);
+    m_imgui.drawFrame(ctx(), fui.swapChainImageIdx);
 }
 
 void HelloTriangleApplication::createGraphicsPipeline()
@@ -162,7 +162,7 @@ void HelloTriangleApplication::createRenderPass()
     geometrySubpass.pColorAttachments = &colorAttach;
     geometrySubpass.pDepthStencilAttachment = &depthAttach;
     geometrySubpass.pResolveAttachments = nullptr;
-    auto geometrySubpassIdx = builder.addSubpass(geometrySubpass);
+    builder.addSubpass(geometrySubpass);
 
     builder.addPreviousFrameSubpassDepencency();
 
@@ -291,10 +291,7 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
         std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraUBOData &ubo = m_uniformBuffers[imageIndex].data();
-    // ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(45.f), glm::vec3(0.0f, 1.0f,
-    // 0.0f));
-    // ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
-    //                       glm::vec3(0.0f, 0.0f, 1.0f));
+
     ubo.model = glm::identity<glm::mat4>();
     ubo.view = cameraManipulator.getMatrix();
     ubo.proj = glm::perspective(glm::radians(45.0f),
@@ -302,6 +299,13 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
                                 0.1f, 10.0f);
     ubo.proj[1][1] *= -1; // NOTE: we flip this bc/ glm is written for OpenGL which has Y inverted.
                           // otherwise image will be upside down :)
+
+    ImGui::Begin("Camera");
+    auto camPos = cameraManipulator.getCameraPosition();
+    ImGui::InputFloat3("Camera Position", glm::value_ptr(camPos), (int)2,
+                       ImGuiInputTextFlags_ReadOnly);
+    ImGui::Text("Camera Position");
+    ImGui::End();
 
     m_uniformBuffers[imageIndex].update(ctx());
 }

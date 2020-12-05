@@ -21,8 +21,10 @@ I also use it to test more modern C++ features.
  - Implement Monte Carlo Volume Raycasting
  - Play around with ray tracing
 
-### Inspiration / Resources
+### Inspiration and Resources
  - Engine structure and basic facilities are inspired heavily by the Hazel engine by TheCherno, greatly documented on his Youtube Channel https://www.youtube.com/user/TheChernoProject
+ - Alexander Overvoorde's excellent Vulkan tutorial https://vulkan-tutorial.com/
+ - Tutorial on how to actually integrate imgui into a vulkan renderer https://frguthmann.github.io/posts/vulkan_imgui/, based off of the vulkan-tutorial.com source code
 
 
 ### Included Third-Party libraries

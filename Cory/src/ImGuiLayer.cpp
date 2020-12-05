@@ -19,11 +19,14 @@ void check_vk_result(VkResult err)
         abort();
 }
 
-ImGuiLayer::ImGuiLayer() {}
+ImGuiLayer::ImGuiLayer() { m_clearValue.color.setFloat32({0.0f, 0.0f, 0.0f, 0.0f}); }
 
-void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, uint32_t queueFamily,
-                      vk::Queue queue, uint32_t minImageCount, vk::RenderPass renderPass)
+void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, vk::RenderPass renderPass,
+                      uint32_t subpassIdx, vk::SampleCountFlagBits msaaSamples,
+                      uint32_t minImageCount)
 {
+    m_renderPass = renderPass;
+
     vk::DescriptorPoolSize pool_sizes[] = {{vk::DescriptorType::eSampler, 1000},
                                            {vk::DescriptorType::eCombinedImageSampler, 1000},
                                            {vk::DescriptorType::eSampledImage, 1000},
@@ -61,17 +64,19 @@ void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, uint32_t queueFa
     info.Instance = *ctx.instance;
     info.PhysicalDevice = ctx.physicalDevice;
     info.Device = *ctx.device;
-    info.QueueFamily = queueFamily;
-    info.Queue = queue;
+    info.QueueFamily = *ctx.queueFamilyIndices.graphicsFamily;
+    info.Queue = ctx.graphicsQueue;
     info.PipelineCache = nullptr; // TODO?
     info.DescriptorPool = m_descriptorPool;
     info.Allocator = nullptr;
     info.MinImageCount = minImageCount;
     info.ImageCount = minImageCount;
+    info.Subpass = subpassIdx;
     info.CheckVkResultFn = check_vk_result;
+    info.MSAASamples = (VkSampleCountFlagBits)msaaSamples;
 
     info.MinImageCount = minImageCount;
-    ImGui_ImplVulkan_Init(&info, renderPass);
+    ImGui_ImplVulkan_Init(&info, m_renderPass);
 
     // Load Fonts
     // - If no fonts are loaded, dear imgui will use the default font. You can also load multiple
@@ -97,7 +102,6 @@ void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, uint32_t queueFa
     // Upload Fonts
     {
         // Use any command queue
-        SingleTimeCommandBuffer cmdBuff(ctx);
         // VkCommandPool command_pool = wd->Frames[wd->FrameIndex].CommandPool;
         // VkCommandBuffer command_buffer = wd->Frames[wd->FrameIndex].CommandBuffer;
 
@@ -108,8 +112,10 @@ void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, uint32_t queueFa
         begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         err = vkBeginCommandBuffer(command_buffer, &begin_info);
         check_vk_result(err);*/
-
-        ImGui_ImplVulkan_CreateFontsTexture(cmdBuff.buffer());
+        {
+            SingleTimeCommandBuffer cmdBuff(ctx);
+            ImGui_ImplVulkan_CreateFontsTexture(cmdBuff.buffer());
+        }
 
         // VkSubmitInfo end_info = {};
         // end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -145,8 +151,10 @@ void ImGuiLayer::NewFrame(GraphicsContext &ctx)
     ImGui::ShowDemoWindow(&show_demo_window);
 }
 
-void ImGuiLayer::EndFrame(GraphicsContext &ctx)
+void ImGuiLayer::DrawFrame(GraphicsContext &ctx, vk::Framebuffer framebuffer,
+                           vk::Extent2D surfaceExtent)
 {
+    auto cmdBuf = SingleTimeCommandBuffer(ctx);
     // Rendering
     ImGui::Render();
     // ImDrawData *draw_data = ImGui::GetDrawData();
@@ -163,6 +171,18 @@ void ImGuiLayer::EndFrame(GraphicsContext &ctx)
     //     - create a render pass that has a proper configuration
     //     - probably needs to have a subpass for imgui
     //     - call ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+
+    vk::ClearValue clearValues[] = {m_clearValue, vk::ClearDepthStencilValue(0.0f, 0.0f)};
+    vk::RenderPassBeginInfo info = {};
+    info.renderPass = m_renderPass;
+    info.framebuffer = framebuffer;
+    info.renderArea.extent = surfaceExtent;
+    info.clearValueCount = 2;
+    info.pClearValues = clearValues;
+
+    cmdBuf->beginRenderPass(info, vk::SubpassContents::eInline);
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuf.buffer());
+    cmdBuf->endRenderPass();
 }
 
 } // namespace Cory

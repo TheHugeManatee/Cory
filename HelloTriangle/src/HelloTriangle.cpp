@@ -38,8 +38,6 @@ void HelloTriangleApplication::init()
     m_texture2 = createTextureImage(RESOURCE_DIR "/sunglasses.png", vk::Filter::eLinear,
                                     vk::SamplerAddressMode::eClampToBorder);
     createGeometry();
-
-    //m_imgui.Init(window(), ctx(), )
 }
 
 void HelloTriangleApplication::deinit()
@@ -49,6 +47,64 @@ void HelloTriangleApplication::deinit()
     m_texture.destroy(ctx());
     m_texture2.destroy(ctx());
 }
+
+void HelloTriangleApplication::createSwapchainDependentResources()
+{
+    createRenderPass();
+    createFramebuffers(m_renderPass);
+    createUniformBuffers();
+    createDescriptorSets();
+    createGraphicsPipeline();
+    createCommandBuffers();
+
+    m_imgui.Init(window(), ctx(), m_renderPass, 0, msaaSamples(), static_cast<uint32_t>(swapChain().size()));
+}
+
+void HelloTriangleApplication::destroySwapchainDependentResources()
+{
+    m_imgui.Deinit(ctx());
+
+    for (auto framebuffer : m_swapChainFramebuffers) {
+        ctx().device->destroyFramebuffer(framebuffer);
+    }
+
+    ctx().device->destroyRenderPass(m_renderPass);
+
+    for (auto &buffer : m_uniformBuffers) {
+        buffer.destroy(ctx());
+    }
+}
+
+void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
+{
+    Cory::ScopeTimer("Draw");
+    m_imgui.NewFrame(ctx());
+
+    updateUniformBuffer(fui.swapChainImageIdx);
+
+    // execute command buffer with that image as attachment
+    vk::SubmitInfo submitInfo{};
+
+    // vkQueueSubmit allows to wait for a specific semaphore, which in our case waits until the
+    // image is signaled available
+    vk::Semaphore waitSemaphores[] = {fui.imageAvailableSemaphore};
+    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &*m_commandBuffers[fui.swapChainImageIdx];
+
+    // vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
+    vk::Semaphore signalSemaphores[] = {fui.renderFinishedSemaphore};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    ctx().graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
+
+    m_imgui.DrawFrame(ctx(), m_swapChainFramebuffers[fui.swapChainImageIdx], swapChain().extent());
+}
+
 
 void HelloTriangleApplication::createGraphicsPipeline()
 {
@@ -130,7 +186,6 @@ void HelloTriangleApplication::createCommandBuffers()
         renderPassInfo.pClearValues = clearColors.data();
 
         cmdBuf.beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
-
         // bind graphics pipeline
         cmdBuf.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_graphicsPipeline);
 
@@ -216,7 +271,8 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
         std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraUBOData &ubo = m_uniformBuffers[imageIndex].data();
-    //ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(45.f), glm::vec3(0.0f, 1.0f, 0.0f));
+    // ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(45.f), glm::vec3(0.0f, 1.0f,
+    // 0.0f));
     // ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f),
     //                       glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.model = glm::identity<glm::mat4>();
@@ -260,55 +316,6 @@ void HelloTriangleApplication::createFramebuffers(vk::RenderPass renderPass)
         framebufferInfo.layers = 1;
 
         m_swapChainFramebuffers[i] = ctx().device->createFramebuffer(framebufferInfo);
-    }
-}
-
-void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
-{
-    Cory::ScopeTimer("Draw");
-    updateUniformBuffer(fui.swapChainImageIdx);
-
-    // execute command buffer with that image as attachment
-    vk::SubmitInfo submitInfo{};
-
-    // vkQueueSubmit allows to wait for a specific semaphore, which in our case waits until the
-    // image is signaled available
-    vk::Semaphore waitSemaphores[] = {fui.imageAvailableSemaphore};
-    vk::PipelineStageFlags waitStages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &*m_commandBuffers[fui.swapChainImageIdx];
-
-    // vkQueueSubmit allows to signal other semaphore(s) when the rendering is finished
-    vk::Semaphore signalSemaphores[] = {fui.renderFinishedSemaphore};
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
-
-    ctx().graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
-}
-
-void HelloTriangleApplication::createSwapchainDependentResources()
-{
-    createRenderPass();
-    createFramebuffers(m_renderPass);
-    createUniformBuffers();
-    createDescriptorSets();
-    createGraphicsPipeline();
-    createCommandBuffers();
-}
-
-void HelloTriangleApplication::destroySwapchainDependentResources()
-{
-    for (auto framebuffer : m_swapChainFramebuffers) {
-        ctx().device->destroyFramebuffer(framebuffer);
-    }
-
-    ctx().device->destroyRenderPass(m_renderPass);
-
-    for (auto &buffer : m_uniformBuffers) {
-        buffer.destroy(ctx());
     }
 }
 

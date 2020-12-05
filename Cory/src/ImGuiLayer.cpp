@@ -3,8 +3,8 @@
 #include "Context.h"
 #include "Log.h"
 #include "VkUtils.h"
-#include "GLFW/glfw3.h"
 
+#include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
 
@@ -22,8 +22,7 @@ void check_vk_result(VkResult err)
 ImGuiLayer::ImGuiLayer() {}
 
 void ImGuiLayer::Init(GLFWwindow *window, GraphicsContext &ctx, uint32_t queueFamily,
-                      vk::Queue queue,
-                      uint32_t minImageCount, vk::RenderPass renderPass)
+                      vk::Queue queue, uint32_t minImageCount, vk::RenderPass renderPass)
 {
     vk::DescriptorPoolSize pool_sizes[] = {{vk::DescriptorType::eSampler, 1000},
                                            {vk::DescriptorType::eCombinedImageSampler, 1000},
@@ -131,42 +130,39 @@ void ImGuiLayer::Deinit(GraphicsContext &ctx)
 {
     ctx.device->destroyDescriptorPool(m_descriptorPool);
 
-        ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
 }
 
-
-
-void ImGuiLayer::NewFrame(GraphicsContext &ctx) {
+void ImGuiLayer::NewFrame(GraphicsContext &ctx)
+{
     ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-
 
     static bool show_demo_window{true};
     ImGui::ShowDemoWindow(&show_demo_window);
 }
 
-void ImGuiLayer::EndFrame(GraphicsContext &ctx) {
+void ImGuiLayer::EndFrame(GraphicsContext &ctx)
+{
     // Rendering
     ImGui::Render();
-    //ImDrawData *draw_data = ImGui::GetDrawData();
-    //const bool is_minimized =
+    // ImDrawData *draw_data = ImGui::GetDrawData();
+    // const bool is_minimized =
     //    (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
-    //if (!is_minimized) {
+    // if (!is_minimized) {
     //    memcpy(&wd->ClearValue.color.float32[0], &clear_color, 4 * sizeof(float));
     //    FrameRender(wd, draw_data);
     //    FramePresent(wd);
     //}
-
 
     //********************************
     //    TODO NEXT STEPS
     //     - create a render pass that has a proper configuration
     //     - probably needs to have a subpass for imgui
     //     - call ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
-
 }
 
 } // namespace Cory

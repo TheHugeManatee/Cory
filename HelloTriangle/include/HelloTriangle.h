@@ -10,6 +10,9 @@
 #include <Cory/Utils.h>
 #include <Cory/VkUtils.h>
 
+// temporary
+#include <Cory/ImGuiLayer.h>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -78,4 +81,6 @@ class HelloTriangleApplication : public Application {
 
     Texture m_texture;
     Texture m_texture2;
+
+    ImGuiLayer m_imgui;
 };

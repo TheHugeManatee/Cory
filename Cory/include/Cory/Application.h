@@ -97,6 +97,7 @@ class Application {
     auto msaaSamples() const { return m_msaaSamples; }
     auto &colorBuffer() const { return m_renderTarget; }
     auto &depthBuffer() const { return m_depthBuffer; }
+    auto window() { return m_window; }
 
     Cory::CameraManipulator cameraManipulator;
 

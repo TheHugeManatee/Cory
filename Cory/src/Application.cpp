@@ -416,6 +416,8 @@ void Application::createDepthResources()
 
 void Application::drawFrame()
 {
+    m_ctx.device->resetCommandPool(*m_ctx.transientCmdPool, vk::CommandPoolResetFlags{});
+
     // fences to sync per-frame draw resources
     auto perFrameFenceResult =
         m_ctx.device->waitForFences({*m_inFlightFences[m_currentFrame]}, true, UINT64_MAX);

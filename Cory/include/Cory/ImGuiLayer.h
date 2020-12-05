@@ -1,11 +1,9 @@
 #pragma once
 
-#include <imgui.h>
-
-
 #include <vulkan/vulkan.hpp>
+#include <memory>
 
-class GLFWwindow;
+struct GLFWwindow;
 
 namespace Cory {
 class GraphicsContext;
@@ -22,8 +20,7 @@ class ImGuiLayer {
     void EndFrame(GraphicsContext &ctx);
 
   private:
-    ImGui_ImplVulkanH_Window m_wd;
     vk::DescriptorPool m_descriptorPool;
-}
+};
 
 } // namespace Cory

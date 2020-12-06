@@ -65,6 +65,28 @@ PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Cory>
 )
 
+###### TESTING BINARY
+
+if(CORY_BUILD_TESTS)
+  set(TEST_TARGET_NAME "Test_${TARGET_NAME}")
+  add_executable(${TEST_TARGET_NAME}
+      src/test_main.cpp
+  )
+
+  target_link_libraries(${TEST_TARGET_NAME} 
+      PRIVATE 
+          Cory
+          ThirdPartyLibs
+          ${Vulkan_LIBRARIES}
+          ${CONAN_LIBS}
+  )
+
+  target_compile_features(${TEST_TARGET_NAME} PRIVATE cxx_std_20)
+
+  doctest_force_link_static_lib_in_target(${TEST_TARGET_NAME} ${TARGET_NAME})
+else()
+  target_compile_definitions(${TARGET_NAME} PRIVATE CORY_DISABLE_TESTS)
+endif()
 ###### INSTALLATION
 
 # Install in the desired folder

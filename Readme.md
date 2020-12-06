@@ -51,6 +51,9 @@ See `conanfile.txt` for the exact versions used, but there is of course always s
  - glew
  - spdlog
  - libfmt
+ - doctest
+ - imgui
+ - shaderc
 
 
 ## Cory?

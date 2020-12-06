@@ -41,6 +41,9 @@ include(Coverage)
 include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 
+# macro to force-link static libraries into a binary
+include(cmake/doctest_force_link_static_lib_in_target.cmake)
+
 ###############
 ##  OPTIONS  ##
 ###############
@@ -57,7 +60,8 @@ endif()
 # You should try to give as much control over the project setup to the user.
 # When modifying compile flags for example, if they are not mandatory, provide an option.
 
-option(BUILD_USE_DOXYGEN "Add a doxygen target to generate the documentation" ON)
+option(CORY_BUILD_USE_DOXYGEN "Add a doxygen target to generate the documentation" ON)
+option(CORY_BUILD_TESTS "Build tests and test executable" ON)
 
 # Use your own option for tests, in case people use your library through add_subdirectory
 cmake_dependent_option(BUILD_BUILD_TESTS
@@ -107,7 +111,7 @@ set_directory_properties(PROPERTIES VS_STARTUP_PROJECT HelloTriangle)
 ## Doxygen ##
 #############
 
-if(BP_USE_DOXYGEN AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.9)
+if(CORY_BUILD_USE_DOXYGEN AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.9)
     find_package(Doxygen
         OPTIONAL_COMPONENTS dot mscgen dia
     )

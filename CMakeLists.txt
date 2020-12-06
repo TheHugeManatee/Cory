@@ -61,10 +61,9 @@ endif()
 # When modifying compile flags for example, if they are not mandatory, provide an option.
 
 option(CORY_BUILD_USE_DOXYGEN "Add a doxygen target to generate the documentation" ON)
-option(CORY_BUILD_TESTS "Build tests and test executable" ON)
 
 # Use your own option for tests, in case people use your library through add_subdirectory
-cmake_dependent_option(BUILD_BUILD_TESTS
+cmake_dependent_option(CORY_BUILD_TESTS
     "Enable tests targets" ON # By default we want tests if CTest is enabled
     "BUILD_TESTING" OFF # Stay coherent with CTest variables
 )

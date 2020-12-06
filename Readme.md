@@ -34,19 +34,20 @@ I also use it to test more modern C++ features.
  - Tutorial on how to actually integrate imgui into a vulkan renderer https://frguthmann.github.io/posts/vulkan_imgui/, based off of the vulkan-tutorial.com source code
 
 
-### Included Third-Party libraries
+### Included Third-Party sources
 `Cory` pulls some third-party libraries into this repository. They all live in the subdirectory `ThirdParty` and are available under their respective license, included in the respecive directory or at the top of the header files:
+ - some cmake files in /cmake are from https://github.com/Lectem/cpp-boilerplate, MIT License
  - glm, https://github.com/g-truc/glm, MIT / Happy Bunny License
  - stb_image, https://github.com/nothings/stb, MIT / Public Domain
  - tinyobjloader, https://github.com/tinyobjloader/tinyobjloader, MIT License
- - Vulkan Memory Allocator, https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator, MIT
+ - Vulkan Memory Allocator, https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator, MIT License
  - refl-cpp, https://github.com/veselink1/refl-cpp, MIT license
- - Modified `CameraManipulator` Class, https://github.com/KhronosGroup/Vulkan-Hpp/tree/master/samples/RayTracing, Apache 2.0
- - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT
- - imGuIZMO.quat for totation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause
+ - Modified `CameraManipulator` Class, https://github.com/KhronosGroup/Vulkan-Hpp/tree/master/samples/RayTracing, Apache 2.0 License
+ - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT License
+ - imGuIZMO.quat for totation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause License
 
 ### Other referenced third party libraries
-See `conanfile.txt` for the exact versions used, but there is of course always some flexibility.
+See `conanfile.txt` for the exact versions used, but there is of course always some flexibility in using different versions.
  - glfw
  - glew
  - spdlog

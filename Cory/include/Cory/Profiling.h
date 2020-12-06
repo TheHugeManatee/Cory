@@ -28,6 +28,9 @@ template <long long RECORD_HISTORY_SIZE = 64> class ProfilerRecord {
 
     Stats stats() const
     {
+        if(m_currentIdx == 0)
+            return { 0, 0, 0 };
+
         auto endIter =
             m_currentIdx > m_data.size() ? m_data.cend() : m_data.cbegin() + m_currentIdx;
         auto stats =
@@ -44,12 +47,19 @@ template <long long RECORD_HISTORY_SIZE = 64> class ProfilerRecord {
 
     std::vector<long long> history() const
     {
+        if (m_currentIdx == 0)
+            return {};
+
         auto breakPoint = m_currentIdx % RECORD_HISTORY_SIZE;
+
+        if (m_currentIdx <= RECORD_HISTORY_SIZE) {
+            return {m_data.cbegin(), m_data.cbegin() + m_currentIdx};
+        }
 
         std::vector<long long> hist{m_data.cbegin() + breakPoint, m_data.cend()};
 
         if (breakPoint > 0)
-            std::copy(m_data.cbegin(), m_data.cbegin() + breakPoint - 1, std::back_inserter(hist));
+            std::copy(m_data.cbegin(), m_data.cbegin() + breakPoint, std::back_inserter(hist));
 
         return hist;
     }

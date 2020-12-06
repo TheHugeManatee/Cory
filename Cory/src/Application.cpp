@@ -545,7 +545,7 @@ void Application::processPerfCounters(LapTimer &fpsCounter)
     std::vector<float> fpsHistoryMs;
     std::ranges::transform(fpsHistory, std::back_inserter(fpsHistoryMs),
                            [](long long nanos) { return float(nanos) / 1'000'000; });
-    ImGui::PlotLines("Frame Times", fpsHistoryMs.data(), fpsHistoryMs.size(), 0, nullptr, 0.0f,
+    ImGui::PlotLines("Frame Times", fpsHistoryMs.data(), static_cast<int>(fpsHistoryMs.size()), 0, nullptr, 0.0f,
                      FLT_MAX, ImVec2{0, 100});
 
     // debug / performance counters

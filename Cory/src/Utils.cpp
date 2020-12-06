@@ -25,12 +25,12 @@ std::string formatBytes(size_t bytes)
     return fmt::format("{:.2f} {}", float(bytes) + float(remaind) / 1024.f, suffix[suff]);
 }
 
-std::vector<char> readFile(const std::string &filename)
+std::vector<char> readFile(const std::filesystem::path &filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
-        throw std::runtime_error(fmt::format("failed to open file {}", filename));
+        throw std::runtime_error(fmt::format("failed to open file {}", filename.string()));
     }
     size_t fileSize = (size_t)file.tellg();
     std::vector<char> buffer(fileSize);

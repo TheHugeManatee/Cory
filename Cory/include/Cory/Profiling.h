@@ -28,7 +28,6 @@ template <long long RECORD_HISTORY_SIZE = 64> class ProfilerRecord {
 
     Stats stats() const
     {
-        // FIXME: stats are wrong when only one item exists?
         auto endIter =
             m_currentIdx > m_data.size() ? m_data.cend() : m_data.cbegin() + m_currentIdx;
         auto stats =
@@ -39,7 +38,7 @@ template <long long RECORD_HISTORY_SIZE = 64> class ProfilerRecord {
                                 acc.avg += value;
                                 return acc;
                             });
-        stats.avg /= RECORD_HISTORY_SIZE;
+        stats.avg /= (m_currentIdx > RECORD_HISTORY_SIZE)?RECORD_HISTORY_SIZE : m_currentIdx;
         return stats;
     }
 

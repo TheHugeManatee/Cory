@@ -9,12 +9,13 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 namespace Cory {
 
 std::string formatBytes(size_t bytes);
 
-std::vector<char> readFile(const std::string &filename);
+std::vector<char> readFile(const std::filesystem::path &filename);
 
 inline glm::vec3 sphericalToCartesian(const glm::vec3 spherical)
 {

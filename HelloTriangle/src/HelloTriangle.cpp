@@ -100,16 +100,19 @@ void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 
 void HelloTriangleApplication::createGraphicsPipeline()
 {
-    //****************** Shaders ******************
-    const auto vertShaderCode = readFile(RESOURCE_DIR "/default-vert.spv");
-    const auto fragShaderCode = readFile(RESOURCE_DIR "/manatee.spv");
 
     // start pipeline initialization
     PipelineBuilder creator;
-    std::vector<Shader> shaders;
-    shaders.emplace_back(ctx(), vertShaderCode, ShaderType::eVertex);
-    shaders.emplace_back(ctx(), fragShaderCode, ShaderType::eFragment);
-    creator.setShaders(std::move(shaders));
+
+    {
+        ScopeTimer timer("Shader Compilation");
+        std::vector<Shader> shaders;
+        Shader vertexShader(ctx(), {RESOURCE_DIR "/Shaders/default.vert"});
+        Shader fragmentShader(ctx(), {RESOURCE_DIR "/Shaders/coolmanatee.frag"});
+        shaders.emplace_back(std::move(vertexShader));
+        shaders.emplace_back(std::move(fragmentShader));
+        creator.setShaders(std::move(shaders));
+    }
 
     creator.setVertexInput(*m_mesh);
     creator.setViewport(swapChain().extent());

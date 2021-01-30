@@ -39,7 +39,7 @@ include(Coverage)
 
 ## Conan initialization
 include(${CMAKE_BINARY_DIR}/conanbuildinfo_multi.cmake)
-conan_basic_setup()
+conan_basic_setup(TARGETS)
 
 ###############
 ##  OPTIONS  ##

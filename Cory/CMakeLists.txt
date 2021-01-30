@@ -29,7 +29,14 @@ target_include_directories (${TARGET_NAME}
 
 target_link_libraries(${TARGET_NAME} 
   PUBLIC 
-    ${CONAN_LIBS}
+    CONAN_PKG::spdlog
+    CONAN_PKG::fmt
+    CONAN_PKG::glew
+    CONAN_PKG::glm
+    CONAN_PKG::glfw
+    CONAN_PKG::vulkan-headers
+    CONAN_PKG::imgui
+    CONAN_PKG::shaderc
   PRIVATE
     ${Vulkan_LIBRARIES}
     ThirdPartyLibs

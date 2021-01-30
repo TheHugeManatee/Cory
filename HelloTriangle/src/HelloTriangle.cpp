@@ -283,8 +283,8 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     auto currentTime = std::chrono::high_resolution_clock::now();
-    float time =
-        std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+//     float time =
+//         std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
     CameraUBOData &ubo = m_uniformBuffers[imageIndex].data();
 

@@ -17,6 +17,12 @@ target_include_directories(${TARGET_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
+target_link_libraries(${TARGET_NAME} 
+  PRIVATE
+    CONAN_PKG::vulkan-headers
+    CONAN_PKG::imgui
+)
+
 # We don't install our external headers, ideally we keep the interfaces clean of 
 # stuff provided in this module
 # ###### INSTALLATION

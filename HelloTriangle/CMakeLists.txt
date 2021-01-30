@@ -23,9 +23,14 @@ target_link_libraries(${TARGET_NAME}
 
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)
 
+if(WIN32)
+    target_link_options(${TARGET_NAME} PUBLIC /ignore:4099)
+endif()
+
 # CMake scripts extensions
 target_set_warnings(${TARGET_NAME} ENABLE ALL DISABLE Annoying) # Helper that can set default warning flags for you
 #target_enable_lto(${TARGET_NAME} optimized) #enable lto if available for non-debug configurations
+
 
 
 # Install in the desired folder

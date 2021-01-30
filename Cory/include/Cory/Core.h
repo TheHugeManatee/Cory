@@ -1,1 +1,1 @@
-#pramga once
+#pragma once

@@ -22,63 +22,59 @@
 
 using namespace Cory;
 
-
-struct CameraUBOData{
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
+struct CameraUBOData {
+  glm::mat4 model;
+  glm::mat4 view;
+  glm::mat4 proj;
 };
 
-
 class HelloTriangleApplication : public Application {
-  public:
-    static constexpr uint32_t WIDTH{800};
-    static constexpr uint32_t HEIGHT{600};
+public:
+  static constexpr uint32_t WIDTH{800};
+  static constexpr uint32_t HEIGHT{600};
 
-    HelloTriangleApplication();
+  HelloTriangleApplication();
 
-    void drawSwapchainFrame(FrameUpdateInfo &fui) override;
-    void createSwapchainDependentResources() override;
-    void destroySwapchainDependentResources() override;
+  void drawSwapchainFrame(FrameUpdateInfo &fui) override;
+  void createSwapchainDependentResources() override;
+  void destroySwapchainDependentResources() override;
 
-  private:
-    
-    void init() override;
-    void deinit() override;
+private:
+  void init() override;
+  void deinit() override;
 
-    void createGraphicsPipeline();
-    void createRenderPass();
-    void createCommandBuffers();
+  void createGraphicsPipeline();
+  void createRenderPass();
+  void createCommandBuffers();
 
-    void createGeometry();
+  void createGeometry();
 
-    void createUniformBuffers();
-    Texture createTextureImage(std::string textureFilename, vk::Filter filter,
-                                      vk::SamplerAddressMode addressMode);
+  void createUniformBuffers();
+  Texture createTextureImage(std::string textureFilename, vk::Filter filter,
+                             vk::SamplerAddressMode addressMode);
 
-    void updateUniformBuffer(uint32_t imageIndex);
+  void updateUniformBuffer(uint32_t imageIndex);
 
-    void createDescriptorSets();
+  void createDescriptorSets();
 
-    void createFramebuffers(vk::RenderPass renderPass);
+  void createFramebuffers(vk::RenderPass renderPass);
 
+private:
+  vk::RenderPass m_renderPass;
 
-  private:
-    vk::RenderPass m_renderPass;
-    
-    DescriptorSet m_descriptorSet;
+  DescriptorSet m_descriptorSet;
 
-    vk::UniquePipelineLayout m_pipelineLayout;
-    vk::UniquePipeline m_graphicsPipeline;
+  vk::UniquePipelineLayout m_pipelineLayout;
+  vk::UniquePipeline m_graphicsPipeline;
 
-    std::vector<vk::Framebuffer> m_swapChainFramebuffers;
+  std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
-    vk::UniqueCommandPool m_commandPool;
-    std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
-    std::vector<UniformBuffer<CameraUBOData>> m_uniformBuffers;
+  vk::UniqueCommandPool m_commandPool;
+  std::vector<vk::UniqueCommandBuffer> m_commandBuffers;
+  std::vector<UniformBuffer<CameraUBOData>> m_uniformBuffers;
 
-    std::unique_ptr<Mesh> m_mesh;
+  std::unique_ptr<Mesh> m_mesh;
 
-    Texture m_texture;
-    Texture m_texture2;
+  Texture m_texture;
+  Texture m_texture2;
 };

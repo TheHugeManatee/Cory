@@ -6,24 +6,30 @@
 
 namespace Cory {
 class Log {
-  public:
-    static void Init();
+public:
+  static void Init();
 
-    inline static std::shared_ptr<spdlog::logger> &GetCoreLogger() { return s_coreLogger; }
-    inline static std::shared_ptr<spdlog::logger> &GetAppLogger() { return s_appLogger; }
+  inline static std::shared_ptr<spdlog::logger> &GetCoreLogger()
+  {
+    return s_coreLogger;
+  }
+  inline static std::shared_ptr<spdlog::logger> &GetAppLogger()
+  {
+    return s_appLogger;
+  }
 
-    inline static void SetCoreLevel(spdlog::level::level_enum level)
-    {
-        s_coreLogger->set_level(level);
-    }
-    inline static void SetAppLevel(spdlog::level::level_enum level)
-    {
-        s_coreLogger->set_level(level);
-    }
+  inline static void SetCoreLevel(spdlog::level::level_enum level)
+  {
+    s_coreLogger->set_level(level);
+  }
+  inline static void SetAppLevel(spdlog::level::level_enum level)
+  {
+    s_coreLogger->set_level(level);
+  }
 
-  private:
-    static std::shared_ptr<spdlog::logger> s_coreLogger;
-    static std::shared_ptr<spdlog::logger> s_appLogger;
+private:
+  static std::shared_ptr<spdlog::logger> s_coreLogger;
+  static std::shared_ptr<spdlog::logger> s_appLogger;
 };
 
 } // namespace Cory

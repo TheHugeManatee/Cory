@@ -7,16 +7,16 @@
 
 int main()
 {
-    HelloTriangleApplication app;
+  HelloTriangleApplication app;
 
-    try {
-        app.run();
-    }
-    catch (const std::exception &e) {
-        CO_APP_FATAL("Unhandled exception: {}", e.what());
+  try {
+    app.run();
+  }
+  catch (const std::exception &e) {
+    CO_APP_FATAL("Unhandled exception: {}", e.what());
 
-        return EXIT_FAILURE;
-    }
+    return EXIT_FAILURE;
+  }
 
-    return EXIT_SUCCESS;
+  return EXIT_SUCCESS;
 }

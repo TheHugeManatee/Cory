@@ -7,7 +7,7 @@ find_package(Vulkan REQUIRED FATAL_ERROR)
 add_library(${TARGET_NAME} STATIC
   src/Application.cpp
   src/Buffer.cpp
-  src/Camera.cpp
+  src/CameraManipulator.cpp
   src/Context.cpp
   src/Descriptor.cpp
   src/Image.cpp
@@ -36,7 +36,7 @@ target_link_libraries(${TARGET_NAME}
 )
 
 # Define a macro that allows consumers of this lib to know they link against it
-target_compile_definitions(${TARGET_NAME} PUBLIC HAS_CORY)
+target_compile_definitions(${TARGET_NAME} PUBLIC HAVE_CORY)
 # for now, we hardcode the resource path until we have a proper resource management in place
 target_compile_definitions(${TARGET_NAME} PUBLIC "RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
 
@@ -50,7 +50,7 @@ target_set_warnings(${TARGET_NAME} ENABLE ALL DISABLE Annoying)
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)
 
 # group this lib into the 'libs' group for some IDEs
-set_target_properties (${TARGET_NAME} PROPERTIES FOLDER libs)
+#set_target_properties (${TARGET_NAME} PROPERTIES FOLDER libs)
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
@@ -65,28 +65,7 @@ PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Cory>
 )
 
-###### TESTING BINARY
 
-if(CORY_BUILD_TESTS)
-  set(TEST_TARGET_NAME "Test_${TARGET_NAME}")
-  add_executable(${TEST_TARGET_NAME}
-      src/test_main.cpp
-  )
-
-  target_link_libraries(${TEST_TARGET_NAME} 
-      PRIVATE 
-          Cory
-          ThirdPartyLibs
-          ${Vulkan_LIBRARIES}
-          ${CONAN_LIBS}
-  )
-
-  target_compile_features(${TEST_TARGET_NAME} PRIVATE cxx_std_20)
-
-  doctest_force_link_static_lib_in_target(${TEST_TARGET_NAME} ${TARGET_NAME})
-else()
-  target_compile_definitions(${TARGET_NAME} PRIVATE CORY_DISABLE_TESTS)
-endif()
 ###### INSTALLATION
 
 # Install in the desired folder

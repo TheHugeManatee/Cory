@@ -57,5 +57,17 @@ See `conanfile.txt` for the exact versions used, but there is of course always s
  - shaderc
 
 
+## Building
+Roughly:
+```
+git clone https://github.com/TheHugeManatee/Cory
+cd Cory
+mkdir build && cd build
+conan install .. -s build_type=Debug
+conan install .. -s build_type=Release
+cmake ..
+cmake --build .
+```
+
 ## Cory?
 According to [this very trustworthy-looking web source](http://www.talesbeyondbelief.com/roman-gods/vulcan.htm), *Corynetes* was the son of the roman god Vulcan.

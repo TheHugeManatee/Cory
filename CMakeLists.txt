@@ -38,11 +38,8 @@ include(Warnings)
 include(Coverage)
 
 ## Conan initialization
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
+include(${CMAKE_BINARY_DIR}/conanbuildinfo_multi.cmake)
 conan_basic_setup()
-
-# macro to force-link static libraries into a binary
-include(cmake/doctest_force_link_static_lib_in_target.cmake)
 
 ###############
 ##  OPTIONS  ##

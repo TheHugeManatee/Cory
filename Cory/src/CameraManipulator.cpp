@@ -29,7 +29,7 @@
 // unknow compiler... just ignore the warnings for yourselves ;)
 #endif
 
-#include "Camera.h"
+#include "CameraManipulator.h"
 #include "Log.h"
 
 #include <glm.h>

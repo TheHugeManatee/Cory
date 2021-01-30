@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Camera.h"
+#include "CameraManipulator.h"
 #include "Context.h"
 #include "Image.h"
 

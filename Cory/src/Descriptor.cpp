@@ -47,48 +47,50 @@ void DescriptorSet::setDescriptors(
               t->sampler(), t->view(), vk::ImageLayout::eShaderReadOnlyOptimal);
         });
 
-    std::array<vk::WriteDescriptorSet, 2> descriptorWrites;
-    descriptorWrites[0].dstSet = m_descriptorSets[i];
-    descriptorWrites[0].dstBinding = 0;
-    descriptorWrites[0].dstArrayElement = 0;
-    descriptorWrites[0].descriptorType = vk::DescriptorType::eUniformBuffer;
-    descriptorWrites[0].descriptorCount = m_numUBOs;
-    descriptorWrites[0].pBufferInfo = bufferInfos.data();
-    descriptorWrites[0].pImageInfo = nullptr;
-    descriptorWrites[0].pTexelBufferView = nullptr;
-    descriptorWrites[0].pNext = nullptr;
+    vk::WriteDescriptorSet write;
+    write.dstSet = m_descriptorSets[i];
+    write.dstBinding = 0;
+    write.dstArrayElement = 0;
+    write.descriptorType = vk::DescriptorType::eUniformBuffer;
+    write.descriptorCount = m_numUBOs;
+    write.pBufferInfo = bufferInfos.data();
+    write.pImageInfo = nullptr;
+    write.pTexelBufferView = nullptr;
+    write.pNext = nullptr;
+    ctx.device->updateDescriptorSets(1, &write, 0, nullptr);
 
-    descriptorWrites[1].dstSet = m_descriptorSets[i];
-    descriptorWrites[1].dstBinding = 1;
-    descriptorWrites[1].dstArrayElement = 0;
-    descriptorWrites[1].descriptorType =
-        vk::DescriptorType::eCombinedImageSampler;
-    descriptorWrites[1].descriptorCount = m_numSamplers;
-    descriptorWrites[1].pBufferInfo = nullptr;
-    descriptorWrites[1].pImageInfo = imageInfos.data();
-    descriptorWrites[1].pTexelBufferView = nullptr;
-    descriptorWrites[1].pNext = nullptr;
-
-    ctx.device->updateDescriptorSets(
-        descriptorWrites,
-        {}); // todo: this could be refactored to only one update call
+    if (m_numSamplers > 0) {
+      write.dstSet = m_descriptorSets[i];
+      write.dstBinding = 1;
+      write.dstArrayElement = 0;
+      write.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+      write.descriptorCount = m_numSamplers;
+      write.pBufferInfo = nullptr;
+      write.pImageInfo = imageInfos.data();
+      write.pTexelBufferView = nullptr;
+      write.pNext = nullptr;
+      ctx.device->updateDescriptorSets(1, &write, 0, nullptr);
+    }
   }
 }
 
 void DescriptorSet::createPool(GraphicsContext &ctx)
 {
-  std::array<vk::DescriptorPoolSize, 2> poolSizes;
-  poolSizes[0].type = vk::DescriptorType::eUniformBuffer;
-  poolSizes[0].descriptorCount = m_numUBOs * m_swapChainSize;
-  poolSizes[1].type = vk::DescriptorType::eCombinedImageSampler;
-  poolSizes[1].descriptorCount = m_numSamplers * m_swapChainSize;
+  std::vector<vk::DescriptorPoolSize> poolSizes;
+  poolSizes.push_back(vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
+                                             m_numUBOs * m_swapChainSize));
 
+  if (m_numSamplers) {
+    poolSizes.push_back(
+        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler,
+                               m_numSamplers * m_swapChainSize));
+  }
   vk::DescriptorPoolCreateInfo poolInfo{};
   poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
   poolInfo.pPoolSizes = poolSizes.data();
   poolInfo.maxSets = m_swapChainSize;
-  // enables creation and freeing of individual descriptor sets -- we don't care
-  // for that right now poolInfo.flags =
+  // enables creation and freeing of individual descriptor sets -- we don't
+  // care for that right now poolInfo.flags =
   // VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
   m_descriptorPool = ctx.device->createDescriptorPoolUnique(poolInfo);

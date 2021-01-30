@@ -43,8 +43,8 @@ Cory::PipelineBuilder &PipelineBuilder::setVertexInput(
       m_vertexAttributeDescriptions.data();
 
   m_inputAssembly.topology = topology;
-  m_inputAssembly.primitiveRestartEnable =
-      false; // allows to break primitive lists with 0xFFFF index
+  // allows to break primitive lists with 0xFFFF index
+  m_inputAssembly.primitiveRestartEnable = false;
   return *this;
 }
 
@@ -119,13 +119,13 @@ vk::UniquePipeline PipelineBuilder::create(GraphicsContext &ctx)
   pipelineInfo.pMultisampleState = &m_multisampling;
   pipelineInfo.pDepthStencilState = &m_depthStencil;
   pipelineInfo.pColorBlendState = &m_colorBlending;
-  pipelineInfo.pDynamicState = nullptr; // skipped for now --why tho?
+  // skipped for now --why tho?
+  pipelineInfo.pDynamicState = nullptr;
   pipelineInfo.layout = m_pipelineLayout;
   pipelineInfo.renderPass = m_renderPass;
   pipelineInfo.subpass = 0;
-  pipelineInfo.basePipelineHandle =
-      nullptr; // note: vulkan can have "base" and "derived"
-               // pipelines when they are similar
+  // note: vulkan can have "base" and "derived" pipelines when they are similar
+  pipelineInfo.basePipelineHandle = nullptr;
   pipelineInfo.basePipelineIndex = -1;
 
   auto [result, pipeline] =
@@ -138,7 +138,8 @@ vk::UniquePipeline PipelineBuilder::create(GraphicsContext &ctx)
         fmt::format("Could not create pipeline: {}", result));
     break;
   default:
-    assert(false); // should never happen
+    // should never happen
+    assert(false);
     return {};
   }
 }
@@ -150,10 +151,11 @@ RenderPassBuilder::addColorAttachment(vk::Format format,
   vk::AttachmentDescription colorAttachment{};
   colorAttachment.format = format;
   colorAttachment.samples = samples;
-  colorAttachment.loadOp = vk::AttachmentLoadOp::eClear; // care about color
+  // care about color
+  colorAttachment.loadOp = vk::AttachmentLoadOp::eClear;
   colorAttachment.storeOp = vk::AttachmentStoreOp::eStore;
-  colorAttachment.stencilLoadOp =
-      vk::AttachmentLoadOp::eDontCare; // don't care about stencil
+  // don't care about stencil
+  colorAttachment.stencilLoadOp = vk::AttachmentLoadOp::eDontCare;
   colorAttachment.stencilStoreOp = vk::AttachmentStoreOp::eDontCare;
   colorAttachment.initialLayout = vk::ImageLayout::eUndefined;
   colorAttachment.finalLayout = vk::ImageLayout::eColorAttachmentOptimal;

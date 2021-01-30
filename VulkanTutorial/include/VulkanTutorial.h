@@ -28,12 +28,12 @@ struct CameraUBOData {
   glm::mat4 proj;
 };
 
-class HelloTriangleApplication : public Application {
+class VulkanTutorialApplication : public Application {
 public:
   static constexpr uint32_t WIDTH{800};
   static constexpr uint32_t HEIGHT{600};
 
-  HelloTriangleApplication();
+  VulkanTutorialApplication();
 
   void drawSwapchainFrame(FrameUpdateInfo &fui) override;
   void createSwapchainDependentResources() override;
@@ -50,6 +50,8 @@ private:
   void createGeometry();
 
   void createUniformBuffers();
+  Texture createTextureImage(std::string textureFilename, vk::Filter filter,
+                             vk::SamplerAddressMode addressMode);
 
   void updateUniformBuffer(uint32_t imageIndex);
 
@@ -72,4 +74,7 @@ private:
   std::vector<UniformBuffer<CameraUBOData>> m_uniformBuffers;
 
   std::unique_ptr<Mesh> m_mesh;
+
+  Texture m_texture;
+  Texture m_texture2;
 };

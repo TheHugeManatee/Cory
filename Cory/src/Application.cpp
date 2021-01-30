@@ -19,7 +19,24 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
     VkDebugUtilsMessageTypeFlagsEXT messageType,
     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData, void *pUserData)
 {
-  CO_CORE_ERROR("Vulkan validation layer: {}", pCallbackData->pMessage);
+  switch (messageSeverity) {
+  case VkDebugUtilsMessageSeverityFlagBitsEXT::
+  VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+    CO_CORE_TRACE("Vulkan validation layer: {}", pCallbackData->pMessage);
+    break;
+  case VkDebugUtilsMessageSeverityFlagBitsEXT::
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+    CO_CORE_INFO("Vulkan validation layer: {}", pCallbackData->pMessage);
+    break;
+  case VkDebugUtilsMessageSeverityFlagBitsEXT::
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+    CO_CORE_WARN("Vulkan validation layer: {}", pCallbackData->pMessage);
+    break;
+  case VkDebugUtilsMessageSeverityFlagBitsEXT::
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+    CO_CORE_ERROR("Vulkan validation layer: {}", pCallbackData->pMessage);
+    break;
+  }
 
   return false;
 }
@@ -528,8 +545,8 @@ void Application::drawFrame()
   static LapTimer fpsCounter;
   if (fpsCounter.lap()) {
     auto s = fpsCounter.stats();
-    CO_CORE_INFO("FPS: {:3.2f} ({:3.2f} ms)",
-                 float(1'000'000'000) / float(s.avg), float(s.avg) / 1'000'000);
+    //CO_CORE_INFO("FPS: {:3.2f} ({:3.2f} ms)",
+    //             float(1'000'000'000) / float(s.avg), float(s.avg) / 1'000'000);
   }
 
   processPerfCounters(fpsCounter);

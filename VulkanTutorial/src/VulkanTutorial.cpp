@@ -312,6 +312,13 @@ void VulkanTutorialApplication::updateUniformBuffer(uint32_t imageIndex)
                                   (float)swapChain().extent().height,
                               0.1f, 10.0f);
 
+  ubo.modelInv = glm::inverse(ubo.model);
+  ubo.viewInv = glm::inverse(ubo.view);
+  ubo.projInv = glm::inverse(ubo.proj);
+
+  ubo.camPos = cameraManipulator.getCameraPosition();
+  ubo.camFocus = cameraManipulator.getCenterPosition();
+
   // NOTE: we flip this bc/ glm is written for OpenGL which has Y
   // inverted. otherwise image will be upside down :)
   ubo.proj[1][1] *= -1;

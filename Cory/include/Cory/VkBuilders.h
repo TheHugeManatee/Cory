@@ -84,6 +84,10 @@ public:
    */
   uint32_t addDefaultSubpass();
 
+  /**
+   * Add a subpass dependency to depend on the VK_SUBPASS_EXTERNAL event of the
+   * previous frame
+   */
   void addPreviousFrameSubpassDepencency()
   {
     //****************** Subpass dependencies ******************
@@ -96,8 +100,8 @@ public:
     dependency.srcStageMask =
         vk::PipelineStageFlagBits::eColorAttachmentOutput |
         vk::PipelineStageFlagBits::eEarlyFragmentTests;
-    dependency.srcAccessMask =
-        vk::AccessFlagBits::eColorAttachmentRead; // not sure here..
+    // not sure here..
+    dependency.srcAccessMask = vk::AccessFlagBits::eColorAttachmentRead;
     dependency.dstStageMask =
         vk::PipelineStageFlagBits::eColorAttachmentOutput |
         vk::PipelineStageFlagBits::eEarlyFragmentTests;
@@ -114,11 +118,11 @@ public:
 
   // NOTE: the order of attachments directly corresponds to the
   // 'layout(location=0) out vec4 color' index in the fragment shader
-  // pInputAttachments: attachments that are read from a shader
-  // pResolveAttachments: attachments used for multisampling color attachments
-  // pDepthStencilAttachment: attachment for depth and stencil data
-  // pPreserveAttachments: attachments that are not currently used by the
-  // subpass but for which the data needs to be preserved.
+  // - pInputAttachments: attachments that are read from a shader
+  // - pResolveAttachments: attachments used for multisampling color attachments
+  // - pDepthStencilAttachment: attachment for depth and stencil data
+  // - pPreserveAttachments: attachments that are not currently used by the
+  //   subpass but for which the data needs to be preserved.
   uint32_t addSubpass(vk::SubpassDescription subpassDesc);
 
   vk::RenderPass create(GraphicsContext &ctx);

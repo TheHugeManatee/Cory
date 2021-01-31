@@ -26,6 +26,13 @@ struct CameraUBOData {
   glm::mat4 model;
   glm::mat4 view;
   glm::mat4 proj;
+
+  glm::mat4 modelInv;
+  glm::mat4 viewInv;
+  glm::mat4 projInv;
+
+  glm::vec3 camPos;
+  glm::vec3 camFocus;
 };
 
 class VolumeRenderingApplication : public Application {

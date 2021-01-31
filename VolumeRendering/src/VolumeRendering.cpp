@@ -114,7 +114,8 @@ void VolumeRenderingApplication::createGraphicsPipeline()
     ScopeTimer timer("Shader Compilation");
     std::vector<Shader> shaders;
     Shader vertexShader(ctx(), {RESOURCE_DIR "/Shaders/default.vert"});
-    Shader fragmentShader(ctx(), {RESOURCE_DIR "/Shaders/cube.frag"});
+    Shader fragmentShader(ctx(),
+                          {RESOURCE_DIR "/Shaders/raymarch_implicit.frag"});
     shaders.emplace_back(std::move(vertexShader));
     shaders.emplace_back(std::move(fragmentShader));
     creator.setShaders(std::move(shaders));
@@ -271,6 +272,13 @@ void VolumeRenderingApplication::updateUniformBuffer(uint32_t imageIndex)
                               swapChain().extent().width /
                                   (float)swapChain().extent().height,
                               0.1f, 10.0f);
+
+  ubo.modelInv = glm::inverse(ubo.model);
+  ubo.viewInv = glm::inverse(ubo.view);
+  ubo.projInv = glm::inverse(ubo.proj);
+
+  ubo.camPos = cameraManipulator.getCameraPosition();
+  ubo.camFocus = cameraManipulator.getCenterPosition();
 
   // NOTE: we flip this bc/ glm is written for OpenGL which has Y
   // inverted. otherwise image will be upside down :)

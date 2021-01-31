@@ -8,6 +8,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <imgui.h>
+#include <optick/optick.h>
 
 #include <set>
 #include <thread>
@@ -186,6 +187,7 @@ void Application::mainLoop()
 {
   CO_CORE_INFO("Entering main loop.");
   while (!glfwWindowShouldClose(m_window)) {
+    OPTICK_FRAME("MainThread");
     glfwPollEvents();
     drawFrame();
   }
@@ -788,6 +790,7 @@ bool Application::isDeviceSuitable(const vk::PhysicalDevice &device)
 
 void Application::imguiWindows()
 {
+  OPTICK_EVENT()
   ImGui::Begin("Camera");
   auto camPos = cameraManipulator.getCameraPosition();
   auto camFocus = cameraManipulator.getCenterPosition();

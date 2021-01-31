@@ -13,6 +13,20 @@ add_library(${TARGET_NAME} STATIC
   src/imGuIZMOquat.cpp
 )
 
+# optick
+file(GLOB_RECURSE OPTICK_SRC "src/optick/*.cpp")
+target_sources(${TARGET_NAME} PRIVATE ${OPTICK_SRC})
+target_include_directories(${TARGET_NAME} PRIVATE "include/optick")
+if(WIN32) 
+  target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
+
+# Headers
+file(GLOB_RECURSE HEADERS "include/*.h")
+target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
+
+
 target_include_directories(${TARGET_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)

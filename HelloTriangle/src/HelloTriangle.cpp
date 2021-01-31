@@ -13,6 +13,7 @@
 
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
+#include <optick/optick.h>
 
 #include <algorithm>
 #include <chrono>
@@ -64,6 +65,7 @@ void HelloTriangleApplication::destroySwapchainDependentResources()
 void HelloTriangleApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {
   Cory::ScopeTimer("Draw");
+  OPTICK_EVENT()
 
   updateUniformBuffer(fui.swapChainImageIdx);
 

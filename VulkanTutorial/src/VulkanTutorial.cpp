@@ -13,6 +13,7 @@
 
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
+#include <optick/optick.h>
 
 #include <algorithm>
 #include <chrono>
@@ -76,6 +77,7 @@ void VulkanTutorialApplication::destroySwapchainDependentResources()
 void VulkanTutorialApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {
   Cory::ScopeTimer("Draw");
+  OPTICK_EVENT()
 
   updateUniformBuffer(fui.swapChainImageIdx);
 

@@ -36,6 +36,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
   case VkDebugUtilsMessageSeverityFlagBitsEXT::
       VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
     CO_CORE_ERROR("Vulkan validation layer: {}", pCallbackData->pMessage);
+    __debugbreak();
     break;
   }
 

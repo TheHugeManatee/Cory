@@ -113,7 +113,7 @@ void VolumeRenderingApplication::createGraphicsPipeline()
   {
     ScopeTimer timer("Shader Compilation");
     std::vector<Shader> shaders;
-    Shader vertexShader(ctx(), {RESOURCE_DIR "/Shaders/default.vert"});
+    Shader vertexShader(ctx(), {RESOURCE_DIR "/Shaders/raymarch.vert"});
     Shader fragmentShader(ctx(),
                           {RESOURCE_DIR "/Shaders/raymarch_implicit.frag"});
     shaders.emplace_back(std::move(vertexShader));

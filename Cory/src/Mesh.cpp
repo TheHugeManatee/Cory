@@ -98,6 +98,36 @@ meshdata doublequad()
                                 4, 5, 6, 6, 7, 4};
   return {vertices, indices};
 }
+
+meshdata cube()
+{
+  auto v = [](float x, float y, float z) {
+    return Vertex{{x, y, z}, {x + 0.5f, y + 0.5f, z + 0.5f}, {x, y}};
+  };
+
+  std::vector<Vertex> vertices{v(-.5f, -.5f, -.5f), v( .5f, -.5f, -.5f),
+                               v(-.5f,  .5f, -.5f), v( .5f,  .5f, -.5f),
+
+                               v(-.5f, -.5f,  .5f), v( .5f, -.5f,  .5f),
+                               v(-.5f,  .5f,  .5f), v( .5f,  .5f,  .5f)};
+
+  std::vector<uint16_t> indices{
+      // front
+      0, 2, 1,  1, 2, 3,
+      // left
+      0, 4, 6,  0, 6, 2, 
+      // back
+      4, 5, 7,  4, 7, 6,
+      // top
+      5, 4, 1,  4, 0, 1,
+      // right
+      5, 1, 7,  1, 3, 7,
+      // bottom
+      6, 7, 3,  6, 3, 2
+    };
+  return {vertices, indices};
+}
+
 } // namespace primitives
 
 void Mesh::createVertexBuffer(const void *vertexData,

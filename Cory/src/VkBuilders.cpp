@@ -235,7 +235,7 @@ uint32_t RenderPassBuilder::addDefaultSubpass()
 
 uint32_t RenderPassBuilder::addSubpass(vk::SubpassDescription subpassDesc)
 {
-  uint32_t subpassIdx = static_cast<uint32_t>(m_subpasses.size());
+  auto subpassIdx = static_cast<uint32_t>(m_subpasses.size());
   m_subpasses.emplace_back(std::move(subpassDesc));
   return subpassIdx;
 }
@@ -258,7 +258,7 @@ vk::AttachmentReference
 RenderPassBuilder::addAttachment(vk::AttachmentDescription desc,
                                  vk::ImageLayout layout)
 {
-  uint32_t attachmentID = static_cast<uint32_t>(m_attachments.size());
+  auto attachmentID = static_cast<uint32_t>(m_attachments.size());
   m_attachments.push_back(desc);
   vk::AttachmentReference attachmentRef{};
   attachmentRef.attachment = attachmentID;

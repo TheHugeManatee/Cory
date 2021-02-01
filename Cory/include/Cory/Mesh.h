@@ -95,6 +95,7 @@ std::vector<Vertex> triangle();
 
 meshdata quad();
 meshdata doublequad();
+meshdata cube();
 
 } // namespace primitives
 

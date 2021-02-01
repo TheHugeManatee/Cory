@@ -142,9 +142,22 @@ void Texture::create(GraphicsContext &ctx, glm::uvec3 size, uint32_t mipLevels,
   vk::ImageViewCreateInfo viewInfo{};
   viewInfo.format = m_format;
   viewInfo.image = m_image;
-  assert(type == vk::ImageType::e2D &&
-         "TODO: creating views for image types other than 2D not implemented!");
-  viewInfo.viewType = vk::ImageViewType::e2D;
+
+  switch (type) {
+  case vk::ImageType::e1D:
+    viewInfo.viewType = vk::ImageViewType::e1D;
+    break;
+  case vk::ImageType::e2D:
+    viewInfo.viewType = vk::ImageViewType::e2D;
+    break;
+  case vk::ImageType::e3D:
+    viewInfo.viewType = vk::ImageViewType::e3D;
+    break;
+  default:
+    assert(false && "Unknown image type!");
+    break;
+  }
+
   viewInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
   viewInfo.subresourceRange.baseMipLevel = 0;
   viewInfo.subresourceRange.levelCount = m_mipLevels;

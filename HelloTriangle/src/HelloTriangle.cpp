@@ -170,7 +170,8 @@ void HelloTriangleApplication::createCommandBuffers()
   m_commandBuffers.resize(m_swapChainFramebuffers.size());
   vk::CommandBufferAllocateInfo allocInfo{};
   allocInfo.commandPool = *ctx().permanentCmdPool;
-  // _SECONDARY cannot be directly submitted but can be called from other cmd buffer
+  // _SECONDARY cannot be directly submitted but can be called from other cmd
+  // buffer
   allocInfo.level = vk::CommandBufferLevel::ePrimary;
   allocInfo.commandBufferCount = (uint32_t)m_commandBuffers.size();
   m_commandBuffers = ctx().device->allocateCommandBuffersUnique(allocInfo);
@@ -258,6 +259,14 @@ void HelloTriangleApplication::updateUniformBuffer(uint32_t imageIndex)
                               swapChain().extent().width /
                                   (float)swapChain().extent().height,
                               0.1f, 10.0f);
+
+  ubo.modelInv = glm::inverse(ubo.model);
+  ubo.viewInv = glm::inverse(ubo.view);
+  ubo.projInv = glm::inverse(ubo.proj);
+
+  ubo.camPos = cameraManipulator.getCameraPosition();
+  ubo.camFocus = cameraManipulator.getCenterPosition();
+
   // NOTE: we flip this bc/ glm is written for OpenGL which has Y
   // inverted. otherwise image will be upside down :)
   ubo.proj[1][1] *= -1;

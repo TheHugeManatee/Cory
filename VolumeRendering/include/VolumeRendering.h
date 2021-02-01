@@ -35,12 +35,12 @@ struct CameraUBOData {
   glm::vec3 camFocus;
 };
 
-class VulkanTutorialApplication : public Application {
+class VolumeRenderingApplication : public Application {
 public:
-  static constexpr uint32_t WIDTH{800};
-  static constexpr uint32_t HEIGHT{600};
+  static constexpr uint32_t WIDTH{1920};
+  static constexpr uint32_t HEIGHT{1080};
 
-  VulkanTutorialApplication();
+  VolumeRenderingApplication();
 
   void drawSwapchainFrame(FrameUpdateInfo &fui) override;
   void createSwapchainDependentResources() override;
@@ -83,5 +83,4 @@ private:
   std::unique_ptr<Mesh> m_mesh;
 
   Texture m_texture;
-  Texture m_texture2;
 };

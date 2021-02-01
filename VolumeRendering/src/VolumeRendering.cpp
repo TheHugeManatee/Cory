@@ -1,4 +1,4 @@
-#include "VulkanTutorial.h"
+#include "VolumeRendering.h"
 
 #include "Cory/Log.h"
 #include "Cory/Mesh.h"
@@ -21,10 +21,10 @@
 #include <ranges>
 #include <set>
 
-VulkanTutorialApplication::VulkanTutorialApplication()
+VolumeRenderingApplication::VolumeRenderingApplication()
 {
   Cory::Log::SetAppLevel(spdlog::level::trace);
-  Cory::Log::SetCoreLevel(spdlog::level::trace);
+  Cory::Log::SetCoreLevel(spdlog::level::debug);
 
   requestLayers({"VK_LAYER_KHRONOS_validation"});
   requestExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME});
@@ -32,26 +32,26 @@ VulkanTutorialApplication::VulkanTutorialApplication()
   setInitialWindowSize(WIDTH, HEIGHT);
 }
 
-void VulkanTutorialApplication::init()
+void VolumeRenderingApplication::init()
 {
   m_texture =
-      createTextureImage(RESOURCE_DIR "/viking_room.png", vk::Filter::eLinear,
-                         vk::SamplerAddressMode::eRepeat);
-  m_texture2 =
-      createTextureImage(RESOURCE_DIR "/sunglasses.png", vk::Filter::eLinear,
+      createTextureImage(RESOURCE_DIR "/smallHeart.raw", vk::Filter::eLinear,
                          vk::SamplerAddressMode::eClampToBorder);
+
   createGeometry();
+
+  cameraManipulator.setLookat({1.5f, 1.5f, 1.5f}, {0.0f, 0.0f, 0.0f},
+                              glm::vec3(0, 1, 0));
 }
 
-void VulkanTutorialApplication::deinit()
+void VolumeRenderingApplication::deinit()
 {
   m_mesh = {}; // deinit the mesh data
 
   m_texture.destroy(ctx());
-  m_texture2.destroy(ctx());
 }
 
-void VulkanTutorialApplication::createSwapchainDependentResources()
+void VolumeRenderingApplication::createSwapchainDependentResources()
 {
   createRenderPass();
   createFramebuffers(m_renderPass);
@@ -61,7 +61,7 @@ void VulkanTutorialApplication::createSwapchainDependentResources()
   createCommandBuffers();
 }
 
-void VulkanTutorialApplication::destroySwapchainDependentResources()
+void VolumeRenderingApplication::destroySwapchainDependentResources()
 {
   for (auto framebuffer : m_swapChainFramebuffers) {
     ctx().device->destroyFramebuffer(framebuffer);
@@ -74,7 +74,7 @@ void VulkanTutorialApplication::destroySwapchainDependentResources()
   }
 }
 
-void VulkanTutorialApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
+void VolumeRenderingApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
 {
   Cory::ScopeTimer("Draw");
   OPTICK_EVENT()
@@ -104,7 +104,7 @@ void VulkanTutorialApplication::drawSwapchainFrame(FrameUpdateInfo &fui)
   ctx().graphicsQueue.submit(submitInfo, fui.imageInFlightFence);
 }
 
-void VulkanTutorialApplication::createGraphicsPipeline()
+void VolumeRenderingApplication::createGraphicsPipeline()
 {
 
   // start pipeline initialization
@@ -113,8 +113,9 @@ void VulkanTutorialApplication::createGraphicsPipeline()
   {
     ScopeTimer timer("Shader Compilation");
     std::vector<Shader> shaders;
-    Shader vertexShader(ctx(), {RESOURCE_DIR "/Shaders/default.vert"});
-    Shader fragmentShader(ctx(), {RESOURCE_DIR "/Shaders/coolmanatee.frag"});
+    Shader vertexShader(ctx(), {RESOURCE_DIR "/Shaders/raymarch.vert"});
+    Shader fragmentShader(ctx(),
+                          {RESOURCE_DIR "/Shaders/raymarch_implicit.frag"});
     shaders.emplace_back(std::move(vertexShader));
     shaders.emplace_back(std::move(fragmentShader));
     creator.setShaders(std::move(shaders));
@@ -142,7 +143,7 @@ void VulkanTutorialApplication::createGraphicsPipeline()
   m_graphicsPipeline = creator.create(ctx());
 }
 
-void VulkanTutorialApplication::createRenderPass()
+void VolumeRenderingApplication::createRenderPass()
 {
   RenderPassBuilder builder;
 
@@ -174,7 +175,7 @@ void VulkanTutorialApplication::createRenderPass()
   m_renderPass = builder.create(ctx());
 }
 
-void VulkanTutorialApplication::createCommandBuffers()
+void VolumeRenderingApplication::createCommandBuffers()
 {
   ScopeTimer("Command Buffers");
   // we need one command buffer per frame buffer
@@ -236,57 +237,21 @@ void VulkanTutorialApplication::createCommandBuffers()
   }
 }
 
-void VulkanTutorialApplication::createGeometry()
+void VolumeRenderingApplication::createGeometry()
 {
   CO_APP_INFO("Loading mesh...");
   Cory::ScopeTimer("Geometry");
-  //     auto [vertices, indices] = primitives::doublequad();
-  //     m_numVertices = static_cast<uint32_t>(indices.size());
 
-  tinyobj::attrib_t attrib;
-  std::vector<tinyobj::shape_t> shapes;
-  std::vector<tinyobj::material_t> materials;
-  std::string warn, err;
-  if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
-                        RESOURCE_DIR "/viking_room.obj")) {
-
-    throw std::runtime_error(
-        fmt::format("Could not load 3D model: {} {}", warn, err));
-  }
-
-  CO_APP_DEBUG("Collapsing common vertices..");
-  std::vector<Vertex> vertices;
-  std::vector<uint16_t> indices;
-  std::unordered_map<Vertex, uint16_t, Vertex::hasher> uniqueVertices;
-  for (const auto &shape : shapes) {
-
-    for (const auto &index : shape.mesh.indices) {
-      Vertex v{};
-      v.pos = {attrib.vertices[3 * index.vertex_index + 0],
-               attrib.vertices[3 * index.vertex_index + 1],
-               attrib.vertices[3 * index.vertex_index + 2]};
-      v.texCoord = {attrib.texcoords[2 * index.texcoord_index + 0],
-                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]};
-      v.color = {1.0f, 1.0f, 1.0f};
-
-      if (uniqueVertices.count(v) == 0) {
-        uniqueVertices[v] = static_cast<uint16_t>(vertices.size());
-        vertices.push_back(v);
-      }
-
-      indices.push_back(uniqueVertices[v]);
-    }
-  }
+  auto [vertices, indices] = primitives::cube();
 
   m_mesh = std::make_unique<Mesh>(ctx(), vertices, indices,
                                   vk::PrimitiveTopology::eTriangleList);
 
-  CO_APP_INFO("Mesh loading finished. {} vertices, {} indices after common "
-              "vertex collapse.",
-              vertices.size(), indices.size());
+  CO_APP_INFO("Mesh loading finished. {} vertices, {}", vertices.size(),
+              indices.size());
 }
 
-void VulkanTutorialApplication::createUniformBuffers()
+void VolumeRenderingApplication::createUniformBuffers()
 {
   m_uniformBuffers.resize(swapChain().size());
 
@@ -297,12 +262,8 @@ void VulkanTutorialApplication::createUniformBuffers()
   }
 }
 
-void VulkanTutorialApplication::updateUniformBuffer(uint32_t imageIndex)
+void VolumeRenderingApplication::updateUniformBuffer(uint32_t imageIndex)
 {
-  static auto startTime = std::chrono::high_resolution_clock::now();
-
-  auto currentTime = std::chrono::high_resolution_clock::now();
-
   CameraUBOData &ubo = m_uniformBuffers[imageIndex].data();
 
   ubo.model = glm::identity<glm::mat4>();
@@ -326,22 +287,22 @@ void VulkanTutorialApplication::updateUniformBuffer(uint32_t imageIndex)
   m_uniformBuffers[imageIndex].update(ctx());
 }
 
-void VulkanTutorialApplication::createDescriptorSets()
+void VolumeRenderingApplication::createDescriptorSets()
 {
   m_descriptorSet.create(ctx(), static_cast<uint32_t>(swapChain().size()), 1,
-                         2);
+                         1);
 
   std::vector<std::vector<const UniformBufferBase *>> uniformBuffers(
       swapChain().size());
   std::vector<std::vector<const Texture *>> samplers(swapChain().size());
   for (int i = 0; i < swapChain().size(); ++i) {
     uniformBuffers[i].push_back(&m_uniformBuffers[i]);
-    samplers[i] = {&m_texture, &m_texture2};
+    samplers[i] = {&m_texture};
   }
   m_descriptorSet.setDescriptors(ctx(), uniformBuffers, samplers);
 }
 
-void VulkanTutorialApplication::createFramebuffers(vk::RenderPass renderPass)
+void VolumeRenderingApplication::createFramebuffers(vk::RenderPass renderPass)
 {
   m_swapChainFramebuffers.resize(swapChain().views().size());
 
@@ -362,30 +323,32 @@ void VulkanTutorialApplication::createFramebuffers(vk::RenderPass renderPass)
   }
 }
 
-Texture VulkanTutorialApplication::createTextureImage(
-    std::string textureFilename, vk::Filter filter,
+Texture VolumeRenderingApplication::createTextureImage(
+    std::string rawFilename, vk::Filter filter,
     vk::SamplerAddressMode addressMode)
 {
-  stbi_image image(textureFilename);
-  Texture texture;
+  auto volumeData = readFile(rawFilename);
+  CO_APP_INFO("Read {}, {} bytes", rawFilename, volumeData.size());
 
-  if (!image.data) {
-    throw std::runtime_error("Could not load texture image from file!");
+  Texture texture;
+  if (volumeData.empty()) {
+    CO_APP_ERROR("Could not read volume raw file!");
+    return texture;
   }
 
+  glm::uvec3 vSize{128, 128, 114};
+
   Buffer stagingBuffer;
-  stagingBuffer.create(ctx(), image.size(),
+  stagingBuffer.create(ctx(), volumeData.size(),
                        vk::BufferUsageFlagBits::eTransferSrc,
                        DeviceMemoryUsage::eCpuOnly);
 
-  stagingBuffer.upload(ctx(), image.data, image.size());
+  stagingBuffer.upload(ctx(), volumeData.data(), volumeData.size());
 
-  uint32_t mipLevels = static_cast<uint32_t>(std::floor(
-                           std::log2(std::max(image.width, image.height)))) +
-                       1;
+  uint32_t mipLevels = 1;
   texture.create(
-      ctx(), {image.width, image.height, 1}, mipLevels, vk::ImageType::e2D,
-      vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, filter, addressMode,
+      ctx(), vSize, mipLevels, vk::ImageType::e3D, vk::Format::eR16Unorm,
+      vk::ImageTiling::eOptimal, filter, addressMode,
       vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled |
           vk::ImageUsageFlagBits::eTransferSrc,
       DeviceMemoryUsage::eGpuOnly);
@@ -394,9 +357,9 @@ Texture VulkanTutorialApplication::createTextureImage(
   stagingBuffer.copyTo(ctx(), texture);
   stagingBuffer.destroy(ctx());
 
-  texture.generateMipmaps(ctx(), vk::ImageLayout::eShaderReadOnlyOptimal,
-                          vk::AccessFlagBits::eShaderRead);
-  // texture.transitionLayout(ctx(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  //   texture.generateMipmaps(ctx(), vk::ImageLayout::eShaderReadOnlyOptimal,
+  //                           vk::AccessFlagBits::eShaderRead);
+  texture.transitionLayout(ctx(), vk::ImageLayout::eShaderReadOnlyOptimal);
 
   return texture;
 }

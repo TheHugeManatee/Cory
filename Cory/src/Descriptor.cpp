@@ -77,13 +77,12 @@ void DescriptorSet::setDescriptors(
 void DescriptorSet::createPool(GraphicsContext &ctx)
 {
   std::vector<vk::DescriptorPoolSize> poolSizes;
-  poolSizes.push_back(vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer,
-                                             m_numUBOs * m_swapChainSize));
+  poolSizes.emplace_back(vk::DescriptorType::eUniformBuffer,
+                         m_numUBOs * m_swapChainSize);
 
   if (m_numSamplers) {
-    poolSizes.push_back(
-        vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler,
-                               m_numSamplers * m_swapChainSize));
+    poolSizes.emplace_back(vk::DescriptorType::eCombinedImageSampler,
+                           m_numSamplers * m_swapChainSize);
   }
   vk::DescriptorPoolCreateInfo poolInfo{};
   poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());

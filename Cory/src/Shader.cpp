@@ -6,9 +6,53 @@
 
 #include <shaderc/shaderc.hpp>
 
+#include <fstream>
 #include <mutex>
 
 namespace Cory {
+
+class FileIncludeHandler : public shaderc::CompileOptions::IncluderInterface {
+public:
+  struct IncludeData {
+      std::vector<char> data;
+      std::string resourceName;
+  };
+
+  // Handles shaderc_include_resolver_fn callbacks.
+  shaderc_include_result *GetInclude(const char *requested_source,
+                                     shaderc_include_type type,
+                                     const char *requesting_source,
+                                     size_t include_depth) override
+  {
+    CO_CORE_INFO("Include file {} from {}", requested_source,
+                 requesting_source);
+
+    std::string resolvedLocation =
+        fmt::format("{}/Shaders/{}", RESOURCE_DIR, requested_source);
+
+    auto ir = new shaderc_include_result;
+    IncludeData* id  = new IncludeData;
+    ir->user_data = id;
+
+    id->data = readFile(resolvedLocation);
+    id->resourceName = resolvedLocation;
+
+    ir->content = id->data.data();
+    ir->content_length = id->data.size();
+    ir->source_name = id->resourceName.data();
+    ir->source_name_length = id->resourceName.size();
+
+    return ir;
+  };
+
+  // Handles shaderc_include_result_release_fn callbacks.
+  void ReleaseInclude(shaderc_include_result *data) override { 
+      delete (IncludeData*)data->user_data;
+      delete data; 
+  };
+
+  virtual ~FileIncludeHandler() = default;
+};
 
 shaderc_shader_kind ShaderTypeToShaderKind(ShaderType type)
 {
@@ -59,6 +103,7 @@ std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source,
 {
   shaderc::Compiler compiler;
   shaderc::CompileOptions options;
+  options.SetIncluder(std::make_unique<FileIncludeHandler>());
 
   for (const auto [k, v] : source.defines()) {
     options.AddMacroDefinition(k, v);
@@ -110,6 +155,7 @@ std::string Shader::preprocessShader()
 {
   shaderc::Compiler compiler;
   shaderc::CompileOptions options;
+  options.SetIncluder(std::make_unique<FileIncludeHandler>());
 
   for (const auto [k, v] : m_source.defines()) {
     options.AddMacroDefinition(k, v);
@@ -133,6 +179,7 @@ std::string Shader::compileToAssembly(bool optimize /*= false*/)
 {
   shaderc::Compiler compiler;
   shaderc::CompileOptions options;
+  options.SetIncluder(std::make_unique<FileIncludeHandler>());
 
   for (const auto [k, v] : m_source.defines()) {
     options.AddMacroDefinition(k, v);

@@ -35,8 +35,8 @@ VolumeRenderingApplication::VolumeRenderingApplication()
 void VolumeRenderingApplication::init()
 {
   m_texture =
-      createTextureImage(RESOURCE_DIR "/viking_room.png", vk::Filter::eLinear,
-                         vk::SamplerAddressMode::eRepeat);
+      createTextureImage(RESOURCE_DIR "/smallHeart.raw", vk::Filter::eLinear,
+                         vk::SamplerAddressMode::eClampToBorder);
 
   createGeometry();
 
@@ -324,29 +324,31 @@ void VolumeRenderingApplication::createFramebuffers(vk::RenderPass renderPass)
 }
 
 Texture VolumeRenderingApplication::createTextureImage(
-    std::string textureFilename, vk::Filter filter,
+    std::string rawFilename, vk::Filter filter,
     vk::SamplerAddressMode addressMode)
 {
-  stbi_image image(textureFilename);
-  Texture texture;
+  auto volumeData = readFile(rawFilename);
+  CO_APP_INFO("Read {}, {} bytes", rawFilename, volumeData.size());
 
-  if (!image.data) {
-    throw std::runtime_error("Could not load texture image from file!");
+  Texture texture;
+  if (volumeData.empty()) {
+    CO_APP_ERROR("Could not read volume raw file!");
+    return texture;
   }
 
+  glm::uvec3 vSize{128, 128, 114};
+
   Buffer stagingBuffer;
-  stagingBuffer.create(ctx(), image.size(),
+  stagingBuffer.create(ctx(), volumeData.size(),
                        vk::BufferUsageFlagBits::eTransferSrc,
                        DeviceMemoryUsage::eCpuOnly);
 
-  stagingBuffer.upload(ctx(), image.data, image.size());
+  stagingBuffer.upload(ctx(), volumeData.data(), volumeData.size());
 
-  uint32_t mipLevels = static_cast<uint32_t>(std::floor(
-                           std::log2(std::max(image.width, image.height)))) +
-                       1;
+  uint32_t mipLevels = 1;
   texture.create(
-      ctx(), {image.width, image.height, 1}, mipLevels, vk::ImageType::e2D,
-      vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, filter, addressMode,
+      ctx(), vSize, mipLevels, vk::ImageType::e3D, vk::Format::eR16Unorm,
+      vk::ImageTiling::eOptimal, filter, addressMode,
       vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled |
           vk::ImageUsageFlagBits::eTransferSrc,
       DeviceMemoryUsage::eGpuOnly);
@@ -355,9 +357,9 @@ Texture VolumeRenderingApplication::createTextureImage(
   stagingBuffer.copyTo(ctx(), texture);
   stagingBuffer.destroy(ctx());
 
-  texture.generateMipmaps(ctx(), vk::ImageLayout::eShaderReadOnlyOptimal,
-                          vk::AccessFlagBits::eShaderRead);
-  // texture.transitionLayout(ctx(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  //   texture.generateMipmaps(ctx(), vk::ImageLayout::eShaderReadOnlyOptimal,
+  //                           vk::AccessFlagBits::eShaderRead);
+  texture.transitionLayout(ctx(), vk::ImageLayout::eShaderReadOnlyOptimal);
 
   return texture;
 }

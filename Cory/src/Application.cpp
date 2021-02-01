@@ -325,7 +325,7 @@ void Application::setupInstance()
   m_ctx.instance = vk::createInstanceUnique(createInfo);
 
   vk::DynamicLoader dl;
-  PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr =
+  auto vkGetInstanceProcAddr =
       dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
   m_ctx.dl = vk::DispatchLoaderDynamic(*m_ctx.instance, vkGetInstanceProcAddr);
 }
@@ -614,7 +614,7 @@ void Application::processPerfCounters(LapTimer &fpsCounter)
   if (ImGui::CollapsingHeader("Perf Markers")) {
     auto recs = Profiler::GetRecords();
     ImGui::Text("{avg} {min} {max}, microseconds");
-    for (const auto [k, v] : recs) {
+    for (const auto& [k, v] : recs) {
       auto ps = v.stats();
       float visStats[3]{float(ps.avg) / 1'000, float(ps.min) / 1'000,
                         float(ps.max) / 1'000};

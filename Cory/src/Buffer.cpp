@@ -112,7 +112,7 @@ void Buffer::copyTo(GraphicsContext &ctx, const Image &rhs) const
   region.imageSubresource.layerCount = 1;
 
   region.imageOffset = vk::Offset3D{0, 0, 0};
-  region.imageExtent = vk::Extent3D{rhs.size().x, rhs.size().y, 1};
+  region.imageExtent = vk::Extent3D{rhs.size().x, rhs.size().y, rhs.size().z};
 
   cmdBuf.buffer().copyBufferToImage(
       m_buffer, rhs.image(), vk::ImageLayout::eTransferDstOptimal, {region});

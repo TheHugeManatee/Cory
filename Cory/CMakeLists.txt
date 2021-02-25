@@ -10,6 +10,7 @@ add_library(${TARGET_NAME} STATIC
   src/CameraManipulator.cpp
   src/Context.cpp
   src/Descriptor.cpp
+  src/FrameGraph.cpp
   src/Image.cpp
   src/ImGuiLayer.cpp
   src/Log.cpp

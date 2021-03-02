@@ -13,5 +13,8 @@ void Log::Init()
 
   s_coreLogger = spdlog::stdout_color_mt("Cory");
   s_appLogger = spdlog::stdout_color_mt("App");
+
+  s_coreLogger->set_level(spdlog::level::debug);
+  s_appLogger->set_level(spdlog::level::trace);
 }
 } // namespace Cory

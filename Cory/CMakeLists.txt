@@ -15,21 +15,22 @@ find_package(shaderc)
 
 
 add_library(${TARGET_NAME} STATIC
-        src/Application.cpp
-        src/Buffer.cpp
-        src/CameraManipulator.cpp
-        src/Context.cpp
-        src/Descriptor.cpp
-        src/Image.cpp
-        src/ImGuiLayer.cpp
-        src/Log.cpp
-        src/Mesh.cpp
-        src/Profiling.cpp
-        src/Shader.cpp
-        src/Utils.cpp
-        src/VkBuilders.cpp
-        src/VkUtils.cpp
-        )
+  src/vk/utils.cpp
+  src/Application.cpp
+  src/Buffer.cpp
+  src/CameraManipulator.cpp
+  src/Context.cpp
+  src/Descriptor.cpp
+  src/Image.cpp
+  src/ImGuiLayer.cpp
+  src/Log.cpp
+  src/Mesh.cpp
+  src/Profiling.cpp
+  src/Shader.cpp
+  src/Utils.cpp
+  src/VkBuilders.cpp
+  src/VkUtils.cpp
+)
 
 target_include_directories(${TARGET_NAME}
         PUBLIC

@@ -6,3 +6,5 @@ CMakeSettings.json
 build19/
 
 *.spv
+
+.vscode/

@@ -5,6 +5,7 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
 add_library(${TARGET_NAME} STATIC
+  src/vk/utils.cpp
   src/Application.cpp
   src/Buffer.cpp
   src/CameraManipulator.cpp

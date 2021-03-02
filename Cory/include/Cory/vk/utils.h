@@ -27,5 +27,20 @@ enum class device_memory_usage : int /*std::underlying_type<VmaMemoryUsage>::typ
 
 const std::vector<VkExtensionProperties> &extension_properties();
 
+constexpr VkSampleCountFlagBits get_max_usable_sample_count(const VkPhysicalDeviceProperties &props) noexcept
+{
+    auto counts = VkSampleCountFlagBits(props.limits.framebufferColorSampleCounts &
+                                        props.limits.framebufferDepthSampleCounts);
+
+    if (counts & VK_SAMPLE_COUNT_64_BIT) return VK_SAMPLE_COUNT_64_BIT;
+    if (counts & VK_SAMPLE_COUNT_32_BIT) return VK_SAMPLE_COUNT_64_BIT;
+    if (counts & VK_SAMPLE_COUNT_16_BIT) return VK_SAMPLE_COUNT_16_BIT;
+    if (counts & VK_SAMPLE_COUNT_8_BIT) return VK_SAMPLE_COUNT_8_BIT;
+    if (counts & VK_SAMPLE_COUNT_4_BIT) return VK_SAMPLE_COUNT_4_BIT;
+    if (counts & VK_SAMPLE_COUNT_2_BIT) return VK_SAMPLE_COUNT_2_BIT;
+
+    return VK_SAMPLE_COUNT_1_BIT;
+}
+
 } // namespace vk
 } // namespace cory

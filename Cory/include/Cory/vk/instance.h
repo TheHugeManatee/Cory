@@ -7,6 +7,9 @@
 namespace cory {
 namespace vk {
 
+/**
+ * Private detail functions that should not be relevant for the public interface
+ */
 namespace detail {
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                       const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
@@ -31,37 +34,115 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance,
 }
 } // namespace detail
 
+class debug_utils_messenger_builder {
+  public:
+    friend class instance_builder;
+    [[nodiscard]] debug_utils_messenger_builder &next(const void *pNext) noexcept
+    {
+        info_.pNext = pNext;
+        return *this;
+    }
+
+    [[nodiscard]] debug_utils_messenger_builder &
+    flags(VkDebugUtilsMessengerCreateFlagsEXT flags) noexcept
+    {
+        info_.flags = flags;
+        return *this;
+    }
+
+    [[nodiscard]] debug_utils_messenger_builder &
+    message_severity(VkDebugUtilsMessageSeverityFlagsEXT messageSeverity) noexcept
+    {
+        info_.messageSeverity = messageSeverity;
+        return *this;
+    }
+
+    [[nodiscard]] debug_utils_messenger_builder &
+    message_type(VkDebugUtilsMessageTypeFlagsEXT messageType) noexcept
+    {
+        info_.messageType = messageType;
+        return *this;
+    }
+
+    [[nodiscard]] debug_utils_messenger_builder &
+    user_callback(PFN_vkDebugUtilsMessengerCallbackEXT pfnUserCallback) noexcept
+    {
+        info_.pfnUserCallback = pfnUserCallback;
+        return *this;
+    }
+
+    [[nodiscard]] debug_utils_messenger_builder &user_data(void *pUserData) noexcept
+    {
+        info_.pUserData = pUserData;
+        return *this;
+    }
+
+    [[nodiscard]] void* ptr() const noexcept {
+        return (void*)&info_;
+    }
+
+  private:
+    VkDebugUtilsMessengerCreateInfoEXT info_{
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+    };
+};
+
+
+struct physical_device_info {
+    VkPhysicalDevice device;
+    VkPhysicalDeviceProperties properties;
+    VkPhysicalDeviceFeatures features;
+    std::vector<VkQueueFamilyProperties> queue_family_properties;
+    VkSampleCountFlagBits max_usable_sample_count;
+};
+
 class instance {
   public:
-    instance(std::shared_ptr<VkInstance_T> instance_ptr)
+    instance(std::shared_ptr<struct VkInstance_T> instance_ptr)
         : instance_ptr_{instance_ptr}
     {
     }
 
+    physical_device_info device_info(VkPhysicalDevice device)
+    {
+        physical_device_info dev_info;
+        dev_info.device = device;
+        vkGetPhysicalDeviceProperties(device, &dev_info.properties);
+        vkGetPhysicalDeviceFeatures(device, &dev_info.features);
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+        dev_info.queue_family_properties.resize(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(
+            device, &queueFamilyCount, dev_info.queue_family_properties.data());
+
+        dev_info.max_usable_sample_count = get_max_usable_sample_count(dev_info.properties);
+        return dev_info;
+    }
+
     /**
-     * @brief 
-     * @return 
-    */
-    std::vector<std::tuple<VkPhysicalDevice, VkPhysicalDeviceProperties>> physical_devices()
+     * @brief list info about all physical devices
+     * @return
+     */
+    std::vector<physical_device_info> physical_devices()
     {
         uint32_t numDevices;
         vkEnumeratePhysicalDevices(instance_ptr_.get(), &numDevices, nullptr);
         std::vector<VkPhysicalDevice> devices(numDevices);
         vkEnumeratePhysicalDevices(instance_ptr_.get(), &numDevices, devices.data());
 
-        std::vector<std::tuple<VkPhysicalDevice, VkPhysicalDeviceProperties>> props(numDevices);
-        for (size_t i{}; i < devices.size(); ++i) {
-            const auto &p = devices[i];
-            VkPhysicalDeviceProperties dp;
-            vkGetPhysicalDeviceProperties(p, &dp);
-            props[i] = std::make_tuple(p, dp);
+        std::vector<physical_device_info> props(numDevices);
+        for (const auto &p : devices) {
+            props.push_back(device_info(p));
         }
 
         return props;
     }
 
+    VkInstance get() { return instance_ptr_.get(); }
+
   private:
-    std::shared_ptr<VkInstance_T> instance_ptr_;
+    std::shared_ptr<struct VkInstance_T> instance_ptr_;
 };
 
 class instance_builder {

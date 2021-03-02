@@ -2,7 +2,7 @@
 
 #include "graphics_context.h"
 #include "resource.h"
-#include "vk_utils.h"
+#include "utils.h"
 
 #include <vulkan/vulkan.h>
 

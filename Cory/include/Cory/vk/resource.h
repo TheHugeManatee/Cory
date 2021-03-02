@@ -39,7 +39,7 @@ template <typename Derived, typename ResourcePtr> class resource {
     ResourcePtr resource_;
 };
 
-class image : public resource<image, std::shared_ptr<VkImage_T>> {
+class image : public resource<image, std::shared_ptr<struct VkImage_T>> {
   public:
     friend class graphics_context;
 
@@ -67,7 +67,7 @@ class image : public resource<image, std::shared_ptr<VkImage_T>> {
     VkFormat format_;
 };
 
-class buffer : public resource<buffer, std::shared_ptr<VkBuffer_T>> {
+class buffer : public resource<buffer, std::shared_ptr<struct VkBuffer_T>> {
   public:
 };
 

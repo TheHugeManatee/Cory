@@ -2,6 +2,7 @@
 
 #include <Cory/Log.h>
 
+#include <Cory/vk/enum_utils.h>
 #include <Cory/vk/graphics_context.h>
 #include <Cory/vk/instance.h>
 #include <Cory/vk/utils.h>
@@ -9,8 +10,8 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan.h>
 
-#include <optional>
 #include <cstdlib>
+#include <optional>
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -40,7 +41,7 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 int main()
 {
     Cory::Log::Init();
-    // Cory::Log::GetCoreLogger()->set_level(spdlog::level::trace);
+    //Cory::Log::GetCoreLogger()->set_level(spdlog::level::trace);
 
     VkApplicationInfo app_info{.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                                .pApplicationName = "CoryAPITester",
@@ -63,45 +64,65 @@ int main()
     std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT,
-        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-        .pfnUserCallback = debugCallback};
+    // create the instance with our nice builder pattern
+    cory::vk::instance instance =
+        cory::vk::instance_builder()
+            .application_info(&app_info)
+            .enabled_extensions(extensions)
+            .next(cory::vk::debug_utils_messenger_builder()
+                      .message_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                                        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
+                      .message_type(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                                    VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                                    VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+                      .user_callback(debugCallback)
+                      .ptr())
+            .create();
 
-    // create the instance
-    cory::vk::instance instance = cory::vk::instance_builder()
-                                      .application_info(&app_info)
-                                      .enabled_extensions(extensions)
-                                      .next(&debugCreateInfo)
-                                      .create();
-
+    // list/pick physical device
     const auto devices = instance.physical_devices();
-    std::optional<VkPhysicalDevice> pickedDevice;
-    for (const auto &[device, props] : devices) {
-        if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-            pickedDevice = device;
-            break;
+    std::optional<cory::vk::physical_device_info> pickedDevice;
+    for (const auto &info : devices) {
+        if (!pickedDevice && info.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            pickedDevice = info;
         }
     }
 
-    /*      cory::vk::graphics_context app_context;
+    CO_APP_INFO("Testing pretty-printing of vulkan enums");
+    VkImageTiling tiling{VK_IMAGE_TILING_LINEAR};
+    VkResult result{VK_INCOMPLETE};
+    CO_APP_INFO("Image tiling: {}, was {}, rtsgt={}",
+                tiling,
+                result,
+                VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR);
+    VkQueueFlags qflags{VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT};
+    CO_APP_INFO("Queue flags: {}", cory::vk::flag_bits_to_string<VkQueueFlagBits>(qflags));
 
-      auto img = app_context.image().extent({1, 1, 1}).format(VK_FORMAT_R8G8B8A8_USCALED).create();
+    // queues
+    CO_APP_INFO("Listing the available queues for the selected device");
+    for (const auto &qfp : pickedDevice->queue_family_properties) {
+        CO_APP_INFO("{} queues: {}",
+                    qfp.queueCount,
+                    cory::vk::flag_bits_to_string<VkQueueFlagBits>(qfp.queueFlags));
+    }
 
-      try {
-          app.run();
-      }
-      catch (const std::exception &e) {
-          CO_APP_FATAL("Unhandled exception: {}", e.what());
+    // create a logical device
+    cory::vk::device device = [&]() {
+        using namespace cory::vk;
 
-          return EXIT_FAILURE;
-      }
+        // just enable everything! :)
+        VkPhysicalDeviceFeatures enabledFeatures = pickedDevice->features;
+        // build the device
+        return device_builder(pickedDevice->device)
+            .queue_create_infos({queue_builder().queue_family_index(1).queue_priorities({1.0f}),
+                                  queue_builder().queue_family_index(2).queue_priorities({1.0f})})
+            .enabled_features(enabledFeatures)
+            .create();
+    }();
 
-      */
+
+
+
     return EXIT_SUCCESS;
 }

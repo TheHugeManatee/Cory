@@ -1,7 +1,9 @@
 #pragma once
 
+#include <fmt/format.h>
 #include <vulkan/vulkan.h>
 
+#include <optional>
 #include <type_traits>
 #include <vector>
 
@@ -23,11 +25,14 @@ enum class device_memory_usage : int /*std::underlying_type<VmaMemoryUsage>::typ
 };
 
 #define VK_CHECKED_CALL(x, err)                                                                    \
-    if ((x) != VK_SUCCESS) { throw std::runtime_error(#x " failed: " err); }
+    if (auto code = (x); code != VK_SUCCESS) {                                                     \
+        throw std::runtime_error(fmt::format(#x " failed with {}: ", code));                       \
+    }
 
 const std::vector<VkExtensionProperties> &extension_properties();
 
-constexpr VkSampleCountFlagBits get_max_usable_sample_count(const VkPhysicalDeviceProperties &props) noexcept
+constexpr VkSampleCountFlagBits
+get_max_usable_sample_count(const VkPhysicalDeviceProperties &props) noexcept
 {
     auto counts = VkSampleCountFlagBits(props.limits.framebufferColorSampleCounts &
                                         props.limits.framebufferDepthSampleCounts);
@@ -40,6 +45,24 @@ constexpr VkSampleCountFlagBits get_max_usable_sample_count(const VkPhysicalDevi
     if (counts & VK_SAMPLE_COUNT_2_BIT) return VK_SAMPLE_COUNT_2_BIT;
 
     return VK_SAMPLE_COUNT_1_BIT;
+}
+
+template <typename ScoringFunctor>
+std::optional<uint32_t>
+find_best_queue_family(const std::vector<VkQueueFamilyProperties> &queue_family_properties,
+                       ScoringFunctor scoring_func)
+{
+    // if eligible, score is 32 - number of total set bits
+    // the thought is the lower the number of set bits,
+    // the more "specialized" the family is and therefore more optimal
+    std::vector<int> scores;
+    std::transform(queue_family_properties.begin(),
+                   queue_family_properties.end(),
+                   std::back_inserter(scores),
+                   scoring_func);
+    auto best_it = std::max_element(scores.begin(), scores.end());
+    if (*best_it == 0) return {};
+    return static_cast<uint32_t>(std::distance(scores.begin(), best_it));
 }
 
 } // namespace vk

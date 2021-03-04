@@ -41,7 +41,7 @@ debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 int main()
 {
     Cory::Log::Init();
-    //Cory::Log::GetCoreLogger()->set_level(spdlog::level::trace);
+    // Cory::Log::GetCoreLogger()->set_level(spdlog::level::trace);
 
     VkApplicationInfo app_info{.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                                .pApplicationName = "CoryAPITester",
@@ -67,7 +67,7 @@ int main()
     // create the instance with our nice builder pattern
     cory::vk::instance instance =
         cory::vk::instance_builder()
-            .application_info(&app_info)
+            .application_info(app_info)
             .enabled_extensions(extensions)
             .next(cory::vk::debug_utils_messenger_builder()
                       .message_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
@@ -116,13 +116,23 @@ int main()
         // build the device
         return device_builder(pickedDevice->device)
             .queue_create_infos({queue_builder().queue_family_index(1).queue_priorities({1.0f}),
-                                  queue_builder().queue_family_index(2).queue_priorities({1.0f})})
+                                 queue_builder().queue_family_index(2).queue_priorities({1.0f})})
             .enabled_features(enabledFeatures)
             .create();
     }();
 
+    // create a context
+    cory::vk::graphics_context ctx(instance, pickedDevice->device);
+    // TODO
 
-
+    auto img = ctx.image()
+                   .image_type(VK_IMAGE_TYPE_3D)
+                   .extent({1, 2, 3})
+                   .format(VK_FORMAT_R8G8B8A8_SRGB)
+                   .memory_usage(cory::vk::device_memory_usage::eCpuToGpu)
+                   .usage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
+                   .name("test image")
+                   .create();
 
     return EXIT_SUCCESS;
 }

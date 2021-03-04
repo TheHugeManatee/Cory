@@ -1,22 +1,23 @@
 #pragma once
 
+#include "buffer.h"
+#include "image.h"
 #include "instance.h"
-#include "resource.h"
 #include "utils.h"
 
 #include <glm.h>
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
-#include <iterator>
 #include <memory>
+#include <optional>
 #include <string_view>
+
+// we use the forward-declared version of the type to avoid the header file
+struct VmaAllocator_T;
 
 namespace cory {
 namespace vk {
-
-class image_builder;
-class buffer_builder;
 
 class device {
   public:
@@ -120,33 +121,7 @@ class device_builder {
         return *this;
     }
 
-    [[nodiscard]] device create()
-    {
-        std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-        std::transform(queue_builders_.begin(),
-                       queue_builders_.end(),
-                       std::back_inserter(queueCreateInfos),
-                       [](queue_builder &builder) { return builder.create_info(); });
-
-        info_.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-        info_.pQueueCreateInfos = queueCreateInfos.data();
-
-        info_.enabledLayerCount = static_cast<uint32_t>(enabled_layer_names_.size());
-        info_.ppEnabledLayerNames = enabled_layer_names_.data();
-
-        info_.enabledExtensionCount = static_cast<uint32_t>(enabled_extension_names_.size());
-        info_.ppEnabledExtensionNames = enabled_extension_names_.data();
-
-        info_.pEnabledFeatures = &enabled_features_;
-
-        VkDevice device;
-        vkCreateDevice(physical_device_, &info_, nullptr, &device);
-
-        std::shared_ptr<struct VkDevice_T> device_ptr{
-            device, [=](VkDevice d) { vkDestroyDevice(d, nullptr); }};
-
-        return device_ptr;
-    }
+    [[nodiscard]] device create();
 
   private:
     VkPhysicalDevice physical_device_;
@@ -161,17 +136,12 @@ class device_builder {
 
 class graphics_context {
   public:
-    graphics_context(instance inst, VkPhysicalDevice physical_device)
-        : instance_{inst}
-        , physical_device_info_{inst.device_info(physical_device)}
-    {
-        // TODO
-        device_ = device_builder(physical_device).create();
-
-        // device_builder()
-        //    .queue(queue_builder().queue_family_index(1).queue_priorities({1.0f}))
-        //    .enabled_features();
-    }
+    graphics_context(instance inst,
+                     VkPhysicalDevice physical_device,
+                     VkSurfaceKHR surface = nullptr,
+                     VkPhysicalDeviceFeatures *requested_features = nullptr,
+                     std::vector<const char *> requested_extensions = {},
+                     std::vector<const char *> requested_layers = {});
 
     // this one should never be copied
     graphics_context(const graphics_context &) = delete;
@@ -181,10 +151,10 @@ class graphics_context {
     graphics_context(graphics_context &&) = default;
     graphics_context &operator=(graphics_context &&) = default;
 
-    ~graphics_context() {}
+    ~graphics_context();
 
-    // image_builder image() { return image_builder{*this}; }
-    // buffer_builder buffer() { return buffer_builder{*this}; }
+    image_builder image() { return image_builder{*this}; }
+    buffer_builder buffer() { return buffer_builder{*this}; }
 
     cory::vk::image create_image(const image_builder &builder);
 
@@ -196,20 +166,38 @@ class graphics_context {
     //    f(cmd_buffer.buffer());
     //}
 
-    const auto &enabled_features() const { return physical_device_features_; }
-    const auto &device_info() const { return physical_device_info_; }
-    auto &instance() const { return instance_; }
-    auto physical_device() const { return physical_device_info_.device; }
+    [[nodiscard]] const auto &graphics_queue() const noexcept { return graphics_queue_; }
+    [[nodiscard]] const auto &compute_queue() const noexcept { return compute_queue_; }
+    [[nodiscard]] const auto &present_queue() const noexcept { return present_queue_; }
+    [[nodiscard]] const auto &transfer_queue() const noexcept { return transfer_queue_; }
 
+    [[nodiscard]] const auto &enabled_features() const noexcept
+    {
+        return physical_device_features_;
+    }
+    [[nodiscard]] const auto &device_info() const noexcept { return physical_device_info_; }
+    [[nodiscard]] auto &instance() const noexcept { return instance_; }
+    [[nodiscard]] auto physical_device() const noexcept { return physical_device_info_.device; }
+
+  private:
   private:
     cory::vk::instance instance_;
     physical_device_info physical_device_info_;
-    VkPhysicalDeviceFeatures physical_device_features_;
+    VkPhysicalDeviceFeatures physical_device_features_{};
     device device_;
 
-    // we use the forward-declared version of the type to avoid the header file
-    struct VmaAllocator_T *vma_allocator_;
-};
+    std::optional<uint32_t> graphics_queue_family_;
+    std::optional<uint32_t> transfer_queue_family_;
+    std::optional<uint32_t> compute_queue_family_;
+    std::optional<uint32_t> present_queue_family_;
+
+    VkQueue graphics_queue_{};
+    VkQueue transfer_queue_{};
+    VkQueue compute_queue_{};
+    VkQueue present_queue_{};
+
+    VmaAllocator_T *vma_allocator_{};
+}; // namespace vk
 
 } // namespace vk
 } // namespace cory

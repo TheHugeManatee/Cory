@@ -39,37 +39,5 @@ template <typename Derived, typename ResourcePtr> class resource {
     ResourcePtr resource_;
 };
 
-class image : public resource<image, std::shared_ptr<struct VkImage_T>> {
-  public:
-    friend class graphics_context;
-
-    [[nodiscard]] VkImageType type() const noexcept { return type_; }
-    [[nodiscard]] const auto &size() const noexcept { return size_; }
-    [[nodiscard]] auto format() const noexcept { return format_; }
-
-  private:
-    /// private constructor - create through @a graphics_context
-    image(graphics_context &context,
-          resource_ptr_t ptr,
-          std::string_view name,
-          VkImageType type,
-          glm::uvec3 size,
-          VkFormat format)
-        : resource(context, ptr, name)
-        , type_{type}
-        , size_{size}
-        , format_{format}
-    {
-    }
-
-    VkImageType type_;
-    glm::uvec3 size_;
-    VkFormat format_;
-};
-
-class buffer : public resource<buffer, std::shared_ptr<struct VkBuffer_T>> {
-  public:
-};
-
 } // namespace vk
 } // namespace cory

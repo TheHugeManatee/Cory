@@ -4,8 +4,15 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
-add_library(${TARGET_NAME} STATIC
+set(CORY_VK_SOURCES   
   src/vk/utils.cpp
+  src/vk/image.cpp
+  src/vk/instance.cpp
+  src/vk/buffer.cpp
+  src/vk/graphics_context.cpp
+)
+
+set(CORY_SOURCES 
   src/Application.cpp
   src/Buffer.cpp
   src/CameraManipulator.cpp
@@ -21,6 +28,14 @@ add_library(${TARGET_NAME} STATIC
   src/VkBuilders.cpp
   src/VkUtils.cpp
 )
+
+file(GLOB_RECURSE HEADERS "include/*.h")
+
+add_library(${TARGET_NAME} STATIC
+  ${CORY_VK_SOURCES} ${CORY_SOURCES} ${HEADERS})
+
+source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/src PREFIX src FILES ${CORY_VK_SOURCES} ${CORY_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/include/Cory PREFIX include FILES ${HEADERS})
 
 target_include_directories (${TARGET_NAME} 
   PUBLIC 
@@ -59,11 +74,6 @@ target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)
 
 # group this lib into the 'libs' group for some IDEs
 #set_target_properties (${TARGET_NAME} PROPERTIES FOLDER libs)
-
-# add headers as sources automatically - this makes them show up in some IDEs
-# but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
-file(GLOB_RECURSE HEADERS "include/*.h")
-target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
 # Set the include directories of this library
 target_include_directories(${TARGET_NAME} PUBLIC

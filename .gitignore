@@ -8,3 +8,5 @@ build19/
 *.spv
 
 .vscode/
+
+.ipynb_checkpoints/

@@ -21,24 +21,34 @@ graphics_context::graphics_context(cory::vk::instance inst,
     : instance_{inst}
     , physical_device_info_{inst.device_info(physical_device)}
 {
-    if (requested_features) physical_device_features_ = *requested_features;
+    // if not explicitly supplied, enable all features. :)
+    if (requested_features) { physical_device_features_ = *requested_features; }
+    else {
+        physical_device_features_ = physical_device_info_.features;
+    }
 
+    // find the default queue families for graphics, transfer and compute
+    // we use a scoring function that ranks eligible families by their amount of
+    // specialization: the more other bits they have (i.e. the more other features the
+    // family supports) the less attractive they are (because they might overlap with other
+    // computations).
+    // No idea if this makes sense at all, but I finally found a use for std::popcount! :)
     auto scoring_func = [](VkQueueFlagBits queue_flags) {
         return [=](const VkQueueFamilyProperties &qfp) {
             if (qfp.queueFlags & queue_flags) { return 32 - std::popcount(qfp.queueFlags); }
             return 0;
         };
     };
-
     const auto &qfi_props = physical_device_info_.queue_family_properties;
     graphics_queue_family_ = find_best_queue_family(qfi_props, scoring_func(VK_QUEUE_GRAPHICS_BIT));
     transfer_queue_family_ = find_best_queue_family(qfi_props, scoring_func(VK_QUEUE_TRANSFER_BIT));
     compute_queue_family_ = find_best_queue_family(qfi_props, scoring_func(VK_QUEUE_COMPUTE_BIT));
 
+    // if we were passed a surface, try to initialize a present queue for it. no fancy
+    // selection logic yet, just pick whatever works.
     if (surface) {
-        // just pick the last queue that can present
+        VkBool32 supports_present;
         for (int qfi = 0; qfi < qfi_props.size(); ++qfi) {
-            VkBool32 supports_present;
             vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, qfi, surface, &supports_present);
             if (supports_present) { present_queue_family_ = qfi; }
         }
@@ -48,6 +58,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
         }
     }
 
+    // log this out, you never know when this might be interesting..
     CO_APP_TRACE(R"(Instantiating queue families:)");
     CO_APP_TRACE(
         "    graphics: {} - {}",
@@ -65,13 +76,25 @@ graphics_context::graphics_context(cory::vk::instance inst,
         flag_bits_to_string<VkQueueFlagBits>(
             physical_device_info_.queue_family_properties[*compute_queue_family_].queueFlags));
 
-    // figure out which queues we need to create
+    if (surface) {
+        CO_APP_TRACE(
+            "    present:  {} - {}",
+            *present_queue_family_,
+            flag_bits_to_string<VkQueueFlagBits>(
+                physical_device_info_.queue_family_properties[*present_queue_family_].queueFlags));
+    }
+
+    // figure out which queues we need to create - we always expect graphics and transfer queues
+    // (i guess there might be compute-only devices but we don't care about those weirdos)
     std::vector<queue_builder> queues{
         queue_builder().queue_family_index(*graphics_queue_family_).queue_priorities({1.0f}),
         queue_builder().queue_family_index(*transfer_queue_family_).queue_priorities({1.0f})};
-    if (compute_queue_family_.has_value())
+    if (compute_queue_family_)
         queues.emplace_back(
             queue_builder().queue_family_index(*compute_queue_family_).queue_priorities({1.0f}));
+    if (present_queue_family_)
+        queues.emplace_back(
+            queue_builder().queue_family_index(*present_queue_family_).queue_priorities({1.0f}));
 
     // create the device with from the physical device and the extensions
     device_ = device_builder(physical_device)
@@ -81,7 +104,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
                   .enabled_layer_names(requested_layers)
                   .create();
 
-    // query the actual queues to keep a reference
+    // get references to the actual queues so we can reference them later
     auto get_queue = [&](auto &family, auto &queue) {
         if (family.has_value()) vkGetDeviceQueue(device_.get(), *family, 0, &queue);
     };
@@ -89,17 +112,21 @@ graphics_context::graphics_context(cory::vk::instance inst,
     get_queue(compute_queue_family_, compute_queue_);
     get_queue(transfer_queue_family_, transfer_queue_);
 
-    // create the allocator
+    // create the VMA allocator
     VmaAllocatorCreateInfo allocatorInfo = {};
     allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
     allocatorInfo.physicalDevice = physical_device_info_.device;
     allocatorInfo.device = device_.get();
     allocatorInfo.instance = instance_.get();
 
-    vmaCreateAllocator(&allocatorInfo, &vma_allocator_);
+    VmaAllocator vmaAllocator;
+    VK_CHECKED_CALL(vmaCreateAllocator(&allocatorInfo, &vmaAllocator),
+                    "Could not create VMA allocator object");
+    // wrap the allocator with a shared_ptr with a custom deallocator
+    vma_allocator_ = std::shared_ptr<VmaAllocator_T>(
+        vmaAllocator, [](VmaAllocator alloc) { vmaDestroyAllocator(alloc); });
 }
 
-graphics_context::~graphics_context() { vmaDestroyAllocator(vma_allocator_); }
 
 cory::vk::image graphics_context::create_image(const image_builder &builder)
 {
@@ -109,16 +136,16 @@ cory::vk::image graphics_context::create_image(const image_builder &builder)
     allocCreateInfo.usage = static_cast<VmaMemoryUsage>(builder.memory_usage_);
     VmaAllocationInfo allocInfo;
 
-    VK_CHECKED_CALL(
-        vmaCreateImage(
-            vma_allocator_, &builder.info_, &allocCreateInfo, &vkImage, &allocation, &allocInfo),
-        "Could not allocate image device memory from memory allocator");
+    // VK_CHECKED_CALL(
+    vmaCreateImage(
+        vma_allocator_.get(), &builder.info_, &allocCreateInfo, &vkImage, &allocation, &allocInfo);
+    //   "Could not allocate image device memory from memory allocator");
 
     // create a shared pointer to VkImage_T (because VkImage_T* == VkImage)
     // with a custom deallocation function that destroys the image in the VMA
     // this way we get reference-counted
     std::shared_ptr<VkImage_T> image_sptr(
-        vkImage, [=](auto *p) { vmaDestroyImage(vma_allocator_, p, allocation); });
+        vkImage, [=](auto *p) { vmaDestroyImage(vma_allocator_.get(), p, allocation); });
 
     static_assert(std::is_same<decltype(image_sptr.get()), VkImage>::value);
 

@@ -151,7 +151,8 @@ class graphics_context {
     graphics_context(graphics_context &&) = default;
     graphics_context &operator=(graphics_context &&) = default;
 
-    ~graphics_context();
+    // nothing to do here!
+    ~graphics_context() = default;
 
     image_builder image() { return image_builder{*this}; }
     buffer_builder buffer() { return buffer_builder{*this}; }
@@ -196,7 +197,7 @@ class graphics_context {
     VkQueue compute_queue_{};
     VkQueue present_queue_{};
 
-    VmaAllocator_T *vma_allocator_{};
+    std::shared_ptr<VmaAllocator_T> vma_allocator_{};
 }; // namespace vk
 
 } // namespace vk

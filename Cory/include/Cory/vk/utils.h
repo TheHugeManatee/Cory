@@ -26,7 +26,7 @@ enum class device_memory_usage : int /*std::underlying_type<VmaMemoryUsage>::typ
 
 #define VK_CHECKED_CALL(x, err)                                                                    \
     if (auto code = (x); code != VK_SUCCESS) {                                                     \
-        throw std::runtime_error(fmt::format(#x " failed with {}: ", code));                       \
+        throw std::runtime_error(fmt::format(#x " failed with {}: {}", code, (err)));              \
     }
 
 const std::vector<VkExtensionProperties> &extension_properties();

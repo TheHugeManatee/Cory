@@ -123,14 +123,13 @@ int main()
 
     // create a context
     cory::vk::graphics_context ctx(instance, pickedDevice->device);
-    // TODO
 
     auto img = ctx.image()
                    .image_type(VK_IMAGE_TYPE_3D)
                    .extent({1, 2, 3})
-                   .format(VK_FORMAT_R8G8B8A8_SRGB)
-                   .memory_usage(cory::vk::device_memory_usage::eCpuToGpu)
-                   .usage(VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
+                   .format(VK_FORMAT_R8G8B8A8_UNORM)
+                   .memory_usage(cory::vk::device_memory_usage::eGpuOnly)
+                   .usage(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
                    .name("test image")
                    .create();
 

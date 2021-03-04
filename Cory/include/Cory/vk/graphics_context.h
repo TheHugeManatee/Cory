@@ -19,19 +19,8 @@ struct VmaAllocator_T;
 namespace cory {
 namespace vk {
 
-class device {
-  public:
-    device() = default;
-    device(std::shared_ptr<struct VkDevice_T> device_ptr)
-        : device_ptr_{device_ptr}
-    {
-    }
-
-    VkDevice get() { return device_ptr_.get(); }
-
-  private:
-    std::shared_ptr<struct VkDevice_T> device_ptr_;
-};
+using surface = std::shared_ptr<VkSurfaceKHR_T>;
+using device = std::shared_ptr<VkDevice_T>;
 
 class queue_builder {
   public:
@@ -138,7 +127,7 @@ class graphics_context {
   public:
     graphics_context(instance inst,
                      VkPhysicalDevice physical_device,
-                     VkSurfaceKHR surface = nullptr,
+                     surface surface_khr = nullptr,
                      VkPhysicalDeviceFeatures *requested_features = nullptr,
                      std::vector<const char *> requested_extensions = {},
                      std::vector<const char *> requested_layers = {});
@@ -186,6 +175,7 @@ class graphics_context {
     physical_device_info physical_device_info_;
     VkPhysicalDeviceFeatures physical_device_features_{};
     device device_;
+    std::shared_ptr<VkSurfaceKHR_T> surface_;
 
     std::optional<uint32_t> graphics_queue_family_;
     std::optional<uint32_t> transfer_queue_family_;

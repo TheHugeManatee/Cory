@@ -98,7 +98,7 @@ int main_main()
     }();
 
     // create a context
-    cory::vk::graphics_context ctx(instance, pickedDevice->device, surface.get());
+    cory::vk::graphics_context ctx(instance, pickedDevice->device, surface);
 
 
 

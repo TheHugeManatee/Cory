@@ -8,18 +8,20 @@
 
 #include <bit>
 #include <iterator>
+#include <set>
 
 namespace cory {
 namespace vk {
 
 graphics_context::graphics_context(cory::vk::instance inst,
                                    VkPhysicalDevice physical_device,
-                                   VkSurfaceKHR surface /*= nullptr*/,
+                                   surface surface_khr /*= nullptr*/,
                                    VkPhysicalDeviceFeatures *requested_features /*= nullptr*/,
                                    std::vector<const char *> requested_extensions /*= {}*/,
                                    std::vector<const char *> requested_layers /*= {}*/)
     : instance_{inst}
     , physical_device_info_{inst.device_info(physical_device)}
+    , surface_{surface_khr}
 {
     // if not explicitly supplied, enable all features. :)
     if (requested_features) { physical_device_features_ = *requested_features; }
@@ -46,10 +48,11 @@ graphics_context::graphics_context(cory::vk::instance inst,
 
     // if we were passed a surface, try to initialize a present queue for it. no fancy
     // selection logic yet, just pick whatever works.
-    if (surface) {
+    if (surface_) {
         VkBool32 supports_present;
         for (int qfi = 0; qfi < qfi_props.size(); ++qfi) {
-            vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, qfi, surface, &supports_present);
+            vkGetPhysicalDeviceSurfaceSupportKHR(
+                physical_device, qfi, surface_.get(), &supports_present);
             if (supports_present) { present_queue_family_ = qfi; }
         }
         if (!present_queue_family_) {
@@ -76,7 +79,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
         flag_bits_to_string<VkQueueFlagBits>(
             physical_device_info_.queue_family_properties[*compute_queue_family_].queueFlags));
 
-    if (surface) {
+    if (surface_) {
         CO_APP_TRACE(
             "    present:  {} - {}",
             *present_queue_family_,
@@ -86,16 +89,16 @@ graphics_context::graphics_context(cory::vk::instance inst,
 
     // figure out which queues we need to create - we always expect graphics and transfer queues
     // (i guess there might be compute-only devices but we don't care about those weirdos)
-    std::vector<queue_builder> queues{
-        queue_builder().queue_family_index(*graphics_queue_family_).queue_priorities({1.0f}),
-        queue_builder().queue_family_index(*transfer_queue_family_).queue_priorities({1.0f})};
-    if (compute_queue_family_)
-        queues.emplace_back(
-            queue_builder().queue_family_index(*compute_queue_family_).queue_priorities({1.0f}));
-    if (present_queue_family_)
-        queues.emplace_back(
-            queue_builder().queue_family_index(*present_queue_family_).queue_priorities({1.0f}));
+    std::set<uint32_t> queue_families_to_instantiate;
+    queue_families_to_instantiate.insert(*graphics_queue_family_);
+    queue_families_to_instantiate.insert(*transfer_queue_family_);
 
+    if (compute_queue_family_) queue_families_to_instantiate.insert(*compute_queue_family_);
+    if (present_queue_family_) queue_families_to_instantiate.insert(*present_queue_family_);
+    std::vector<queue_builder> queues;
+    for (uint32_t qfi : queue_families_to_instantiate)
+        queues.emplace_back(queue_builder().queue_family_index(qfi).queue_priorities({1.0f}));
+   
     // create the device with from the physical device and the extensions
     device_ = device_builder(physical_device)
                   .queue_create_infos(queues)
@@ -126,7 +129,6 @@ graphics_context::graphics_context(cory::vk::instance inst,
     vma_allocator_ = std::shared_ptr<VmaAllocator_T>(
         vmaAllocator, [](VmaAllocator alloc) { vmaDestroyAllocator(alloc); });
 }
-
 
 cory::vk::image graphics_context::create_image(const image_builder &builder)
 {
@@ -183,13 +185,10 @@ cory::vk::device device_builder::create()
 
     info_.pEnabledFeatures = &enabled_features_;
 
-    VkDevice device;
-    vkCreateDevice(physical_device_, &info_, nullptr, &device);
+    VkDevice vkDevice;
+    vkCreateDevice(physical_device_, &info_, nullptr, &vkDevice);
 
-    std::shared_ptr<struct VkDevice_T> device_ptr{device,
-                                                  [=](VkDevice d) { vkDestroyDevice(d, nullptr); }};
-
-    return device_ptr;
+    return {vkDevice, [=](VkDevice d) { vkDestroyDevice(d, nullptr); }};
 }
 
 } // namespace vk

@@ -88,19 +88,18 @@ int main_main()
     }
 
     // initialize the surface
-    auto surface = [&, instance_ptr = instance.get()]() -> std::shared_ptr<VkSurfaceKHR_T> {
+    auto surface = [&, instance_ptr = instance.get()]() -> cory::vk::surface {
         VkSurfaceKHR surface;
         VK_CHECKED_CALL(glfwCreateWindowSurface(instance.get(), window, nullptr, &surface),
                         "Could not create window surface");
         // return a shared_ptr with custom deallocator to destroy the surface
-        return {surface,
-                [instance_ptr](VkSurfaceKHR s) { vkDestroySurfaceKHR(instance_ptr, s, nullptr); }};
+        return cory::vk::make_shared_resource(surface, [instance_ptr](VkSurfaceKHR s) {
+            vkDestroySurfaceKHR(instance_ptr, s, nullptr);
+        });
     }();
 
     // create a context
     cory::vk::graphics_context ctx(instance, pickedDevice->device, surface);
-
-
 
     return EXIT_SUCCESS;
 }

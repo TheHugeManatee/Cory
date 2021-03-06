@@ -65,5 +65,16 @@ find_best_queue_family(const std::vector<VkQueueFamilyProperties> &queue_family_
     return static_cast<uint32_t>(std::distance(scores.begin(), best_it));
 }
 
+// create a shared pointer to a vulkan resource, for ex. to VkImage_T (because VkImage_T* ==
+// VkImage) with a custom deallocation function that destroys the resource appropriately, for
+// example by calling the VkDestroy* functions. by wrapping the objects in a shared_ptr, we get
+// reference-counted semantics without manually introducing new types for each of those types
+template <typename VkResourceType, typename DeletionFunctor>
+std::shared_ptr<std::remove_pointer_t<typename VkResourceType>>
+make_shared_resource(VkResourceType resource, DeletionFunctor &&deletionFunctor)
+{
+    return {resource, std::forward<DeletionFunctor>(deletionFunctor)};
+}
+
 } // namespace vk
 } // namespace cory

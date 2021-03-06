@@ -5,11 +5,12 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
 set(CORY_VK_SOURCES   
-  src/vk/utils.cpp
-  src/vk/image.cpp
-  src/vk/instance.cpp
-  src/vk/buffer.cpp
-  src/vk/graphics_context.cpp
+src/vk/buffer.cpp
+src/vk/graphics_context.cpp
+src/vk/image.cpp
+src/vk/instance.cpp
+src/vk/swapchain.cpp
+src/vk/utils.cpp
 )
 
 set(CORY_SOURCES 

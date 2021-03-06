@@ -98,7 +98,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
     std::vector<queue_builder> queues;
     for (uint32_t qfi : queue_families_to_instantiate)
         queues.emplace_back(queue_builder().queue_family_index(qfi).queue_priorities({1.0f}));
-   
+
     // create the device with from the physical device and the extensions
     device_ = device_builder(physical_device)
                   .queue_create_infos(queues)
@@ -126,8 +126,8 @@ graphics_context::graphics_context(cory::vk::instance inst,
     VK_CHECKED_CALL(vmaCreateAllocator(&allocatorInfo, &vmaAllocator),
                     "Could not create VMA allocator object");
     // wrap the allocator with a shared_ptr with a custom deallocator
-    vma_allocator_ = std::shared_ptr<VmaAllocator_T>(
-        vmaAllocator, [](VmaAllocator alloc) { vmaDestroyAllocator(alloc); });
+    vma_allocator_ =
+        make_shared_resource(vmaAllocator, [](VmaAllocator alloc) { vmaDestroyAllocator(alloc); });
 }
 
 cory::vk::image graphics_context::create_image(const image_builder &builder)
@@ -143,10 +143,8 @@ cory::vk::image graphics_context::create_image(const image_builder &builder)
         vma_allocator_.get(), &builder.info_, &allocCreateInfo, &vkImage, &allocation, &allocInfo);
     //   "Could not allocate image device memory from memory allocator");
 
-    // create a shared pointer to VkImage_T (because VkImage_T* == VkImage)
-    // with a custom deallocation function that destroys the image in the VMA
-    // this way we get reference-counted
-    std::shared_ptr<VkImage_T> image_sptr(
+
+    auto image_sptr = make_shared_resource(
         vkImage, [=](auto *p) { vmaDestroyImage(vma_allocator_.get(), p, allocation); });
 
     static_assert(std::is_same<decltype(image_sptr.get()), VkImage>::value);
@@ -188,7 +186,7 @@ cory::vk::device device_builder::create()
     VkDevice vkDevice;
     vkCreateDevice(physical_device_, &info_, nullptr, &vkDevice);
 
-    return {vkDevice, [=](VkDevice d) { vkDestroyDevice(d, nullptr); }};
+    return make_shared_resource(vkDevice, [=](VkDevice d) { vkDestroyDevice(d, nullptr); });
 }
 
 } // namespace vk

@@ -34,7 +34,7 @@ private:
 
 } // namespace Cory
 
-#
+
 #define CO_CORE_FATAL(...) ::Cory::Log::GetCoreLogger()->critical(__VA_ARGS__)
 #define CO_CORE_ERROR(...) ::Cory::Log::GetCoreLogger()->error(__VA_ARGS__)
 #define CO_CORE_WARN(...) ::Cory::Log::GetCoreLogger()->warn(__VA_ARGS__)
@@ -48,3 +48,6 @@ private:
 #define CO_APP_DEBUG(...) ::Cory::Log::GetAppLogger()->debug(__VA_ARGS__)
 #define CO_APP_TRACE(...) ::Cory::Log::GetAppLogger()->trace(__VA_ARGS__)
 #define CO_APP_INFO(...) ::Cory::Log::GetAppLogger()->info(__VA_ARGS__)
+
+#define CO_CORE_ASSERT(condition, message)                                                              \
+    if (!(condition)) { CO_CORE_FATAL("Assertion failed: \n{}.\n    {}", #condition, message);}

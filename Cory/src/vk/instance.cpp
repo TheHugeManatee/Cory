@@ -30,7 +30,6 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance,
 }
 } // namespace detail
 
-
 physical_device_info instance::device_info(VkPhysicalDevice device)
 {
     physical_device_info dev_info;
@@ -87,12 +86,10 @@ instance instance_builder::create()
                         "Could not create debug utils messenger");
     }
 
-    auto instance_sptr = std::shared_ptr<VkInstance_T>{
-        inst, [=](VkInstance inst) {
-            if (debugMessenger)
-                detail::DestroyDebugUtilsMessengerEXT(inst, debugMessenger, nullptr);
-            vkDestroyInstance(inst, nullptr);
-        }};
+    auto instance_sptr = make_shared_resource(inst, [=](VkInstance inst) {
+        if (debugMessenger) detail::DestroyDebugUtilsMessengerEXT(inst, debugMessenger, nullptr);
+        vkDestroyInstance(inst, nullptr);
+    });
 
     return instance{instance_sptr};
 }

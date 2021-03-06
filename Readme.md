@@ -69,5 +69,24 @@ cmake ..
 cmake --build .
 ```
 
-## Cory?
+## FAQ / Interesting tidbits
+
+### `std::shared_ptr<VkSurfaceKHR_T>` - what in the heck is this?
+I use this idiom often to store references to vulkan-managed objects, which are nothing more than opaque pointers: in this case, `VkSurfaceKHR` is a pointer to `VkSurfaceKHR_T`, so we use this as the template type. Using a `std::shared_ptr` in this way gives us a reference-counted mechanism and allows us to supply a custom deallocator by attaching a lambda, in which we can
+call the respective `vkDestroy*` method. 
+
+Check out this example, which uses an immediately invoked lambda for some extra coolness:
+```
+    // initialize the surface
+    auto surface = [&, instance_ptr = instance.get()]() -> std::shared_ptr<VkSurfaceKHR_T> {
+        VkSurfaceKHR surface;
+        VK_CHECKED_CALL(glfwCreateWindowSurface(instance.get(), window, nullptr, &surface),
+                        "Could not create window surface");
+        // return a shared_ptr with custom deallocator to destroy the surface
+        return {surface,
+                [instance_ptr](VkSurfaceKHR s) { vkDestroySurfaceKHR(instance_ptr, s, nullptr); }};
+    }();
+```
+
+### Cory?
 According to [this very trustworthy-looking web source](http://www.talesbeyondbelief.com/roman-gods/vulcan.htm), *Corynetes* was the son of the roman god Vulcan.

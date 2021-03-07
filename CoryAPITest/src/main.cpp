@@ -124,7 +124,7 @@ int main()
     // create a context
     cory::vk::graphics_context ctx(instance, pickedDevice->device);
 
-    auto img = ctx.image()
+    auto img = ctx.build_image()
                    .image_type(VK_IMAGE_TYPE_3D)
                    .extent({1, 2, 3})
                    .format(VK_FORMAT_R8G8B8A8_UNORM)

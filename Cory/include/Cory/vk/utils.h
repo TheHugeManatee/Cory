@@ -47,6 +47,15 @@ get_max_usable_sample_count(const VkPhysicalDeviceProperties &props) noexcept
     return VK_SAMPLE_COUNT_1_BIT;
 }
 
+struct swap_chain_support {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+};
+
+swap_chain_support query_swap_chain_support(VkPhysicalDevice device,
+                                                    VkSurfaceKHR surface);
+
 template <typename ScoringFunctor>
 std::optional<uint32_t>
 find_best_queue_family(const std::vector<VkQueueFamilyProperties> &queue_family_properties,

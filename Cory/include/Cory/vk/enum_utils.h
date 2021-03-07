@@ -2731,8 +2731,8 @@ constexpr std::string_view to_string(VkImageViewCreateFlagBits vk_image_view_cre
     return "Unknown VkImageViewCreateFlagBits";
 }
 constexpr std::string_view to_string(VkShaderModuleCreateFlagBits vk_shader_module_create_flag_bits) noexcept {
-    switch (vk_shader_module_create_flag_bits) {
-    }
+//     switch (vk_shader_module_create_flag_bits) {
+//     }
     return "Unknown VkShaderModuleCreateFlagBits";
 }
 constexpr std::string_view to_string(VkPipelineCacheCreateFlagBits vk_pipeline_cache_create_flag_bits) noexcept {

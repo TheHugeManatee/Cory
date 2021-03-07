@@ -5,9 +5,9 @@
 namespace cory {
 namespace vk {
 
-buffer_builder::operator buffer() { return ctx_.create_buffer(*this); }
+//buffer_builder::operator buffer() { return ctx_.create_buffer(*this); }
 
-buffer buffer_builder::create() { return ctx_.create_buffer(*this); }
+//buffer buffer_builder::create() { return ctx_.create_buffer(*this); }
 
 }
 } // namespace cory

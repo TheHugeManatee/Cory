@@ -5,7 +5,10 @@
 #include <Cory/vk/instance.h>
 #include <Cory/vk/utils.h>
 
+#include <Cory/utils/container.h>
+
 #include <GLFW/glfw3.h>
+#include <fmt/ranges.h>
 #include <vulkan/vulkan.h>
 
 #include <cstdlib>
@@ -99,7 +102,8 @@ int main_main()
     }();
 
     // create a context
-    cory::vk::graphics_context ctx(instance, pickedDevice->device, surface);
+    cory::vk::graphics_context ctx(
+        instance, pickedDevice->device, surface, nullptr);
 
     return EXIT_SUCCESS;
 }

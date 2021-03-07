@@ -1,9 +1,11 @@
 #include "vk/graphics_context.h"
 
-#include "vk/enum_utils.h"
-
 #include "Log.h"
 
+#include "utils/container.h"
+#include "vk/enum_utils.h"
+
+#include <fmt/ranges.h>
 #include <vk_mem_alloc.h>
 
 #include <bit>
@@ -15,7 +17,7 @@ namespace vk {
 
 graphics_context::graphics_context(cory::vk::instance inst,
                                    VkPhysicalDevice physical_device,
-                                   surface surface_khr /*= nullptr*/,
+                                   cory::vk::surface surface_khr /*= nullptr*/,
                                    VkPhysicalDeviceFeatures *requested_features /*= nullptr*/,
                                    std::vector<const char *> requested_extensions /*= {}*/,
                                    std::vector<const char *> requested_layers /*= {}*/)
@@ -29,6 +31,63 @@ graphics_context::graphics_context(cory::vk::instance inst,
         physical_device_features_ = physical_device_info_.features;
     }
 
+    // if we got a surface, make sure we enable the required extension
+    if (surface_) { requested_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME); }
+
+    // figure out which queue families we want to use for what
+    const std::set<uint32_t> queue_families_to_instantiate = configure_queue_families();
+
+    // pre-create the builders for each queue
+    const std::vector<queue_builder> queues = [&]() {
+        std::vector<queue_builder> q;
+        for (uint32_t qfi : queue_families_to_instantiate)
+            q.emplace_back(queue_builder().queue_family_index(qfi).queue_priorities({1.0f}));
+        return q;
+    }();
+
+    // create the device with from the physical device and the extensions
+    device_ = device_builder(physical_device)
+                  .queue_create_infos(queues)
+                  .enabled_features(physical_device_features_)
+                  .enabled_extension_names(requested_extensions)
+                  .enabled_layer_names(requested_layers)
+                  .create();
+
+    // get references to the actual queues so we can reference them later
+    auto get_queue = [&](auto &family, auto &queue) {
+        if (family.has_value()) vkGetDeviceQueue(device_.get(), *family, 0, &queue);
+    };
+    get_queue(graphics_queue_family_, graphics_queue_);
+    get_queue(compute_queue_family_, compute_queue_);
+    get_queue(transfer_queue_family_, transfer_queue_);
+    get_queue(present_queue_family_, present_queue_);
+
+    init_allocator();
+
+    if (surface_) { init_swapchain(); }
+}
+
+void graphics_context::init_allocator()
+{
+    // create the VMA allocator
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    // TODO: the vulkan version should come from the instance, as the instance/device might not
+    // actually support 1.2
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+    allocatorInfo.physicalDevice = physical_device_info_.device;
+    allocatorInfo.device = device_.get();
+    allocatorInfo.instance = instance_.get();
+
+    VmaAllocator vmaAllocator;
+    VK_CHECKED_CALL(vmaCreateAllocator(&allocatorInfo, &vmaAllocator),
+                    "Could not create VMA allocator object");
+    // wrap the allocator with a shared_ptr with a custom deallocator
+    vma_allocator_ =
+        make_shared_resource(vmaAllocator, [](VmaAllocator alloc) { vmaDestroyAllocator(alloc); });
+}
+
+std::set<uint32_t> graphics_context::configure_queue_families()
+{
     // find the default queue families for graphics, transfer and compute
     // we use a scoring function that ranks eligible families by their amount of
     // specialization: the more other bits they have (i.e. the more other features the
@@ -52,13 +111,13 @@ graphics_context::graphics_context(cory::vk::instance inst,
         VkBool32 supports_present;
         for (int qfi = 0; qfi < qfi_props.size(); ++qfi) {
             vkGetPhysicalDeviceSurfaceSupportKHR(
-                physical_device, qfi, surface_.get(), &supports_present);
+                physical_device_info_.device, qfi, surface_.get(), &supports_present);
             if (supports_present) { present_queue_family_ = qfi; }
         }
-        if (!present_queue_family_) {
-            CO_CORE_ERROR("graphics_context: surface was supplied but could not find a present "
-                          "queue to support it.");
-        }
+
+        CO_CORE_ASSERT(present_queue_family_.has_value(),
+                       "graphics_context: surface was supplied but could not find a present "
+                       "queue to support it.");
     }
 
     // log this out, you never know when this might be interesting..
@@ -95,73 +154,75 @@ graphics_context::graphics_context(cory::vk::instance inst,
 
     if (compute_queue_family_) queue_families_to_instantiate.insert(*compute_queue_family_);
     if (present_queue_family_) queue_families_to_instantiate.insert(*present_queue_family_);
-    std::vector<queue_builder> queues;
-    for (uint32_t qfi : queue_families_to_instantiate)
-        queues.emplace_back(queue_builder().queue_family_index(qfi).queue_priorities({1.0f}));
-
-    // create the device with from the physical device and the extensions
-    device_ = device_builder(physical_device)
-                  .queue_create_infos(queues)
-                  .enabled_features(physical_device_features_)
-                  .enabled_extension_names(requested_extensions)
-                  .enabled_layer_names(requested_layers)
-                  .create();
-
-    // get references to the actual queues so we can reference them later
-    auto get_queue = [&](auto &family, auto &queue) {
-        if (family.has_value()) vkGetDeviceQueue(device_.get(), *family, 0, &queue);
-    };
-    get_queue(graphics_queue_family_, graphics_queue_);
-    get_queue(compute_queue_family_, compute_queue_);
-    get_queue(transfer_queue_family_, transfer_queue_);
-
-    // create the VMA allocator
-    VmaAllocatorCreateInfo allocatorInfo = {};
-    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
-    allocatorInfo.physicalDevice = physical_device_info_.device;
-    allocatorInfo.device = device_.get();
-    allocatorInfo.instance = instance_.get();
-
-    VmaAllocator vmaAllocator;
-    VK_CHECKED_CALL(vmaCreateAllocator(&allocatorInfo, &vmaAllocator),
-                    "Could not create VMA allocator object");
-    // wrap the allocator with a shared_ptr with a custom deallocator
-    vma_allocator_ =
-        make_shared_resource(vmaAllocator, [](VmaAllocator alloc) { vmaDestroyAllocator(alloc); });
+    return queue_families_to_instantiate;
 }
 
-cory::vk::image graphics_context::create_image(const image_builder &builder)
+void graphics_context::init_swapchain()
 {
-    VkImage vkImage;
-    VmaAllocation allocation;
-    VmaAllocationCreateInfo allocCreateInfo{};
-    allocCreateInfo.usage = static_cast<VmaMemoryUsage>(builder.memory_usage_);
-    VmaAllocationInfo allocInfo;
+    // get the capabilities of the swapchain
+    const auto swapchain_support =
+        cory::vk::query_swap_chain_support(physical_device_info_.device, surface_.get());
 
-    // VK_CHECKED_CALL(
-    vmaCreateImage(
-        vma_allocator_.get(), &builder.info_, &allocCreateInfo, &vkImage, &allocation, &allocInfo);
-    //   "Could not allocate image device memory from memory allocator");
+    CO_APP_INFO("swapchain supported present modes: {}", swapchain_support.presentModes);
+    for (const auto &surfaceFmt : swapchain_support.formats)
+        CO_CORE_DEBUG(
+            "swapchain supported format: {}, {}", surfaceFmt.format, surfaceFmt.colorSpace);
+    // CO_APP_INFO("Swap chain supports formats: {}", fmt::join(formats, ","));
 
+    // get the present mode
+    auto present_mode = utils::find_or(
+        swapchain_support.presentModes, VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR);
 
-    auto image_sptr = make_shared_resource(
-        vkImage, [=](auto *p) { vmaDestroyImage(vma_allocator_.get(), p, allocation); });
+    // get the surface format - BGRA8 with nonlinear sRGB is the preferred option
+    auto surface_format = utils::find_or(
+        swapchain_support.formats,
+        [](const auto &fmt) {
+            return fmt.format == VK_FORMAT_B8G8R8A8_SRGB &&
+                   fmt.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+        },
+        swapchain_support.formats[0]);
 
-    static_assert(std::is_same<decltype(image_sptr.get()), VkImage>::value);
+    // determine the swapchain extent
+    glm::uvec2 swapchain_extent;
+    if (swapchain_support.capabilities.currentExtent.width != UINT32_MAX) {
+        swapchain_extent = glm::uvec2{swapchain_support.capabilities.currentExtent.width,
+                                      swapchain_support.capabilities.currentExtent.height};
+    }
+    else {
+        swapchain_extent = glm::uvec2{800, 600};
 
-    return cory::vk::image(*this,
-                           std::move(image_sptr),
-                           builder.name_,
-                           builder.info_.imageType,
-                           glm::uvec3{builder.info_.extent.width,
-                                      builder.info_.extent.height,
-                                      builder.info_.extent.depth},
-                           builder.info_.format);
-}
+        // NOTE: this is where we would ideally query the window manager for the window size.
+        //       however, the current API does not allow passing such a size, so we have to fall
+        //       back to a fixed window size, which might not look great and might not work at
+        //       all on some platforms
 
-cory::vk::buffer graphics_context::create_buffer(const buffer_builder &builder)
-{
-    return cory::vk::buffer(*this, {}, builder.name_);
+        CO_CORE_WARN("Surface did not supply a preferred swapchain extent. Falling back to a "
+                     "default resolution of {}x{}. This can lead to unexpected results.",
+                     swapchain_extent.x,
+                     swapchain_extent.y);
+    }
+
+    auto swch_builder = swapchain_builder(*this)
+                            .surface(surface_.get())
+                            .min_image_count(3) // triple buffering works well for most applications
+                            .present_mode(present_mode)
+                            .image_format(surface_format.format)
+                            .image_color_space(surface_format.colorSpace)
+                            .image_extent(swapchain_extent)
+                            .pre_transform(swapchain_support.capabilities.currentTransform);
+
+    // if the swap and present queues are different, the swap chain images have to
+    // be shareable
+    if (graphics_queue_family_ == present_queue_family_) {
+        swch_builder.image_sharing_mode(VK_SHARING_MODE_CONCURRENT)
+            .queue_family_indices({graphics_queue_family_.value(), present_queue_family_.value()});
+    }
+    else {
+        // otherwise, exclusive has better performance
+        swch_builder.image_sharing_mode(VK_SHARING_MODE_EXCLUSIVE).queue_family_indices({});
+    }
+
+    swapchain_.emplace(swch_builder.create());
 }
 
 cory::vk::device device_builder::create()

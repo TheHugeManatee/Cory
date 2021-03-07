@@ -3,6 +3,7 @@
 #include "buffer.h"
 #include "image.h"
 #include "instance.h"
+#include "swapchain.h"
 #include "utils.h"
 
 #include <glm.h>
@@ -12,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <set>
 
 // we use the forward-declared version of the type to avoid the header file
 struct VmaAllocator_T;
@@ -138,17 +140,14 @@ class graphics_context {
 
     // moving is fine
     graphics_context(graphics_context &&) = default;
+
     graphics_context &operator=(graphics_context &&) = default;
 
     // nothing to do here!
     ~graphics_context() = default;
 
-    image_builder image() { return image_builder{*this}; }
-    buffer_builder buffer() { return buffer_builder{*this}; }
-
-    cory::vk::image create_image(const image_builder &builder);
-
-    cory::vk::buffer create_buffer(const buffer_builder &buffer);
+    image_builder build_image() { return image_builder{*this}; }
+    buffer_builder build_buffer() { return buffer_builder{*this}; }
 
     // template <typename Functor> void immediately(Functor &&f)
     //{
@@ -168,14 +167,23 @@ class graphics_context {
     [[nodiscard]] const auto &device_info() const noexcept { return physical_device_info_; }
     [[nodiscard]] auto &instance() const noexcept { return instance_; }
     [[nodiscard]] auto physical_device() const noexcept { return physical_device_info_.device; }
+    [[nodiscard]] auto device() noexcept { return device_.get(); };
+    [[nodiscard]] auto allocator() noexcept { return vma_allocator_.get(); }
+    [[nodiscard]] auto &surface() const noexcept { return surface_; }
+    [[nodiscard]] auto &swapchain() const noexcept { return swapchain_; }
+
 
   private:
+    std::set<uint32_t> configure_queue_families();
+    void init_allocator();
+    void init_swapchain();
+
   private:
     cory::vk::instance instance_;
     physical_device_info physical_device_info_;
     VkPhysicalDeviceFeatures physical_device_features_{};
-    device device_;
-    std::shared_ptr<VkSurfaceKHR_T> surface_;
+    cory::vk::device device_;
+    cory::vk::surface surface_;
 
     std::optional<uint32_t> graphics_queue_family_;
     std::optional<uint32_t> transfer_queue_family_;
@@ -188,7 +196,9 @@ class graphics_context {
     VkQueue present_queue_{};
 
     std::shared_ptr<VmaAllocator_T> vma_allocator_{};
-}; // namespace vk
+
+    std::optional<cory::vk::swapchain> swapchain_;
+};
 
 } // namespace vk
 } // namespace cory

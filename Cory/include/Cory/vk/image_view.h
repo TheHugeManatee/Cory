@@ -3,18 +3,20 @@
 #include <vulkan/vulkan.h>
 
 #include <memory>
+#include <string_view>
 
 namespace cory {
 namespace vk {
 
 class image;
+class graphics_context;
 
 using image_view = std::shared_ptr<VkImageView_T>;
 
 class image_view_builder {
   public:
     friend image_view;
-    image_view_builder(graphics_context &context, image &image);
+    image_view_builder(graphics_context &context, const image &image);
 
     [[nodiscard]] image_view_builder &next(const void *pNext) noexcept
     {
@@ -64,11 +66,11 @@ class image_view_builder {
   private:
     graphics_context &ctx_;
     VkImageViewCreateInfo info_{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-                                .components = VkComponentMapping{.r = VK_COMPONENT_SWIZZLE_R,
-                                                                 .g = VK_COMPONENT_SWIZZLE_G,
-                                                                 .b = VK_COMPONENT_SWIZZLE_B,
-                                                                 .a = VK_COMPONENT_SWIZZLE_A}};
-    cory::vk::image &image_;
+                                .components = VkComponentMapping{.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                                                                 .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                                                                 .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                                                                 .a = VK_COMPONENT_SWIZZLE_IDENTITY}};
+    const cory::vk::image &image_;
     std::string_view name_;
 };
 

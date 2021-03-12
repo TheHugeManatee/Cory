@@ -33,7 +33,7 @@ class swapchain {
 
     std::vector<image> images_{};
     VkFormat image_format_{};
-    VkExtent2D extent_{};
+    glm::uvec2 extent_{};
     std::vector<image_view> image_views_{};
 
     std::shared_ptr<VkSwapchainKHR_T> swapchain_ptr_;

@@ -13,28 +13,25 @@ namespace vk {
 class graphics_context;
 class image_builder;
 
-class image : public resource<image, std::shared_ptr<struct VkImage_T>> {
+class image : public resource<image, std::shared_ptr<VkImage_T>> {
   public:
-    image(image_builder& builder);
-//     /// private constructor - create through @a graphics_context
-//     image(graphics_context &context,
-//           resource_ptr_t ptr,
-//           std::string_view name,
-//           VkImageType type,
-//           glm::uvec3 size,
-//           VkFormat format)
-//         : resource(context, ptr, name)
-//         , type_{type}
-//         , size_{size}
-//         , format_{format}
-//     {
-//     }
+    // create from builder
+    image(image_builder &builder);
+
+    // initialize from existing VkImage object
+    image(graphics_context &ctx_,
+          std::shared_ptr<VkImage_T>& vk_resource_ptr,
+          VkImageType image_type,
+          VkFormat image_format,
+          glm::uvec3 image_size,
+          uint32_t image_mip_levels = 0,
+          std::string_view name = {});
 
     [[nodiscard]] VkImageType type() const noexcept { return type_; }
     [[nodiscard]] const auto &size() const noexcept { return size_; }
     [[nodiscard]] auto format() const noexcept { return format_; }
     [[nodiscard]] auto mip_levels() const noexcept { return mip_levels_; }
-
+    [[nodiscard]] VkImage get() const noexcept { return resource_.get(); }
   private:
     VkImageType type_;
     glm::uvec3 size_;

@@ -1,5 +1,6 @@
 #include "vk/image_view.h"
 
+#include "vk/graphics_context.h"
 #include "vk/image.h"
 
 #include <vulkan/vulkan.h>
@@ -7,9 +8,9 @@
 namespace cory {
 namespace vk {
 
-image_view_builder::image_view_builder(graphics_context &context, image &image)
+image_view_builder::image_view_builder(graphics_context &context, const cory::vk::image &img)
     : ctx_{context}
-    , image_{image}
+    , image_{img}
 {
     info_.format = image_.format();
     info_.image = image_.get();
@@ -39,8 +40,8 @@ cory::vk::image_view image_view_builder::create()
     VK_CHECKED_CALL(vkCreateImageView(ctx_.device(), &info_, nullptr, &view),
                     "Failed to create image view");
 
-    return make_shared_resource(view,
-                                [dev = ctx_.device()](VkImageView) { vkDestroyImageView(dev); });
+    return make_shared_resource(
+        view, [dev = ctx_.device()](VkImageView view) { vkDestroyImageView(dev, view, nullptr); });
 }
 
 } // namespace vk

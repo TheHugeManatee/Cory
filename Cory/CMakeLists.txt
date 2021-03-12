@@ -14,12 +14,13 @@ find_package(imgui)
 find_package(shaderc)
 
 set(CORY_VK_SOURCES   
-src/vk/buffer.cpp
-src/vk/graphics_context.cpp
-src/vk/image.cpp
-src/vk/instance.cpp
-src/vk/swapchain.cpp
-src/vk/utils.cpp
+  src/vk/buffer.cpp
+  src/vk/graphics_context.cpp
+  src/vk/image.cpp
+  src/vk/image_view.cpp
+  src/vk/instance.cpp
+  src/vk/swapchain.cpp
+  src/vk/utils.cpp
 )
 
 set(CORY_SOURCES 

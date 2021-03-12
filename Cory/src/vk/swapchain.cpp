@@ -14,7 +14,7 @@ namespace vk {
 swapchain::swapchain(graphics_context &ctx, swapchain_builder &builder)
     : ctx_{ctx}
     , image_format_{builder.info_.imageFormat}
-    , extent_{builder.info_.imageExtent}
+    , extent_{builder.info_.imageExtent.width, builder.info_.imageExtent.height}
 {
     const auto vk_surface = ctx.surface().get();
     const auto vk_physical_device = ctx.physical_device();
@@ -41,7 +41,7 @@ swapchain::swapchain(graphics_context &ctx, swapchain_builder &builder)
     CO_CORE_DEBUG("SwapChain configuration:");
     CO_CORE_DEBUG("    Surface Format:    {}, {}", image_format_, builder.info_.imageColorSpace);
     CO_CORE_DEBUG("    Present Mode:      {}", builder.info_.presentMode);
-    CO_CORE_DEBUG("    Extent:            {}x{}", extent_.width, extent_.height);
+    CO_CORE_DEBUG("    Extent:            {}x{}", extent_.x, extent_.y);
 
     VkSwapchainKHR vk_swapchain;
     VK_CHECKED_CALL(vkCreateSwapchainKHR(ctx.device(), &builder.info_, nullptr, &vk_swapchain),
@@ -56,31 +56,38 @@ swapchain::swapchain(graphics_context &ctx, swapchain_builder &builder)
 
 void swapchain::create_image_views()
 {
-    // m_swapChainImages = m_ctx.device->getSwapchainImagesKHR(m_swapChain);
+    uint32_t num_images;
+    vkGetSwapchainImagesKHR(ctx_.device(), swapchain_ptr_.get(), &num_images, nullptr);
+    std::vector<VkImage> swapchain_images(num_images);
+    vkGetSwapchainImagesKHR(
+        ctx_.device(), swapchain_ptr_.get(), &num_images, swapchain_images.data());
 
-    // m_swapChainImageViews.resize(m_swapChainImages.size());
+    // create a vk::image for each of the swapchain images
+    std::transform(
+        swapchain_images.begin(),
+        swapchain_images.end(),
+        std::back_inserter(images_),
+        [&](VkImage img) {
+            // empty deletion function because the images are managed by (i.e. their
+            // lifetime is tied to) the swapchain
+            auto image_ptr = make_shared_resource(img, [](VkImage img) {});
+            return cory::vk::image(
+                ctx_, image_ptr, VK_IMAGE_TYPE_2D, image_format_, {extent_.x, extent_.y, 1}, 0);
+        });
 
-    // for (size_t i = 0; i < m_swapChainImages.size(); ++i) {
-    //    vk::ImageViewCreateInfo createInfo{};
-    //    createInfo.image = m_swapChainImages[i];
-    //    createInfo.viewType = vk::ImageViewType::e2D;
-    //    createInfo.format = m_swapChainImageFormat;
-    //    createInfo.components.r = vk::ComponentSwizzle::eIdentity;
-    //    createInfo.components.g = vk::ComponentSwizzle::eIdentity;
-    //    createInfo.components.b = vk::ComponentSwizzle::eIdentity;
-    //    createInfo.components.a = vk::ComponentSwizzle::eIdentity;
+    // create an image view for each of the swapchain images
+    std::transform(
+        images_.cbegin(), images_.cend(), std::back_inserter(image_views_), [&](const image &img) {
+            return image_view_builder{ctx_, img}
+                .subresource_range({.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                    .baseMipLevel = 0,
+                                    .levelCount = 1,
+                                    .baseArrayLayer = 0,
+                                    .layerCount = 1})
+                .create();
+        });
 
-    //    // for stereographic, we could create separate image views for the array
-    //    // layers here
-    //    createInfo.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-    //    createInfo.subresourceRange.baseMipLevel = 0;
-    //    createInfo.subresourceRange.levelCount = 1;
-    //    createInfo.subresourceRange.baseArrayLayer = 0;
-    //    createInfo.subresourceRange.layerCount = 1;
-
-    //    m_swapChainImageViews[i] = m_ctx.device->createImageView(createInfo);
-    //}
-    // CO_CORE_ASSERT(false, "create_image_views not implemented");
+    CO_CORE_DEBUG("    Images:            {}", images_.size());
 }
 
 } // namespace vk

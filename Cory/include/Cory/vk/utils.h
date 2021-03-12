@@ -25,9 +25,11 @@ enum class device_memory_usage : int /*std::underlying_type<VmaMemoryUsage>::typ
 };
 
 #define VK_CHECKED_CALL(x, err)                                                                    \
-    if (auto code = (x); code != VK_SUCCESS) {                                                     \
-        throw std::runtime_error(fmt::format(#x " failed with {}: {}", code, (err)));              \
-    }
+    do {                                                                                           \
+        if (auto code = (x); code != VK_SUCCESS) {                                                 \
+            throw std::runtime_error(fmt::format(#x " failed with {}: {}", code, (err)));          \
+        }                                                                                          \
+    } while (0)
 
 const std::vector<VkExtensionProperties> &extension_properties();
 
@@ -53,8 +55,7 @@ struct swap_chain_support {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-swap_chain_support query_swap_chain_support(VkPhysicalDevice device,
-                                                    VkSurfaceKHR surface);
+swap_chain_support query_swap_chain_support(VkPhysicalDevice device, VkSurfaceKHR surface);
 
 template <typename ScoringFunctor>
 std::optional<uint32_t>

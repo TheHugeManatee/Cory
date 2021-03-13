@@ -11,8 +11,8 @@ class command_pool;
 
 class command_buffer {
   public:
-    command_buffer(command_pool &pool)
-        : pool_{pool} {};
+    //command_buffer(command_pool &pool)
+    //    : pool_{pool} {};
 
     VkCommandBuffer get(){return cmd_buffer_ptr_.get(); }
 
@@ -1155,7 +1155,7 @@ class command_buffer {
   private:
     std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr_;
 
-    command_pool pool_;
+    //command_pool pool_;
 };
 
 class submit_info_builder {
@@ -1166,7 +1166,7 @@ class submit_info_builder {
         return *this;
     }
 
-    submit_info_builder &wait_semaphores(std::vector<const VkSemaphore> waitSemaphores) noexcept
+    submit_info_builder &wait_semaphores(std::vector<VkSemaphore> waitSemaphores) noexcept
     {
         wait_semaphores_ = waitSemaphores;
         return *this;
@@ -1179,14 +1179,14 @@ class submit_info_builder {
     }
 
     submit_info_builder &
-    command_buffers(std::vector<const VkCommandBuffer> commandBuffers) noexcept
+    command_buffers(std::vector<VkCommandBuffer> commandBuffers) noexcept
     {
         command_buffers_ = commandBuffers;
         return *this;
     }
 
     submit_info_builder &
-    signal_semaphores(std::vector<const VkSemaphore> signalSemaphores) noexcept
+    signal_semaphores(std::vector<VkSemaphore> signalSemaphores) noexcept
     {
         signal_semaphores_ = signalSemaphores;
         return *this;
@@ -1210,10 +1210,21 @@ class submit_info_builder {
     VkSubmitInfo info_{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
     };
-    std::vector<const VkSemaphore> wait_semaphores_;
-    std::vector<const VkCommandBuffer> command_buffers_;
-    std::vector<const VkSemaphore> signal_semaphores_;
+    std::vector<VkSemaphore> wait_semaphores_;
+    std::vector<VkCommandBuffer> command_buffers_;
+    std::vector<VkSemaphore> signal_semaphores_;
 };
 
 } // namespace vk
 } // namespace cory
+//
+#ifndef DOCTEST_CONFIG_DISABLE
+#include <doctest/doctest.h>
+
+TEST_CASE("asd") { 
+    
+    printf("hello from <lib_1_src1.cpp>\n"); 
+
+}
+
+#endif

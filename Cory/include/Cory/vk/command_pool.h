@@ -48,6 +48,7 @@ class command_pool_builder {
     VkCommandPoolCreateInfo info_{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     };
+    std::string_view name_;
 };
 
 } // namespace vk

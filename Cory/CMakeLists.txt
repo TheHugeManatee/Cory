@@ -11,6 +11,7 @@ set(CORY_VK_SOURCES
   src/vk/image_view.cpp
   src/vk/instance.cpp
   src/vk/swapchain.cpp
+  src/vk/test_utils.cpp
   src/vk/utils.cpp
 )
 
@@ -55,9 +56,10 @@ target_link_libraries(${TARGET_NAME}
     CONAN_PKG::vulkan-headers
     CONAN_PKG::imgui
     CONAN_PKG::shaderc
+    CONAN_PKG::doctest
+    ThirdPartyLibs
   PRIVATE
     ${Vulkan_LIBRARIES}
-    ThirdPartyLibs
 )
 
 # Define a macro that allows consumers of this lib to know they link against it
@@ -84,6 +86,15 @@ target_include_directories(${TARGET_NAME} PUBLIC
 PRIVATE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Cory>
 )
+
+###### TEST BINARY
+
+add_executable(${TARGET_NAME}_Test test_main.cpp)
+target_link_libraries(${TARGET_NAME}_Test ${TARGET_NAME})
+doctest_force_link_static_lib_in_target(${TARGET_NAME}_Test ${TARGET_NAME})
+add_test(NAME ${TARGET_NAME}_Test COMMAND $<TARGET_FILE:${TARGET_NAME}_Test> --no-version)
+target_compile_features(${TARGET_NAME}_Test PRIVATE cxx_std_20)
+#doctest_add_test(NAME CoryTesting COMMAND $<TARGET_FILE:Cory_Test> --no-version)
 
 
 ###### INSTALLATION

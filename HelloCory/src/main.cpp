@@ -106,10 +106,10 @@ int main_main()
     cory::vk::graphics_context ctx(instance, pickedDevice->device, surface, nullptr);
 
     // TODO THIS!
-    ctx.submit([&](cory::vk::command_buffer &cmd) { 
-        cmd.blit_image({}, {}, {}, {}, {}, {}, {});
-        cmd.wait_events({}, {}, {}, {}, {}, {}, {}, {}, {}, {});
-       });
+    //ctx.submit([&](cory::vk::command_buffer &cmd) { 
+    //    cmd.blit_image({}, {}, {}, {}, {}, {}, {});
+    //    cmd.wait_events({}, {}, {}, {}, {}, {}, {}, {}, {}, {});
+    //   });
 
     return EXIT_SUCCESS;
 }

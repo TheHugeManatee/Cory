@@ -18,7 +18,7 @@ function(doctest_include_file_in_sources header sources)
             # update flags
             if(MSVC)
                 set_source_files_properties(${src} PROPERTIES COMPILE_FLAGS
-                    "${old_compile_flags} /FI\"${header}\"")
+                    "${old_compile_flags} /MP /FI\"${header}\"")
             else()
                 set_source_files_properties(${src} PROPERTIES COMPILE_FLAGS
                     "${old_compile_flags} -include \"${header}\"")

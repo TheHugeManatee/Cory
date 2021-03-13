@@ -4,6 +4,7 @@
 #include <Cory/vk/graphics_context.h>
 #include <Cory/vk/instance.h>
 #include <Cory/vk/utils.h>
+#include <Cory/vk/command_buffer.h>
 
 #include <Cory/utils/container.h>
 
@@ -102,8 +103,13 @@ int main_main()
     }();
 
     // create a context
-    cory::vk::graphics_context ctx(
-        instance, pickedDevice->device, surface, nullptr);
+    cory::vk::graphics_context ctx(instance, pickedDevice->device, surface, nullptr);
+
+    // TODO THIS!
+    ctx.submit([&](cory::vk::command_buffer &cmd) { 
+        cmd.blit_image({}, {}, {}, {}, {}, {}, {});
+        cmd.wait_events({}, {}, {}, {}, {}, {}, {}, {}, {}, {});
+       });
 
     return EXIT_SUCCESS;
 }

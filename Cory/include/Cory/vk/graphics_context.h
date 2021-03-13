@@ -5,6 +5,8 @@
 #include "instance.h"
 #include "swapchain.h"
 #include "utils.h"
+#include "command_buffer.h"
+#include "command_pool.h"
 
 #include <glm.h>
 #include <vulkan/vulkan.h>
@@ -12,8 +14,8 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <string_view>
 #include <set>
+#include <string_view>
 
 // we use the forward-declared version of the type to avoid the header file
 struct VmaAllocator_T;
@@ -140,7 +142,6 @@ class graphics_context {
 
     // moving is fine
     graphics_context(graphics_context &&) = default;
-
     graphics_context &operator=(graphics_context &&) = default;
 
     // nothing to do here!
@@ -149,11 +150,22 @@ class graphics_context {
     image_builder build_image() { return image_builder{*this}; }
     buffer_builder build_buffer() { return buffer_builder{*this}; }
 
-    // template <typename Functor> void immediately(Functor &&f)
-    //{
-    //    SingleTimeCommandBuffer cmd_buffer();
-    //    f(cmd_buffer.buffer());
-    //}
+    template <typename Functor> void submit(Functor &&f)
+    {
+        return submit(graphics_queue_, std::forward<Functor>(f));
+    }
+
+    // TODO THIS!
+    template <typename Functor> void submit(VkQueue queue, Functor &&f) {
+        command_pool pool = command_pool_builder().create();
+        command_buffer cmd_buffer(pool);
+        f(cmd_buffer);
+
+        
+        // TODO!
+        vkQueueSubmit(queue, 1, submit_info_builder().command_buffers({cmd_buffer.get()}).info(), nullptr);
+    
+    }
 
     [[nodiscard]] const auto &graphics_queue() const noexcept { return graphics_queue_; }
     [[nodiscard]] const auto &compute_queue() const noexcept { return compute_queue_; }
@@ -171,7 +183,6 @@ class graphics_context {
     [[nodiscard]] auto allocator() noexcept { return vma_allocator_.get(); }
     [[nodiscard]] auto &surface() const noexcept { return surface_; }
     [[nodiscard]] auto &swapchain() const noexcept { return swapchain_; }
-
 
   private:
     std::set<uint32_t> configure_queue_families();

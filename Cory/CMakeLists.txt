@@ -15,6 +15,7 @@ find_package(shaderc)
 
 set(CORY_VK_SOURCES   
   src/vk/buffer.cpp
+  src/vk/command_pool.cpp
   src/vk/graphics_context.cpp
   src/vk/image.cpp
   src/vk/image_view.cpp

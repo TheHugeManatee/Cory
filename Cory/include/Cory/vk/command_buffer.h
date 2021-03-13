@@ -1217,7 +1217,8 @@ class submit_info_builder {
 
 } // namespace vk
 } // namespace cory
-//
+
+
 #ifndef DOCTEST_CONFIG_DISABLE
 #include <doctest/doctest.h>
 

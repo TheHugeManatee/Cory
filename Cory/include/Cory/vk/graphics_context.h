@@ -1,12 +1,12 @@
 #pragma once
 
 #include "buffer.h"
+#include "command_buffer.h"
+#include "command_pool.h"
 #include "image.h"
 #include "instance.h"
 #include "swapchain.h"
 #include "utils.h"
-#include "command_buffer.h"
-#include "command_pool.h"
 
 #include <glm.h>
 #include <vulkan/vulkan.h>
@@ -156,15 +156,20 @@ class graphics_context {
     }
 
     // TODO THIS!
-    template <typename Functor> void submit(VkQueue queue, Functor &&f) {
-        command_pool pool = command_pool_builder().create();
+    template <typename Functor> void submit(VkQueue queue, Functor &&f)
+    {
+        command_pool pool = command_pool_builder(*this).create();
         command_buffer cmd_buffer(/*pool*/);
         f(cmd_buffer);
 
-        
         // TODO!
-        vkQueueSubmit(queue, 1, submit_info_builder().command_buffers({cmd_buffer.get()}).info(), nullptr);
-    
+        // vkQueueSubmit(queue, 1, submit_info_builder().command_buffers({cmd_buffer.get()}).info(),
+        // nullptr);
+    }
+
+    template <typename PooledObject> [[nodiscard]] constexpr auto &pool() noexcept
+    {
+        if constexpr (std::is_same_v<PooledObject, command_pool>) { return command_pool_pool_ ;}
     }
 
     [[nodiscard]] const auto &graphics_queue() const noexcept { return graphics_queue_; }
@@ -179,7 +184,7 @@ class graphics_context {
     [[nodiscard]] const auto &device_info() const noexcept { return physical_device_info_; }
     [[nodiscard]] auto &instance() const noexcept { return instance_; }
     [[nodiscard]] auto physical_device() const noexcept { return physical_device_info_.device; }
-    [[nodiscard]] auto device() noexcept { return device_.get(); };
+    [[nodiscard]] auto device() noexcept -> VkDevice { return device_.get(); };
     [[nodiscard]] auto allocator() noexcept { return vma_allocator_.get(); }
     [[nodiscard]] auto &surface() const noexcept { return surface_; }
     [[nodiscard]] auto &swapchain() const noexcept { return swapchain_; }
@@ -209,6 +214,9 @@ class graphics_context {
     std::shared_ptr<VmaAllocator_T> vma_allocator_{};
 
     std::optional<cory::vk::swapchain> swapchain_;
+
+    // pools
+    command_pool_pool command_pool_pool_;
 };
 
 } // namespace vk

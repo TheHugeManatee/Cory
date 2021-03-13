@@ -9,6 +9,8 @@ namespace cory {
 
 namespace vk {
 
+    class instance;
+
 VKAPI_ATTR VkBool32 VKAPI_CALL
 test_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                     VkDebugUtilsMessageTypeFlagsEXT messageType,

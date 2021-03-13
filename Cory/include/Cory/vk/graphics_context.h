@@ -158,7 +158,7 @@ class graphics_context {
     // TODO THIS!
     template <typename Functor> void submit(VkQueue queue, Functor &&f) {
         command_pool pool = command_pool_builder().create();
-        command_buffer cmd_buffer(pool);
+        command_buffer cmd_buffer(/*pool*/);
         f(cmd_buffer);
 
         

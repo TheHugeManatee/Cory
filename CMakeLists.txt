@@ -60,6 +60,10 @@ conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_SOURCE_DIR} SETTINGS ${conan_setti
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_BINARY_DIR})
 
+## doctest static lib helper
+include(cmake/doctest_force_link_static_lib_in_target.cmake)
+# DOCTEST_CONFIG_DISABLE for disabling doctest altogether - might be nice for production build
+
 ###############
 ##  OPTIONS  ##
 ###############

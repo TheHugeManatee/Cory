@@ -24,6 +24,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
     : instance_{inst}
     , physical_device_info_{inst.device_info(physical_device)}
     , surface_{surface_khr}
+    , command_pool_pool_{}
 {
     // if not explicitly supplied, enable all features. :)
     if (requested_features) { physical_device_features_ = *requested_features; }
@@ -121,25 +122,25 @@ std::set<uint32_t> graphics_context::configure_queue_families()
     }
 
     // log this out, you never know when this might be interesting..
-    CO_APP_TRACE(R"(Instantiating queue families:)");
-    CO_APP_TRACE(
+    CO_CORE_TRACE(R"(Instantiating queue families:)");
+    CO_CORE_TRACE(
         "    graphics: {} - {}",
         *graphics_queue_family_,
         flag_bits_to_string<VkQueueFlagBits>(
             physical_device_info_.queue_family_properties[*graphics_queue_family_].queueFlags));
-    CO_APP_TRACE(
+    CO_CORE_TRACE(
         "    transfer  {} - {}",
         *transfer_queue_family_,
         flag_bits_to_string<VkQueueFlagBits>(
             physical_device_info_.queue_family_properties[*transfer_queue_family_].queueFlags));
-    CO_APP_TRACE(
+    CO_CORE_TRACE(
         "    compute:  {} - {}",
         *compute_queue_family_,
         flag_bits_to_string<VkQueueFlagBits>(
             physical_device_info_.queue_family_properties[*compute_queue_family_].queueFlags));
 
     if (surface_) {
-        CO_APP_TRACE(
+        CO_CORE_TRACE(
             "    present:  {} - {}",
             *present_queue_family_,
             flag_bits_to_string<VkQueueFlagBits>(
@@ -163,7 +164,7 @@ void graphics_context::init_swapchain()
     const auto swapchain_support =
         cory::vk::query_swap_chain_support(physical_device_info_.device, surface_.get());
 
-    CO_APP_INFO("swapchain supported present modes: {}", swapchain_support.presentModes);
+    CO_CORE_INFO("swapchain supported present modes: {}", swapchain_support.presentModes);
     for (const auto &surfaceFmt : swapchain_support.formats)
         CO_CORE_DEBUG(
             "swapchain supported format: {}, {}", surfaceFmt.format, surfaceFmt.colorSpace);

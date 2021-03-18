@@ -1,5 +1,7 @@
 #pragma once
 
+#include "command_buffer.h"
+
 #include <vulkan/vulkan.h>
 
 #include "Cory/utils/algorithms.h"
@@ -44,6 +46,8 @@ class command_pool /*: public pooled_resource<command_pool, VkCommandPool>*/ {
     void reset(VkCommandPoolResetFlags flags = {});
 
     [[nodiscard]] VkCommandPool get() const noexcept { return command_pool_ptr_.get(); }
+
+    cory::vk::command_buffer allocate_buffer();
 
   private:
     graphics_context &ctx_;

@@ -18,23 +18,10 @@ TEST_CASE("basic command buffer usage")
 
     command_pool pool = command_pool_builder(ctx).create();
 
-    VkCommandBuffer vk_cmd_buffer;
-    VkCommandBufferAllocateInfo cmdAllocInfo = {};
-    cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdAllocInfo.pNext = nullptr;
+    command_buffer cmd_buffer = pool.allocate_buffer();
 
-    // commands will be made from our _commandPool
-    cmdAllocInfo.commandPool = pool.get();
-    // we will allocate 1 command buffer
-    cmdAllocInfo.commandBufferCount = 1;
-    // command level is Primary
-    cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-    CHECK_EQ(vkAllocateCommandBuffers(ctx.device(), &cmdAllocInfo, &vk_cmd_buffer), VK_SUCCESS);
-
-    command_buffer cmd_buffer(pool);
-    cmd_buffer.bind_pipeline({}, {});
-    executable_command_buffer exec_cmd_buffer = cmd_buffer.end();
+    //cmd_buffer.bind_pipeline({}, {});
+    //executable_command_buffer exec_cmd_buffer = cmd_buffer.end();
 }
 
 #endif

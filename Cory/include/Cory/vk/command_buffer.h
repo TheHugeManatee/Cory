@@ -1,7 +1,5 @@
 #pragma once
 
-#include "command_pool.h"
-
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
@@ -18,23 +16,26 @@ class graphics_context;
  */
 class executable_command_buffer {
   public:
-    executable_command_buffer(std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr, command_pool pool)
+    executable_command_buffer(std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr,
+                              std::shared_ptr<VkCommandPool_T> pool)
         : cmd_buffer_ptr_{cmd_buffer_ptr}
-        , pool_(std::move(pool))
+        , pool_ptr_(std::move(pool))
     {
     }
 
     VkCommandBuffer get() { return cmd_buffer_ptr_.get(); }
 
   private:
-    command_pool pool_;
+    std::shared_ptr<VkCommandPool_T> pool_ptr_;
     std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr_;
 };
 
 class command_buffer {
   public:
-    command_buffer(command_pool &pool)
-        : pool_{pool} {};
+    command_buffer(std::shared_ptr<VkCommandPool_T> pool_ptr,
+                   std::shared_ptr<VkCommandBuffer_T> command_buffer_ptr)
+        : pool_ptr_{std::move(pool_ptr)}
+        , cmd_buffer_ptr_{std::move(command_buffer_ptr)} {};
 
     VkCommandBuffer get() { return cmd_buffer_ptr_.get(); }
 
@@ -46,7 +47,7 @@ class command_buffer {
     executable_command_buffer end() noexcept
     {
         vkEndCommandBuffer(cmd_buffer_ptr_.get());
-        return {std::move(cmd_buffer_ptr_), std::move(pool_)};
+        return {std::move(cmd_buffer_ptr_), std::move(pool_ptr_)};
     }
 
     command_buffer &begin_conditional_rendering_ext(
@@ -1186,48 +1187,7 @@ class command_buffer {
 
   private:
     std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr_;
-
-    command_pool pool_;
-};
-
-class command_buffer_builder {
-  public:
-    friend class command_buffer;
-    command_buffer_builder(graphics_context &context, cory::vk::command_pool &&pool)
-        : ctx_{context}
-        , command_pool_{pool}
-    {
-        info_.commandPool = command_pool_.get();
-    }
-
-    command_buffer_builder &next(const void *pNext) noexcept
-    {
-        info_.pNext = pNext;
-        return *this;
-    }
-
-    command_buffer_builder &level(VkCommandBufferLevel level) noexcept
-    {
-        info_.level = level;
-        return *this;
-    }
-
-    // NOTE: for simplicity, we only permit to build one buffer at a time for now
-    // command_buffer_allocate_info_builder &command_buffer_count(uint32_t commandBufferCount)
-    // noexcept
-    //{
-    //    info_.commandBufferCount = commandBufferCount;
-    //    return *this;
-    //}
-
-    [[nodiscard]] command_buffer_builder create() { return command_buffer_builder(*this); }
-
-  private:
-    graphics_context &ctx_;
-    VkCommandBufferAllocateInfo info_{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-                                      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-                                      .commandBufferCount = 1};
-    cory::vk::command_pool command_pool_;
+    std::shared_ptr<VkCommandPool_T> pool_ptr_;
 };
 
 class submit_info_builder {

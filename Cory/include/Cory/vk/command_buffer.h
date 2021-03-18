@@ -1,20 +1,53 @@
 #pragma once
 
-#include <memory>
+#include "command_pool.h"
+
 #include <vulkan/vulkan.h>
+
+#include <cstdint>
+#include <memory>
+#include <vector>
 
 namespace cory {
 namespace vk {
 
 class graphics_context;
-class command_pool;
+
+/**
+ * encapsulates a command buffer that has finished recording and is ready to execute.
+ */
+class executable_command_buffer {
+  public:
+    executable_command_buffer(std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr, command_pool pool)
+        : cmd_buffer_ptr_{cmd_buffer_ptr}
+        , pool_(std::move(pool))
+    {
+    }
+
+    VkCommandBuffer get() { return cmd_buffer_ptr_.get(); }
+
+  private:
+    command_pool pool_;
+    std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr_;
+};
 
 class command_buffer {
   public:
-    //command_buffer(command_pool &pool)
-    //    : pool_{pool} {};
+    command_buffer(command_pool &pool)
+        : pool_{pool} {};
 
-    VkCommandBuffer get(){return cmd_buffer_ptr_.get(); }
+    VkCommandBuffer get() { return cmd_buffer_ptr_.get(); }
+
+    /**
+     * finishes the command buffer with \a vkEndCommandBuffer and creates a new object encapsulating
+     * the executable state. after this call the \a command_buffer will be in a moved-from state and
+     * cannot be used further.
+     */
+    executable_command_buffer end() noexcept
+    {
+        vkEndCommandBuffer(cmd_buffer_ptr_.get());
+        return {std::move(cmd_buffer_ptr_), std::move(pool_)};
+    }
 
     command_buffer &begin_conditional_rendering_ext(
         const VkConditionalRenderingBeginInfoEXT *pConditionalRenderingBegin)
@@ -1151,11 +1184,50 @@ class command_buffer {
         return *this;
     }
 
-
   private:
     std::shared_ptr<VkCommandBuffer_T> cmd_buffer_ptr_;
 
-    //command_pool pool_;
+    command_pool pool_;
+};
+
+class command_buffer_builder {
+  public:
+    friend class command_buffer;
+    command_buffer_builder(graphics_context &context, cory::vk::command_pool &&pool)
+        : ctx_{context}
+        , command_pool_{pool}
+    {
+        info_.commandPool = command_pool_.get();
+    }
+
+    command_buffer_builder &next(const void *pNext) noexcept
+    {
+        info_.pNext = pNext;
+        return *this;
+    }
+
+    command_buffer_builder &level(VkCommandBufferLevel level) noexcept
+    {
+        info_.level = level;
+        return *this;
+    }
+
+    // NOTE: for simplicity, we only permit to build one buffer at a time for now
+    // command_buffer_allocate_info_builder &command_buffer_count(uint32_t commandBufferCount)
+    // noexcept
+    //{
+    //    info_.commandBufferCount = commandBufferCount;
+    //    return *this;
+    //}
+
+    [[nodiscard]] command_buffer_builder create() { return command_buffer_builder(*this); }
+
+  private:
+    graphics_context &ctx_;
+    VkCommandBufferAllocateInfo info_{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+                                      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+                                      .commandBufferCount = 1};
+    cory::vk::command_pool command_pool_;
 };
 
 class submit_info_builder {
@@ -1178,21 +1250,19 @@ class submit_info_builder {
         return *this;
     }
 
-    submit_info_builder &
-    command_buffers(std::vector<VkCommandBuffer> commandBuffers) noexcept
+    submit_info_builder &command_buffers(std::vector<VkCommandBuffer> commandBuffers) noexcept
     {
         command_buffers_ = commandBuffers;
         return *this;
     }
 
-    submit_info_builder &
-    signal_semaphores(std::vector<VkSemaphore> signalSemaphores) noexcept
+    submit_info_builder &signal_semaphores(std::vector<VkSemaphore> signalSemaphores) noexcept
     {
         signal_semaphores_ = signalSemaphores;
         return *this;
     }
 
-    [[nodiscard]] VkSubmitInfo* info() noexcept
+    [[nodiscard]] VkSubmitInfo *info() noexcept
     {
         info_.waitSemaphoreCount = static_cast<uint32_t>(wait_semaphores_.size());
         info_.pWaitSemaphores = wait_semaphores_.data();
@@ -1217,15 +1287,3 @@ class submit_info_builder {
 
 } // namespace vk
 } // namespace cory
-
-
-#ifndef DOCTEST_CONFIG_DISABLE
-#include <doctest/doctest.h>
-
-TEST_CASE("asd") { 
-    
-    printf("hello from <lib_1_src1.cpp>\n"); 
-
-}
-
-#endif

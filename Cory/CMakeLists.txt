@@ -6,6 +6,7 @@ find_package(Vulkan REQUIRED FATAL_ERROR)
 
 set(CORY_VK_SOURCES   
   src/vk/buffer.cpp
+  src/vk/command_buffer.cpp
   src/vk/command_pool.cpp
   src/vk/graphics_context.cpp
   src/vk/image.cpp

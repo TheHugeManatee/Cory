@@ -167,10 +167,10 @@ class graphics_context {
         // nullptr);
     }
 
-    template <typename PooledObject> [[nodiscard]] constexpr auto &pool() noexcept
-    {
-        if constexpr (std::is_same_v<PooledObject, command_pool>) { return command_pool_pool_ ;}
-    }
+    //template <typename PooledObject> [[nodiscard]] constexpr auto &pool() noexcept
+    //{
+    //    if constexpr (std::is_same_v<PooledObject, command_pool>) { return command_pool_pool_ ;}
+    //}
 
     [[nodiscard]] const auto &graphics_queue() const noexcept { return graphics_queue_; }
     [[nodiscard]] const auto &compute_queue() const noexcept { return compute_queue_; }
@@ -216,7 +216,7 @@ class graphics_context {
     std::optional<cory::vk::swapchain> swapchain_;
 
     // pools
-    command_pool_pool command_pool_pool_;
+    //command_pool_pool command_pool_pool_;
 };
 
 } // namespace vk

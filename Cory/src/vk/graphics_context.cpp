@@ -24,7 +24,6 @@ graphics_context::graphics_context(cory::vk::instance inst,
     : instance_{inst}
     , physical_device_info_{inst.device_info(physical_device)}
     , surface_{surface_khr}
-    , command_pool_pool_{}
 {
     // if not explicitly supplied, enable all features. :)
     if (requested_features) { physical_device_features_ = *requested_features; }

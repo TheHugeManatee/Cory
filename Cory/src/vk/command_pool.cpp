@@ -11,8 +11,6 @@ void command_pool::reset(VkCommandPoolResetFlags flags /*= {}*/)
     vkResetCommandPool(ctx_.device(), get(), flags);
 }
 
-
-
 cory::vk::command_buffer command_pool::allocate_buffer()
 {
     VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -28,6 +26,7 @@ cory::vk::command_buffer command_pool::allocate_buffer()
     VkCommandBuffer vk_cmd_buffer;
     VK_CHECKED_CALL(vkAllocateCommandBuffers(ctx_.device(), &cmdAllocInfo, &vk_cmd_buffer),
                     "Could not allocated command buffer");
+
     auto cmd_buf_ptr = make_shared_resource<VkCommandBuffer>(
         vk_cmd_buffer,
         [dev = ctx_.device(), pool = command_pool_ptr_.get()](VkCommandBuffer cmd_buffer) {

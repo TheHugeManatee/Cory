@@ -55,7 +55,9 @@ graphics_context::graphics_context(cory::vk::instance inst,
 
     // get references to the actual queues so we can reference them later
     auto get_queue = [&](auto &family, auto &queue) {
-        if (family.has_value()) vkGetDeviceQueue(device_.get(), *family, 0, &queue);
+        VkQueue vk_queue{};
+        if (family.has_value()) vkGetDeviceQueue(device_.get(), *family, 0, &vk_queue);
+        queue = vk_queue;
     };
     get_queue(graphics_queue_family_, graphics_queue_);
     get_queue(compute_queue_family_, compute_queue_);

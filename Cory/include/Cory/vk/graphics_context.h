@@ -5,6 +5,7 @@
 #include "command_pool.h"
 #include "image.h"
 #include "instance.h"
+#include "queue.h"
 #include "swapchain.h"
 #include "utils.h"
 
@@ -206,10 +207,10 @@ class graphics_context {
     std::optional<uint32_t> compute_queue_family_;
     std::optional<uint32_t> present_queue_family_;
 
-    VkQueue graphics_queue_{};
-    VkQueue transfer_queue_{};
-    VkQueue compute_queue_{};
-    VkQueue present_queue_{};
+    cory::vk::queue graphics_queue_{};
+    cory::vk::queue transfer_queue_{};
+    cory::vk::queue compute_queue_{};
+    cory::vk::queue present_queue_{};
 
     std::shared_ptr<VmaAllocator_T> vma_allocator_{};
 

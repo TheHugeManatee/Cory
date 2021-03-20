@@ -4,6 +4,10 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
+set(CORY_UTILS_SOURCES
+  src/utils/executor.cpp
+)
+
 set(CORY_VK_SOURCES   
   src/vk/buffer.cpp
   src/vk/command_buffer.cpp
@@ -12,34 +16,39 @@ set(CORY_VK_SOURCES
   src/vk/image.cpp
   src/vk/image_view.cpp
   src/vk/instance.cpp
+  src/vk/queue.cpp
   src/vk/swapchain.cpp
   src/vk/test_utils.cpp
   src/vk/utils.cpp
 )
 
 set(CORY_SOURCES 
-  src/Application.cpp
-  src/Buffer.cpp
-  src/CameraManipulator.cpp
-  src/Context.cpp
-  src/Descriptor.cpp
-  src/Image.cpp
-  src/ImGuiLayer.cpp
+  #src/Application.cpp
+  #src/Buffer.cpp
+  #src/CameraManipulator.cpp
+  #src/Context.cpp
+  #src/Descriptor.cpp
+  #src/Image.cpp
+  #src/ImGuiLayer.cpp
   src/Log.cpp
-  src/Mesh.cpp
+  #src/Mesh.cpp
   src/Profiling.cpp
-  src/Shader.cpp
+  #src/Shader.cpp
   src/Utils.cpp
-  src/VkBuilders.cpp
+  #src/VkBuilders.cpp
   src/VkUtils.cpp
 )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 
 add_library(${TARGET_NAME} STATIC
-  ${CORY_VK_SOURCES} ${CORY_SOURCES} ${HEADERS})
+  ${CORY_UTILS_SOURCES}
+  ${CORY_VK_SOURCES}
+  ${CORY_SOURCES}
+  ${HEADERS}
+)
 
-source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/src PREFIX src FILES ${CORY_VK_SOURCES} ${CORY_SOURCES})
+source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/src PREFIX src FILES ${CORY_UTILS_SOURCES} ${CORY_VK_SOURCES} ${CORY_SOURCES})
 source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/include/Cory PREFIX include FILES ${HEADERS})
 
 target_include_directories (${TARGET_NAME} 

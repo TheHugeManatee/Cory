@@ -15,30 +15,8 @@
 #include <cstdlib>
 #include <optional>
 
-VKAPI_ATTR VkBool32 VKAPI_CALL
-debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-              VkDebugUtilsMessageTypeFlagsEXT messageType,
-              const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-              void *pUserData)
-{
-    switch (messageSeverity) {
-    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-        CO_CORE_TRACE("Vulkan validation layer: {}", pCallbackData->pMessage);
-        break;
-    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-        CO_CORE_INFO("Vulkan validation layer: {}", pCallbackData->pMessage);
-        break;
-    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-        CO_CORE_WARN("Vulkan validation layer: {}", pCallbackData->pMessage);
-        break;
-    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-        CO_CORE_ERROR("Vulkan validation layer: {}", pCallbackData->pMessage);
-        __debugbreak();
-        break;
-    }
-
-    return false;
-}
+#define DOCTEST_CONFIG_IMPLEMENT
+#include <doctest/doctest.h>
 
 int main_main()
 {
@@ -78,7 +56,7 @@ int main_main()
                       .message_type(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-                      .user_callback(debugCallback)
+                      .user_callback(cory::vk::default_debug_callback)
                       .ptr())
             .create();
 

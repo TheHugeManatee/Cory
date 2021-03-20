@@ -1,5 +1,7 @@
 #include "vk/utils.h"
 
+#include "Cory/Log.h"
+
 namespace cory {
 namespace vk {
 
@@ -31,6 +33,31 @@ cory::vk::swap_chain_support query_swap_chain_support(VkPhysicalDevice device, V
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &count, details.presentModes.data());
 
     return details;
+}
+
+VKAPI_ATTR VkBool32 VKAPI_CALL
+default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                       VkDebugUtilsMessageTypeFlagsEXT messageType,
+                       const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                       void *pUserData)
+{
+    switch (messageSeverity) {
+    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+        CO_CORE_TRACE("Vulkan validation layer: {}", pCallbackData->pMessage);
+        break;
+    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+        CO_CORE_INFO("Vulkan validation layer: {}", pCallbackData->pMessage);
+        break;
+    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+        CO_CORE_WARN("Vulkan validation layer: {}", pCallbackData->pMessage);
+        break;
+    case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+        CO_CORE_ERROR("Vulkan validation layer: {}", pCallbackData->pMessage);
+        __debugbreak(); // FIXME: this is currently windows-specific
+        break;
+    }
+
+    return false;
 }
 
 //const std::vector<VkLayerProperties>& layer_properties() {

@@ -86,5 +86,12 @@ make_shared_resource(VkResourceType resource, DeletionFunctor &&deletionFunctor)
     return {resource, std::forward<DeletionFunctor>(deletionFunctor)};
 }
 
+
+VKAPI_ATTR VkBool32 VKAPI_CALL
+default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+              VkDebugUtilsMessageTypeFlagsEXT messageType,
+              const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+              void *pUserData);
+
 } // namespace vk
 } // namespace cory

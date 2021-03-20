@@ -27,47 +27,6 @@ namespace vk {
 using surface = std::shared_ptr<VkSurfaceKHR_T>;
 using device = std::shared_ptr<VkDevice_T>;
 
-class queue_builder {
-  public:
-    friend class device_builder;
-
-    [[nodiscard]] queue_builder &next(const void *pNext) noexcept
-    {
-        info_.pNext = pNext;
-        return *this;
-    }
-
-    [[nodiscard]] queue_builder &flags(VkDeviceQueueCreateFlags flags) noexcept
-    {
-        info_.flags = flags;
-        return *this;
-    }
-
-    [[nodiscard]] queue_builder &queue_family_index(uint32_t queueFamilyIndex) noexcept
-    {
-        info_.queueFamilyIndex = queueFamilyIndex;
-        return *this;
-    }
-
-    [[nodiscard]] queue_builder &queue_priorities(std::vector<float> queuePriorities) noexcept
-    {
-        queue_priorities_ = queuePriorities;
-        return *this;
-    }
-
-  private:
-    [[nodiscard]] auto create_info()
-    {
-        info_.queueCount = static_cast<uint32_t>(queue_priorities_.size());
-        info_.pQueuePriorities = queue_priorities_.data();
-        return info_;
-    }
-    VkDeviceQueueCreateInfo info_{
-        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-    };
-    std::vector<float> queue_priorities_;
-};
-
 class device_builder {
   public:
     device_builder(VkPhysicalDevice physical_device)
@@ -207,10 +166,10 @@ class graphics_context {
     std::optional<uint32_t> compute_queue_family_;
     std::optional<uint32_t> present_queue_family_;
 
-    cory::vk::queue graphics_queue_{};
-    cory::vk::queue transfer_queue_{};
-    cory::vk::queue compute_queue_{};
-    cory::vk::queue present_queue_{};
+    cory::vk::queue graphics_queue_{"graphics"};
+    cory::vk::queue transfer_queue_{"transfer"};
+    cory::vk::queue compute_queue_{"compute"};
+    cory::vk::queue present_queue_{"present"};
 
     std::shared_ptr<VmaAllocator_T> vma_allocator_{};
 

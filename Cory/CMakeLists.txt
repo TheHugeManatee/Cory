@@ -74,7 +74,11 @@ target_link_libraries(${TARGET_NAME}
 )
 
 # Define a macro that allows consumers of this lib to know they link against it
-target_compile_definitions(${TARGET_NAME} PUBLIC HAVE_CORY)
+target_compile_definitions(${TARGET_NAME} 
+  #INTERFACE
+    #DOCTEST_CONFIG_DISABLE
+  PUBLIC 
+    HAVE_CORY)
 # for now, we hardcode the resource path until we have a proper resource management in place
 target_compile_definitions(${TARGET_NAME} PUBLIC "RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
 

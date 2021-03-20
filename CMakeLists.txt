@@ -1,7 +1,12 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.18)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "Do not build in-source. Please remove CMakeCache.txt and the CMakeFiles/ directory. Then build out-of-source.")
+endif()
+
+if(WIN32)
+    # for some reason, CMake *sometimes* auto-inserts /W3 into the flags on MSVC, so we remove it (because we set our own warnings)
+    string(REGEX REPLACE "/W[3|4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 endif()
 
 set(PROJECT_NAME "Cory")
@@ -38,7 +43,7 @@ include(Warnings)
 include(Coverage)
 
 ## Conan initialization
-include(${CMAKE_BINARY_DIR}/conanbuildinfo_multi.cmake)
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
 
 ## doctest static lib helper

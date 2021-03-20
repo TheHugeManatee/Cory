@@ -35,6 +35,7 @@ target_link_libraries(${TARGET_NAME}
   PRIVATE
     CONAN_PKG::vulkan-headers
     CONAN_PKG::imgui
+    CONAN_PKG::glfw
 )
 
 # We don't install our external headers, ideally we keep the interfaces clean of 

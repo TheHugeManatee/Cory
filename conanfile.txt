@@ -10,4 +10,4 @@ shaderc/2019.0
 doctest/2.4.4
 
 [generators]
-cmake_multi
+cmake

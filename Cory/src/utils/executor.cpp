@@ -246,7 +246,6 @@ SCENARIO("multithreaded usage")
                 executor.flush();
                 CHECK(results.size() == tasks_per_thread * num_threads);
             }
-            // THEN("all tasks should be executed in the right order") {}
         }
     }
 }

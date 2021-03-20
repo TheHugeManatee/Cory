@@ -25,6 +25,10 @@ class executor {
         worker_thread_ = std::thread([this]() { executor_main(); });
     }
 
+    /**
+     * will drain the event queue. no idea what's going to happen if you try to schedule more tasks
+     * while the executor is destroying, so let's call it undefined behavior (just don't).
+     */
     ~executor()
     {
         stop_thread_ = true;
@@ -32,8 +36,6 @@ class executor {
 
         if (worker_thread_.joinable()) worker_thread_.join();
     }
-
-    void executor_main();
 
     [[nodiscard]] std::string_view name() const noexcept { return name_; }
 
@@ -43,6 +45,13 @@ class executor {
      */
     void flush();
 
+    /**
+     * schedule a task to be executed. currently only `void()` tasks are supported.
+     *
+     * @param task the task (usually a lambda or a void() function reference) to schedule.
+     * @return a future<void> that you may wait for if you are interested in when the task is
+     * finished.
+     */
     template <typename TaskLambda> auto async(TaskLambda &&task)
     {
         using ResultType = decltype(task());
@@ -66,7 +75,17 @@ class executor {
     }
 
   private:
+    /**
+     * @brief worker thread entry point
+     */
+    void executor_main();
+
     void set_thread_name();
+
+    /**
+     * @brief internal method to drain the queue completely. locks the queue only temporarily, so
+     * new tasks may be enqueued while the queue is draining
+     */
     void drain_queue(std::unique_lock<std::mutex> &lck);
 
   private:

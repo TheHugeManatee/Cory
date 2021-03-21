@@ -61,27 +61,25 @@ cory::vk::instance &test_instance()
     return instance;
 }
 
-cory::vk::graphics_context &test_context()
+cory::vk::graphics_context test_context()
 {
-    static graphics_context ctx = []() {
-        // list/pick physical device
-        const auto devices = test_instance().physical_devices();
-        std::optional<cory::vk::physical_device_info> pickedDevice;
-        for (const auto &info : devices) {
-            if (!pickedDevice &&
-                info.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-                pickedDevice = info;
-            }
+    const auto devices = test_instance().physical_devices();
+    std::optional<cory::vk::physical_device_info> pickedDevice;
+    for (const auto &info : devices) {
+        if (!pickedDevice && info.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            pickedDevice = info;
         }
+    }
 
-        // create a context
-        return graphics_context(test_instance(), pickedDevice->device);
-    }();
-
-    return ctx;
+    // create a context
+    return graphics_context(test_instance(), pickedDevice->device);
 }
 
-void test_init() { test_context(); }
+void test_init()
+{
+    test_instance();
+    // test_context();
+}
 
 } // namespace vk
 } // namespace cory

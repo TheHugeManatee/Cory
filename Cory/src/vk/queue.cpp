@@ -89,7 +89,7 @@ TEST_SUITE_BEGIN("cory::vk::queue");
 TEST_CASE("basic queue usage")
 {
     using namespace cory::vk;
-    graphics_context &ctx = test_context();
+    graphics_context ctx = test_context();
 
     // record and submit directly to a queue
     queue &compute_q = ctx.compute_queue();

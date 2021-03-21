@@ -88,7 +88,7 @@ cory::vk::command_pool command_pool_builder::create()
 TEST_CASE("Creating and releasing a command pool")
 {
     using namespace cory::vk;
-    graphics_context &ctx = test_context();
+    graphics_context ctx = test_context();
 
     command_pool pool = command_pool_builder(ctx).queue(ctx.graphics_queue()).create();
     command_pool pool2 = pool;

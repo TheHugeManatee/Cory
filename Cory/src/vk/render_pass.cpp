@@ -188,7 +188,7 @@ TEST_CASE("subpass_description_builder interface")
 TEST_CASE("render pass creation")
 {
 
-    cory::vk::graphics_context &ctx = cory::vk::test_context();
+    cory::vk::graphics_context ctx = cory::vk::test_context();
 
     // TODO
     // ctx.default_color_format();

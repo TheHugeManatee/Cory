@@ -23,7 +23,7 @@ instance &test_instance();
 
 // access to a global context singleton. the context will be created as a headless context, i.e. no
 // associated surface and no present capabilities!
-graphics_context &test_context();
+graphics_context test_context();
 
 // initialize the vulkan instance and device to run the tests.
 void test_init();

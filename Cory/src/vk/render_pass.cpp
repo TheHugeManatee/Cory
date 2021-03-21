@@ -2,6 +2,8 @@
 
 #include "Cory/Log.h"
 
+#include "Cory/vk/graphics_context.h"
+
 namespace cory::vk {
 
 render_pass_builder &render_pass_builder::add_previous_frame_dependency()
@@ -44,7 +46,7 @@ VkAttachmentReference render_pass_builder::add_color_attachment(VkFormat format,
                              .store_op(VK_ATTACHMENT_STORE_OP_STORE)
                              .final_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    auto attachmentRef = add_attachment(color_att_dec, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    auto attachmentRef = add_attachment(color_att_dec);
     color_attachment_refs_.push_back(attachmentRef);
     return attachmentRef;
 }
@@ -52,7 +54,7 @@ VkAttachmentReference render_pass_builder::add_color_attachment(VkFormat format,
 VkAttachmentReference
 render_pass_builder::add_color_attachment(VkAttachmentDescription colorAttachment)
 {
-    auto attachmentRef = add_attachment(colorAttachment, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    auto attachmentRef = add_attachment(colorAttachment);
     color_attachment_refs_.push_back(attachmentRef);
     return attachmentRef;
 }
@@ -63,50 +65,43 @@ VkAttachmentReference render_pass_builder::add_depth_attachment(VkFormat format,
     CO_CORE_ASSERT(!depth_stencil_attachment_ref_.has_value(),
                    "DepthStencil attachment is already set");
 
-    VkAttachmentDescription depthAttachment{};
-    depthAttachment.format = format;
-    depthAttachment.samples = samples;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depthAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    VkAttachmentDescription depth_att =
+        attachment_description_builder()
+            .format(format)
+            .samples(samples)
+            .load_op(VK_ATTACHMENT_LOAD_OP_CLEAR)
+            .final_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
-    depth_stencil_attachment_ref_ =
-        add_attachment(depthAttachment, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    depth_stencil_attachment_ref_ = add_attachment(depth_att);
     return *depth_stencil_attachment_ref_;
 }
 
 VkAttachmentReference render_pass_builder::add_resolve_attachment(VkFormat format,
                                                                   VkImageLayout finalLayout)
 {
-    auto resolve_att_desc = attachment_description_builder()
-                                .format(format)
-                                .store_op(VK_ATTACHMENT_STORE_OP_STORE)
-                                .final_layout(finalLayout);
+    VkAttachmentDescription resolve_att_desc = attachment_description_builder()
+                                                   .format(format)
+                                                   .store_op(VK_ATTACHMENT_STORE_OP_STORE)
+                                                   .final_layout(finalLayout);
 
-    auto attachmentRef = add_attachment(resolve_att_desc, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    auto attachmentRef = add_attachment(resolve_att_desc);
     resolve_attachment_refs_.push_back(attachmentRef);
     return attachmentRef;
 }
 
 uint32_t render_pass_builder::add_default_subpass()
 {
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = static_cast<uint32_t>(color_attachment_refs_.size());
-    subpass.pColorAttachments = color_attachment_refs_.data();
-    if (depth_stencil_attachment_ref_)
-        subpass.pDepthStencilAttachment = &*depth_stencil_attachment_ref_;
-    else
-        subpass.pDepthStencilAttachment = nullptr;
-    subpass.pResolveAttachments = resolve_attachment_refs_.data();
+    auto subpass_builder = subpass_description_builder()
+                               .color_attachments(color_attachment_refs_)
+                               .resolve_attachments(resolve_attachment_refs_);
 
-    return add_subpass(subpass);
+    if (depth_stencil_attachment_ref_)
+        subpass_builder.depth_stencil_attachment(*depth_stencil_attachment_ref_);
+
+    return add_subpass(subpass_builder);
 }
 
-uint32_t render_pass_builder::add_subpass(VkSubpassDescription subpassDesc)
+uint32_t render_pass_builder::add_subpass(subpass_description_builder &subpassDesc)
 {
     auto subpassIdx = static_cast<uint32_t>(subpasses_.size());
     subpasses_.emplace_back(std::move(subpassDesc));
@@ -115,25 +110,44 @@ uint32_t render_pass_builder::add_subpass(VkSubpassDescription subpassDesc)
 
 render_pass render_pass_builder::create()
 {
+    std::vector<VkSubpassDescription> vk_subpasses(subpasses_.size());
+    std::transform(subpasses_.begin(),
+                   subpasses_.end(),
+                   vk_subpasses.begin(),
+                   [](subpass_description_builder &pass_builder) { return pass_builder.get(); });
+
     VkRenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.attachmentCount = static_cast<uint32_t>(render_pass_builder.size());
+    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments_.size());
     renderPassInfo.pAttachments = attachments_.data();
-    renderPassInfo.subpassCount = static_cast<uint32_t>(subpasses_.size());
-    renderPassInfo.pSubpasses = subpasses_.data();
+    renderPassInfo.subpassCount = static_cast<uint32_t>(vk_subpasses.size());
+    renderPassInfo.pSubpasses = vk_subpasses.data();
     renderPassInfo.dependencyCount = static_cast<uint32_t>(subpass_dependencies_.size());
     renderPassInfo.pDependencies = subpass_dependencies_.data();
 
-    return ctx.device->createRenderPass(renderPassInfo);
+    VkRenderPass vk_render_pass;
+    vkCreateRenderPass(ctx_.device(), &renderPassInfo, nullptr, &vk_render_pass);
+
+    return make_shared_resource(vk_render_pass, [dev = ctx_.device()](VkRenderPass p) {
+        vkDestroyRenderPass(dev, p, nullptr);
+    });
 }
 
-VkAttachmentReference render_pass_builder::add_attachment(VkAttachmentDescription desc,
-                                                          VkImageLayout layout)
+/**
+ * adds an attachment with the given description. if \a layout is empty, will use the finalLayout
+ * from the description
+ */
+VkAttachmentReference
+render_pass_builder::add_attachment(VkAttachmentDescription desc,
+                                    VkImageLayout layout /*= VK_IMAGE_LAYOUT_UNDEFINED*/)
 {
     auto attachmentID = static_cast<uint32_t>(attachments_.size());
     attachments_.push_back(desc);
     VkAttachmentReference attachmentRef{};
     attachmentRef.attachment = attachmentID;
-    attachmentRef.layout = layout;
+    if (layout == VK_IMAGE_LAYOUT_UNDEFINED) { attachmentRef.layout = desc.finalLayout; }
+    else {
+        attachmentRef.layout = layout;
+    }
     return attachmentRef;
 }
 
@@ -145,11 +159,11 @@ VkAttachmentReference render_pass_builder::add_attachment(VkAttachmentDescriptio
 
 #include "Cory/vk/test_utils.h"
 
-TEST_SUITE_BEGIN("cory::Vkrender_pass");
+TEST_SUITE_BEGIN("cory::vk::render_pass");
 
 TEST_CASE("attachment_description_builder interface")
 {
-    auto att_desc = cory::attachment_description_builder()
+    auto att_desc = cory::vk::attachment_description_builder()
                         .name("test_attachment_desc")
                         .store_op(VK_ATTACHMENT_STORE_OP_STORE)
                         .stencil_store_op(VK_ATTACHMENT_STORE_OP_STORE)
@@ -162,8 +176,8 @@ TEST_CASE("attachment_description_builder interface")
 
 TEST_CASE("subpass_description_builder interface")
 {
-    VkAttachmentReference color_att0;
-    VkAttachmentReference depth_stencil_att0;
+    VkAttachmentReference color_att0{};
+    VkAttachmentReference depth_stencil_att0{};
 
     VkSubpassDescription subpass_desc = cory::vk::subpass_description_builder()
                                             .pipeline_bind_point(VK_PIPELINE_BIND_POINT_GRAPHICS)
@@ -176,24 +190,31 @@ TEST_CASE("render pass creation")
 
     cory::vk::graphics_context &ctx = cory::vk::test_context();
 
+    // TODO
+    // ctx.default_color_format();
+    // ctx.default_depth_format()
+    // ctx.max_msaa_samples();
+    VkFormat swapchain_format = VK_FORMAT_B8G8R8A8_SRGB;
+    VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
+    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+
     cory::vk::render_pass_builder builder(ctx);
     auto color_att0 =
         builder.add_color_attachment(cory::vk::attachment_description_builder()
                                          .format(swapchain_format)
-                                         .samples(ctx.max_msaa_samples())
+                                         .samples(samples)
                                          .load_op(VK_ATTACHMENT_LOAD_OP_CLEAR)
                                          .store_op(VK_ATTACHMENT_STORE_OP_STORE)
                                          .final_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
-    auto depth_att0 =
-        builder.add_depth_attachment(ctx.default_depth_format(), ctx.max_msaa_samples());
+    auto depth_att0 = builder.add_depth_attachment(depth_format, samples);
 
-    cory::vk::render_pass render_pass = builder
-                                            .add_subpass(cory::vk::subpass_description_builder()
-                                                             .name("geometry")
-                                                             .color_attachments({color_att0})
-                                                             .depth_stencil_attachment(depth_att0))
-                                            .add_previous_frame_dependency()
-                                            .create();
+    builder.add_subpass(cory::vk::subpass_description_builder()
+                            .name("geometry")
+                            .color_attachments({color_att0})
+                            .depth_stencil_attachment(depth_att0));
+    builder.add_previous_frame_dependency();
+
+    cory::vk::render_pass render_pass = builder.create();
 }
 
 TEST_SUITE_END();

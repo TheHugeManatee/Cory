@@ -10,6 +10,7 @@
 namespace cory::vk {
 
 class graphics_context;
+class subpass_description_builder;
 
 using render_pass = std::shared_ptr<VkRenderPass_T>;
 
@@ -42,18 +43,19 @@ class render_pass_builder {
                            VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     /**
-     * Add a default configured graphics subpass that has all color, depth and
-     * resolve attachments that the builder knows about
-     */
-    render_pass_builder &addDefaultSubpass();
-
-    /**
      * Add a subpass dependency to depend on the VK_SUBPASS_EXTERNAL event of the
      * previous frame
      */
     render_pass_builder &add_previous_frame_dependency();
 
     render_pass_builder &add_subpass_dependency(VkSubpassDependency dependency);
+
+    /**
+     * Add a default configured graphics subpass that has all color, depth and
+     * resolve attachments that the builder knows about.
+     * @return the subpass index of the added pass
+     */
+    uint32_t add_default_subpass();
 
     // NOTE: the order of attachments directly corresponds to the
     // 'layout(location=0) out vec4 color' index in the fragment shader
@@ -62,17 +64,19 @@ class render_pass_builder {
     // - pDepthStencilAttachment: attachment for depth and stencil data
     // - pPreserveAttachments: attachments that are not currently used by the
     //   subpass but for which the data needs to be preserved.
-    render_pass_builder &add_subpass(VkSubpassDescription subpassDesc);
+    uint32_t add_subpass(subpass_description_builder& subpass_builder);
 
     render_pass_builder &name(std::string_view name) noexcept
     {
         name_ = name;
         return *this;
     }
-    [[nodiscard]] render_pass create() { return {}; }
+
+    [[nodiscard]] render_pass create();
 
   private:
-    VkAttachmentReference add_attachment(VkAttachmentDescription desc, VkImageLayout layout);
+    VkAttachmentReference add_attachment(VkAttachmentDescription desc,
+                                         VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
 
   private:
     graphics_context &ctx_;
@@ -88,7 +92,7 @@ class render_pass_builder {
     std::optional<VkAttachmentReference> depth_stencil_attachment_ref_;
     std::vector<VkSubpassDependency> subpass_dependencies_;
 
-    std::vector<VkSubpassDescription> subpasses_;
+    std::vector<subpass_description_builder> subpasses_;
 };
 
 /**
@@ -231,10 +235,10 @@ class subpass_description_builder {
     }
 
     subpass_description_builder &
-    depth_stencil_attachment(const VkAttachmentReference depthStencilAttachment) noexcept
+    depth_stencil_attachment(VkAttachmentReference depthStencilAttachment) noexcept
     {
         depth_stencil_attachment_ = depthStencilAttachment;
-        info_.pDepthStencilAttachment = &depth_stencil_attachment_;
+        info_.pDepthStencilAttachment = &*depth_stencil_attachment_;
         return *this;
     }
 

@@ -18,7 +18,7 @@ target_link_libraries(${TARGET_NAME}
         Cory
         ThirdPartyLibs
         ${Vulkan_LIBRARIES}
-        ${CONAN_LIBS}
+        CONAN_PKG::glew
 )
 
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)

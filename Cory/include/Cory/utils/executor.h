@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Cory/types.h"
+
 #include <condition_variable>
 #include <future>
 #include <queue>
@@ -9,8 +11,6 @@
 #include <vector>
 
 namespace cory::utils {
-
-template <typename T> using future = std::future<T>;
 
 /**
  * very simple task queue that spawns a single worker thread that will asynchronously execute the

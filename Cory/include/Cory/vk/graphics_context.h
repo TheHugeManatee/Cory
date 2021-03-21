@@ -3,8 +3,10 @@
 #include "buffer.h"
 #include "command_buffer.h"
 #include "command_pool.h"
+#include "device.h"
 #include "image.h"
 #include "instance.h"
+#include "misc.h"
 #include "queue.h"
 #include "swapchain.h"
 #include "utils.h"
@@ -18,77 +20,14 @@
 #include <set>
 #include <string_view>
 
-// we use the forward-declared version of the type to avoid the header file
+// we use the forward-declared VulkanMemoryAllocator type
 struct VmaAllocator_T;
 
-namespace cory {
-namespace vk {
-
-using surface = std::shared_ptr<VkSurfaceKHR_T>;
-using device = std::shared_ptr<VkDevice_T>;
-
-class device_builder {
-  public:
-    device_builder(VkPhysicalDevice physical_device)
-        : physical_device_{physical_device}
-    {
-    }
-
-    [[nodiscard]] device_builder &next(const void *pNext) noexcept
-    {
-        info_.pNext = pNext;
-        return *this;
-    }
-
-    [[nodiscard]] device_builder &flags(VkDeviceCreateFlags flags) noexcept
-    {
-        info_.flags = flags;
-        return *this;
-    }
-
-    [[nodiscard]] device_builder &
-    queue_create_infos(std::vector<queue_builder> queueCreateInfos) noexcept
-    {
-        queue_builders_ = queueCreateInfos;
-        return *this;
-    }
-
-    [[nodiscard]] device_builder &
-    enabled_layer_names(std::vector<const char *> enabledLayerNames) noexcept
-    {
-        enabled_layer_names_ = enabledLayerNames;
-        return *this;
-    }
-
-    [[nodiscard]] device_builder &
-    enabled_extension_names(std::vector<const char *> enabledExtensionNames) noexcept
-    {
-        enabled_extension_names_ = enabledExtensionNames;
-        return *this;
-    }
-
-    [[nodiscard]] device_builder &
-    enabled_features(VkPhysicalDeviceFeatures enabledFeatures) noexcept
-    {
-        enabled_features_ = enabledFeatures;
-        return *this;
-    }
-
-    [[nodiscard]] device create();
-
-  private:
-    VkPhysicalDevice physical_device_;
-    VkDeviceCreateInfo info_{
-        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-    };
-    std::vector<queue_builder> queue_builders_;
-    std::vector<const char *> enabled_extension_names_;
-    std::vector<const char *> enabled_layer_names_;
-    VkPhysicalDeviceFeatures enabled_features_;
-};
+namespace cory::vk {
 
 class graphics_context {
   public:
+    // == lifetime ==
     graphics_context(instance inst,
                      VkPhysicalDevice physical_device,
                      surface surface_khr = nullptr,
@@ -96,6 +35,10 @@ class graphics_context {
                      std::vector<const char *> requested_extensions = {},
                      std::vector<const char *> requested_layers = {});
 
+    // nothing to do here!
+    ~graphics_context() = default;
+
+    // === basic copy&move interface ===
     // this one should never be copied
     graphics_context(const graphics_context &) = delete;
     graphics_context &operator=(const graphics_context &) = delete;
@@ -104,39 +47,34 @@ class graphics_context {
     graphics_context(graphics_context &&) = default;
     graphics_context &operator=(graphics_context &&) = default;
 
-    // nothing to do here!
-    ~graphics_context() = default;
-
+    // ===  resource creation ===
     image_builder build_image() { return image_builder{*this}; }
     buffer_builder build_buffer() { return buffer_builder{*this}; }
 
-    template <typename Functor> void submit(Functor &&f)
+    cory::vk::fence fence(VkFenceCreateFlags flags = {});
+
+    // === command buffer submission ===
+
+    template <typename Functor>
+    executable_command_buffer record(Functor f, cory::vk::queue &target_queue = graphics_queue_)
     {
-        return submit(graphics_queue_, std::forward<Functor>(f));
+        return graphics_queue_.record(std::forward<Functor>(f));
     }
 
-    // TODO THIS!
-    template <typename Functor> void submit(VkQueue queue, Functor &&f)
-    {
-        command_pool pool = command_pool_builder(*this).create();
-        command_buffer cmd_buffer(/*pool*/);
-        f(cmd_buffer);
-
-        // TODO!
-        // vkQueueSubmit(queue, 1, submit_info_builder().command_buffers({cmd_buffer.get()}).info(),
-        // nullptr);
-    }
-
-    //template <typename PooledObject> [[nodiscard]] constexpr auto &pool() noexcept
+    // template <typename PooledObject> [[nodiscard]] constexpr auto &pool() noexcept
     //{
     //    if constexpr (std::is_same_v<PooledObject, command_pool>) { return command_pool_pool_ ;}
     //}
 
-    [[nodiscard]] const auto &graphics_queue() const noexcept { return graphics_queue_; }
-    [[nodiscard]] const auto &compute_queue() const noexcept { return compute_queue_; }
-    [[nodiscard]] const auto &present_queue() const noexcept { return present_queue_; }
-    [[nodiscard]] const auto &transfer_queue() const noexcept { return transfer_queue_; }
+    // === access to the queues ===
+    [[nodiscard]] cory::vk::queue &graphics_queue() noexcept { return graphics_queue_; }
+    [[nodiscard]] cory::vk::queue &compute_queue() noexcept { return compute_queue_; }
+    [[nodiscard]] cory::vk::queue &present_queue() noexcept { return present_queue_; }
+    [[nodiscard]] cory::vk::queue &transfer_queue() noexcept { return transfer_queue_; }
 
+    inline cory::vk::queue &queue(cory::vk::queue_type requested_type) noexcept;
+
+    // === direct access to the basic vulkan entities ===
     [[nodiscard]] const auto &enabled_features() const noexcept
     {
         return physical_device_features_;
@@ -166,18 +104,18 @@ class graphics_context {
     std::optional<uint32_t> compute_queue_family_;
     std::optional<uint32_t> present_queue_family_;
 
-    cory::vk::queue graphics_queue_{"graphics"};
-    cory::vk::queue transfer_queue_{"transfer"};
-    cory::vk::queue compute_queue_{"compute"};
-    cory::vk::queue present_queue_{"present"};
+    cory::vk::queue graphics_queue_{*this, "graphics"};
+    cory::vk::queue transfer_queue_{*this, "transfer"};
+    cory::vk::queue compute_queue_{*this, "compute"};
+    cory::vk::queue present_queue_{*this, "present"};
 
     std::shared_ptr<VmaAllocator_T> vma_allocator_{};
 
     std::optional<cory::vk::swapchain> swapchain_;
 
     // pools
-    //command_pool_pool command_pool_pool_;
+    // command_pool_pool command_pool_pool_;
 };
+} // namespace cory::vk
 
-} // namespace vk
-} // namespace cory
+// =====================================================================

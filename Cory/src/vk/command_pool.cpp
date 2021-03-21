@@ -11,7 +11,8 @@ void command_pool::reset(VkCommandPoolResetFlags flags /*= {}*/)
     vkResetCommandPool(ctx_.device(), get(), flags);
 }
 
-cory::vk::command_buffer command_pool::allocate_buffer()
+cory::vk::command_buffer
+command_pool::allocate_buffer(VkCommandBufferUsageFlags usageFlags /*= {}*/)
 {
     VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
@@ -33,20 +34,26 @@ cory::vk::command_buffer command_pool::allocate_buffer()
             vkFreeCommandBuffers(dev, pool, 1, &cmd_buffer);
         });
 
-    return {command_pool_ptr_, std::move(cmd_buf_ptr)};
+    // set the command buffer into begin state
+    VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+                                        .flags = usageFlags};
+    vkBeginCommandBuffer(cmd_buf_ptr.get(), &begin_info);
+
+    return cory::vk::command_buffer{command_pool_ptr_, std::move(cmd_buf_ptr), target_queue_};
 }
 
 cory::vk::command_pool command_pool_builder::create()
 {
+    info_.queueFamilyIndex = target_queue_->family();
+
     VkCommandPool pool;
     VK_CHECKED_CALL(vkCreateCommandPool(ctx_.device(), &info_, nullptr, &pool),
                     "Pool could not create new VkCommandPool element!");
 
-    return command_pool(ctx_, make_shared_resource(pool, [dev = ctx_.device()](VkCommandPool p) {
-                            vkDestroyCommandPool(dev, p, nullptr);
-                        }));
+    auto vk_command_pool_ptr = make_shared_resource(
+        pool, [dev = ctx_.device()](VkCommandPool p) { vkDestroyCommandPool(dev, p, nullptr); });
 
-    //    return ctx_.pool<command_pool>().get(*this);
+    return command_pool(ctx_, vk_command_pool_ptr, target_queue_);
 }
 
 // cory::vk::command_pool command_pool_pool::get(const command_pool_builder &builder)
@@ -83,7 +90,7 @@ TEST_CASE("Creating and releasing a command pool")
     using namespace cory::vk;
     graphics_context &ctx = test_context();
 
-    command_pool pool = command_pool_builder(ctx).create();
+    command_pool pool = command_pool_builder(ctx).queue(ctx.graphics_queue()).create();
     command_pool pool2 = pool;
     CO_CORE_WARN("Test with command pools");
 

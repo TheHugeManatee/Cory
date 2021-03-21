@@ -86,12 +86,35 @@ make_shared_resource(VkResourceType resource, DeletionFunctor &&deletionFunctor)
     return {resource, std::forward<DeletionFunctor>(deletionFunctor)};
 }
 
-
 VKAPI_ATTR VkBool32 VKAPI_CALL
 default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-              VkDebugUtilsMessageTypeFlagsEXT messageType,
-              const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-              void *pUserData);
+                       VkDebugUtilsMessageTypeFlagsEXT messageType,
+                       const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                       void *pUserData);
+
+/**
+ * @brief helper to "extract" the contained raw vulkan types from a vector of cory wrapper objects.
+ *
+ * returns a new vector by calling .get() on each of objects in the provided std::vector.
+ *
+ * @code{.cpp}
+ *   std::vector<semaphore> my_semaphores = ...;
+ *   std::vector<VkSemaphore> vk_semaphore_objects = collect_vk_objects(my_semaphores);
+ * @endcode
+ */
+template <typename CoryWrapperType,
+          typename VkContainedType = decltype(std::declval<CoryWrapperType>().get())>
+std::vector<VkContainedType> collect_vk_objects(const std::vector<CoryWrapperType> &vector_of_wrappers)
+{
+
+    std::vector<VkContainedType> vk_objects(vector_of_wrappers.size());
+    std::transform(vector_of_wrappers.begin(),
+                   vector_of_wrappers.end(),
+                   vk_objects.begin(),
+                   [](const auto &wrapper) { return wrapper.get(); });
+
+    return vk_objects;
+}
 
 } // namespace vk
 } // namespace cory

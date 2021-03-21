@@ -10,11 +10,14 @@
 #include <memory>
 #include <string_view>
 
+#include "Cory/Log.h"
+
 namespace cory {
 namespace vk {
 
 class graphics_context;
 class command_pool_builder;
+class queue;
 
 // template <typename Derived, typename StoredVkType> class pooled_resource {
 //  public:
@@ -37,9 +40,12 @@ class command_pool /*: public pooled_resource<command_pool, VkCommandPool>*/ {
   public:
     using ResourcePtrType = std::shared_ptr<VkCommandPool_T>;
 
-    explicit command_pool(graphics_context &ctx, ResourcePtrType command_pool_ptr)
+    explicit command_pool(graphics_context &ctx,
+                          ResourcePtrType command_pool_ptr,
+                          cory::vk::queue *target_queue)
         : ctx_{ctx}
         , command_pool_ptr_{command_pool_ptr}
+        , target_queue_{target_queue}
     {
     }
 
@@ -47,11 +53,15 @@ class command_pool /*: public pooled_resource<command_pool, VkCommandPool>*/ {
 
     [[nodiscard]] VkCommandPool get() const noexcept { return command_pool_ptr_.get(); }
 
-    cory::vk::command_buffer allocate_buffer();
+    [[nodiscard]] cory::vk::command_buffer
+    allocate_buffer(VkCommandBufferUsageFlags usageFlags = {});
+
+    [[nodiscard]] cory::vk::queue *queue() noexcept { return target_queue_; }
 
   private:
     graphics_context &ctx_;
     ResourcePtrType command_pool_ptr_;
+    cory::vk::queue *target_queue_;
 };
 
 class command_pool_builder {
@@ -76,9 +86,9 @@ class command_pool_builder {
         return *this;
     }
 
-    command_pool_builder &queue_family_index(uint32_t queueFamilyIndex) noexcept
+    command_pool_builder &queue(cory::vk::queue &target_queue) noexcept
     {
-        info_.queueFamilyIndex = queueFamilyIndex;
+        target_queue_ = &target_queue;
         return *this;
     }
 
@@ -95,6 +105,7 @@ class command_pool_builder {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     };
     std::string_view name_;
+    cory::vk::queue *target_queue_;
 };
 
 // class command_pool_pool {

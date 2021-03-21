@@ -56,8 +56,10 @@ graphics_context::graphics_context(cory::vk::instance inst,
     // get references to the actual queues so we can reference them later
     auto get_queue = [&](auto &family, auto &queue) {
         VkQueue vk_queue{};
-        if (family.has_value()) vkGetDeviceQueue(device_.get(), *family, 0, &vk_queue);
-        queue = vk_queue;
+        if (family.has_value()) {
+            vkGetDeviceQueue(device_.get(), *family, 0, &vk_queue);
+            queue.set_queue(vk_queue, *family);
+        }
     };
     get_queue(graphics_queue_family_, graphics_queue_);
     get_queue(compute_queue_family_, compute_queue_);
@@ -227,29 +229,31 @@ void graphics_context::init_swapchain()
     swapchain_.emplace(swch_builder.create());
 }
 
-cory::vk::device device_builder::create()
+cory::vk::fence graphics_context::fence(VkFenceCreateFlags flags /*= {}*/)
 {
-    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::transform(queue_builders_.begin(),
-                   queue_builders_.end(),
-                   std::back_inserter(queueCreateInfos),
-                   [](queue_builder &builder) { return builder.create_info(); });
+    // fixme: we probably want a pool here!
+    VkFenceCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .flags = flags};
 
-    info_.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-    info_.pQueueCreateInfos = queueCreateInfos.data();
+    VkFence created_fence;
+    VK_CHECKED_CALL(vkCreateFence(device_.get(), &create_info, nullptr, &created_fence),
+                    "failed to create a fence object");
+    return make_shared_resource(
+        created_fence, [dev = device_.get()](VkFence f) { vkDestroyFence(dev, f, nullptr); });
+}
 
-    info_.enabledLayerCount = static_cast<uint32_t>(enabled_layer_names_.size());
-    info_.ppEnabledLayerNames = enabled_layer_names_.data();
-
-    info_.enabledExtensionCount = static_cast<uint32_t>(enabled_extension_names_.size());
-    info_.ppEnabledExtensionNames = enabled_extension_names_.data();
-
-    info_.pEnabledFeatures = &enabled_features_;
-
-    VkDevice vkDevice;
-    vkCreateDevice(physical_device_, &info_, nullptr, &vkDevice);
-
-    return make_shared_resource(vkDevice, [=](VkDevice d) { vkDestroyDevice(d, nullptr); });
+cory::vk::queue &graphics_context::queue(cory::vk::queue_type requested_type) noexcept
+{
+    switch (requested_type) {
+    case cory::vk::queue_type::graphics:
+        return graphics_queue_;
+    case cory::vk::queue_type::compute:
+        return compute_queue_;
+    case cory::vk::queue_type::transfer:
+        return transfer_queue_;
+    case cory::vk::queue_type::present:
+        return present_queue_;
+        // no default case so compiler will warn about missing cases
+    }
 }
 
 } // namespace vk

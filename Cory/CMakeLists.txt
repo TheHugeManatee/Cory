@@ -14,38 +14,38 @@ find_package(imgui)
 find_package(shaderc)
 
 set(CORY_UTILS_SOURCES
-  src/utils/executor.cpp
+  "src/utils/executor.cpp"
 )
 
 set(CORY_VK_SOURCES   
-  src/vk/buffer.cpp
-  src/vk/command_buffer.cpp
-  src/vk/command_pool.cpp
-  src/vk/graphics_context.cpp
-  src/vk/image.cpp
-  src/vk/image_view.cpp
-  src/vk/instance.cpp
-  src/vk/queue.cpp
-  src/vk/swapchain.cpp
-  src/vk/test_utils.cpp
-  src/vk/utils.cpp
-)
+ "src/vk/buffer.cpp"
+ "src/vk/command_buffer.cpp"
+ "src/vk/command_pool.cpp"
+ "src/vk/graphics_context.cpp"
+ "src/vk/image.cpp"
+ "src/vk/image_view.cpp"
+ "src/vk/instance.cpp"
+ "src/vk/queue.cpp"
+ "src/vk/swapchain.cpp"
+ "src/vk/test_utils.cpp"
+ "src/vk/utils.cpp"
+ "src/vk/device.cpp")
 
 set(CORY_SOURCES 
-  #src/Application.cpp
-  #src/Buffer.cpp
-  #src/CameraManipulator.cpp
-  #src/Context.cpp
-  #src/Descriptor.cpp
-  #src/Image.cpp
-  #src/ImGuiLayer.cpp
-  src/Log.cpp
-  #src/Mesh.cpp
-  src/Profiling.cpp
-  #src/Shader.cpp
-  src/Utils.cpp
-  #src/VkBuilders.cpp
-  src/VkUtils.cpp
+  #"src/Application.cpp"
+  #"src/Buffer.cpp"
+  #"src/CameraManipulator.cpp"
+  #"src/Context.cpp"
+  #"src/Descriptor.cpp"
+  #"src/Image.cpp"
+  #"src/ImGuiLayer.cpp"
+  "src/Log.cpp"
+  #"src/Mesh.cpp"
+  "src/Profiling.cpp"
+  #"src/Shader.cpp"
+  "src/Utils.cpp"
+  #"src/VkBuilders.cpp"
+  "src/VkUtils.cpp"
 )
 
 file(GLOB_RECURSE HEADERS "include/*.h")

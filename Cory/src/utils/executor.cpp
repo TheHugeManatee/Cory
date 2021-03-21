@@ -117,7 +117,7 @@ SCENARIO("basic executor usage")
             constexpr int num_tasks{10};
             std::vector<std::thread::id> thread_ids(num_tasks);
             std::vector<int> task_proof;
-            std::vector<cory::utils::future<void>> results;
+            std::vector<cory::future<void>> results;
 
             for (int i = 0; i < num_tasks; ++i) {
                 results.push_back(executor.async([&, task_idx = i]() {

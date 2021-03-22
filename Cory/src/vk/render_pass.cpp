@@ -52,14 +52,15 @@ VkAttachmentReference render_pass_builder::add_color_attachment(VkFormat format,
 }
 
 VkAttachmentReference
-render_pass_builder::add_color_attachment(VkAttachmentDescription colorAttachment)
+render_pass_builder::add_color_attachment(const VkAttachmentDescription &colorAttachment,
+                                          VkImageLayout layout /*= VK_IMAGE_LAYOUT_UNDEFINED*/)
 {
-    auto attachmentRef = add_attachment(colorAttachment);
+    auto attachmentRef = add_attachment(colorAttachment, layout);
     color_attachment_refs_.push_back(attachmentRef);
     return attachmentRef;
 }
 
-VkAttachmentReference render_pass_builder::add_depth_attachment(VkFormat format,
+VkAttachmentReference render_pass_builder::set_depth_attachment(VkFormat format,
                                                                 VkSampleCountFlagBits samples)
 {
     CO_CORE_ASSERT(!depth_stencil_attachment_ref_.has_value(),
@@ -73,6 +74,16 @@ VkAttachmentReference render_pass_builder::add_depth_attachment(VkFormat format,
             .final_layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
     depth_stencil_attachment_ref_ = add_attachment(depth_att);
+    return *depth_stencil_attachment_ref_;
+}
+
+VkAttachmentReference
+render_pass_builder::set_depth_attachment(const VkAttachmentDescription &colorAttachment,
+                                          VkImageLayout layout /*= VK_IMAGE_LAYOUT_UNDEFINED*/)
+{
+    CO_CORE_ASSERT(!depth_stencil_attachment_ref_.has_value(),
+                   "DepthStencil attachment is already set");
+    depth_stencil_attachment_ref_ = add_attachment(colorAttachment, layout);
     return *depth_stencil_attachment_ref_;
 }
 
@@ -101,7 +112,7 @@ uint32_t render_pass_builder::add_default_subpass()
     return add_subpass(subpass_builder);
 }
 
-uint32_t render_pass_builder::add_subpass(subpass_description_builder &subpassDesc)
+uint32_t render_pass_builder::add_subpass(subpass_description_builder subpassDesc)
 {
     auto subpassIdx = static_cast<uint32_t>(subpasses_.size());
     subpasses_.emplace_back(std::move(subpassDesc));
@@ -116,16 +127,19 @@ render_pass render_pass_builder::create()
                    vk_subpasses.begin(),
                    [](subpass_description_builder &pass_builder) { return pass_builder.get(); });
 
-    VkRenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments_.size());
-    renderPassInfo.pAttachments = attachments_.data();
-    renderPassInfo.subpassCount = static_cast<uint32_t>(vk_subpasses.size());
-    renderPassInfo.pSubpasses = vk_subpasses.data();
-    renderPassInfo.dependencyCount = static_cast<uint32_t>(subpass_dependencies_.size());
-    renderPassInfo.pDependencies = subpass_dependencies_.data();
+    VkRenderPassCreateInfo renderPassInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .attachmentCount = static_cast<uint32_t>(attachments_.size()),
+        .pAttachments = attachments_.data(),
+        .subpassCount = static_cast<uint32_t>(vk_subpasses.size()),
+        .pSubpasses = vk_subpasses.data(),
+        .dependencyCount = static_cast<uint32_t>(subpass_dependencies_.size()),
+        .pDependencies = subpass_dependencies_.data(),
+    };
 
     VkRenderPass vk_render_pass;
-    vkCreateRenderPass(ctx_.device(), &renderPassInfo, nullptr, &vk_render_pass);
+    VK_CHECKED_CALL(vkCreateRenderPass(ctx_.device(), &renderPassInfo, nullptr, &vk_render_pass),
+                    "Failed to create a render pass!");
 
     return make_shared_resource(vk_render_pass, [dev = ctx_.device()](VkRenderPass p) {
         vkDestroyRenderPass(dev, p, nullptr);
@@ -137,11 +151,11 @@ render_pass render_pass_builder::create()
  * from the description
  */
 VkAttachmentReference
-render_pass_builder::add_attachment(VkAttachmentDescription desc,
+render_pass_builder::add_attachment(const VkAttachmentDescription &desc,
                                     VkImageLayout layout /*= VK_IMAGE_LAYOUT_UNDEFINED*/)
 {
     auto attachmentID = static_cast<uint32_t>(attachments_.size());
-    attachments_.push_back(desc);
+    attachments_.emplace_back(desc);
     VkAttachmentReference attachmentRef{};
     attachmentRef.attachment = attachmentID;
     if (layout == VK_IMAGE_LAYOUT_UNDEFINED) { attachmentRef.layout = desc.finalLayout; }
@@ -202,11 +216,20 @@ TEST_CASE("render pass creation")
                                          .load_op(VK_ATTACHMENT_LOAD_OP_CLEAR)
                                          .store_op(VK_ATTACHMENT_STORE_OP_STORE)
                                          .final_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
-    auto depth_att0 = builder.add_depth_attachment(depth_stencil_format, samples);
+    auto depth_att0 = builder.set_depth_attachment(depth_stencil_format, samples);
+
+    // add a second attachment with the generic attachment API
+    auto color_att1 =
+        builder.add_color_attachment(cory::vk::attachment_description_builder()
+                                         .format(ctx.default_color_format())
+                                         .load_op(VK_ATTACHMENT_LOAD_OP_CLEAR)
+                                         .store_op(VK_ATTACHMENT_STORE_OP_STORE)
+                                         .final_layout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR),
+                                     VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     builder.add_subpass(cory::vk::subpass_description_builder()
                             .name("geometry")
-                            .color_attachments({color_att0})
+                            .color_attachments({color_att0, color_att1})
                             .depth_stencil_attachment(depth_att0));
     builder.add_previous_frame_dependency();
 

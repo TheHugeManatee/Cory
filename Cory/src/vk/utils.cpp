@@ -35,6 +35,27 @@ cory::vk::swap_chain_support query_swap_chain_support(VkPhysicalDevice device, V
     return details;
 }
 
+VkFormat find_supported_format(VkPhysicalDevice device,
+                               const std::vector<VkFormat> &candidates,
+                               VkImageTiling tiling,
+                               VkFormatFeatureFlags features) noexcept
+{
+    for (const VkFormat &format : candidates) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(device, format, &props);
+
+        if (tiling == VK_IMAGE_TILING_LINEAR &&
+            (props.linearTilingFeatures & features) == features) {
+            return format;
+        }
+        if (tiling == VK_IMAGE_TILING_OPTIMAL &&
+            (props.optimalTilingFeatures & features) == features) {
+            return format;
+        }
+    }
+    return VK_FORMAT_UNDEFINED;
+}
+
 VKAPI_ATTR VkBool32 VKAPI_CALL
 default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                        VkDebugUtilsMessageTypeFlagsEXT messageType,
@@ -60,7 +81,7 @@ default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     return false;
 }
 
-//const std::vector<VkLayerProperties>& layer_properties() {
+// const std::vector<VkLayerProperties>& layer_properties() {
 //    static const std::vector<VkLayerProperties> layer_props = []() {
 //        uint32_t layerCount = 0;
 //        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -71,5 +92,5 @@ default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 //    return layer_props;
 //}
 
-}
-}
+} // namespace vk
+} // namespace cory

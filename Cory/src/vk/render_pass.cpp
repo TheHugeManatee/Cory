@@ -190,13 +190,9 @@ TEST_CASE("render pass creation")
 
     cory::vk::graphics_context ctx = cory::vk::test_context();
 
-    // TODO
-    // ctx.default_color_format();
-    // ctx.default_depth_format()
-    // ctx.max_msaa_samples();
-    VkFormat swapchain_format = VK_FORMAT_B8G8R8A8_SRGB;
-    VkFormat depth_format = VK_FORMAT_D32_SFLOAT;
-    VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+    VkFormat swapchain_format = ctx.default_color_format();
+    VkFormat depth_stencil_format = ctx.default_depth_stencil_format();
+    VkSampleCountFlagBits samples = ctx.max_msaa_samples();
 
     cory::vk::render_pass_builder builder(ctx);
     auto color_att0 =
@@ -206,7 +202,7 @@ TEST_CASE("render pass creation")
                                          .load_op(VK_ATTACHMENT_LOAD_OP_CLEAR)
                                          .store_op(VK_ATTACHMENT_STORE_OP_STORE)
                                          .final_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
-    auto depth_att0 = builder.add_depth_attachment(depth_format, samples);
+    auto depth_att0 = builder.add_depth_attachment(depth_stencil_format, samples);
 
     builder.add_subpass(cory::vk::subpass_description_builder()
                             .name("geometry")

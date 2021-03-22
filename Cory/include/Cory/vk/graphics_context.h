@@ -87,6 +87,14 @@ class graphics_context {
     [[nodiscard]] auto &surface() const noexcept { return surface_; }
     [[nodiscard]] auto &swapchain() const noexcept { return swapchain_; }
 
+    [[nodiscard]] auto max_msaa_samples() const noexcept { return max_msaa_samples_; }
+    [[nodiscard]] auto default_color_format() const noexcept { return default_color_format_; }
+    [[nodiscard]] auto default_depth_stencil_format() const noexcept
+    {
+        return default_depth_stencil_format_;
+    }
+
+
   private:
     std::set<uint32_t> configure_queue_families();
     void init_allocator();
@@ -112,6 +120,10 @@ class graphics_context {
     std::shared_ptr<VmaAllocator_T> vma_allocator_{};
 
     std::optional<cory::vk::swapchain> swapchain_;
+
+    VkSampleCountFlagBits max_msaa_samples_;
+    VkFormat default_color_format_;
+    VkFormat default_depth_stencil_format_;
 
     // pools
     // command_pool_pool command_pool_pool_;

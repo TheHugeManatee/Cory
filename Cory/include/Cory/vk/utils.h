@@ -7,6 +7,13 @@
 #include <type_traits>
 #include <vector>
 
+#define VK_CHECKED_CALL(x, err)                                                                    \
+    do {                                                                                           \
+        if (auto code = (x); code != VK_SUCCESS) {                                                 \
+            throw std::runtime_error(fmt::format(#x " failed with {}: {}", code, (err)));          \
+        }                                                                                          \
+    } while (0)
+
 namespace cory {
 namespace vk {
 
@@ -23,13 +30,6 @@ enum class device_memory_usage : int /*std::underlying_type<VmaMemoryUsage>::typ
                                                      ///< might not be available for
                                                      ///< desktop GPUs
 };
-
-#define VK_CHECKED_CALL(x, err)                                                                    \
-    do {                                                                                           \
-        if (auto code = (x); code != VK_SUCCESS) {                                                 \
-            throw std::runtime_error(fmt::format(#x " failed with {}: {}", code, (err)));          \
-        }                                                                                          \
-    } while (0)
 
 const std::vector<VkExtensionProperties> &extension_properties();
 
@@ -55,7 +55,13 @@ struct swap_chain_support {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-swap_chain_support query_swap_chain_support(VkPhysicalDevice device, VkSurfaceKHR surface);
+[[nodiscard]] swap_chain_support query_swap_chain_support(VkPhysicalDevice device,
+                                                          VkSurfaceKHR surface);
+
+[[nodiscard]] VkFormat find_supported_format(VkPhysicalDevice device,
+                                             const std::vector<VkFormat> &candidates,
+                                             VkImageTiling tiling,
+                                             VkFormatFeatureFlags features) noexcept;
 
 template <typename ScoringFunctor>
 std::optional<uint32_t>
@@ -104,7 +110,8 @@ default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
  */
 template <typename CoryWrapperType,
           typename VkContainedType = decltype(std::declval<CoryWrapperType>().get())>
-std::vector<VkContainedType> collect_vk_objects(const std::vector<CoryWrapperType> &vector_of_wrappers)
+std::vector<VkContainedType>
+collect_vk_objects(const std::vector<CoryWrapperType> &vector_of_wrappers)
 {
 
     std::vector<VkContainedType> vk_objects(vector_of_wrappers.size());

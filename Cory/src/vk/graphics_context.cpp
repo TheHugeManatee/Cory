@@ -69,6 +69,24 @@ graphics_context::graphics_context(cory::vk::instance inst,
     init_allocator();
 
     if (surface_) { init_swapchain(); }
+
+    // determine best depth format
+    default_depth_stencil_format_ =
+        find_supported_format(physical_device_info_.device,
+                              {VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT},
+                              VK_IMAGE_TILING_OPTIMAL,
+                              VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+
+    if (surface_)
+        default_color_format_ = swapchain_->format();
+    else {
+        // FIXME: this is the next-best thing that was supported on my system, need to figure
+        // out the best way to determine a supported format, i.e. by querying the device's supported
+        // formats and picking the "best" RGB format
+        default_color_format_ = VK_FORMAT_B8G8R8A8_SRGB;
+    }
+
+    max_msaa_samples_ = get_max_usable_sample_count(physical_device_info_.properties);
 }
 
 void graphics_context::init_allocator()

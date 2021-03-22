@@ -1,5 +1,7 @@
 #pragma once
 
+#include "graphics_context.h"
+
 #include <vulkan/vulkan.h>
 
 #include <memory>
@@ -12,7 +14,30 @@ namespace cory::vk {
 class graphics_context;
 class subpass_description_builder;
 
-using render_pass = std::shared_ptr<VkRenderPass_T>;
+using framebuffer = std::shared_ptr<VkFramebuffer_T>;
+
+class render_pass {
+  public:
+    render_pass(graphics_context &ctx,
+                std::shared_ptr<VkRenderPass_T> vk_pass_ptr,
+                std::string_view name)
+        : ctx_{ctx}
+        , vk_pass_ptr_{vk_pass_ptr}
+        , name_{name}
+    {
+    }
+
+    const std::vector<cory::vk::framebuffer> &swapchain_framebuffers();
+    cory::vk::framebuffer framebuffer(cory::vk::image_view &view);
+
+    [[nodiscard]] auto get() { return vk_pass_ptr_.get(); }
+
+  private:
+    graphics_context &ctx_;
+    std::string name_;
+    std::shared_ptr<VkRenderPass_T> vk_pass_ptr_;
+    std::vector<cory::vk::framebuffer> swapchain_framebuffers_;
+};
 
 class render_pass_builder {
   public:
@@ -30,6 +55,12 @@ class render_pass_builder {
     render_pass_builder &flags(VkRenderPassCreateFlags flags) noexcept
     {
         info_.flags = flags;
+        return *this;
+    }
+
+    render_pass_builder &name(std::string_view name) noexcept
+    {
+        name_ = name;
         return *this;
     }
 
@@ -71,12 +102,6 @@ class render_pass_builder {
     //   subpass but for which the data needs to be preserved.
     uint32_t add_subpass(subpass_description_builder subpass_builder);
 
-    render_pass_builder &name(std::string_view name) noexcept
-    {
-        name_ = name;
-        return *this;
-    }
-
     [[nodiscard]] render_pass create();
 
   private:
@@ -89,7 +114,7 @@ class render_pass_builder {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 
     };
-    std::string_view name_;
+    std::string name_;
 
     std::vector<VkAttachmentDescription> attachments_;
     std::vector<VkAttachmentReference> color_attachment_refs_;

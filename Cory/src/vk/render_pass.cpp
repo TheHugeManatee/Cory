@@ -1,6 +1,7 @@
 #include "Cory/vk/render_pass.h"
 
 #include "Cory/Log.h"
+#include "Cory/vk/utils.h"
 
 #include "Cory/vk/graphics_context.h"
 
@@ -121,6 +122,13 @@ uint32_t render_pass_builder::add_subpass(subpass_description_builder subpassDes
 
 render_pass render_pass_builder::create()
 {
+    // init and advance the counter
+    static uint32_t created_objects_counter{};
+    if (name_.empty()) { name_ = fmt::format("render_pass #{}", created_objects_counter); }
+    created_objects_counter++;
+
+    // put all subpass descriptions into a contiguous block of memory so we can reference them as a
+    // pointer in the CreateInfo
     std::vector<VkSubpassDescription> vk_subpasses(subpasses_.size());
     std::transform(subpasses_.begin(),
                    subpasses_.end(),
@@ -141,9 +149,10 @@ render_pass render_pass_builder::create()
     VK_CHECKED_CALL(vkCreateRenderPass(ctx_.device(), &renderPassInfo, nullptr, &vk_render_pass),
                     "Failed to create a render pass!");
 
-    return make_shared_resource(vk_render_pass, [dev = ctx_.device()](VkRenderPass p) {
+    auto vk_pass_ptr = make_shared_resource(vk_render_pass, [dev = ctx_.device()](VkRenderPass p) {
         vkDestroyRenderPass(dev, p, nullptr);
     });
+    return {ctx_, vk_pass_ptr, name_};
 }
 
 /**
@@ -165,6 +174,79 @@ render_pass_builder::add_attachment(const VkAttachmentDescription &desc,
     return attachmentRef;
 }
 
+const std::vector<cory::vk::framebuffer> &render_pass::swapchain_framebuffers()
+{
+    CO_CORE_ASSERT(ctx_.swapchain().has_value(),
+                   "Can't create framebuffers for swapchain: current graphics_context does not "
+                   "have a swapchain!");
+    CO_CORE_TRACE("Creating framebuffers for renderpass {}", name_);
+
+    // create these framebuffers only once
+    if (swapchain_framebuffers_.empty()) {
+        // create the framebuffers for the swapchain images. This will connect the render-pass
+        // to the images for rendering
+        VkFramebufferCreateInfo fb_info = {};
+        fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        fb_info.pNext = nullptr;
+
+        fb_info.renderPass = vk_pass_ptr_.get();
+        fb_info.attachmentCount = 1;
+        fb_info.width = ctx_.swapchain()->extent().x;
+        fb_info.height = ctx_.swapchain()->extent().y;
+        fb_info.layers = 1;
+
+        // grab how many images we have in the swapchain
+        const uint32_t swapchain_imagecount = static_cast<uint32_t>(ctx_.swapchain()->size());
+
+        swapchain_framebuffers_.reserve(swapchain_imagecount);
+
+        // create framebuffers for each of the swapchain image views
+        for (uint32_t i = 0; i < swapchain_imagecount; i++) {
+            VkFramebuffer vk_framebuffer;
+            const VkImageView &image_view = ctx_.swapchain()->views()[i].get();
+            fb_info.pAttachments = &image_view;
+
+            VK_CHECKED_CALL(vkCreateFramebuffer(ctx_.device(), &fb_info, nullptr, &vk_framebuffer),
+                            "Could not create framebuffer for swapchain image");
+
+            swapchain_framebuffers_.emplace_back(
+                make_shared_resource(vk_framebuffer, [dev = ctx_.device()](VkFramebuffer f) {
+                    vkDestroyFramebuffer(dev, f, nullptr);
+                }));
+        }
+    }
+    return swapchain_framebuffers_;
+}
+
+cory::vk::framebuffer render_pass::framebuffer(cory::vk::image_view &view)
+{
+    // create the framebuffers for the swapchain images. This will connect the render-pass
+    // to the images for rendering
+    VkFramebufferCreateInfo fb_info = {};
+    fb_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    fb_info.pNext = nullptr;
+
+    fb_info.renderPass = vk_pass_ptr_.get();
+    fb_info.attachmentCount = 1;
+    fb_info.width = 640;
+    //view.extent().x;
+    fb_info.height = 480;
+    //view.extent().y;
+    fb_info.layers = 1;
+
+    VkFramebuffer vk_framebuffer;
+    const VkImageView &image_view = view.get();
+    fb_info.pAttachments = &image_view;
+
+    VK_CHECKED_CALL(vkCreateFramebuffer(ctx_.device(), &fb_info, nullptr, &vk_framebuffer),
+                    "Could not create framebuffer for swapchain image");
+
+    auto vk_framebuffer_ptr =
+        make_shared_resource(vk_framebuffer, [dev = ctx_.device()](VkFramebuffer f) {
+            vkDestroyFramebuffer(dev, f, nullptr);
+        });
+    return {vk_framebuffer_ptr};
+}
 } // namespace cory::vk
 
 #ifndef DOCTEST_CONFIG_DISABLE
@@ -234,6 +316,19 @@ TEST_CASE("render pass creation")
     builder.add_previous_frame_dependency();
 
     cory::vk::render_pass render_pass = builder.create();
+
+    SUBCASE("framebuffer creation")
+    {
+        auto im0 = ctx.build_image()
+                       .extent({640, 480, 1})
+                       .format(VK_FORMAT_R8G8B8A8_UINT)
+                       .memory_usage(cory::vk::device_memory_usage::eGpuOnly)
+                       .name("framebuffer test");
+        auto im_view0 = ctx.build_image_view(im0).create();
+
+        auto framebuffers = render_pass.framebuffer(im_view0);
+        CHECK(framebuffers.get() != nullptr);
+    }
 }
 
 TEST_SUITE_END();

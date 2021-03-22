@@ -140,6 +140,8 @@ int main_main()
                     "could not create render pass");
     auto render_pass = rpb.create();
     
+    auto &framebuffers = render_pass.swapchain_framebuffers();
+
     return EXIT_SUCCESS;
 }
 

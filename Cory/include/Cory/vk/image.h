@@ -32,6 +32,7 @@ class image : public resource<image, std::shared_ptr<VkImage_T>> {
     [[nodiscard]] auto format() const noexcept { return format_; }
     [[nodiscard]] auto mip_levels() const noexcept { return mip_levels_; }
     [[nodiscard]] VkImage get() const noexcept { return resource_.get(); }
+
   private:
     VkImageType type_;
     glm::uvec3 size_;
@@ -71,8 +72,30 @@ class image_builder {
         return *this;
     }
 
+    /**
+     * 1D texture dimension - sets imageType accordingly
+     */
+    image_builder &extent(uint32_t extent) noexcept
+    {
+        info_.imageType = VK_IMAGE_TYPE_1D;
+        info_.extent = VkExtent3D{extent, 1, 1};
+        return *this;
+    }
+    /**
+     * 2D texture dimension - sets imageType accordingly
+     */
+    image_builder &extent(glm::uvec2 extent) noexcept
+    {
+        info_.imageType = VK_IMAGE_TYPE_2D;
+        info_.extent = VkExtent3D{extent.x, extent.y, 1};
+        return *this;
+    }
+    /**
+     * 3D texture dimension - sets imageType accordingly
+     */
     image_builder &extent(glm::uvec3 extent) noexcept
     {
+        info_.imageType = VK_IMAGE_TYPE_3D;
         info_.extent = VkExtent3D{extent.x, extent.y, extent.z};
         return *this;
     }

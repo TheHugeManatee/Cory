@@ -48,8 +48,9 @@ class graphics_context {
     graphics_context &operator=(graphics_context &&) = default;
 
     // ===  resource creation ===
-    image_builder build_image() { return image_builder{*this}; }
-    buffer_builder build_buffer() { return buffer_builder{*this}; }
+    image_builder build_image() { return {*this}; }
+    buffer_builder build_buffer() { return {*this}; }
+    image_view_builder build_image_view(const cory::vk::image &img) { return {*this, img}; }
 
     cory::vk::fence fence(VkFenceCreateFlags flags = {});
 
@@ -93,7 +94,6 @@ class graphics_context {
     {
         return default_depth_stencil_format_;
     }
-
 
   private:
     std::set<uint32_t> configure_queue_families();

@@ -19,10 +19,10 @@ class swapchain {
     swapchain(graphics_context &ctx, swapchain_builder &builder);
 
     [[nodiscard]] auto get() noexcept { return swapchain_ptr_.get(); }
-    [[nodiscard]] auto &images() noexcept { return images_; }
+    [[nodiscard]] auto &images() const noexcept { return images_; }
     [[nodiscard]] auto format() const noexcept { return image_format_; }
     [[nodiscard]] auto extent() const noexcept { return extent_; }
-    [[nodiscard]] auto &views() noexcept { return image_views_; }
+    [[nodiscard]] auto &views() const noexcept { return image_views_; }
     [[nodiscard]] auto size() const noexcept { return images_.size(); }
 
   private:

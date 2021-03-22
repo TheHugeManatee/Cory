@@ -34,13 +34,18 @@ class render_pass_builder {
     }
 
     VkAttachmentReference add_color_attachment(VkFormat format, VkSampleCountFlagBits samples);
-    VkAttachmentReference add_color_attachment(VkAttachmentDescription colorAttachment);
+    VkAttachmentReference add_color_attachment(const VkAttachmentDescription &colorAttachment,
+                                               VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
 
-    VkAttachmentReference add_depth_attachment(VkFormat format, VkSampleCountFlagBits samples);
+    VkAttachmentReference set_depth_attachment(VkFormat format, VkSampleCountFlagBits samples);
+    VkAttachmentReference set_depth_attachment(const VkAttachmentDescription &colorAttachment,
+                                               VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
 
     VkAttachmentReference
     add_resolve_attachment(VkFormat format,
                            VkImageLayout finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    VkAttachmentReference add_resolve_attachment(const VkAttachmentDescription &colorAttachment,
+                                                 VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
 
     /**
      * Add a subpass dependency to depend on the VK_SUBPASS_EXTERNAL event of the
@@ -64,7 +69,7 @@ class render_pass_builder {
     // - pDepthStencilAttachment: attachment for depth and stencil data
     // - pPreserveAttachments: attachments that are not currently used by the
     //   subpass but for which the data needs to be preserved.
-    uint32_t add_subpass(subpass_description_builder& subpass_builder);
+    uint32_t add_subpass(subpass_description_builder subpass_builder);
 
     render_pass_builder &name(std::string_view name) noexcept
     {
@@ -75,7 +80,7 @@ class render_pass_builder {
     [[nodiscard]] render_pass create();
 
   private:
-    VkAttachmentReference add_attachment(VkAttachmentDescription desc,
+    VkAttachmentReference add_attachment(const VkAttachmentDescription &desc,
                                          VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED);
 
   private:
@@ -212,8 +217,6 @@ class subpass_description_builder {
     input_attachments(std::vector<VkAttachmentReference> inputAttachments) noexcept
     {
         input_attachments_ = std::move(inputAttachments);
-        info_.inputAttachmentCount = static_cast<uint32_t>(input_attachments_.size());
-        info_.pInputAttachments = inputAttachments.data();
         return *this;
     }
 
@@ -221,8 +224,6 @@ class subpass_description_builder {
     color_attachments(std::vector<VkAttachmentReference> colorAttachments) noexcept
     {
         color_attachments_ = std::move(colorAttachments);
-        info_.colorAttachmentCount = static_cast<uint32_t>(color_attachments_.size());
-        info_.pColorAttachments = color_attachments_.data();
         return *this;
     }
 
@@ -230,7 +231,6 @@ class subpass_description_builder {
     resolve_attachments(std::vector<VkAttachmentReference> resolveAttachments) noexcept
     {
         resolve_attachments_ = std::move(resolveAttachments);
-        info_.pResolveAttachments = resolve_attachments_.data();
         return *this;
     }
 
@@ -238,7 +238,6 @@ class subpass_description_builder {
     depth_stencil_attachment(VkAttachmentReference depthStencilAttachment) noexcept
     {
         depth_stencil_attachment_ = depthStencilAttachment;
-        info_.pDepthStencilAttachment = &*depth_stencil_attachment_;
         return *this;
     }
 
@@ -246,8 +245,6 @@ class subpass_description_builder {
     preserve_attachments(std::vector<uint32_t> preserveAttachments) noexcept
     {
         preserve_attachments_ = std::move(preserveAttachments);
-        info_.preserveAttachmentCount = static_cast<uint32_t>(preserve_attachments_.size());
-        info_.pPreserveAttachments = preserve_attachments_.data();
         return *this;
     }
 
@@ -256,7 +253,25 @@ class subpass_description_builder {
         name_ = name;
         return *this;
     }
-    [[nodiscard]] const VkSubpassDescription &get() { return info_; }
+    [[nodiscard]] const VkSubpassDescription &get()
+    {
+        info_.inputAttachmentCount = static_cast<uint32_t>(input_attachments_.size());
+        info_.pInputAttachments = input_attachments_.data();
+
+        info_.colorAttachmentCount = static_cast<uint32_t>(color_attachments_.size());
+        info_.pColorAttachments = color_attachments_.data();
+
+        info_.pDepthStencilAttachment =
+            depth_stencil_attachment_.has_value() ? &*depth_stencil_attachment_ : nullptr;
+
+        info_.preserveAttachmentCount = static_cast<uint32_t>(preserve_attachments_.size());
+        info_.pResolveAttachments = resolve_attachments_.data();
+
+        info_.preserveAttachmentCount = static_cast<uint32_t>(preserve_attachments_.size());
+        info_.pPreserveAttachments = preserve_attachments_.data();
+
+        return info_;
+    }
     [[nodiscard]] operator VkSubpassDescription() { return get(); }
 
   private:

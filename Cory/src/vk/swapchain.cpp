@@ -11,8 +11,11 @@
 namespace cory {
 namespace vk {
 
-swapchain::swapchain(graphics_context &ctx, swapchain_builder &builder)
-    : ctx_{ctx}
+swapchain::swapchain(uint32_t max_frames_in_flight,
+                     graphics_context &ctx,
+                     swapchain_builder &builder)
+    : max_frames_in_flight_{max_frames_in_flight}
+    , ctx_{ctx}
     , image_format_{builder.info_.imageFormat}
     , extent_{builder.info_.imageExtent.width, builder.info_.imageExtent.height}
 {
@@ -52,6 +55,75 @@ swapchain::swapchain(graphics_context &ctx, swapchain_builder &builder)
     });
 
     create_image_views();
+
+    // create all the semaphores needed to manage each parallel frame in flight
+    for (uint32_t i = 0; i < max_frames_in_flight_; ++i) {
+        image_acquired_.emplace_back(ctx_.semaphore());
+        image_rendered_.emplace_back(ctx_.semaphore());
+        in_flight_fences_.emplace_back(ctx_.fence(VK_FENCE_CREATE_SIGNALED_BIT));
+    }
+
+    // initialize an array of (empty) fences, one for each image in the swap chain
+    image_fences_.resize(image_views_.size());
+}
+
+frame_context swapchain::next_image()
+{
+    // advance the image index
+    next_frame_in_flight_ = (next_frame_in_flight_ + 1) % max_frames_in_flight_;
+
+    frame_context fc;
+    VkResult result = vkAcquireNextImageKHR(ctx_.device(),
+                                            swapchain_ptr_.get(),
+                                            UINT64_MAX,
+                                            image_acquired_[next_frame_in_flight_].get(),
+                                            nullptr,
+                                            &fc.index);
+
+    
+    CO_CORE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
+                   "failed to acquire swap chain image: {}",
+                   result);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        fc.should_recreate_swapchain = true;
+        return fc;
+    }
+    fc.should_recreate_swapchain = false;
+
+    // wait for the fence of the previous frame operating on that image
+    if (image_fences_[fc.index].has_value()) { image_fences_[fc.index].wait(); }
+
+    // assign the image a new fence and reset it
+    image_fences_[fc.index] = in_flight_fences_[next_frame_in_flight_];
+    fc.in_flight = in_flight_fences_[next_frame_in_flight_];
+    fc.in_flight.reset();
+
+    fc.in_flight = in_flight_fences_[next_frame_in_flight_];
+    fc.acquired = image_acquired_[next_frame_in_flight_];
+    fc.rendered = image_rendered_[next_frame_in_flight_];
+    fc.view = image_views_[fc.index];
+
+
+    return fc;
+}
+
+void swapchain::present(frame_context &fc)
+{
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+    presentInfo.waitSemaphoreCount = 1;
+    VkSemaphore waitSemaphores[1] = {fc.rendered.get()};
+    presentInfo.pWaitSemaphores = waitSemaphores;
+
+    VkSwapchainKHR swapChains[] = {swapchain_ptr_.get()};
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapChains;
+
+    presentInfo.pImageIndices = &fc.index;
+
+    vkQueuePresentKHR(ctx_.present_queue().get(), &presentInfo);
 }
 
 void swapchain::create_image_views()

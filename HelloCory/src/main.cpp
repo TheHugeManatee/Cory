@@ -139,8 +139,67 @@ int main_main()
     VK_CHECKED_CALL(vkCreateRenderPass(ctx.device(), &render_pass_info, nullptr, &vk_render_pass),
                     "could not create render pass");
     auto render_pass = rpb.create();
-    
+
     auto &framebuffers = render_pass.swapchain_framebuffers();
+
+    for (uint32_t frame_number = 0; frame_number < 10000; frame_number++) {
+        // poll input events
+        glfwPollEvents();
+        // TODO: process events?
+
+        // TODO: update resources and re-record command buffers
+
+        // draw frame
+        {
+            // acquire next image
+            auto frame_ctx = ctx.swapchain()->next_image();
+            if (frame_ctx.should_recreate_swapchain) {
+                // TODO recreate swapchain
+                continue;
+            }
+
+            // issue command buffers
+            ctx.record(
+                   [&](cory::vk::command_buffer &c) {
+                       // make a clear-color from frame number. This will flash with a 120*pi frame
+                       // period.
+                       VkClearValue clearValue;
+                       float flash = abs(sin(frame_number / 120.f));
+                       clearValue.color = {{0.0f, 0.0f, flash, 1.0f}};
+
+                       // start the main renderpass.
+                       // We will use the clear color from above, and the framebuffer of the index
+                       // the swapchain gave us
+                       VkRenderPassBeginInfo rpInfo = {};
+                       rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                       rpInfo.pNext = nullptr;
+
+                       rpInfo.renderPass = render_pass.get();
+                       rpInfo.renderArea.offset.x = 0;
+                       rpInfo.renderArea.offset.y = 0;
+                       rpInfo.renderArea.extent = {ctx.swapchain()->extent().x,
+                                                   ctx.swapchain()->extent().y};
+                       rpInfo.framebuffer = framebuffers[frame_ctx.index].get();
+
+                       // connect clear values
+                       rpInfo.clearValueCount = 1;
+                       rpInfo.pClearValues = &clearValue;
+
+                       c.begin_render_pass(&rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+                       c.end_render_pass();
+                   },
+                   ctx.graphics_queue())
+                .name(fmt::format("command buffer #{}", frame_number))
+                .submit({frame_ctx.acquired}, {frame_ctx.rendered}, frame_ctx.in_flight);
+
+            // present the frame
+            ctx.swapchain()->present(frame_ctx);
+        }
+    }
+
+    // synchronize for the last frame to prevent resource destruction before the rendering of the
+    // last frame is finished
+    vkDeviceWaitIdle(ctx.device());
 
     return EXIT_SUCCESS;
 }

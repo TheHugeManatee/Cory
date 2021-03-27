@@ -61,7 +61,7 @@ class graphics_context {
     // === command buffer submission ===
 
     template <typename Functor>
-    executable_command_buffer record(Functor f, cory::vk::queue &target_queue = graphics_queue_)
+    executable_command_buffer record(Functor f, cory::vk::queue &target_queue)
     {
         return graphics_queue_.record(std::forward<Functor>(f));
     }

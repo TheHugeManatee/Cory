@@ -231,7 +231,8 @@ void graphics_context::init_swapchain()
                             .image_format(surface_format.format)
                             .image_color_space(surface_format.colorSpace)
                             .image_extent(swapchain_extent)
-                            .pre_transform(swapchain_support.capabilities.currentTransform);
+                            .pre_transform(swapchain_support.capabilities.currentTransform)
+                            .max_frames_in_flight(2);
 
     // if the swap and present queues are different, the swap chain images have to
     // be shareable

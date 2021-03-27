@@ -8,22 +8,24 @@ namespace cory::vk {
 
 cory::future<void>
 executable_command_buffer::submit(const std::vector<semaphore> &waitSemaphores /*= {}*/,
-                                  const std::vector<semaphore> &signalSemaphores /*= {}*/)
+                                  const std::vector<semaphore> &signalSemaphores /*= {}*/,
+                                  fence cmdbuf_fence)
 {
     CO_CORE_ASSERT(target_queue_ != nullptr,
                    "No target queue was specified - cannot submit() without queue");
-    return target_queue_->submit(*this, waitSemaphores, signalSemaphores);
+    return target_queue_->submit(*this, waitSemaphores, signalSemaphores, cmdbuf_fence);
 }
 
 cory::future<void>
 executable_command_buffer::submit(cory::vk::queue &target_queue,
                                   const std::vector<semaphore> &waitSemaphores /*= {}*/,
-                                  const std::vector<semaphore> &signalSemaphores /*= {}*/)
+                                  const std::vector<semaphore> &signalSemaphores /*= {}*/,
+                                  fence cmdbuf_fence)
 {
     CO_CORE_ASSERT(target_queue.family() == target_queue_->family(),
                    "command buffer was recorded for a different queue family and cannot be "
                    "submitted to this queue!");
-    return target_queue.submit(*this, waitSemaphores, signalSemaphores);
+    return target_queue.submit(*this, waitSemaphores, signalSemaphores, cmdbuf_fence);
 }
 
 } // namespace cory::vk

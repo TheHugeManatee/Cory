@@ -17,6 +17,24 @@
 namespace cory {
 namespace vk {
 
+template <typename WrappedVkType> class basic_vk_wrapper {
+  public:
+    using vk_type = WrappedVkType;
+    using vk_opaque_type = std::remove_pointer_t<WrappedVkType>;
+    using vk_shared_ptr = std::shared_ptr<vk_opaque_type>;
+
+    basic_vk_wrapper(vk_shared_ptr vk_resource_ptr = {})
+        : vk_resource_ptr_{vk_resource_ptr}
+    {
+    }
+
+    const vk_type get() const { return vk_resource_ptr_.get(); }
+    bool has_value() const { return vk_resource_ptr_.get() != nullptr; }
+
+  private:
+    vk_shared_ptr vk_resource_ptr_;
+};
+
 enum class device_memory_usage : int /*std::underlying_type<VmaMemoryUsage>::type*/ {
     eUnknown = 0 /*VMA_MEMORY_USAGE_UNKNOWN*/,     ///< should not be used
     eGpuOnly = 1 /*VMA_MEMORY_USAGE_GPU_ONLY*/,    ///< textures, images used as attachments

@@ -4,6 +4,7 @@
 #include "command_buffer.h"
 #include "command_pool.h"
 #include "device.h"
+#include "fence.h"
 #include "image.h"
 #include "instance.h"
 #include "misc.h"
@@ -30,7 +31,7 @@ class graphics_context {
     // == lifetime ==
     graphics_context(instance inst,
                      VkPhysicalDevice physical_device,
-                     surface surface_khr = nullptr,
+                     surface surface_khr = {},
                      VkPhysicalDeviceFeatures *requested_features = nullptr,
                      std::vector<const char *> requested_extensions = {},
                      std::vector<const char *> requested_layers = {});
@@ -52,7 +53,10 @@ class graphics_context {
     buffer_builder build_buffer() { return {*this}; }
     image_view_builder build_image_view(const cory::vk::image &img) { return {*this, img}; }
 
+    /// creates a new fence
     cory::vk::fence fence(VkFenceCreateFlags flags = {});
+    /// creates a new semaphore
+    cory::vk::semaphore semaphore(VkSemaphoreCreateFlags = {});
 
     // === command buffer submission ===
 
@@ -86,7 +90,7 @@ class graphics_context {
     [[nodiscard]] auto device() noexcept -> VkDevice { return device_.get(); };
     [[nodiscard]] auto allocator() noexcept { return vma_allocator_.get(); }
     [[nodiscard]] auto &surface() const noexcept { return surface_; }
-    [[nodiscard]] auto &swapchain() const noexcept { return swapchain_; }
+    [[nodiscard]] auto &swapchain() noexcept { return swapchain_; }
 
     [[nodiscard]] auto max_msaa_samples() const noexcept { return max_msaa_samples_; }
     [[nodiscard]] auto default_color_format() const noexcept { return default_color_format_; }

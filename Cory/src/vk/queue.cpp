@@ -33,8 +33,7 @@ cory::future<void> queue::submit(executable_command_buffer cmd_buffer,
     return queue_executor_.async([cmdbuf_fence = std::move(cmdbuf_fence),
                                   cmd_buffer = std::move(cmd_buffer),
                                   dev = ctx_.device()]() {
-        VkFence vk_fence = cmdbuf_fence.get();
-        VK_CHECKED_CALL(vkWaitForFences(dev, 1, &vk_fence, true, SUBMISSION_TIMEOUT),
+        VK_CHECKED_CALL(cmdbuf_fence.wait(SUBMISSION_TIMEOUT),
                         "timed out while waiting for command submission to finish.");
     });
 }

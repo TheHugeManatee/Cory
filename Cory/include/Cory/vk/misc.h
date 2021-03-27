@@ -1,15 +1,17 @@
 #pragma once
 
+#include "utils.h"
+
 #include <vulkan/vulkan.h>
 
 #include <memory>
+#include <type_traits>
 
 namespace cory::vk {
 
-using surface = std::shared_ptr<VkSurfaceKHR_T>;
 
-using fence = std::shared_ptr<VkFence_T>;
+using surface = basic_vk_wrapper<VkSurfaceKHR>;
 
-using semaphore = std::shared_ptr<VkSemaphore_T>;
+using semaphore = basic_vk_wrapper<VkSemaphore>;
 
 } // namespace cory::vk

@@ -17,7 +17,7 @@ namespace vk {
 
 graphics_context::graphics_context(cory::vk::instance inst,
                                    VkPhysicalDevice physical_device,
-                                   cory::vk::surface surface_khr /*= nullptr*/,
+                                   cory::vk::surface surface_khr /*= {} */,
                                    VkPhysicalDeviceFeatures *requested_features /*= nullptr*/,
                                    std::vector<const char *> requested_extensions /*= {}*/,
                                    std::vector<const char *> requested_layers /*= {}*/)
@@ -32,7 +32,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
     }
 
     // if we got a surface, make sure we enable the required extension
-    if (surface_) { requested_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME); }
+    if (surface_.has_value()) { requested_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME); }
 
     // figure out which queue families we want to use for what
     const std::set<uint32_t> queue_families_to_instantiate = configure_queue_families();
@@ -68,7 +68,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
 
     init_allocator();
 
-    if (surface_) { init_swapchain(); }
+    if (surface_.has_value()) { init_swapchain(); }
 
     // determine best depth format
     default_depth_stencil_format_ =
@@ -77,7 +77,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
                               VK_IMAGE_TILING_OPTIMAL,
                               VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
-    if (surface_)
+    if (surface_.has_value())
         default_color_format_ = swapchain_->format();
     else {
         // FIXME: this is the next-best thing that was supported on my system, need to figure
@@ -129,7 +129,7 @@ std::set<uint32_t> graphics_context::configure_queue_families()
 
     // if we were passed a surface, try to initialize a present queue for it. no fancy
     // selection logic yet, just pick whatever works.
-    if (surface_) {
+    if (surface_.has_value()) {
         VkBool32 supports_present;
         for (int qfi = 0; qfi < qfi_props.size(); ++qfi) {
             vkGetPhysicalDeviceSurfaceSupportKHR(
@@ -160,7 +160,7 @@ std::set<uint32_t> graphics_context::configure_queue_families()
         flag_bits_to_string<VkQueueFlagBits>(
             physical_device_info_.queue_family_properties[*compute_queue_family_].queueFlags));
 
-    if (surface_) {
+    if (surface_.has_value()) {
         CO_CORE_TRACE(
             "    present:  {} - {}",
             *present_queue_family_,
@@ -255,8 +255,24 @@ cory::vk::fence graphics_context::fence(VkFenceCreateFlags flags /*= {}*/)
     VkFence created_fence;
     VK_CHECKED_CALL(vkCreateFence(device_.get(), &create_info, nullptr, &created_fence),
                     "failed to create a fence object");
-    return make_shared_resource(
+
+    auto vk_resource_ptr = make_shared_resource(
         created_fence, [dev = device_.get()](VkFence f) { vkDestroyFence(dev, f, nullptr); });
+
+    return {*this, vk_resource_ptr};
+}
+
+cory::vk::semaphore graphics_context::semaphore(VkSemaphoreCreateFlags flags /*= {}*/)
+{
+    VkSemaphoreCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+                                      .flags = flags};
+
+    VkSemaphore created_semaphore;
+    VK_CHECKED_CALL(vkCreateSemaphore(device_.get(), &create_info, nullptr, &created_semaphore),
+                    "failed to create a semaphore object");
+    return make_shared_resource(created_semaphore, [dev = device_.get()](VkSemaphore f) {
+        vkDestroySemaphore(dev, f, nullptr);
+    });
 }
 
 cory::vk::queue &graphics_context::queue(cory::vk::queue_type requested_type) noexcept

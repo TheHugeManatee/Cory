@@ -20,7 +20,7 @@ set(CORY_VK_SOURCES
  "src/vk/swapchain.cpp"
  "src/vk/test_utils.cpp"
  "src/vk/utils.cpp"
- "src/vk/device.cpp" "src/vk/render_pass.cpp" "src/vk/graphics_pipeline.cpp")
+ "src/vk/device.cpp" "src/vk/render_pass.cpp" "src/vk/graphics_pipeline.cpp" "src/vk/fence.cpp")
 
 set(CORY_SOURCES 
   #"src/Application.cpp"

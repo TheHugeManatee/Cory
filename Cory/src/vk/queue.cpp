@@ -1,6 +1,6 @@
 #include "Cory/vk/queue.h"
-
 #include "Cory/vk/graphics_context.h"
+#include "Cory/vk/utils.h"
 
 #include <vulkan/vulkan.h>
 
@@ -10,22 +10,33 @@ namespace cory::vk {
 
 cory::future<void> queue::submit(executable_command_buffer cmd_buffer,
                                  const std::vector<semaphore> &waitSemaphores,
-                                 const std::vector<semaphore> &signalSemaphores)
+                                 const std::vector<semaphore> &signalSemaphores,
+                                 fence cmdbuf_fence)
 {
     VkCommandBuffer vk_cmd_buffer = cmd_buffer.get();
+    auto vk_wait_sem = collect_vk_objects(waitSemaphores);
+    auto vk_signal_sem = collect_vk_objects(signalSemaphores);
+
+    // TODO FIX!!!
+    CO_CORE_WARN("you forgot to remove the hardcoded waitStage in queue.cpp!");
+    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+
     // fill the submit info - not much to do here
     VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                            .waitSemaphoreCount = 0,
-                            .pWaitSemaphores = nullptr,
-                            .pWaitDstStageMask = nullptr,
+                            .waitSemaphoreCount = static_cast<uint32_t>(vk_wait_sem.size()),
+                            .pWaitSemaphores = vk_wait_sem.data(),
+                            .pWaitDstStageMask = &waitStage,
                             .commandBufferCount = 1,
                             .pCommandBuffers = &vk_cmd_buffer,
-                            .signalSemaphoreCount = 0,
-                            .pSignalSemaphores = nullptr};
+                            .signalSemaphoreCount = static_cast<uint32_t>(vk_signal_sem.size()),
+                            .pSignalSemaphores = vk_signal_sem.data()};
 
     // create a fence that will synchronize the job callback on the executor
-    fence cmdbuf_fence = ctx_.fence();
-    vkQueueSubmit(vk_queue_, 1, &submitInfo, cmdbuf_fence.get());
+    if (!cmdbuf_fence.has_value()) cmdbuf_fence = ctx_.fence();
+    VK_CHECKED_CALL(
+        vkQueueSubmit(vk_queue_, 1, &submitInfo, cmdbuf_fence.get()),
+        fmt::format("failed to submit command buffer {} to queue {}", cmd_buffer.name(), name_));
 
     // enqueue the executor task - this will a) extend the lifetime of the command_buffer until the
     // GPU has finished executing it and b) it will signal the returned future once the GPU is
@@ -40,12 +51,16 @@ cory::future<void> queue::submit(executable_command_buffer cmd_buffer,
 
 cory::future<void> queue::submit(const std::vector<executable_command_buffer> cmd_buffers,
                                  const std::vector<semaphore> &waitSemaphores,
-                                 const std::vector<semaphore> &signalSemaphores)
+                                 const std::vector<semaphore> &signalSemaphores,
+                                 fence cmdbuf_fence)
 {
     if (cmd_buffers.empty()) {
         CO_CORE_WARN("queue::submit() called with empty cmd_buffers array!");
         return {};
     }
+
+    auto vk_wait_sem = collect_vk_objects(waitSemaphores);
+    auto vk_signal_sem = collect_vk_objects(signalSemaphores);
 
     // "extract" the actual pointers into a vector
     std::vector<VkCommandBuffer> vk_cmd_buffers = collect_vk_objects(cmd_buffers);
@@ -54,16 +69,16 @@ cory::future<void> queue::submit(const std::vector<executable_command_buffer> cm
 
     // fill the submit info - not much to do here
     VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                            .waitSemaphoreCount = 0,
-                            .pWaitSemaphores = nullptr,
+                            .waitSemaphoreCount = static_cast<uint32_t>(vk_wait_sem.size()),
+                            .pWaitSemaphores = vk_wait_sem.data(),
                             .pWaitDstStageMask = nullptr,
                             .commandBufferCount = static_cast<uint32_t>(vk_cmd_buffers.size()),
                             .pCommandBuffers = vk_cmd_buffers.data(),
-                            .signalSemaphoreCount = 0,
-                            .pSignalSemaphores = nullptr};
+                            .signalSemaphoreCount = static_cast<uint32_t>(vk_signal_sem.size()),
+                            .pSignalSemaphores = vk_signal_sem.data()};
 
     // create a fence that will synchronize the job callback on the executor
-    fence cmdbuf_fence = ctx_.fence();
+    if (!cmdbuf_fence.has_value()) cmdbuf_fence = ctx_.fence();
     vkQueueSubmit(vk_queue_, 1, &submitInfo, cmdbuf_fence.get());
 
     // enqueue the executor task - this will a) extend the lifetime of the command_buffers until the

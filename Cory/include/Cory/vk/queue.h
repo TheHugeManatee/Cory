@@ -96,14 +96,16 @@ class queue {
      */
     cory::future<void> submit(executable_command_buffer cmd_buffer,
                               const std::vector<semaphore> &waitSemaphores = {},
-                              const std::vector<semaphore> &signalSemaphores = {});
+                              const std::vector<semaphore> &signalSemaphores = {},
+                              fence cmdbuf_fence = {});
 
     /**
      * @brief submit multiple command buffers.
      */
     cory::future<void> submit(const std::vector<executable_command_buffer> cmd_buffers,
                               const std::vector<semaphore> &waitSemaphores = {},
-                              const std::vector<semaphore> &signalSemaphores = {});
+                              const std::vector<semaphore> &signalSemaphores = {},
+                              fence cmdbuf_fence = {});
 
     [[nodiscard]] auto get() const noexcept { return vk_queue_; }
     [[nodiscard]] auto family() const noexcept { return queue_family_; }

@@ -210,15 +210,18 @@ const std::vector<cory::vk::framebuffer> &render_pass::swapchain_framebuffers()
                             "Could not create framebuffer for swapchain image");
 
             swapchain_framebuffers_.emplace_back(
-                make_shared_resource(vk_framebuffer, [dev = ctx_.device()](VkFramebuffer f) {
-                    vkDestroyFramebuffer(dev, f, nullptr);
-                }));
+                make_shared_resource(vk_framebuffer,
+                                     [dev = ctx_.device()](VkFramebuffer f) {
+                                         vkDestroyFramebuffer(dev, f, nullptr);
+                                     }),
+                ctx_.swapchain()->views()[i],
+                *this);
         }
     }
     return swapchain_framebuffers_;
 }
 
-cory::vk::framebuffer render_pass::framebuffer(cory::vk::image_view &view)
+cory::vk::framebuffer render_pass::framebuffer(const cory::vk::image_view &view)
 {
     // create the framebuffers for the swapchain images. This will connect the render-pass
     // to the images for rendering
@@ -228,12 +231,9 @@ cory::vk::framebuffer render_pass::framebuffer(cory::vk::image_view &view)
 
     fb_info.renderPass = vk_pass_ptr_.get();
     fb_info.attachmentCount = 1;
-    CO_CORE_ASSERT(false, "image_view is missing extent fields!");
-    fb_info.width = 640;
-    //view.extent().x;
-    fb_info.height = 480;
-    //view.extent().y;
-    fb_info.layers = 1;
+    fb_info.width = view.size().x;
+    fb_info.height = view.size().y;
+    fb_info.layers = view.layers();
 
     VkFramebuffer vk_framebuffer;
     const VkImageView &image_view = view.get();
@@ -246,8 +246,35 @@ cory::vk::framebuffer render_pass::framebuffer(cory::vk::image_view &view)
         make_shared_resource(vk_framebuffer, [dev = ctx_.device()](VkFramebuffer f) {
             vkDestroyFramebuffer(dev, f, nullptr);
         });
-    return {vk_framebuffer_ptr};
+    return cory::vk::framebuffer{vk_framebuffer_ptr, view, *this};
 }
+
+void render_pass::begin(command_buffer &cmd_buffer,
+                        const cory::vk::framebuffer &fb,
+                        std::vector<VkClearValue> clear_values,
+                        VkSubpassContents subpass_contents /*= VK_SUBPASS_CONTENTS_INLINE*/)
+{
+    // start the main renderpass.
+    // We will use the clear color from above, and the framebuffer of the index
+    // the swapchain gave us
+    VkRenderPassBeginInfo rpInfo = {};
+    rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpInfo.pNext = nullptr;
+
+    rpInfo.renderPass = vk_pass_ptr_.get();
+    rpInfo.renderArea.offset.x = 0;
+    rpInfo.renderArea.offset.y = 0;
+    rpInfo.renderArea.extent = {fb.size().x, fb.size().y};
+    rpInfo.framebuffer = fb.get();
+
+    // connect clear values
+    rpInfo.clearValueCount = static_cast<uint32_t>(clear_values.size());
+    rpInfo.pClearValues = clear_values.data();
+    cmd_buffer.begin_render_pass(&rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+void render_pass::end(command_buffer &cmd_buffer) { cmd_buffer.end_render_pass(); }
+
 } // namespace cory::vk
 
 #ifndef DOCTEST_CONFIG_DISABLE

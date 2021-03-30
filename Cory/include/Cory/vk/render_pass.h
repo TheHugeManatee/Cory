@@ -16,9 +16,27 @@ namespace cory::vk {
 class graphics_context;
 class subpass_description_builder;
 class command_buffer;
+class image_view;
+class render_pass;
 
-//using framebuffer = std::shared_ptr<VkFramebuffer_T>;
 class framebuffer : public basic_vk_wrapper<VkFramebuffer> {
+  public:
+    framebuffer(vk_shared_ptr vk_ptr,
+                const cory::vk::image_view &attachment,
+                const cory::vk::render_pass &rdr_pass)
+        : basic_vk_wrapper(vk_ptr)
+        , attachment_{attachment}
+        , pass_{rdr_pass}
+    {
+    }
+
+    [[nodiscard]] const cory::vk::image_view &attachments() const noexcept { return attachment_; }
+    [[nodiscard]] const cory::vk::render_pass &render_pass() const noexcept { return pass_; }
+    [[nodiscard]] glm::uvec3 size() const noexcept { return attachment_.size(); }
+
+  private:
+    const cory::vk::image_view &attachment_;
+    const cory::vk::render_pass &pass_;
 };
 
 class render_pass {
@@ -34,13 +52,15 @@ class render_pass {
 
     const std::vector<cory::vk::framebuffer> &swapchain_framebuffers();
     // create a framebuffer from the image_view
-    cory::vk::framebuffer framebuffer(cory::vk::image_view &view);
+    cory::vk::framebuffer framebuffer(const cory::vk::image_view &view);
 
     [[nodiscard]] auto get() { return vk_pass_ptr_.get(); }
 
-
-    void begin() {}
-    void end() {};
+    void begin(command_buffer &cmd_buffer,
+               const cory::vk::framebuffer &fb,
+               std::vector<VkClearValue> clear_values,
+               VkSubpassContents subpass_contents = VK_SUBPASS_CONTENTS_INLINE);
+    void end(command_buffer &cmd_buffer);
 
   private:
     graphics_context &ctx_;

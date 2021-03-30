@@ -8,25 +8,30 @@
 
 namespace cory::vk {
 
-cory::future<void> queue::submit(executable_command_buffer cmd_buffer,
-                                 const std::vector<semaphore> &waitSemaphores,
-                                 const std::vector<semaphore> &signalSemaphores,
-                                 fence cmdbuf_fence)
+cory::future<void>
+queue::submit(executable_command_buffer cmd_buffer,
+              const std::vector<std::pair<VkPipelineStageFlags, semaphore>> &waitSemaphores,
+              const std::vector<semaphore> &signalSemaphores,
+              fence cmdbuf_fence)
 {
     VkCommandBuffer vk_cmd_buffer = cmd_buffer.get();
-    auto vk_wait_sem = collect_vk_objects(waitSemaphores);
+
+    // collect the semaphore stages and Vk objects into separate vectors
+    std::vector<VkPipelineStageFlags> vk_wait_stages;
+    std::vector<VkSemaphore> vk_wait_sem;
+    for (const auto &[stage, sem] : waitSemaphores) {
+        vk_wait_stages.push_back(stage);
+        vk_wait_sem.push_back(sem.get());
+    }
+
+    // collect the signal semaphores into a separate vector
     auto vk_signal_sem = collect_vk_objects(signalSemaphores);
-
-    // TODO FIX!!!
-    CO_CORE_WARN("you forgot to remove the hardcoded waitStage in queue.cpp!");
-    VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
 
     // fill the submit info - not much to do here
     VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                             .waitSemaphoreCount = static_cast<uint32_t>(vk_wait_sem.size()),
                             .pWaitSemaphores = vk_wait_sem.data(),
-                            .pWaitDstStageMask = &waitStage,
+                            .pWaitDstStageMask = vk_wait_stages.data(),
                             .commandBufferCount = 1,
                             .pCommandBuffers = &vk_cmd_buffer,
                             .signalSemaphoreCount = static_cast<uint32_t>(vk_signal_sem.size()),
@@ -49,29 +54,34 @@ cory::future<void> queue::submit(executable_command_buffer cmd_buffer,
     });
 }
 
-cory::future<void> queue::submit(const std::vector<executable_command_buffer> cmd_buffers,
-                                 const std::vector<semaphore> &waitSemaphores,
-                                 const std::vector<semaphore> &signalSemaphores,
-                                 fence cmdbuf_fence)
+cory::future<void>
+queue::submit(const std::vector<executable_command_buffer> cmd_buffers,
+              const std::vector<std::pair<VkPipelineStageFlags, semaphore>> &waitSemaphores,
+              const std::vector<semaphore> &signalSemaphores,
+              fence cmdbuf_fence)
 {
     if (cmd_buffers.empty()) {
         CO_CORE_WARN("queue::submit() called with empty cmd_buffers array!");
         return {};
     }
 
-    auto vk_wait_sem = collect_vk_objects(waitSemaphores);
-    auto vk_signal_sem = collect_vk_objects(signalSemaphores);
+    // collect the semaphore stages and Vk objects into separate vectors
+    std::vector<VkPipelineStageFlags> vk_wait_stages;
+    std::vector<VkSemaphore> vk_wait_sem;
+    for (const auto &[stage, sem] : waitSemaphores) {
+        vk_wait_stages.push_back(stage);
+        vk_wait_sem.push_back(sem.get());
+    }
 
     // "extract" the actual pointers into a vector
     std::vector<VkCommandBuffer> vk_cmd_buffers = collect_vk_objects(cmd_buffers);
-    auto vk_wait_semaphores = collect_vk_objects(waitSemaphores);
-    auto vk_signal_semaphores = collect_vk_objects(signalSemaphores);
+    auto vk_signal_sem = collect_vk_objects(signalSemaphores);
 
     // fill the submit info - not much to do here
     VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                             .waitSemaphoreCount = static_cast<uint32_t>(vk_wait_sem.size()),
                             .pWaitSemaphores = vk_wait_sem.data(),
-                            .pWaitDstStageMask = nullptr,
+                            .pWaitDstStageMask = vk_wait_stages.data(),
                             .commandBufferCount = static_cast<uint32_t>(vk_cmd_buffers.size()),
                             .pCommandBuffers = vk_cmd_buffers.data(),
                             .signalSemaphoreCount = static_cast<uint32_t>(vk_signal_sem.size()),

@@ -228,6 +228,7 @@ cory::vk::framebuffer render_pass::framebuffer(cory::vk::image_view &view)
 
     fb_info.renderPass = vk_pass_ptr_.get();
     fb_info.attachmentCount = 1;
+    CO_CORE_ASSERT(false, "image_view is missing extent fields!");
     fb_info.width = 640;
     //view.extent().x;
     fb_info.height = 480;

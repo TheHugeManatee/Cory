@@ -2,6 +2,8 @@
 
 #include "graphics_context.h"
 
+#include "utils.h"
+
 #include <vulkan/vulkan.h>
 
 #include <memory>
@@ -13,8 +15,11 @@ namespace cory::vk {
 
 class graphics_context;
 class subpass_description_builder;
+class command_buffer;
 
-using framebuffer = std::shared_ptr<VkFramebuffer_T>;
+//using framebuffer = std::shared_ptr<VkFramebuffer_T>;
+class framebuffer : public basic_vk_wrapper<VkFramebuffer> {
+};
 
 class render_pass {
   public:
@@ -28,9 +33,14 @@ class render_pass {
     }
 
     const std::vector<cory::vk::framebuffer> &swapchain_framebuffers();
+    // create a framebuffer from the image_view
     cory::vk::framebuffer framebuffer(cory::vk::image_view &view);
 
     [[nodiscard]] auto get() { return vk_pass_ptr_.get(); }
+
+
+    void begin() {}
+    void end() {};
 
   private:
     graphics_context &ctx_;

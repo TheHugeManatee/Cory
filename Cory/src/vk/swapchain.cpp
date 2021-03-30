@@ -80,15 +80,14 @@ frame_context swapchain::next_image()
                                             nullptr,
                                             &fc.index);
 
-    
-    CO_CORE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
-                   "failed to acquire swap chain image: {}",
-                   result);
-
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         fc.should_recreate_swapchain = true;
         return fc;
     }
+    CO_CORE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
+                   "failed to acquire swap chain image: {}",
+                   result);
+
     fc.should_recreate_swapchain = false;
 
     // wait for the fence of the previous frame operating on that image
@@ -99,11 +98,13 @@ frame_context swapchain::next_image()
     fc.in_flight = in_flight_fences_[next_frame_in_flight_];
     fc.in_flight.reset();
 
+    // assign the semaphores to the struct
     fc.in_flight = in_flight_fences_[next_frame_in_flight_];
     fc.acquired = image_acquired_[next_frame_in_flight_];
     fc.rendered = image_rendered_[next_frame_in_flight_];
-    fc.view = image_views_[fc.index];
 
+    // get the image view
+    fc.view = image_views_[fc.index];
 
     return fc;
 }

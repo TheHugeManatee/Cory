@@ -95,49 +95,6 @@ int main_main()
                                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     rpb.add_default_subpass();
 
-    VkAttachmentDescription color_attachment = {};
-    // the attachment will have the format needed by the swapchain
-    color_attachment.format = ctx.default_color_format();
-    // 1 sample, we won't be doing MSAA
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    // we Clear when this attachment is loaded
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    // we keep the attachment stored when the renderpass ends
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    // we don't care about stencil
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-
-    // we don't know or care about the starting layout of the attachment
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    // after the renderpass ends, the image has to be on a layout ready for display
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    VkAttachmentReference color_attachment_ref = {};
-    // attachment number will index into the pAttachments array in the parent renderpass itself
-    color_attachment_ref.attachment = 0;
-    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    // we are going to create 1 subpass, which is the minimum you can do
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_attachment_ref;
-
-    VkRenderPassCreateInfo render_pass_info = {};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-
-    // connect the color attachment to the info
-    render_pass_info.attachmentCount = 1;
-    render_pass_info.pAttachments = &color_attachment;
-    // connect the subpass to the info
-    render_pass_info.subpassCount = 1;
-    render_pass_info.pSubpasses = &subpass;
-
-    VkRenderPass vk_render_pass;
-    VK_CHECKED_CALL(vkCreateRenderPass(ctx.device(), &render_pass_info, nullptr, &vk_render_pass),
-                    "could not create render pass");
     auto render_pass = rpb.create();
 
     auto &framebuffers = render_pass.swapchain_framebuffers();
@@ -164,29 +121,12 @@ int main_main()
                        // make a clear-color from frame number. This will flash with a 120*pi frame
                        // period.
                        VkClearValue clearValue;
-                       float flash = abs(sin(frame_number / 120.f));
-                       clearValue.color = {{0.0f, 0.0f, flash, 1.0f}};
+                       float flash = abs(sin(frame_number / 220.f));
+                       float flash2 = abs(cos(frame_number / 220.f));
+                       clearValue.color = {{flash, flash2, 0.0f, 1.0f}};
 
-                       // start the main renderpass.
-                       // We will use the clear color from above, and the framebuffer of the index
-                       // the swapchain gave us
-                       VkRenderPassBeginInfo rpInfo = {};
-                       rpInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                       rpInfo.pNext = nullptr;
-
-                       rpInfo.renderPass = render_pass.get();
-                       rpInfo.renderArea.offset.x = 0;
-                       rpInfo.renderArea.offset.y = 0;
-                       rpInfo.renderArea.extent = {ctx.swapchain()->extent().x,
-                                                   ctx.swapchain()->extent().y};
-                       rpInfo.framebuffer = framebuffers[frame_ctx.index].get();
-
-                       // connect clear values
-                       rpInfo.clearValueCount = 1;
-                       rpInfo.pClearValues = &clearValue;
-
-                       c.begin_render_pass(&rpInfo, VK_SUBPASS_CONTENTS_INLINE);
-                       c.end_render_pass();
+                       render_pass.begin(c, framebuffers[frame_ctx.index], {clearValue});
+                       render_pass.end(c);
                    },
                    ctx.graphics_queue())
                 .name(fmt::format("command buffer #{}", frame_number))

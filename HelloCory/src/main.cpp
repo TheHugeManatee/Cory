@@ -190,7 +190,9 @@ int main_main()
                    },
                    ctx.graphics_queue())
                 .name(fmt::format("command buffer #{}", frame_number))
-                .submit({frame_ctx.acquired}, {frame_ctx.rendered}, frame_ctx.in_flight);
+                .submit({{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, frame_ctx.acquired}},
+                        {frame_ctx.rendered},
+                        frame_ctx.in_flight);
 
             // present the frame
             ctx.swapchain()->present(frame_ctx);

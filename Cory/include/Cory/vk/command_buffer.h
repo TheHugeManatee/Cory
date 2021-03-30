@@ -38,14 +38,16 @@ class executable_command_buffer {
 
     [[nodiscard]] VkCommandBuffer get() const noexcept { return cmd_buffer_ptr_.get(); }
 
-    cory::future<void> submit(const std::vector<semaphore> &waitSemaphores = {},
-                              const std::vector<semaphore> &signalSemaphores = {},
-                              fence cmdbuf_fence = {});
+    cory::future<void>
+    submit(const std::vector<std::pair<VkPipelineStageFlags, semaphore>> &waitSemaphores = {},
+           const std::vector<semaphore> &signalSemaphores = {},
+           fence cmdbuf_fence = {});
 
-    cory::future<void> submit(cory::vk::queue &target_queue,
-                              const std::vector<semaphore> &waitSemaphores = {},
-                              const std::vector<semaphore> &signalSemaphores = {},
-                              fence cmdbuf_fence = {});
+    cory::future<void>
+    submit(cory::vk::queue &target_queue,
+           const std::vector<std::pair<VkPipelineStageFlags, semaphore>> &waitSemaphores = {},
+           const std::vector<semaphore> &signalSemaphores = {},
+           fence cmdbuf_fence = {});
 
     [[nodiscard]] std::string_view name() const noexcept { return name_; }
     executable_command_buffer &name(std::string_view new_name)

@@ -145,7 +145,7 @@ shader::shader(graphics_context &ctx, std::shared_ptr<shader_source> source)
 
     if (spirvBinary.empty()) return;
 
-    VkShaderModuleCreateInfo createInfo{};
+    VkShaderModuleCreateInfo createInfo{.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     createInfo.codeSize = spirvBinary.size() * sizeof(uint32_t);
     createInfo.pCode = reinterpret_cast<const uint32_t *>(spirvBinary.data());
 

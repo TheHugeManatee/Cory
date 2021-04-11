@@ -101,12 +101,12 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 #find_lto(CXX)
 
 add_subdirectory(Cory)
-#add_subdirectory(HelloTriangle)
 #add_subdirectory(VolumeRendering)
 #add_subdirectory(VulkanTutorial)
 add_subdirectory(CoryAPITest)
 add_subdirectory(UdemyCourse)
 add_subdirectory(HelloCory)
+add_subdirectory(HelloTriangle)
 
 # Setup our project as the startup project for Visual so that people don't need to do it manually
 set_directory_properties(PROPERTIES VS_STARTUP_PROJECT HelloCory)

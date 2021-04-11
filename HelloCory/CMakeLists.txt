@@ -3,7 +3,6 @@ set(TARGET_NAME "HelloCory")
 # Always list the files explicitly
 add_executable(${TARGET_NAME} 
     src/main.cpp
-    src/HelloCory.cpp
 )
 
 # add headers as sources automatically - this makes them show up in some IDEs

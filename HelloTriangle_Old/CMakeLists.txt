@@ -3,6 +3,7 @@ set(TARGET_NAME "HelloTriangle")
 # Always list the files explicitly
 add_executable(${TARGET_NAME} 
     src/main.cpp
+    src/HelloTriangle.cpp
 )
 
 # add headers as sources automatically - this makes them show up in some IDEs
@@ -17,7 +18,7 @@ target_link_libraries(${TARGET_NAME}
         Cory
         ThirdPartyLibs
         ${Vulkan_LIBRARIES}
-        CONAN_PKG::glew
+        ${CONAN_LIBS}
 )
 
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)

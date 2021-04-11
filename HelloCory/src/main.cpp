@@ -19,7 +19,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest/doctest.h>
 
-int main_main()
+int run_application()
 {
     Cory::Log::Init();
     // Cory::Log::GetCoreLogger()->set_level(spdlog::level::trace);
@@ -149,7 +149,7 @@ int main_main()
 int main()
 {
     try {
-        main_main();
+        run_application();
     }
     catch (std::runtime_error &err) {
         CO_APP_ERROR("runtime_error: {}", err.what());

@@ -202,3 +202,13 @@ std::string Shader::compileToAssembly(bool optimize /*= false*/)
 }
 
 } // namespace Cory
+
+bool cory::vk::shader::compiled()
+{
+    throw std::logic_error("The method or operation is not implemented.");
+}
+
+std::string cory::vk::shader::compiler_message()
+{
+    throw std::logic_error("The method or operation is not implemented.");
+}

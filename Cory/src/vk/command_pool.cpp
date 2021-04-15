@@ -92,7 +92,6 @@ TEST_CASE("Creating and releasing a command pool")
 
     command_pool pool = command_pool_builder(ctx).queue(ctx.graphics_queue()).create();
     command_pool pool2 = pool;
-    CO_CORE_WARN("Test with command pools");
 
     // ctx.pool<command_pool>().recycle(std::move(pool));
 }

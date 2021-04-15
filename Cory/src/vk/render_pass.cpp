@@ -334,7 +334,8 @@ TEST_CASE("render pass creation")
                                          .format(ctx.default_color_format())
                                          .load_op(VK_ATTACHMENT_LOAD_OP_CLEAR)
                                          .store_op(VK_ATTACHMENT_STORE_OP_STORE)
-                                         .final_layout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR),
+                                         .final_layout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
+                                         .samples(samples),
                                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     builder.add_subpass(cory::vk::subpass_description_builder()
@@ -344,19 +345,40 @@ TEST_CASE("render pass creation")
     builder.add_previous_frame_dependency();
 
     cory::vk::render_pass render_pass = builder.create();
+    CHECK(render_pass.get() != nullptr);
+}
 
-    SUBCASE("framebuffer creation")
-    {
-        auto im0 = ctx.build_image()
-                       .extent({640, 480, 1})
-                       .format(VK_FORMAT_R8G8B8A8_UINT)
-                       .memory_usage(cory::vk::device_memory_usage::eGpuOnly)
-                       .name("framebuffer test");
-        auto im_view0 = ctx.build_image_view(im0).create();
+TEST_CASE("offscreen framebuffer creation")
+{
+    cory::vk::graphics_context ctx = cory::vk::test_context();
 
-        auto framebuffers = render_pass.framebuffer(im_view0);
-        CHECK(framebuffers.get() != nullptr);
-    }
+    VkFormat swapchain_format = ctx.default_color_format();
+
+    // create a minimal render pass with a single attachment and a single subpass
+    cory::vk::render_pass_builder builder(ctx);
+    auto color_att0 =
+        builder.add_color_attachment(cory::vk::attachment_description_builder()
+                                         .format(swapchain_format)
+                                         .samples(VK_SAMPLE_COUNT_1_BIT)
+                                         .load_op(VK_ATTACHMENT_LOAD_OP_CLEAR)
+                                         .store_op(VK_ATTACHMENT_STORE_OP_STORE)
+                                         .final_layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
+    builder.add_subpass(
+        cory::vk::subpass_description_builder().name("geometry").color_attachments({color_att0}));
+    cory::vk::render_pass render_pass = builder.create();
+
+    auto im0 = ctx.build_image()
+                   .extent({640, 480})
+                   .format(swapchain_format)
+                   .memory_usage(cory::vk::device_memory_usage::eGpuOnly)
+                   .name("offscreen framebuffer test")
+                   .usage(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+                   .samples(VK_SAMPLE_COUNT_1_BIT)
+                   .create();
+    auto im_view0 = ctx.build_image_view(im0).create();
+
+    auto framebuffers = render_pass.framebuffer(im_view0);
+    CHECK(framebuffers.get() != nullptr);
 }
 
 TEST_SUITE_END();

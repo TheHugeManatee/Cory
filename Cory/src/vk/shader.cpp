@@ -282,6 +282,10 @@ SCENARIO("creating shaders")
 
         WHEN("creating the shader")
         {
+            // disable logging temporarily to silence the warnings generated from the shader
+            // compilation
+            auto level_scoped = Cory::Log::SetCoreLevelScoped(spdlog::level::critical);
+
             auto faulty_vertex_shader_src = std::make_shared<shader_source>(
                 cory::vk::shader_type::Vertex, faulty_vertex_glsl, "broken_vertex.glsl");
 
@@ -349,6 +353,10 @@ SCENARIO("using shader defines")
 
         WHEN("creating the shader without any defines")
         {
+            // disable logging temporarily to silence the warnings generated from the shader
+            // compilation
+            auto level_scoped = Cory::Log::SetCoreLevelScoped(spdlog::level::critical);
+
             auto fragment_shader_src = std::make_shared<shader_source>(
                 shader_type::Fragment, fragment_shader_glsl, "fragment.glsl");
 

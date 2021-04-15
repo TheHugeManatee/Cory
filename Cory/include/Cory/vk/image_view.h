@@ -31,7 +31,7 @@ class image_view : public basic_vk_wrapper<VkImageView> {
         , format_{format}
         , size_{size}
         , mip_levels_{mip_levels}
-        , layers_{layers_}
+        , layers_{layers}
     {
     }
 

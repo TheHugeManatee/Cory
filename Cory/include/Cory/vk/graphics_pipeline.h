@@ -1,6 +1,8 @@
 #pragma once
 
 #include "pipeline_components.h"
+#include "shader.h"
+#include "render_pass.h"
 
 #include <vulkan/vulkan.h>
 
@@ -10,7 +12,8 @@
 
 namespace cory::vk {
 
-    class graphics_pipeline_builder;
+class graphics_pipeline_builder;
+class graphics_context;
 
 class graphics_pipeline {
   public:
@@ -40,74 +43,73 @@ class graphics_pipeline_builder {
         return *this;
     }
 
-
-    graphics_pipeline_builder &stages(std::vector<VkPipelineShaderStageCreateInfo> vk_stages) noexcept
+    graphics_pipeline_builder &
+    stages(std::vector<VkPipelineShaderStageCreateInfo> vk_stages) noexcept
     {
-        info_.stageCount = stageCount;
-        info_.pStages = pStages;
+        shader_ci_ = std::move(vk_stages);
         return *this;
     }
 
     graphics_pipeline_builder &
-    vertex_input_state(const VkPipelineVertexInputStateCreateInfo *pVertexInputState) noexcept
+    vertex_input_state(VkPipelineVertexInputStateCreateInfo vertexInputState) noexcept
     {
-        info_.pVertexInputState = pVertexInputState;
+        vertex_input_ci_ = vertexInputState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    input_assembly_state(const VkPipelineInputAssemblyStateCreateInfo *pInputAssemblyState) noexcept
+    input_assembly_state(VkPipelineInputAssemblyStateCreateInfo inputAssemblyState) noexcept
     {
-        info_.pInputAssemblyState = pInputAssemblyState;
+        input_assembly_ci_ = inputAssemblyState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    tessellation_state(const VkPipelineTessellationStateCreateInfo *pTessellationState) noexcept
+    tessellation_state(VkPipelineTessellationStateCreateInfo tessellationState) noexcept
     {
-        info_.pTessellationState = pTessellationState;
+        tesselation_state_ci_ = tessellationState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    viewport_state(const VkPipelineViewportStateCreateInfo *pViewportState) noexcept
+    viewport_state(VkPipelineViewportStateCreateInfo viewportState) noexcept
     {
-        info_.pViewportState = pViewportState;
+        viewport_state_ci_ = viewportState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    rasterization_state(const VkPipelineRasterizationStateCreateInfo *pRasterizationState) noexcept
+    rasterization_state(VkPipelineRasterizationStateCreateInfo rasterizationState) noexcept
     {
-        info_.pRasterizationState = pRasterizationState;
+        rasterizer_ci_ = rasterizationState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    multisample_state(const VkPipelineMultisampleStateCreateInfo *pMultisampleState) noexcept
+    multisample_state(VkPipelineMultisampleStateCreateInfo multisampleState) noexcept
     {
-        info_.pMultisampleState = pMultisampleState;
+        multisampling_ci_ = multisampleState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    depth_stencil_state(const VkPipelineDepthStencilStateCreateInfo *pDepthStencilState) noexcept
+    depth_stencil_state(VkPipelineDepthStencilStateCreateInfo depthStencilState) noexcept
     {
-        info_.pDepthStencilState = pDepthStencilState;
+        depth_stencil_ci_ = depthStencilState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    color_blend_state(const VkPipelineColorBlendStateCreateInfo *pColorBlendState) noexcept
+    color_blend_state(VkPipelineColorBlendStateCreateInfo colorBlendState) noexcept
     {
-        info_.pColorBlendState = pColorBlendState;
+        color_blend_state_ci_ = colorBlendState;
         return *this;
     }
 
     graphics_pipeline_builder &
-    dynamic_state(const VkPipelineDynamicStateCreateInfo *pDynamicState) noexcept
+    dynamic_state(VkPipelineDynamicStateCreateInfo dynamicState) noexcept
     {
-        info_.pDynamicState = pDynamicState;
+        dynamic_state_ci_ = dynamicState;
         return *this;
     }
 
@@ -146,14 +148,43 @@ class graphics_pipeline_builder {
         name_ = name;
         return *this;
     }
-    [[nodiscard]] graphics_pipeline create() { return graphics_pipeline(*this); }
+    [[nodiscard]] graphics_pipeline create() { 
+        return graphics_pipeline(*this); 
+    }
 
   private:
     graphics_context &ctx_;
     VkGraphicsPipelineCreateInfo info_{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
     };
+
+    // shaders
+    std::vector<VkPipelineShaderStageCreateInfo> shader_ci_{};
+    std::vector<cory::vk::shader> shaders_;
+    // Vertex and input assembly
+    VkVertexInputBindingDescription vertex_binding_desc_{};
+    std::vector<VkVertexInputAttributeDescription> vertex_attribute_descs_{};
+    VkPipelineVertexInputStateCreateInfo vertex_input_ci_{};
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_ci_{};
+    // viewport and scissor
+    VkViewport viewport_{};
+    VkRect2D scissor_{};
+    VkPipelineViewportStateCreateInfo viewport_state_ci_{};
+    //
+    VkPipelineRasterizationStateCreateInfo rasterizer_ci_{};
+    VkPipelineMultisampleStateCreateInfo multisampling_ci_{};
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_ci_{};
+    std::vector<VkPipelineColorBlendAttachmentState> attachment_blend_states_{};
+    VkPipelineColorBlendStateCreateInfo color_blend_state_ci_{};
+    //
+    std::vector<VkDynamicState> dynamic_states_;
+    VkPipelineDynamicStateCreateInfo dynamic_state_ci_{};
+
+    cory::vk::render_pass render_pass_;
+    VkPipelineLayout m_pipelineLayout;
+
     std::string_view name_;
+    VkPipelineTessellationStateCreateInfo tesselation_state_ci_;
 };
 
 // class pipeline_builder {

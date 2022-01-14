@@ -4,22 +4,26 @@
 
 set(TARGET_NAME ThirdPartyLibs)
 
-add_library(${TARGET_NAME} STATIC 
-  src/stb_image.cpp
-  src/tiny_obj_loader.cpp
-  src/vk_mem_alloc.cpp
-  src/imgui_impl_vulkan.cpp
-  src/imgui_impl_glfw.cpp
-  src/imGuIZMOquat.cpp
-)
+find_package(VulkanHeaders)
+find_package(imgui)
+find_package(glfw3)
+
+add_library(${TARGET_NAME} STATIC
+        src/stb_image.cpp
+        src/tiny_obj_loader.cpp
+        src/vk_mem_alloc.cpp
+        src/imgui_impl_vulkan.cpp
+        src/imgui_impl_glfw.cpp
+        src/imGuIZMOquat.cpp
+        )
 
 # optick
 file(GLOB_RECURSE OPTICK_SRC "src/optick/*.cpp")
 target_sources(${TARGET_NAME} PRIVATE ${OPTICK_SRC})
 target_include_directories(${TARGET_NAME} PRIVATE "include/optick")
-if(WIN32) 
-  target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
-endif()
+if (WIN32)
+    target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif ()
 
 
 # Headers
@@ -28,14 +32,15 @@ target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
 
 target_include_directories(${TARGET_NAME} PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>)
 
-target_link_libraries(${TARGET_NAME} 
-  PRIVATE
-    CONAN_PKG::vulkan-headers
-    CONAN_PKG::imgui
-)
+target_link_libraries(${TARGET_NAME}
+        PRIVATE
+        Vulkan::Headers
+        imgui::imgui
+        glfw::glfw
+        )
 
 # We don't install our external headers, ideally we keep the interfaces clean of 
 # stuff provided in this module

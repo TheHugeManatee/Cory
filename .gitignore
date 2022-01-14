@@ -1,4 +1,6 @@
 build/
+build-*/
+cmake-build-*/
 out/
 .vs/
 CMakeSettings.json
@@ -6,3 +8,6 @@ CMakeSettings.json
 build19/
 
 *.spv
+.vscode/
+.ipynb_checkpoints/
+.idea/

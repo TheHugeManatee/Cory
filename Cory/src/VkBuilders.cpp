@@ -135,7 +135,7 @@ vk::UniquePipeline PipelineBuilder::create(GraphicsContext &ctx)
     return std::move(pipeline);
   case vk::Result::ePipelineCompileRequiredEXT:
     throw std::runtime_error(
-        fmt::format("Could not create pipeline: {}", result));
+        fmt::format("Could not create pipeline: {}", to_string(result)));
     break;
   default:
     // should never happen

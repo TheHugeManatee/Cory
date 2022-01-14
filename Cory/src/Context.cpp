@@ -39,7 +39,8 @@ void SwapChain::createSwapchain(vk::SurfaceKHR surface)
 
   CO_CORE_DEBUG("SwapChain configuration:");
   CO_CORE_DEBUG("    Surface Format:    {}, {}",
-                to_string(surfaceFormat.format), surfaceFormat.colorSpace);
+                to_string(surfaceFormat.format),
+                to_string(surfaceFormat.colorSpace));
   CO_CORE_DEBUG("    Present Mode:      {}", to_string(presentMode));
   CO_CORE_DEBUG("    Extent:            {}x{}", m_swapChainExtent.width,
                 m_swapChainExtent.height);

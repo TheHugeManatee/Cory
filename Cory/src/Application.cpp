@@ -9,9 +9,9 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 #include <optick/optick.h>
-
 #include <set>
 #include <thread>
+#include <fmt/ostream.h>
 
 namespace Cory {
 
@@ -22,7 +22,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Application::debugCallback(
 {
   switch (messageSeverity) {
   case VkDebugUtilsMessageSeverityFlagBitsEXT::
-  VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
     CO_CORE_TRACE("Vulkan validation layer: {}", pCallbackData->pMessage);
     break;
   case VkDebugUtilsMessageSeverityFlagBitsEXT::
@@ -52,12 +52,11 @@ void Application::cursorPosCallback(GLFWwindow *window, double mouseX,
   Cory::CameraManipulator::MouseButton mouseButton =
       (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
           ? Cory::CameraManipulator::MouseButton::Left
-          : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
-                ? Cory::CameraManipulator::MouseButton::Middle
-                : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) ==
-                   GLFW_PRESS)
-                      ? Cory::CameraManipulator::MouseButton::Right
-                      : Cory::CameraManipulator::MouseButton::None;
+      : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+          ? Cory::CameraManipulator::MouseButton::Middle
+      : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+          ? Cory::CameraManipulator::MouseButton::Right
+          : Cory::CameraManipulator::MouseButton::None;
   if (mouseButton != Cory::CameraManipulator::MouseButton::None) {
     Cory::CameraManipulator::ModifierFlags modifiers;
     if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
@@ -548,8 +547,9 @@ void Application::drawFrame()
   static LapTimer fpsCounter;
   if (fpsCounter.lap()) {
     auto s = fpsCounter.stats();
-    //CO_CORE_INFO("FPS: {:3.2f} ({:3.2f} ms)",
-    //             float(1'000'000'000) / float(s.avg), float(s.avg) / 1'000'000);
+    // CO_CORE_INFO("FPS: {:3.2f} ({:3.2f} ms)",
+    //              float(1'000'000'000) / float(s.avg), float(s.avg) /
+    //              1'000'000);
   }
 
   processPerfCounters(fpsCounter);
@@ -614,7 +614,7 @@ void Application::processPerfCounters(LapTimer &fpsCounter)
   if (ImGui::CollapsingHeader("Perf Markers")) {
     auto recs = Profiler::GetRecords();
     ImGui::Text("{avg} {min} {max}, microseconds");
-    for (const auto& [k, v] : recs) {
+    for (const auto &[k, v] : recs) {
       auto ps = v.stats();
       float visStats[3]{float(ps.avg) / 1'000, float(ps.min) / 1'000,
                         float(ps.max) / 1'000};
@@ -622,7 +622,8 @@ void Application::processPerfCounters(LapTimer &fpsCounter)
       //             k, visStats[0], visStats[1],
       //                                    visStats[2]);
       //             ImGui::Text(txt.c_str());
-      ImGui::InputFloat3(k.c_str(), visStats, 2, ImGuiInputTextFlags_ReadOnly);
+      ImGui::InputFloat3(k.c_str(), visStats, "%.3f",
+                         ImGuiInputTextFlags_ReadOnly);
     }
   }
 
@@ -796,9 +797,9 @@ void Application::imguiWindows()
   auto camPos = cameraManipulator.getCameraPosition();
   auto camFocus = cameraManipulator.getCenterPosition();
 
-  ImGui::InputFloat3("Camera Position", glm::value_ptr(camPos), (int)2,
+  ImGui::InputFloat3("Camera Position", glm::value_ptr(camPos), "%.3f",
                      ImGuiInputTextFlags_ReadOnly);
-  ImGui::InputFloat3("Camera Focus", glm::value_ptr(camFocus), (int)2,
+  ImGui::InputFloat3("Camera Focus", glm::value_ptr(camFocus), "%.3f",
                      ImGuiInputTextFlags_ReadOnly);
   ImGui::End();
 }

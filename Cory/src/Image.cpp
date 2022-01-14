@@ -88,7 +88,7 @@ void Image::transitionLayout(GraphicsContext &ctx, vk::ImageLayout newLayout)
   else {
     throw std::runtime_error(
         fmt::format("unsupported layout transition: from {} to {}",
-                    m_currentLayout, newLayout));
+                    to_string(m_currentLayout), to_string(newLayout)));
   }
 
   cmdBuf.buffer().pipelineBarrier(sourceStage, destinationStage,

@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.12)
 
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "Do not build in-source. Please remove CMakeCache.txt and the CMakeFiles/ directory. Then build out-of-source.")
-endif()
+endif ()
+
+if (WIN32)
+    # for some reason, CMake *sometimes* auto-inserts /W3 into the flags on MSVC, so we remove it (because we set our own warnings)
+    string(REGEX REPLACE "/W[3|4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+endif ()
 
 set(PROJECT_NAME "Cory")
 set(PROJECT_TARGETS "coryTargets")
@@ -27,7 +32,6 @@ set(CMAKE_PDB_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Standard CMake modules
 
-include(CTest) # Must be called before adding tests but after calling project(). This automatically calls enable_testing() and configures ctest targets when using Make/Ninja
 include(CMakeDependentOption)# This is a really useful scripts that creates options that depends on other options. It can even be used with generator expressions !
 
 # Custom modules and scripts
@@ -37,22 +41,37 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 include(Warnings)
 include(Coverage)
 
-## Conan initialization
-include(${CMAKE_BINARY_DIR}/conanbuildinfo_multi.cmake)
-conan_basic_setup(TARGETS)
+### Run conan install so we don't have to do it manually
+if (NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
+    message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
+    file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.16.1/conan.cmake"
+            "${CMAKE_BINARY_DIR}/conan.cmake"
+            EXPECTED_HASH SHA256=396e16d0f5eabdc6a14afddbcfff62a54a7ee75c6da23f32f7a31bc85db23484
+            TLS_VERIFY ON)
+endif ()
+include(${CMAKE_BINARY_DIR}/conan.cmake)
+conan_cmake_autodetect(conan_settings)
+# fixup RelWithDebInfo to Release (most packages don't have a RelWithDebInfo build)
+string(REGEX REPLACE "RelWithDebInfo" "Release" conan_settings "${conan_settings}")
+message("Conan autodetected settings: ${conan_settings}")
+conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_SOURCE_DIR} SETTINGS ${conan_settings} OUTPUT_QUIET)
+
+# add this to find the conan-generated Find*.cmake files
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR})
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_BINARY_DIR})
 
 ###############
 ##  OPTIONS  ##
 ###############
 
-if(${CMAKE_GENERATOR} MATCHES "Unix Makefiles")
+if (${CMAKE_GENERATOR} MATCHES "Unix Makefiles")
     message(STATUS ${CMAKE_BUILD_TOOL})
     set(CMAKE_MAKE_PROGRAM "${CMAKE_MAKE_PROGRAM} -j${MULTITHREADED_BUILD}")
     message(STATUS "Added arguments to CMAKE_BUILD_TOOL: ${CMAKE_MAKE_PROGRAM}")
-elseif(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
-    message(STATUS "Added parallel build arguments to CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
-endif()
+elseif (MSVC)
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /MP")
+#    message(STATUS "Added parallel build arguments to CMAKE_CXX_FLAGS: ${CMAKE_CXX_FLAGS}")
+endif ()
 
 # You should try to give as much control over the project setup to the user.
 # When modifying compile flags for example, if they are not mandatory, provide an option.
@@ -61,9 +80,9 @@ option(CORY_BUILD_USE_DOXYGEN "Add a doxygen target to generate the documentatio
 
 # Use your own option for tests, in case people use your library through add_subdirectory
 cmake_dependent_option(CORY_BUILD_TESTS
-    "Enable tests targets" ON # By default we want tests if CTest is enabled
-    "BUILD_TESTING" OFF # Stay coherent with CTest variables
-)
+        "Enable tests targets" ON # By default we want tests if CTest is enabled
+        "BUILD_TESTING" OFF # Stay coherent with CTest variables
+        )
 
 set(CORY_RESOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resource CACHE PATH "Directory to resources (textures/shaders)")
 
@@ -109,19 +128,19 @@ set_directory_properties(PROPERTIES VS_STARTUP_PROJECT HelloTriangle)
 ## Doxygen ##
 #############
 
-if(CORY_BUILD_USE_DOXYGEN AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.9)
+if (CORY_BUILD_USE_DOXYGEN AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.9)
     find_package(Doxygen
-        OPTIONAL_COMPONENTS dot mscgen dia
-    )
-    if(DOXYGEN_FOUND)
+            OPTIONAL_COMPONENTS dot mscgen dia
+            )
+    if (DOXYGEN_FOUND)
         set(DOXYGEN_USE_MDFILE_AS_MAINPAGE README.md)
         doxygen_add_docs(
-            doc
-            README.md source
-            COMMENT "Generate man pages"
+                doc
+                README.md source
+                COMMENT "Generate man pages"
         )
-    endif()
-endif()
+    endif ()
+endif ()
 
 
 

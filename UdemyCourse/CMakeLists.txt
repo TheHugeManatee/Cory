@@ -1,13 +1,13 @@
-set(TARGET_NAME "00_CompatibilityTest")
-
-# Always list the files explicitly
-add_executable(${TARGET_NAME} 
-    00_CompatibilityTest.cpp
-)
+set(TARGET_NAME "UdemyVulkanCourse")
 
 find_package(Vulkan REQUIRED)
 find_package(glfw3)
 find_package(spdlog)
+
+# Always list the files explicitly
+add_executable(${TARGET_NAME} 
+    UdemyVulkanCourse.cpp
+)
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)

@@ -7,6 +7,7 @@ set(TARGET_NAME ThirdPartyLibs)
 find_package(VulkanHeaders)
 find_package(imgui)
 find_package(glfw3)
+find_package(glm)
 
 add_library(${TARGET_NAME} STATIC
         src/stb_image.cpp
@@ -36,10 +37,12 @@ target_include_directories(${TARGET_NAME} PUBLIC
         $<INSTALL_INTERFACE:include>)
 
 target_link_libraries(${TARGET_NAME}
-        PRIVATE
-        Vulkan::Headers
+        PUBLIC
         imgui::imgui
         glfw::glfw
+        glm::glm
+        PRIVATE
+        Vulkan::Headers
         )
 
 # We don't install our external headers, ideally we keep the interfaces clean of 

@@ -70,8 +70,6 @@ constexpr std::string_view to_string(VkResult vk_result) noexcept {
             return "VK_ERROR_VALIDATION_FAILED_EXT";
         case VK_ERROR_INVALID_SHADER_NV:
             return "VK_ERROR_INVALID_SHADER_NV";
-        case VK_ERROR_INCOMPATIBLE_VERSION_KHR:
-            return "VK_ERROR_INCOMPATIBLE_VERSION_KHR";
         case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT:
             return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
         case VK_ERROR_NOT_PERMITTED_EXT:
@@ -669,14 +667,10 @@ constexpr std::string_view to_string(VkStructureType vk_structure_type) noexcept
             return "VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_ADVANCED_STATE_CREATE_INFO_EXT";
         case VK_STRUCTURE_TYPE_PIPELINE_COVERAGE_TO_COLOR_STATE_CREATE_INFO_NV:
             return "VK_STRUCTURE_TYPE_PIPELINE_COVERAGE_TO_COLOR_STATE_CREATE_INFO_NV";
-        case VK_STRUCTURE_TYPE_BIND_ACCELERATION_STRUCTURE_MEMORY_INFO_KHR:
-            return "VK_STRUCTURE_TYPE_BIND_ACCELERATION_STRUCTURE_MEMORY_INFO_KHR";
         case VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR:
             return "VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR";
         case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR:
             return "VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR";
-        case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_GEOMETRY_TYPE_INFO_KHR:
-            return "VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_GEOMETRY_TYPE_INFO_KHR";
         case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR:
             return "VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR";
         case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR:
@@ -687,20 +681,12 @@ constexpr std::string_view to_string(VkStructureType vk_structure_type) noexcept
             return "VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR";
         case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR:
             return "VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR";
-        case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_INFO_KHR:
-            return "VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_INFO_KHR";
-        case VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_VERSION_KHR:
-            return "VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_VERSION_KHR";
         case VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR:
             return "VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR";
         case VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_TO_MEMORY_INFO_KHR:
             return "VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_TO_MEMORY_INFO_KHR";
         case VK_STRUCTURE_TYPE_COPY_MEMORY_TO_ACCELERATION_STRUCTURE_INFO_KHR:
             return "VK_STRUCTURE_TYPE_COPY_MEMORY_TO_ACCELERATION_STRUCTURE_INFO_KHR";
-        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_FEATURES_KHR:
-            return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_FEATURES_KHR";
-        case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PROPERTIES_KHR:
-            return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PROPERTIES_KHR";
         case VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR:
             return "VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR";
         case VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR:
@@ -717,8 +703,6 @@ constexpr std::string_view to_string(VkStructureType vk_structure_type) noexcept
             return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SM_BUILTINS_PROPERTIES_NV";
         case VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT:
             return "VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT";
-        case VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT:
-            return "VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT";
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT:
             return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_DRM_FORMAT_MODIFIER_INFO_EXT";
         case VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT:
@@ -909,8 +893,6 @@ constexpr std::string_view to_string(VkStructureType vk_structure_type) noexcept
             return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_EXT";
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT:
             return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT";
-        case VK_STRUCTURE_TYPE_DEFERRED_OPERATION_INFO_KHR:
-            return "VK_STRUCTURE_TYPE_DEFERRED_OPERATION_INFO_KHR";
         case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR:
             return "VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_EXECUTABLE_PROPERTIES_FEATURES_KHR";
         case VK_STRUCTURE_TYPE_PIPELINE_INFO_KHR:
@@ -2716,8 +2698,6 @@ constexpr std::string_view to_string(VkBufferUsageFlagBits vk_buffer_usage_flag_
             return "VK_BUFFER_USAGE_TRANSFORM_FEEDBACK_COUNTER_BUFFER_BIT_EXT";
         case VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT:
             return "VK_BUFFER_USAGE_CONDITIONAL_RENDERING_BIT_EXT";
-        case VK_BUFFER_USAGE_RAY_TRACING_BIT_KHR:
-            return "VK_BUFFER_USAGE_RAY_TRACING_BIT_KHR";
     }
     return "Unknown VkBufferUsageFlagBits";
 }
@@ -3936,19 +3916,6 @@ constexpr std::string_view to_string(VkCopyAccelerationStructureModeKHR vk_copy_
     }
     return "Unknown VkCopyAccelerationStructureModeKHR";
 }
-constexpr std::string_view to_string(VkAccelerationStructureMemoryRequirementsTypeKHR vk_acceleration_structure_memory_requirements_type_k_h_r) noexcept {
-    switch (vk_acceleration_structure_memory_requirements_type_k_h_r) {
-        case VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_OBJECT_KHR:
-            return "VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_OBJECT_KHR";
-        case VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_BUILD_SCRATCH_KHR:
-            return "VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_BUILD_SCRATCH_KHR";
-        case VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_UPDATE_SCRATCH_KHR:
-            return "VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_UPDATE_SCRATCH_KHR";
-        case VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_MAX_ENUM_KHR:
-            return "VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_MAX_ENUM_KHR";
-    }
-    return "Unknown VkAccelerationStructureMemoryRequirementsTypeKHR";
-}
 constexpr std::string_view to_string(VkGeometryFlagBitsKHR vk_geometry_flag_bits_k_h_r) noexcept {
     switch (vk_geometry_flag_bits_k_h_r) {
         case VK_GEOMETRY_OPAQUE_BIT_KHR:
@@ -4487,7 +4454,6 @@ template <> struct fmt::formatter<VkRayTracingShaderGroupTypeKHR> : fmt::formatt
 template <> struct fmt::formatter<VkGeometryTypeKHR> : fmt::formatter<VkResult> {};
 template <> struct fmt::formatter<VkAccelerationStructureTypeKHR> : fmt::formatter<VkResult> {};
 template <> struct fmt::formatter<VkCopyAccelerationStructureModeKHR> : fmt::formatter<VkResult> {};
-template <> struct fmt::formatter<VkAccelerationStructureMemoryRequirementsTypeKHR> : fmt::formatter<VkResult> {};
 template <> struct fmt::formatter<VkGeometryFlagBitsKHR> : fmt::formatter<VkResult> {};
 template <> struct fmt::formatter<VkGeometryInstanceFlagBitsKHR> : fmt::formatter<VkResult> {};
 template <> struct fmt::formatter<VkBuildAccelerationStructureFlagBitsKHR> : fmt::formatter<VkResult> {};

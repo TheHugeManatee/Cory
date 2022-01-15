@@ -12,26 +12,32 @@ find_package(glfw3)
 find_package(VulkanHeaders)
 find_package(imgui)
 find_package(shaderc)
+find_package(doctest)
 
 set(CORY_UTILS_SOURCES
   "src/utils/executor.cpp"
 )
 
-set(CORY_VK_SOURCES   
- "src/vk/buffer.cpp"
- "src/vk/command_buffer.cpp"
- "src/vk/command_pool.cpp"
- "src/vk/graphics_context.cpp"
- "src/vk/image.cpp"
- "src/vk/image_view.cpp"
- "src/vk/instance.cpp"
- "src/vk/queue.cpp"
- "src/vk/swapchain.cpp"
- "src/vk/test_utils.cpp"
- "src/vk/utils.cpp"
- "src/vk/device.cpp" "src/vk/render_pass.cpp" "src/vk/graphics_pipeline.cpp" "src/vk/fence.cpp" "src/vk/shader.cpp")
+set(CORY_VK_SOURCES
+ src/vk/buffer.cpp
+ src/vk/command_buffer.cpp
+ src/vk/command_pool.cpp
+ src/vk/graphics_context.cpp
+ src/vk/image.cpp
+ src/vk/image_view.cpp
+ src/vk/instance.cpp
+ src/vk/queue.cpp
+ src/vk/swapchain.cpp
+ src/vk/test_utils.cpp
+ src/vk/utils.cpp
+ src/vk/device.cpp
+ src/vk/render_pass.cpp
+ src/vk/graphics_pipeline.cpp
+ src/vk/fence.cpp
+ src/vk/shader.cpp
+ )
 
-set(CORY_SOURCES 
+set(CORY_SOURCES
   #"src/Application.cpp"
   #"src/Buffer.cpp"
   #"src/CameraManipulator.cpp"
@@ -39,13 +45,13 @@ set(CORY_SOURCES
   #"src/Descriptor.cpp"
   #"src/Image.cpp"
   #"src/ImGuiLayer.cpp"
-  "src/Log.cpp"
+  src/Log.cpp
   #"src/Mesh.cpp"
-  "src/Profiling.cpp"
+  src/Profiling.cpp
   #"src/Shader.cpp"
-  "src/Utils.cpp"
+  src/Utils.cpp
   #"src/VkBuilders.cpp"
-  "src/VkUtils.cpp"
+  src/VkUtils.cpp
 )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
@@ -60,9 +66,9 @@ add_library(${TARGET_NAME} STATIC
 source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/src PREFIX src FILES ${CORY_UTILS_SOURCES} ${CORY_VK_SOURCES} ${CORY_SOURCES})
 source_group(TREE ${CMAKE_CURRENT_LIST_DIR}/include/Cory PREFIX include FILES ${HEADERS})
 
-target_include_directories (${TARGET_NAME} 
-  PUBLIC 
-    ${VULKAN_INCLUDE_DIRS} 
+target_include_directories (${TARGET_NAME}
+  PUBLIC
+    ${VULKAN_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/ThirdParty
 )
 
@@ -76,16 +82,16 @@ target_link_libraries(${TARGET_NAME}
         glfw::glfw
         imgui::imgui
         shaderc::shaderc
-        PRIVATE
-        Vulkan::Vulkan
         ThirdPartyLibs
+        Vulkan::Vulkan
+        doctest::doctest
         )
 
 # Define a macro that allows consumers of this lib to know they link against it
-target_compile_definitions(${TARGET_NAME} 
+target_compile_definitions(${TARGET_NAME}
   #INTERFACE
     #DOCTEST_CONFIG_DISABLE
-  PUBLIC 
+  PUBLIC
     HAVE_CORY)
 # for now, we hardcode the resource path until we have a proper resource management in place
 target_compile_definitions(${TARGET_NAME} PUBLIC "RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
@@ -113,7 +119,7 @@ target_include_directories(${TARGET_NAME} PUBLIC
 ###### TEST BINARY
 
 add_executable(${TARGET_NAME}_Test test_main.cpp)
-target_link_libraries(${TARGET_NAME}_Test ${TARGET_NAME})
+target_link_libraries(${TARGET_NAME}_Test ${TARGET_NAME} doctest::doctest)
 doctest_force_link_static_lib_in_target(${TARGET_NAME}_Test ${TARGET_NAME})
 add_test(NAME ${TARGET_NAME}_Test COMMAND $<TARGET_FILE:${TARGET_NAME}_Test> --no-version)
 target_compile_features(${TARGET_NAME}_Test PRIVATE cxx_std_20)

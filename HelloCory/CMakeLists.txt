@@ -1,5 +1,8 @@
 set(TARGET_NAME "HelloCory")
 
+find_package(Vulkan)
+find_package(GLEW)
+
 # Always list the files explicitly
 add_executable(${TARGET_NAME} 
     src/main.cpp
@@ -12,12 +15,12 @@ target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-target_link_libraries(${TARGET_NAME} 
-    PRIVATE 
+target_link_libraries(${TARGET_NAME}
+    PRIVATE
         Cory
         ThirdPartyLibs
-        ${Vulkan_LIBRARIES}
-        CONAN_PKG::glew
+        Vulkan::Vulkan
+        GLEW::GLEW
 )
 
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)

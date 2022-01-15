@@ -6,6 +6,7 @@
 #include <optional>
 #include <type_traits>
 #include <vector>
+#include <algorithm>
 
 #define VK_CHECKED_CALL(x, err)                                                                    \
     do {                                                                                           \

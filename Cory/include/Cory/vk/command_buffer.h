@@ -278,27 +278,6 @@ class command_buffer {
         return *this;
     }
 
-    command_buffer &build_acceleration_structure_nv(const VkAccelerationStructureInfoNV *pInfo,
-                                                    VkBuffer instanceData,
-                                                    VkDeviceSize instanceOffset,
-                                                    VkBool32 update,
-                                                    VkAccelerationStructureKHR dst,
-                                                    VkAccelerationStructureKHR src,
-                                                    VkBuffer scratch,
-                                                    VkDeviceSize scratchOffset)
-    {
-        vkCmdBuildAccelerationStructureNV(cmd_buffer_ptr_.get(),
-                                          pInfo,
-                                          instanceData,
-                                          instanceOffset,
-                                          update,
-                                          dst,
-                                          src,
-                                          scratch,
-                                          scratchOffset);
-        return *this;
-    }
-
     command_buffer &clear_attachments(uint32_t attachmentCount,
                                       const VkClearAttachment *pAttachments,
                                       uint32_t rectCount,
@@ -328,14 +307,6 @@ class command_buffer {
     {
         vkCmdClearDepthStencilImage(
             cmd_buffer_ptr_.get(), image, imageLayout, pDepthStencil, rangeCount, pRanges);
-        return *this;
-    }
-
-    command_buffer &copy_acceleration_structure_nv(VkAccelerationStructureKHR dst,
-                                                   VkAccelerationStructureKHR src,
-                                                   VkCopyAccelerationStructureModeKHR mode)
-    {
-        vkCmdCopyAccelerationStructureNV(cmd_buffer_ptr_.get(), dst, src, mode);
         return *this;
     }
 
@@ -1206,22 +1177,6 @@ class command_buffer {
                                                       queryType,
                                                       queryPool,
                                                       firstQuery);
-        return *this;
-    }
-
-    command_buffer &write_acceleration_structures_properties_nv(
-        uint32_t accelerationStructureCount,
-        const VkAccelerationStructureKHR *pAccelerationStructures,
-        VkQueryType queryType,
-        VkQueryPool queryPool,
-        uint32_t firstQuery)
-    {
-        vkCmdWriteAccelerationStructuresPropertiesNV(cmd_buffer_ptr_.get(),
-                                                     accelerationStructureCount,
-                                                     pAccelerationStructures,
-                                                     queryType,
-                                                     queryPool,
-                                                     firstQuery);
         return *this;
     }
 

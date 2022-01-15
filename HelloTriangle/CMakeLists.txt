@@ -1,5 +1,8 @@
 set(TARGET_NAME "HelloTriangle")
 
+find_package(Vulkan REQUIRED)
+find_package(GLEW REQUIRED)
+
 # Always list the files explicitly
 add_executable(${TARGET_NAME} 
     src/main.cpp
@@ -16,8 +19,8 @@ target_link_libraries(${TARGET_NAME}
     PRIVATE 
         Cory
         ThirdPartyLibs
-        ${Vulkan_LIBRARIES}
-        CONAN_PKG::glew
+        Vulkan::Vulkan
+        GLEW::GLEW
 )
 
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)

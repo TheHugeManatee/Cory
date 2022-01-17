@@ -104,7 +104,8 @@ def parse_type(node: ET.Element) -> Type:
         name=name,
         category=category,
         # for basetype or bitmask types, the typedef might be in a <type> subnode
-        alias=str_attrib(node, 'name') or subnode_text(node, 'type'),
+        alias=subnode_text(node, 'type') if category in [
+            'basetype', 'bitmask'] else str_attrib(node, 'alias'),
         members=[parse_member(member_n)
                  for member_n in node.findall('member')],
         definition=definition
@@ -192,6 +193,7 @@ class EnumValue:
             return f"{self.name} --> {self.alias}"
         return f"{self.name}: {self.value}"
 
+
 def parse_enum_value(node: ET.Element) -> EnumValue:
     return EnumValue(
         name=str_attrib(node, 'name'),
@@ -199,6 +201,7 @@ def parse_enum_value(node: ET.Element) -> EnumValue:
         alias=str_attrib(node, 'alias'),
         comment=str_attrib(node, 'comment')
     )
+
 
 @dataclass(frozen=True)
 class Enum:
@@ -210,8 +213,9 @@ class Enum:
         values = '\n'.join(f'  - {p}' for p in self.values)
         return f'[enum] {self.name}\n{values}'
 
+
 def parse_enum(node: ET.Element) -> Enum:
-    return Enum (
+    return Enum(
         name=str_attrib(node, 'name'),
         type=str_attrib(node, 'type'),
         values=[parse_enum_value(vn) for vn in node.findall('enum')]

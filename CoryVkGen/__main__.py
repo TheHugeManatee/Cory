@@ -10,10 +10,12 @@ vk_spec_url = 'https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/{}/xml
 # Spec file download
 ################################################################################
 
+
 def file_age(filename):
     return (time.time() - os.path.getmtime(filename)) / 3600.0
 
-def download_spec(version, spec_dir, save_as, always_download = False):
+
+def download_spec(version, spec_dir, save_as, always_download=False):
     download_url = vk_spec_url.format(version)
     if not os.path.exists(save_as):
         os.makedirs(save_as)
@@ -21,7 +23,7 @@ def download_spec(version, spec_dir, save_as, always_download = False):
     spec_file = os.path.join(spec_dir, save_as)
 
     if always_download or not os.path.exists(spec_file) or file_age(spec_file) > 3*24:
-        print ('Downloading %s' % download_url)
+        print('Downloading %s' % download_url)
         urllib.request.urlretrieve(download_url, spec_file)
     else:
         print(f"File already downloaded under {spec_file}")
@@ -34,8 +36,30 @@ if __name__ == '__main__':
 
     parser = SpecParser.SpecParser(spec_file_path)
 
+    print("## Vulkan Types")
+    #    list a summary of the categories
+    cats = {}
+    for type in parser.types.values():
+        cat = type.category if type.category != '' else '<no cat>'
+        if cat not in cats:
+            cats[cat] = 1
+        else:
+            cats[cat] += 1
+
+    for c, v in cats.items():
+        print(f"  - {c : <14}{v}")
+    print('')
 
     print(parser.types['VkResult'])
     print(parser.types['VkFramebufferCreateFlagBits'])
-
+    print(parser.types['VkImageFormatListCreateInfo'])
+    print(parser.types['VkColorSpaceKHR'])
+    print(parser.types['VkDriverIdKHR'])
+    print(parser.types['VkSamplerCreateFlags'])
     print(parser.commands['vkCreateInstance'])
+    print(parser.commands['vkCmdDispatch'])
+    print(parser.commands['vkCmdSetDiscardRectangleEXT'])
+    print(parser.commands['vkGetImageMemoryRequirements2'])
+
+    print(parser.commands['vkCreateImage'])
+    print(parser.types['VkImageCreateInfo'])

@@ -31,8 +31,11 @@ def download_spec(version, spec_dir, save_as, always_download = False):
 if __name__ == '__main__':
     spec_version = 'v1.2.162'
     spec_file_path = download_spec(spec_version, "c:/tmp/", "vk.xml")
+
     parser = SpecParser.SpecParser(spec_file_path)
 
-    print(parser.types[1000])
 
-    print(parser.commands[202])
+    print(parser.types['VkResult'])
+    print(parser.types['VkFramebufferCreateFlagBits'])
+
+    print(parser.commands['vkCreateInstance'])

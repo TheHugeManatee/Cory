@@ -7,7 +7,7 @@ find_package(spdlog)
 # Always list the files explicitly
 add_executable(${TARGET_NAME} 
     UdemyVulkanCourse.cpp
-)
+        VulkanRenderer.cpp VulkanRenderer.h)
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
@@ -18,6 +18,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/in
 
 target_link_libraries(${TARGET_NAME} 
     PRIVATE
+        Cory
         ThirdPartyLibs
         Vulkan::Vulkan
         glfw::glfw

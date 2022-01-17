@@ -1,10 +1,13 @@
+#include "VulkanRenderer.h"
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include <glm.h>
+#include <Cory/Log.h>
 
 #include <spdlog/spdlog.h>
 
+// utility to shorten the typical enumerate pattern you need in c++
 template <typename ReturnT, typename FunctionT, typename... FunctionParameters>
 std::vector<ReturnT> vk_enumerate(FunctionT func, FunctionParameters... parameters)
 {
@@ -15,37 +18,40 @@ std::vector<ReturnT> vk_enumerate(FunctionT func, FunctionParameters... paramete
     return values;
 }
 
-int main(int argc, char **argv)
+GLFWwindow *initWindow(const std::string &window_name, uint32_t width, uint32_t height)
 {
-    spdlog::info("Compat test running");
-
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // we don't do resizing yet
+    return glfwCreateWindow(width, height, window_name.c_str(), nullptr, nullptr);
+}
 
-    GLFWwindow *wnd = glfwCreateWindow(800, 600, "Test Window", nullptr, nullptr);
+int main(int argc, char **argv)
+{
+    Cory::Log::Init();
 
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    CO_APP_INFO("Compat test running");
 
-    auto extensions =
-        vk_enumerate<VkExtensionProperties>(vkEnumerateInstanceExtensionProperties, nullptr);
+    GLFWwindow *window = initWindow("Test window", 800, 600);
 
-    spdlog::info("Extension count: {}", extensions.size());
+    try {
+        VulkanRenderer renderer(window);
 
-    glm::mat4 test_matrix(1.0f);
-    glm::vec4 test_vector(1.0f);
-    auto test_result = test_matrix * test_vector;
-    spdlog::info("Test result: {} {} {}", test_result.x, test_result.y, test_result.z);
-
-    while (!glfwWindowShouldClose(wnd)) {
-        glfwPollEvents();
+        while (!glfwWindowShouldClose(window)) {
+            glfwPollEvents();
+        }
+    }
+    catch (const std::exception &e) {
+        CO_APP_ERROR("Uncaught exception: {}", e.what());
+    }
+    catch (...) {
+        CO_APP_ERROR("Uncaught exception in main.");
     }
 
-    glfwDestroyWindow(wnd);
-
+    glfwDestroyWindow(window);
     glfwTerminate();
 
-    spdlog::info("Application finished");
+    CO_APP_INFO("Application finished");
     return 0;
 }

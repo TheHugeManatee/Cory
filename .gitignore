@@ -11,3 +11,8 @@ build19/
 .vscode/
 .ipynb_checkpoints/
 .idea/
+__pycache__/
+*.pyc
+.cvkg-env/
+.venv/
+venv/

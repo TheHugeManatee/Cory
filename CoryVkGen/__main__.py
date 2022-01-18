@@ -1,6 +1,6 @@
 import os.path
 import time
-import urllib
+import urllib.request
 
 from cvkg import SpecParser
 
@@ -31,10 +31,10 @@ def download_spec(version, spec_dir, save_as, always_download=False):
 
 
 if __name__ == '__main__':
-    spec_version = 'v1.2.162'
-    spec_file_path = download_spec(spec_version, "c:/tmp/", "vk.xml")
+    spec_version = 'v1.2.203'
+    spec_file_path = download_spec(spec_version, "c:/tmp/", "vk.v1.2.203.xml")
 
-    parser = SpecParser.SpecParser(spec_file_path)
+    parser = SpecParser(spec_file_path)
 
     print("## Vulkan Types")
     #    list a summary of the categories
@@ -50,16 +50,4 @@ if __name__ == '__main__':
         print(f"  - {c : <14}{v}")
     print('')
 
-    print(parser.types['VkResult'])
-    print(parser.types['VkFramebufferCreateFlagBits'])
-    print(parser.types['VkImageFormatListCreateInfo'])
-    print(parser.types['VkColorSpaceKHR'])
-    print(parser.types['VkDriverIdKHR'])
-    print(parser.types['VkSamplerCreateFlags'])
-    print(parser.commands['vkCreateInstance'])
-    print(parser.commands['vkCmdDispatch'])
-    print(parser.commands['vkCmdSetDiscardRectangleEXT'])
-    print(parser.commands['vkGetImageMemoryRequirements2'])
-
-    print(parser.commands['vkCreateImage'])
-    print(parser.types['VkImageCreateInfo'])
+    

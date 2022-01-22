@@ -45,6 +45,8 @@ target_link_libraries(${TARGET_NAME}
         Vulkan::Headers
         )
 
+add_library(Cory::ThirdParty ALIAS ThirdPartyLibs)
+
 # We don't install our external headers, ideally we keep the interfaces clean of 
 # stuff provided in this module
 # ###### INSTALLATION

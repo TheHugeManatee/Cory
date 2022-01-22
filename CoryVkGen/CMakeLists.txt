@@ -1,4 +1,4 @@
-find_package(Python REQUIRED)
+find_package(Python REQUIRED COMPONENTS Interpreter)
 
 find_package(Vulkan REQUIRED)
 
@@ -12,6 +12,7 @@ else ()
     message(FATAL_ERROR "Could not discover vk.xml. Please fix me.")
 endif ()
 
+set(CVK_DIR ${CMAKE_CURRENT_LIST_DIR}/cvk/include/cvk)
 
 set(PYTHON_SOURCES
         __main__.py
@@ -21,13 +22,28 @@ set(PYTHON_SOURCES
         cvkg/Types.py
         )
 set(TEMPLATE_SOURCES
-        cvkg/templates/CreateInfo.tpl.h
+        templates/CreateInfo.tpl
+        templates/CreateInfos.tpl.h
+        )
+set(GENERATED_FILES
+        ${CVK_DIR}/CreateInfos.h
         )
 
-set(CVK_DIR ${CMAKE_CURRENT_LIST_DIR}/cvk)
 
 
-add_custom_target(cvk
-        COMMAND python ${CMAKE_CURRENT_LIST_DIR}/__main__.py --output_folder ${CVK_DIR} --registry ${VULKAN_REGISTRY_XML}
-        SOURCES ${PYTHON_SOURCES} ${TEMPLATE_SOURCES}
+
+add_custom_target(cvkg
+        COMMAND ${Python_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/__main__.py --output_folder ${CVK_DIR} --registry ${VULKAN_REGISTRY_XML}
+#        SOURCES ${PYTHON_SOURCES} ${TEMPLATE_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+        BYPRODUCTS ${GENERATED_FILES}
         )
+
+
+add_library(cvk INTERFACE)
+add_dependencies(cvk cvkg)
+target_link_libraries(cvk INTERFACE Vulkan::Vulkan)
+target_include_directories(cvk INTERFACE ${CMAKE_CURRENT_LIST_DIR}/cvk/include)
+#target_sources(cvk INTERFACE ${GENERATED_FILES})
+
+add_library(cvk::cvk ALIAS cvk)

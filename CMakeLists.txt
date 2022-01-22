@@ -100,6 +100,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 # Check for LTO support (needs to be after project(...) )
 #find_lto(CXX)
 
+add_subdirectory(CoryVkGen)
 add_subdirectory(Cory)
 #add_subdirectory(VolumeRendering)
 #add_subdirectory(VulkanTutorial)

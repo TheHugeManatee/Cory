@@ -1,10 +1,12 @@
 import os.path
 import time
 import urllib.request
+import argparse
 
 from cvkg import SpecParser
 
 vk_spec_url = 'https://raw.githubusercontent.com/KhronosGroup/Vulkan-Docs/{}/xml/vk.xml'
+
 
 ################################################################################
 # Spec file download
@@ -22,7 +24,7 @@ def download_spec(version, spec_dir, save_as, always_download=False):
 
     spec_file = os.path.join(spec_dir, save_as)
 
-    if always_download or not os.path.exists(spec_file) or file_age(spec_file) > 3*24:
+    if always_download or not os.path.exists(spec_file) or file_age(spec_file) > 3 * 24:
         print('Downloading %s' % download_url)
         urllib.request.urlretrieve(download_url, spec_file)
     else:
@@ -31,10 +33,23 @@ def download_spec(version, spec_dir, save_as, always_download=False):
 
 
 if __name__ == '__main__':
-    spec_version = 'v1.2.203'
-    spec_file_path = download_spec(spec_version, "c:/tmp/", "vk.v1.2.203.xml")
+    parser = argparse.ArgumentParser(description='Generator for the Cory Vulkan wrapper library')
+    parser.add_argument('--registry', help="Path to vulkan registry xml")
+    parser.add_argument('--output_folder', help="Where to put the generated cvk headers.")
+    
+    args = parser.parse_args()
 
-    parser = SpecParser(spec_file_path)
+    if not args.output_folder:
+        print("No output folder specified!")
+    if not args.registry:
+        print("No path to python registry specified!")
+
+        spec_version = 'v1.2.203'
+        registry_file_path = download_spec(spec_version, "c:/tmp/", "vk.v1.2.203.xml")
+    else:
+        registry_file_path = args.registry
+
+    parser = SpecParser(registry_file_path)
 
     print("## Vulkan Types")
     #    list a summary of the categories
@@ -49,5 +64,3 @@ if __name__ == '__main__':
     for c, v in cats.items():
         print(f"  - {c : <14}{v}")
     print('')
-
-    

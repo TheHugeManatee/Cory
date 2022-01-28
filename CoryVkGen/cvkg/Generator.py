@@ -1,6 +1,7 @@
 from .SpecParser import SpecParser
 #from airspeed import Template,CachingFileLoader
 from .EnumFmtGenerator import EnumFmtGenerator
+from .StructFmtGenerator import StructFmtGenerator
 
 import os
 import os.path
@@ -17,15 +18,16 @@ class Generator:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        #loader = CachingFileLoader(self.template_dir)
-
         create_infos = [c for c in self.registry.types.values() if not c.alias and "CreateInfo" in c.name]
         env = {
             'registry': self.registry,
             'create_infos': create_infos[:20]
         }
 
-        generators = [EnumFmtGenerator(self.registry, self.template_dir)]
+        generators = [
+            EnumFmtGenerator(self.registry, self.template_dir),
+            StructFmtGenerator(self.registry, self.template_dir),
+        ]
 
         generated_files = []
         for generator in generators:

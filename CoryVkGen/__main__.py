@@ -70,7 +70,8 @@ if __name__ == '__main__':
     ############################################
     ##              GENERATION                ##
     ############################################
+    vk_version = 'VK_VERSION_1_2'
     module_dir = os.path.dirname(os.path.abspath(__file__))
     template_dir = os.path.join(module_dir, 'templates')
-    generator = Generator(parser, template_dir=template_dir)
+    generator = Generator(parser.feature_levels[vk_version], template_dir=template_dir)
     generator.generate(args.output_folder)

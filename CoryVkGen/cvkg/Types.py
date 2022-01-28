@@ -76,12 +76,14 @@ class Type:
     alias: str
     members: List[Member]
     definition: str
+    requires: str
 
     def __repr__(self):
         if self.alias:
             return f'[{self.category}] {self.name} --> {self.alias}'
 
-        return '\n'.join([f'[{self.category}] {self.name}'] + [f'  - {p}' for p in self.members])
+        members = '\n'.join([f'[{self.category}] {self.name}'] + [f'  - {p}' for p in self.members])
+        return members.replace('\n', '\n  ')
 
 
 def parse_type(node: ET.Element) -> Type:
@@ -108,7 +110,8 @@ def parse_type(node: ET.Element) -> Type:
             'basetype', 'bitmask'] else str_attrib(node, 'alias'),
         members=[parse_member(member_n)
                  for member_n in node.findall('member')],
-        definition=definition
+        definition=definition,
+        requires=str_attrib(node, 'requires')
     )
 
 
@@ -155,6 +158,7 @@ class Command:
             return f'[command] {self.name}(...) --> {self.alias}'
 
         params = '\n'.join(f'  - {p}' for p in self.params)
+        params = params.replace('\n', '\n  ')
         return f'[command] {self.name}(...) -> {self.returnType}\n{params}'
 
 
@@ -191,7 +195,7 @@ class EnumValue:
     def __repr__(self):
         if self.alias:
             return f"{self.name} --> {self.alias}"
-        return f"{self.name}: {self.value}"
+        return f"{self.name}: {self.value}" #  // {self.comment}
 
 
 def parse_enum_value(node: ET.Element) -> EnumValue:

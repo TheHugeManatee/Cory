@@ -2,6 +2,7 @@ from .SpecParser import SpecParser
 from .EnumFmtGenerator import EnumFmtGenerator
 from .StructFmtGenerator import StructFmtGenerator
 from .BuilderGenerator import BuilderGenerator
+from .GeneratorUtils import camel_to_snake
 
 import os
 import os.path
@@ -18,13 +19,14 @@ class Generator:
         create_infos = [c for c in self.registry.types.values() if not c.alias and "CreateInfo" in c.name]
         env = {
             'registry': self.registry,
-            'create_infos': create_infos[:20]
+            'create_infos': create_infos[:20],
+            'camel_to_snake': camel_to_snake,
         }
 
         generators = [
             EnumFmtGenerator(self.registry, self.template_dir, output_dir),
             StructFmtGenerator(self.registry, self.template_dir, output_dir),
-            #BuilderGenerator(self.registry, self.template_dir),
+            BuilderGenerator(self.registry, self.template_dir, output_dir),
         ]
 
         # run all generators

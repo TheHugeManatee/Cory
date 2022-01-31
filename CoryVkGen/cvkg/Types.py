@@ -51,6 +51,7 @@ class Member:
     is_optional: bool
     is_const_ptr: bool
     definition: str
+    len: str
 
     def __repr__(self):
         type = f"const {self.type}*" if self.is_const_ptr else self.type
@@ -65,7 +66,8 @@ def parse_member(node: ET.Element) -> Member:
         values=str_attrib(node, 'values'),
         is_optional=bool_attrib(node, 'optional'),
         is_const_ptr=is_cptr_definition(definition),
-        definition=definition
+        definition=definition,
+        len=str_attrib(node, 'len')
     )
 
 

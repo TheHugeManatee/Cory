@@ -1,13 +1,10 @@
 from .SpecParser import SpecParser
-#from airspeed import Template,CachingFileLoader
 from .EnumFmtGenerator import EnumFmtGenerator
 from .StructFmtGenerator import StructFmtGenerator
+from .BuilderGenerator import BuilderGenerator
 
 import os
 import os.path
-
-from Cheetah.Template import Template
-
 
 class Generator:
     def __init__(self, registry: SpecParser, template_dir: str):
@@ -25,17 +22,19 @@ class Generator:
         }
 
         generators = [
-            EnumFmtGenerator(self.registry, self.template_dir),
-            StructFmtGenerator(self.registry, self.template_dir),
+            EnumFmtGenerator(self.registry, self.template_dir, output_dir),
+            StructFmtGenerator(self.registry, self.template_dir, output_dir),
+            #BuilderGenerator(self.registry, self.template_dir),
         ]
 
+        # run all generators
         generated_files = []
         for generator in generators:
-            generated_files += generator.run(output_dir, env)
+            generated_files += generator.run(output_dir, self.registry, env)
 
         print("#### Generated files:")
         for file in generated_files:
-            os.system(f'clang-format -i {file}')
+        #     os.system(f'clang-format -i {file}')
             print("  " + file)
 
 

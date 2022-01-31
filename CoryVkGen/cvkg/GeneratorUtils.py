@@ -1,4 +1,6 @@
 import re
+import os
+from Cheetah.Template import Template
 
 def split_uppercase(s):
     return [a for a in re.split(r'([A-Z][a-z]*)', s) if a]
@@ -20,3 +22,4 @@ def camel_to_snake(s:str, remove_prefixes=False):
     if start_suffix_merge < len(parts):
         parts[start_suffix_merge:] = [''.join(parts[start_suffix_merge:])]
     return "_".join([s.lower() for s in parts])
+

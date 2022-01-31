@@ -1,11 +1,5 @@
 #pragma once
 
-#set unions = [s for s in $registry.types.values() if s.category == 'union']
-
-#set structs = [s for s in $registry.types.values() if s.name not in $ignored_structs and s.category == 'struct' and not s.alias]
-#set ignored_members = ['sType', 'pNext']
-#set void_cast_categories = ['handle', 'funcpointer']
-
 \#include <fmt/format.h>
 \#include <fmt/ranges.h>
 \#include <vulkan/vulkan.h>

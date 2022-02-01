@@ -1,12 +1,14 @@
-#include <cvk/test_utils.h>
+#include "test_utils.h"
 
-#include <cvk/utils.h>
 #include <cvk/instance.h>
 #include <cvk/log.h>
+#include <cvk/utils.h>
 
 #include <stdexcept>
 
-namespace cvk {
+namespace cvkt {
+
+static uint64_t test_debug_message_count{0};
 
 VKAPI_ATTR VkBool32 VKAPI_CALL
 test_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -14,6 +16,7 @@ test_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                     void *pUserData)
 {
+    test_debug_message_count++;
     switch (messageSeverity) {
     case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
         CVK_TRACE("Vulkan validation layer: {}", pCallbackData->pMessage);
@@ -23,18 +26,18 @@ test_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
         break;
     case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
         CVK_WARN("Vulkan validation layer: {}", pCallbackData->pMessage);
-        throw std::runtime_error(fmt::format("Validation Warning: {}", pCallbackData->pMessage));
+        // throw std::runtime_error(fmt::format("Validation Warning: {}", pCallbackData->pMessage));
     case VkDebugUtilsMessageSeverityFlagBitsEXT::VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
         CVK_ERROR("Vulkan validation layer: {}", pCallbackData->pMessage);
-        throw std::runtime_error(fmt::format("Validation Error: {}", pCallbackData->pMessage));
+        // throw std::runtime_error(fmt::format("Validation Error: {}", pCallbackData->pMessage));
     }
 
     return false;
 }
 
-instance &test_instance()
+cvk::instance &test_instance()
 {
-    static instance test_inst = []() {
+    static cvk::instance test_inst = []() {
         VkApplicationInfo app_info{.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                                    .pApplicationName = "CoryTestExecutable",
                                    .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
@@ -55,27 +58,28 @@ instance &test_instance()
                       .ptr())
             .create();
     }();
-
+    // we reset the debug message count - this is important so a faulty debug message count
+    // does not leak from one unit test to the next.
+    test_debug_message_count = 0;
     return test_inst;
 }
 
-//cvk::graphics_context test_context()
+// cvk::graphics_context test_context()
 //{
-//    const auto devices = test_instance().physical_devices();
-//    std::optional<cvk::physical_device_info> pickedDevice;
-//    for (const auto &info : devices) {
-//        if (!pickedDevice && info.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-//            pickedDevice = info;
-//        }
-//    }
+//     const auto devices = test_instance().physical_devices();
+//     std::optional<cvk::physical_device_info> pickedDevice;
+//     for (const auto &info : devices) {
+//         if (!pickedDevice && info.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+//         {
+//             pickedDevice = info;
+//         }
+//     }
 //
-//    // create a context
-//    return graphics_context(test_instance(), pickedDevice->device);
-//}
+//     // create a context
+//     return graphics_context(test_instance(), pickedDevice->device);
+// }
 
-void test_init()
-{
-    test_instance();
-}
+void test_init() { test_instance(); }
+uint64_t debug_message_count() { return test_debug_message_count; }
 
-} // namespace cvk
+} // namespace cvkt

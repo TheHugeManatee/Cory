@@ -6,9 +6,12 @@ find_package(fmt)
 find_package(glfw3)
 
 set(CVK_SOURCES
+        include/cvk/instance.h
+        include/cvk/core.h
+        include/cvk/utils.h
+        include/cvk/log.h
         src/instance.cpp
         src/log.cpp
-        src/test_utils.cpp
         include/cvk/core.h
         )
 
@@ -47,7 +50,11 @@ add_library(cvk::cvk ALIAS ${TARGET_NAME})
 # ================================================================
 find_package(doctest REQUIRED)
 
-add_executable(cvk_test src/test_main.cpp src/test_utils.cpp)
+add_executable(cvk_test
+        test/instance.cpp
+        test/test_main.cpp
+        test/test_utils.cpp
+        )
 target_link_libraries(cvk_test ${TARGET_NAME} doctest::doctest)
 doctest_force_link_static_lib_in_target(cvk_test cvk)
 target_compile_features(cvk_test PRIVATE cxx_std_20)

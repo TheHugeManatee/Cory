@@ -1,13 +1,16 @@
 set(TARGET_NAME "UdemyVulkanCourse")
 
 find_package(Vulkan REQUIRED)
-find_package(glfw3)
-find_package(spdlog)
+find_package(glfw3 REQUIRED)
+find_package(spdlog REQUIRED)
+find_package(range-v3 REQUIRED)
 
 # Always list the files explicitly
 add_executable(${TARGET_NAME} 
-    UdemyVulkanCourse.cpp
-        VulkanRenderer.cpp VulkanRenderer.h)
+        UdemyVulkanCourse.cpp
+        VulkanRenderer.cpp
+        VulkanRenderer.h
+        )
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
@@ -24,6 +27,7 @@ target_link_libraries(${TARGET_NAME}
         Vulkan::Vulkan
         glfw::glfw
         spdlog::spdlog
+        range-v3::range-v3
 )
 
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)
@@ -38,8 +42,9 @@ target_set_warnings(${TARGET_NAME} ENABLE ALL DISABLE Annoying)
 
 # Install in the desired folder
 install(TARGETS ${TARGET_NAME}
-  EXPORT ${PROJECT_TARGETS}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+        EXPORT ${PROJECT_TARGETS}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        )

@@ -7,17 +7,6 @@
 
 #include <spdlog/spdlog.h>
 
-// utility to shorten the typical enumerate pattern you need in c++
-template <typename ReturnT, typename FunctionT, typename... FunctionParameters>
-std::vector<ReturnT> vk_enumerate(FunctionT func, FunctionParameters... parameters)
-{
-    uint32_t count = 0;
-    func(parameters..., &count, nullptr);
-    std::vector<ReturnT> values{size_t(count)};
-    func(parameters..., &count, nullptr);
-    return values;
-}
-
 GLFWwindow *initWindow(const std::string &window_name, uint32_t width, uint32_t height)
 {
     glfwInit();

@@ -1,80 +1,7 @@
-#include "utils/executor.h"
-
-#include <algorithm>
-#include <numeric>
-
-#include "Cory/Log.h"
-
-#if WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-#include <processthreadsapi.h>
-#endif
-
-namespace cory::utils {
-
-void executor::executor_main()
-{
-    set_thread_name();
-
-    std::unique_lock lck{queue_mtx_};
-    while (!stop_thread_) {
-        drain_queue(lck);
-        // wait until either stop is requested or queue has new entries
-        queue_condition_.wait(lck, [&]() { return stop_thread_ || !task_queue_.empty(); });
-    }
-
-    // when stopping, drain the queue to make sure all tasks have been completed
-    drain_queue(lck);
-}
-
-void executor::set_thread_name()
-{
-#if WIN32
-    size_t convertedChars = 0;
-    const size_t newsize = (name_.size() + 1) * 2;
-    std::wstring wname;
-    wname.resize(newsize);
-    mbstowcs_s(&convertedChars, wname.data(), name_.size() + 1, name_.c_str(), _TRUNCATE);
-
-    SetThreadDescription(GetCurrentThread(), wname.c_str());
-#endif
-}
-
-void executor::drain_queue(std::unique_lock<std::mutex> &lck)
-{
-    while (!task_queue_.empty()) {
-        // dequeue a task from the queue
-        // move the task out of the queue and pop it
-        std::packaged_task<void()> task{std::move(task_queue_.front())};
-        task_queue_.pop();
-        {
-            lck.unlock();
-            try {
-                task();
-            }
-            catch (...) {
-                // ignore all exceptions to ensure the lock is re-acquired
-            }
-            lck.lock();
-        }
-    }
-}
-
-void executor::flush()
-{
-    CO_CORE_ASSERT(std::this_thread::get_id() != worker_thread_.get_id(),
-                   "cannot flush from the executor worker thread!");
-    // enqueue an empty marker job and wait for it to be executed
-    async([]() {}).get();
-}
-
-} // namespace cory::utils
-
-#ifndef DOCTEST_CONFIG_DISABLE
+#include <cvk/util/executor.h>
 
 #include <doctest/doctest.h>
+#include <numeric>
 
 TEST_SUITE_BEGIN("executor");
 
@@ -82,7 +9,7 @@ SCENARIO("basic executor usage")
 {
     GIVEN("an executor")
     {
-        cory::utils::executor executor("test executor");
+        cvk::util::executor executor("test executor");
         THEN("it should be possible to query the name")
         {
             REQUIRE(executor.name() == "test executor");
@@ -117,7 +44,8 @@ SCENARIO("basic executor usage")
             constexpr int num_tasks{10};
             std::vector<std::thread::id> thread_ids(num_tasks);
             std::vector<int> task_proof;
-            std::vector<cory::future<void>> results;
+            std::vector<std::future<void>> results;
+            results.reserve(num_tasks);
 
             for (int i = 0; i < num_tasks; ++i) {
                 results.push_back(executor.async([&, task_idx = i]() {
@@ -194,7 +122,7 @@ SCENARIO("executor shutdown")
             std::vector<int> task_proof;
 
             {
-                cory::utils::executor executor("out-of-scope test executor");
+                cvk::util::executor executor("out-of-scope test executor");
 
                 for (int i = 0; i < num_tasks; ++i) {
                     executor.async([&, task_idx = i]() {
@@ -215,7 +143,7 @@ SCENARIO("multithreaded usage")
 {
     GIVEN("an executor")
     {
-        cory::utils::executor executor("multithread test executor");
+        cvk::util::executor executor("multithread test executor");
         WHEN("scheduling tasks from multiple threads")
         {
             constexpr int tasks_per_thread{50};
@@ -225,6 +153,7 @@ SCENARIO("multithreaded usage")
             std::vector<std::pair<int, int>> results;
 
             std::vector<std::thread> scheduling_threads;
+            scheduling_threads.reserve(num_threads);
             for (int tidx = 0; tidx < num_threads; ++tidx) {
                 scheduling_threads.emplace_back([&]() {
                     for (int i = 0; i < tasks_per_thread; ++i) {
@@ -254,7 +183,7 @@ SCENARIO("exceptions")
 {
     GIVEN("an executor")
     {
-        cory::utils::executor executor("exception test executor");
+        cvk::util::executor executor("exception test executor");
 
         WHEN("scheduling a task that throws an exception")
         {
@@ -288,5 +217,3 @@ SCENARIO("exceptions")
 }
 
 TEST_SUITE_END();
-
-#endif

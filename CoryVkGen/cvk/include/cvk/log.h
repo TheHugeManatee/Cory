@@ -50,6 +50,7 @@ class log {
         auto formatted_message = fmt::format(message, __VA_ARGS__);                                \
         auto assertion_string =                                                                    \
             fmt::format("Assertion failed: {}\n{} == {}.\n", formatted_message, #condition, val);  \
-        CO_CORE_FATAL(assertion_string);                                                           \
+        CVK_FATAL(assertion_string);                                                               \
+        spdlog::shutdown();                                                                        \
         std::abort();                                                                              \
     }

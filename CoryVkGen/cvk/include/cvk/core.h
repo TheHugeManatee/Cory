@@ -30,6 +30,9 @@ std::vector<ReturnT> vk_enumerate(FunctionT func, FunctionParameters... paramete
     return values;
 }
 
+/**
+ * wrapper base class for vulkan objects - holds a shared pointer of the opaque type
+ */
 template <typename WrappedVkType> class basic_vk_wrapper {
   public:
     using vk_type = WrappedVkType;

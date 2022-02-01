@@ -10,7 +10,9 @@
 
 namespace cvk {
 
-
+/**
+ * wrapper/adaptation macro for VMA memory usage
+ */
 enum class device_memory_usage : int /*std::underlying_type<VmaMemoryUsage>::type*/ {
     eUnknown = 0 /*VMA_MEMORY_USAGE_UNKNOWN*/,     ///< should not be used
     eGpuOnly = 1 /*VMA_MEMORY_USAGE_GPU_ONLY*/,    ///< textures, images used as attachments

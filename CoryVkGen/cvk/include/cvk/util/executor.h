@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Cory/types.h"
-
 #include <condition_variable>
 #include <future>
 #include <queue>
@@ -10,7 +8,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace cory::utils {
+namespace cvk::util {
 
 /**
  * very simple task queue that spawns a single worker thread that will asynchronously execute the
@@ -70,7 +68,7 @@ class executor {
         }
         else {
             throw std::logic_error("The method or operation is not implemented.");
-            return std::future<ResultType>{};
+            //return std::future<ResultType>{};
         }
     }
 

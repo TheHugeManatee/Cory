@@ -1,6 +1,6 @@
+#pragma once
 
-
-namespace util {
+namespace cvk::util {
 // use as 
 // ```
 // std::variant<int, float> v{1.0f};

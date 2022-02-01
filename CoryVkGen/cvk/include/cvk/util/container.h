@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace cory::utils {
+namespace cvk::util {
 
 template <typename ContainerType, typename ValueOrPredicateType>
 bool contains(const ContainerType &container, ValueOrPredicateType &&value_or_predicate)

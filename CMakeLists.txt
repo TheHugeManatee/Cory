@@ -103,11 +103,11 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 add_subdirectory(CoryVkGen)
 add_subdirectory(CVkDemo)
 
-#add_subdirectory(Cory)
+add_subdirectory(Cory)
 #add_subdirectory(VolumeRendering)
 #add_subdirectory(VulkanTutorial)
 #add_subdirectory(CoryAPITest)
-#add_subdirectory(UdemyCourse)
+add_subdirectory(UdemyCourse)
 #add_subdirectory(HelloCory)
 #add_subdirectory(HelloTriangle)
 

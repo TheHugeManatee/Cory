@@ -36,7 +36,7 @@ class Generator:
 
         print("#### Generated files:")
         for file in generated_files:
-        #     os.system(f'clang-format -i {file}')
+            os.system(f'clang-format -i {file}')
             print("  " + file)
 
 

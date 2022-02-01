@@ -1,5 +1,6 @@
 #include "VulkanRenderer.h"
 #include <Cory/Log.h>
+#include <cvk/FmtEnum.h>
 
 #include <stdexcept>
 
@@ -10,7 +11,7 @@ VulkanRenderer::VulkanRenderer(GLFWwindow *window)
 }
 VulkanRenderer::~VulkanRenderer()
 {
-    //
+    // nope
 }
 
 cory::vk::instance VulkanRenderer::createInstance()

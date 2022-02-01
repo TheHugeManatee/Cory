@@ -19,6 +19,7 @@ target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/in
 target_link_libraries(${TARGET_NAME} 
     PRIVATE
         Cory
+        cvk::cvk
         ThirdPartyLibs
         Vulkan::Vulkan
         glfw::glfw

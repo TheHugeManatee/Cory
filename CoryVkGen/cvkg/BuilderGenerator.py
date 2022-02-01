@@ -47,6 +47,7 @@ class BuilderDefinition:
             if s.name in size_param:
                 continue
 
+            # vector parameters are passed to the setter as a std::vector
             if s.name in vector_param:
                 setter_name = camel_to_snake(s.name)
                 param_type = f'std::vector<{s.type}>'

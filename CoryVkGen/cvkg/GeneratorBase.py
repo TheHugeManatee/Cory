@@ -28,4 +28,4 @@ class GeneratorBase:
         template = Template(file=template_file, searchList=sl)
         with open(out_file, 'w') as f:
             f.write(str(template))
-        return template_file
+        return out_file

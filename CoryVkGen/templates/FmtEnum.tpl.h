@@ -1,10 +1,10 @@
 #pragma once
 
-#set enums = [e for e in $registry.enums.values() if e.name not in $ignored_enums]
-
 \#include <fmt/format.h>
 \#include <vulkan/vulkan.h>
 
+#set enums = [e for e in $registry.enums.values() if e.name not in $ignored_enums]
+    
 namespace cvk {
 #for $enum in $enums
 constexpr std::string_view to_string($enum.name enum_value) noexcept

@@ -1,6 +1,6 @@
 #include "Cory/vk/device.h"
 
-#include "Cory/vk/instance.h"
+#include "../../../CoryVkGen/cvk/include/cvk/instance.h"
 #include "Cory/vk/utils.h"
 
 namespace cory::vk {

@@ -1,7 +1,11 @@
-#include "vk/instance.h"
+#include <cvk/instance.h>
 
-namespace cory {
-namespace vk {
+#include <cvk/core.h>
+#include <cvk/utils.h>
+
+#include <string_view>
+
+namespace cvk {
 
 std::vector<const char *> instance::unsupported_extensions(std::vector<const char *> extensions)
 {
@@ -94,7 +98,7 @@ instance instance_builder::create()
     VkInstance inst;
     VK_CHECKED_CALL(vkCreateInstance(&info_, nullptr, &inst), "Failed to create instance!");
 
-    VkDebugUtilsMessengerEXT debugMessenger;
+    VkDebugUtilsMessengerEXT debugMessenger{};
     if (*((VkStructureType *)info_.pNext) ==
         VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT) {
         VK_CHECKED_CALL(detail::CreateDebugUtilsMessengerEXT(
@@ -113,5 +117,4 @@ instance instance_builder::create()
     return instance{instance_sptr};
 }
 
-} // namespace vk
-} // namespace cory
+} // namespace cvk

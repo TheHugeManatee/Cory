@@ -10,4 +10,4 @@ class EnumFmtGenerator(GeneratorBase):
         ignored_enums = ['API Constants', 'VkFullScreenExclusiveEXT', 'VkSwapchainImageUsageFlagBitsANDROID']
         search_list = [{'ignored_enums': ignored_enums}, global_env]
 
-        return [self.write_template("FmtEnum.tpl.h", "FmtEnum.h", search_list)]
+        return [self.write_template("FmtEnum.tpl.h", "include/cvk/FmtEnum.h", search_list)]

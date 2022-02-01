@@ -18,12 +18,14 @@ class SpecParser:
     enums: Dict[str, Enum]
     commands: Dict[str, Command]
     feature_levels: Dict[str, FeatureLevel]
+    silent: bool
 
-    def __init__(self, vk_file_path):
+    def __init__(self, vk_file_path, silent=False):
         print(f"Starting to parse '{vk_file_path}':")
         start_time = time.time()
         tree = ET.parse(vk_file_path)
         registry = tree.getroot()
+        self.silent = silent
 
         self.parse_types(registry.find('types'))
         self.parse_commands(registry.find('commands'))
@@ -32,10 +34,11 @@ class SpecParser:
 
         duration = time.time() - start_time
 
-        summary = self.feature_levels.copy()
-        summary['REGISTRY'] = FeatureLevel(self.types, self.enums, self.commands)
-        for k, v in summary.items():
-            print(f"""===== {k} =====
+        if not silent:
+            summary = self.feature_levels.copy()
+            summary['REGISTRY'] = FeatureLevel(self.types, self.enums, self.commands)
+            for k, v in summary.items():
+                print(f"""===== {k} =====
     Types:     {len(v.types)}
     Commands:  {len(v.commands)}
     Enums:     {len(v.enums)}
@@ -49,7 +52,8 @@ class SpecParser:
             return
 
         types = [parse_type(type_n) for type_n in types_n.findall('type')]
-        print(f"{len(types)} Types found")
+        if not self.silent:
+            print(f"{len(types)} Types found")
 
         self.types = {t.name: t for t in types if t}
 
@@ -72,7 +76,8 @@ class SpecParser:
 
         commands = [parse_command(type_n)
                     for type_n in commands_n.findall('command')]
-        print(f"{len(commands)} commands found")
+        if not self.silent:
+            print(f"{len(commands)} commands found")
 
         self.commands = {c.name: c for c in commands}
         unsuccessful = sum(c is None for c in commands)
@@ -85,7 +90,8 @@ class SpecParser:
             print('ERROR: No <enums> nodes found on root node.')
             return
 
-        print(f"{len(enums_ns)} Enums found")
+        if not self.silent:
+            print(f"{len(enums_ns)} Enums found")
 
         enums = [parse_enum(en) for en in enums_ns]
 
@@ -110,7 +116,8 @@ class SpecParser:
                 # there's often empty ones, which we skip
                 continue
             feature_level_name = feature_n.attrib['name']
-            print("Parsing feature level " + feature_level_name)
+            if not self.silent:
+                print("Parsing feature level " + feature_level_name)
 
             for req_n in feature_n:
                 if req_n.tag != 'require':

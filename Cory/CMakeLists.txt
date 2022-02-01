@@ -9,7 +9,6 @@ find_package(fmt)
 find_package(GLEW)
 find_package(glm)
 find_package(glfw3)
-find_package(VulkanHeaders)
 find_package(imgui)
 find_package(shaderc)
 find_package(doctest)
@@ -74,7 +73,7 @@ target_include_directories (${TARGET_NAME}
 
 target_link_libraries(${TARGET_NAME}
         PUBLIC
-        Vulkan::Headers
+        ${VULKAN_LIBRARIES}
         spdlog::spdlog
         fmt::fmt
         GLEW::GLEW
@@ -83,7 +82,6 @@ target_link_libraries(${TARGET_NAME}
         imgui::imgui
         shaderc::shaderc
         ThirdPartyLibs
-        Vulkan::Vulkan
         doctest::doctest
         )
 

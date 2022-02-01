@@ -87,4 +87,4 @@ class BuilderGenerator(GeneratorBase):
 
         search_list = [{'builder_defs': builder_defs}, global_env]
 
-        return [self.write_template("Builder.tpl.h", "Builder.h", search_list)]
+        return [self.write_template("Builder.tpl.h", "include/cvk/Builder.h", search_list)]

@@ -52,20 +52,20 @@ if __name__ == '__main__':
     ############################################
     ##               PARSING                  ##
     ############################################
-    parser = SpecParser(registry_file_path)
+    parser = SpecParser(registry_file_path, silent=True)
 
-    print("## Vulkan Types")
-    #    list a summary of the categories
-    cats = {}
-    for type in parser.types.values():
-        cat = type.category if type.category != '' else '<no cat>'
-        if cat not in cats:
-            cats[cat] = 1
-        else:
-            cats[cat] += 1
-
-    for c, v in cats.items():
-        print(f"  - {c : <14}{v}")
+    # print("## Vulkan Types")
+    # #    list a summary of the categories
+    # cats = {}
+    # for type in parser.types.values():
+    #     cat = type.category if type.category != '' else '<no cat>'
+    #     if cat not in cats:
+    #         cats[cat] = 1
+    #     else:
+    #         cats[cat] += 1
+    #
+    # for c, v in cats.items():
+    #     print(f"  - {c : <14}{v}")
 
     ############################################
     ##              GENERATION                ##

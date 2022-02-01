@@ -27,7 +27,6 @@ target_link_libraries(${TARGET_NAME}
         Vulkan::Vulkan
         glfw::glfw
         spdlog::spdlog
-        range-v3::range-v3
 )
 
 target_compile_features(${TARGET_NAME} PRIVATE cxx_std_20)

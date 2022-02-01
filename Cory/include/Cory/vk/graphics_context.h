@@ -6,7 +6,7 @@
 #include "device.h"
 #include "fence.h"
 #include "image.h"
-#include "instance.h"
+#include "../../../../CoryVkGen/cvk/include/cvk/instance.h"
 #include "misc.h"
 #include "queue.h"
 #include "swapchain.h"

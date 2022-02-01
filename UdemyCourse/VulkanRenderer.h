@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Cory/vk/instance.h>
+#include "cvk/instance.h"
 #include <Cory/vk/device.h>
 
 // only pull in the typedefs

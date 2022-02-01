@@ -18,5 +18,5 @@ class StructFmtGenerator(GeneratorBase):
         search_list = [locals(), global_env]
 
         return [
-            self.write_template("FmtStruct.tpl.h", "FmtStruct.h", search_list)
+            self.write_template("FmtStruct.tpl.h", "include/cvk/FmtStruct.h", search_list)
         ]

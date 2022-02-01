@@ -1,12 +1,12 @@
 #pragma once
 
-#include "utils.h"
-
 #include <vulkan/vulkan.h>
 
 #include <utility>
+#include <vector>
+#include <memory>
 
-namespace cory::vk {
+namespace cvk {
 
 class debug_utils_messenger_builder {
   public:
@@ -137,4 +137,4 @@ class instance_builder {
     VkApplicationInfo application_info_;
 };
 
-} // namespace cory
+} // namespace cvk

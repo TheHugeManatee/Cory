@@ -31,7 +31,7 @@ class device_builder {
         return *this;
     }
 
-    [[nodiscard]] device_builder& add_queue(VkQueueFlags flags, float priority = 1.0f) noexcept;
+    [[nodiscard]] device_builder& add_queue(VkQueueFlags flags, float priority = 1.0f);
 
     [[nodiscard]] device_builder &
     enabled_layer_names(std::vector<const char *> enabledLayerNames) noexcept

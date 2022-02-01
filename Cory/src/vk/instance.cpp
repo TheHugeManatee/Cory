@@ -3,6 +3,25 @@
 namespace cory {
 namespace vk {
 
+std::vector<const char *> instance::unsupported_extensions(std::vector<const char *> extensions)
+{
+    auto instanceExtensions =
+        vk_enumerate<VkExtensionProperties>(vkEnumerateInstanceExtensionProperties, nullptr);
+
+    std::vector<const char *> unsupportedExtensions;
+
+    for (const auto &ext : extensions) {
+        const auto match_ext = [&](const VkExtensionProperties &ep) {
+            return std::string_view{ep.extensionName} == ext;
+        };
+        if (std::ranges::find_if(instanceExtensions, match_ext) ==
+            std::ranges::end(instanceExtensions)) {
+            unsupportedExtensions.push_back(ext);
+        }
+    }
+    return unsupportedExtensions;
+}
+
 /**
  * Private detail functions that should not be relevant for the public interface
  */

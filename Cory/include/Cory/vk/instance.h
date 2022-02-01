@@ -4,8 +4,9 @@
 
 #include <vulkan/vulkan.h>
 
-namespace cory {
-namespace vk {
+#include <utility>
+
+namespace cory::vk {
 
 class debug_utils_messenger_builder {
   public:
@@ -50,16 +51,13 @@ class debug_utils_messenger_builder {
         return *this;
     }
 
-    [[nodiscard]] void* ptr() const noexcept {
-        return (void*)&info_;
-    }
+    [[nodiscard]] void *ptr() const noexcept { return (void *)&info_; }
 
   private:
     VkDebugUtilsMessengerCreateInfoEXT info_{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
     };
 };
-
 
 struct physical_device_info {
     VkPhysicalDevice device;
@@ -71,8 +69,8 @@ struct physical_device_info {
 
 class instance {
   public:
-    instance(std::shared_ptr<struct VkInstance_T> instance_ptr)
-        : instance_ptr_{instance_ptr}
+    explicit instance(std::shared_ptr<struct VkInstance_T> instance_ptr)
+        : instance_ptr_{std::move(instance_ptr)}
     {
     }
 
@@ -85,6 +83,9 @@ class instance {
     std::vector<physical_device_info> physical_devices();
 
     VkInstance get() { return instance_ptr_.get(); }
+
+    /// figure out if any of the given extensions are unsupported
+    static std::vector<const char *> unsupported_extensions(std::vector<const char *> extensions);
 
   private:
     std::shared_ptr<struct VkInstance_T> instance_ptr_;
@@ -106,8 +107,7 @@ class instance_builder {
         return *this;
     }
 
-    [[nodiscard]] instance_builder &
-    application_info(VkApplicationInfo applicationInfo) noexcept
+    [[nodiscard]] instance_builder &application_info(VkApplicationInfo applicationInfo) noexcept
     {
         application_info_ = applicationInfo;
         return *this;
@@ -115,14 +115,14 @@ class instance_builder {
 
     [[nodiscard]] instance_builder &enabled_layers(std::vector<const char *> enabledLayers) noexcept
     {
-        enabled_layers_ = enabledLayers;
+        enabled_layers_ = std::move(enabledLayers);
         return *this;
     }
 
     [[nodiscard]] instance_builder &
     enabled_extensions(std::vector<const char *> enabledExtensions) noexcept
     {
-        enabled_extensions_ = enabledExtensions;
+        enabled_extensions_ = std::move(enabledExtensions);
         return *this;
     }
 
@@ -137,5 +137,4 @@ class instance_builder {
     VkApplicationInfo application_info_;
 };
 
-} // namespace vk
 } // namespace cory

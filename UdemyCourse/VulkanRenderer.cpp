@@ -8,8 +8,6 @@
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
-#include <range/v3/all.hpp>
-
 #include <stdexcept>
 
 // utility to shorten the typical enumerate pattern you need in c++
@@ -50,10 +48,13 @@ cory::vk::instance VulkanRenderer::createInstance()
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
     std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
     CO_CORE_INFO("GLFW requires {} instance extensions", glfwExtensionCount);
+
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-    if (!check_extension_support(extensions)) {
-        throw std::runtime_error("Some required instances are not supported");
+    const auto unsupported_extensions = cory::vk::instance::unsupported_extensions(extensions);
+    if (!unsupported_extensions.empty()) {
+        throw std::runtime_error(
+            fmt::format("Some required instances are not supported: {}", unsupported_extensions));
     }
 
     auto debug_message = cory::vk::debug_utils_messenger_builder()
@@ -77,23 +78,7 @@ cory::vk::instance VulkanRenderer::createInstance()
     CO_APP_INFO("Instance created successfully!");
     return instance;
 }
-bool VulkanRenderer::check_extension_support(std::vector<const char *> extensions)
-{
-    auto instanceExtensions =
-        vk_enumerate<VkExtensionProperties>(vkEnumerateInstanceExtensionProperties, nullptr);
 
-    namespace views = ranges::views;
-    auto supported_ext_names = instanceExtensions | views::transform([](const auto &ext) {
-                                   return std::string_view{ext.extensionName};
-                               });
-    for (const auto &ext : extensions) {
-        if (ranges::find(supported_ext_names, ext) == ranges::end(supported_ext_names)) {
-            spdlog::error("Extension is not supported: {}", ext);
-            return false;
-        }
-    }
-    return true;
-}
 cory::vk::physical_device_info VulkanRenderer::pickPhysicalDevice()
 {
     const auto devices = instance_.physical_devices();
@@ -119,11 +104,13 @@ cory::vk::device VulkanRenderer::createLogicalDevice()
     //    for (const auto &qfp : physicalDevice_.queue_family_properties) {
     //        spdlog::info("{}", qfp);
     //    }
+    std::vector<const char *> extensions{};
 
     // build the device
     auto device = cory::vk::device_builder(physicalDevice_)
                       .add_queue(VK_QUEUE_GRAPHICS_BIT)
                       .enabled_features(enabledFeatures)
+                      .enabled_extension_names(extensions)
                       .create();
 
     spdlog::info("Logical device created");

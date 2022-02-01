@@ -11,6 +11,7 @@
 #include <bit>
 #include <iterator>
 #include <set>
+#include <utility>
 
 namespace cory {
 namespace vk {
@@ -23,7 +24,7 @@ graphics_context::graphics_context(cory::vk::instance inst,
                                    std::vector<const char *> requested_layers /*= {}*/)
     : instance_{inst}
     , physical_device_info_{inst.device_info(physical_device)}
-    , surface_{surface_khr}
+    , surface_{std::move(surface_khr)}
 {
     // if not explicitly supplied, enable all features. :)
     if (requested_features) { physical_device_features_ = *requested_features; }
@@ -46,11 +47,11 @@ graphics_context::graphics_context(cory::vk::instance inst,
     }();
 
     // create the device with from the physical device and the extensions
-    device_ = device_builder(physical_device)
+    device_ = device_builder(physical_device_info_)
                   .queue_create_infos(queues)
                   .enabled_features(physical_device_features_)
                   .enabled_extension_names(requested_extensions)
-                  .enabled_layer_names(requested_layers)
+                  .enabled_layer_names(std::move(requested_layers))
                   .create();
 
     // get references to the actual queues so we can reference them later

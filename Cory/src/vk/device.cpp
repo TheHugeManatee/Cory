@@ -2,7 +2,6 @@
 
 #include "Cory/vk/instance.h"
 #include "Cory/vk/utils.h"
-#include <
 
 namespace cory::vk {
 
@@ -25,7 +24,7 @@ cory::vk::device device_builder::create()
     return make_shared_resource(vkDevice, [=](VkDevice d) { vkDestroyDevice(d, nullptr); });
 }
 
-device_builder &device_builder::add_queue(VkQueueFlags flags, float priority) noexcept
+device_builder &device_builder::add_queue(VkQueueFlags flags, float priority)
 {
     const auto &qfps = device_info_.queue_family_properties;
 
@@ -39,7 +38,7 @@ device_builder &device_builder::add_queue(VkQueueFlags flags, float priority) no
     }
 
     VkDeviceQueueCreateInfo ci{.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
-    ci.queueFamilyIndex = std::distance(qfps.cbegin(), matching_family);
+    ci.queueFamilyIndex = uint32_t(std::distance(qfps.cbegin(), matching_family));
     ci.queueCount = 1;
     queue_priorities_.at(queue_create_infos_.size()) = priority;
     ci.pQueuePriorities = &queue_priorities_.at(queue_create_infos_.size());

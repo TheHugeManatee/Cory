@@ -19,8 +19,6 @@ class VulkanRenderer {
     static cory::vk::instance createInstance();
 
   private:
-    static bool check_extension_support(std::vector<const char *> extensions);
-
     GLFWwindow *window_;
     cory::vk::instance instance_;
     cory::vk::physical_device_info physicalDevice_;

@@ -1,6 +1,7 @@
 #include "test_utils.h"
 
 #include <cvk/instance.h>
+#include <cvk/instance_builder.h>
 #include <cvk/log.h>
 #include <cvk/utils.h>
 

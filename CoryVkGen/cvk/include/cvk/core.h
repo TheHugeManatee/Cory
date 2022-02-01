@@ -1,7 +1,11 @@
 #pragma once
 
+#include <fmt/format.h>
+
 #include <vector>
 #include <memory>
+#include <stdexcept>
+
 
 #define VK_CHECKED_CALL(x, err)                                                                    \
     do {                                                                                           \

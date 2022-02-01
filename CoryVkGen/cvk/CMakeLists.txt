@@ -14,12 +14,13 @@ set(CVK_SOURCES
         include/cvk/util/algorithms.h
         include/cvk/util/container.h
         include/cvk/util/executor.h
+        include/cvk/core.h
+        include/cvk/instance_builder.h
         # .cpp
         src/instance.cpp
         src/log.cpp
         src/util/executor.cpp
-        include/cvk/core.h
-        )
+        src/instance_builder.cpp)
 
 add_library(${TARGET_NAME} STATIC
         ${CVK_GENERATED_HEADERS}

@@ -21,7 +21,18 @@ cory::vk::device device_builder::create()
     VkDevice vkDevice;
     vkCreateDevice(device_info_.device, &info_, nullptr, &vkDevice);
 
-    return make_shared_resource(vkDevice, [=](VkDevice d) { vkDestroyDevice(d, nullptr); });
+//    std::vector<VkQueue> queues{queue_create_infos_.size()};
+//    std::ranges::generate(queues, [&vkDevice, this, i = 0]() mutable {
+//        VkQueue q;
+//        const auto &qci = queue_create_infos_[i++];
+//        vkGetDeviceQueue(vkDevice, qci.queueFamilyIndex, 0, &q);
+//        return q;
+//        //return queue(fmt::format("Queue {}", i), q, qci[i].queueFamilyIndex);
+//    });
+
+    auto sr = cory::vk::device{
+        make_shared_resource(vkDevice, [=](VkDevice d) { vkDestroyDevice(d, nullptr); })};
+    return std::move(sr);
 }
 
 device_builder &device_builder::add_queue(VkQueueFlags flags, float priority)

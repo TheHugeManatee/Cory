@@ -9,7 +9,15 @@
 
 namespace cory::vk {
 
-using device = std::shared_ptr<VkDevice_T>;
+class device : public basic_vk_wrapper<VkDevice> {
+  public:
+    explicit device(std::shared_ptr<struct VkDevice_T> vk_resource_ptr)
+        : basic_vk_wrapper{std::move(vk_resource_ptr)}
+    {
+    }
+  private:
+};
+
 struct physical_device_info;
 
 class device_builder {

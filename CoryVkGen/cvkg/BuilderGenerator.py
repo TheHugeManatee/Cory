@@ -82,8 +82,10 @@ class BuilderDefinition:
 
 class BuilderGenerator(GeneratorBase):
     def run(self, output_dir: str, registry: SpecParser, global_env: dict) -> List[str]:
-        bd = BuilderDefinition(registry, 'VkImageCreateInfo', 'vkCreateImage', 'VkImage')
+        builder_defs = [BuilderDefinition(registry, 'VkImageCreateInfo', 'vkCreateImage', 'VkImage'),
+                        BuilderDefinition(registry, 'VkDeviceCreateInfo', 'vkCreateDevice', 'VkImage')
+                        ]
 
-        search_list = [{'builder_defs': [bd]}, global_env]
+        search_list = [{'builder_defs': builder_defs}, global_env]
 
         return [self.write_template("Builder.tpl.h", "Builder.h", search_list)]

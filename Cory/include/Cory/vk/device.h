@@ -10,11 +10,12 @@
 namespace cory::vk {
 
 using device = std::shared_ptr<VkDevice_T>;
+struct physical_device_info;
 
 class device_builder {
   public:
-    device_builder(VkPhysicalDevice physical_device)
-        : physical_device_{physical_device}
+    device_builder(const physical_device_info& deviceInfo)
+        : device_info_{deviceInfo}
     {
     }
 
@@ -30,12 +31,7 @@ class device_builder {
         return *this;
     }
 
-    [[nodiscard]] device_builder &
-    queue_create_infos(std::vector<queue_builder> queueCreateInfos) noexcept
-    {
-        queue_builders_ = queueCreateInfos;
-        return *this;
-    }
+    [[nodiscard]] device_builder& add_queue(VkQueueFlags flags, float priority = 1.0f) noexcept;
 
     [[nodiscard]] device_builder &
     enabled_layer_names(std::vector<const char *> enabledLayerNames) noexcept
@@ -61,11 +57,12 @@ class device_builder {
     [[nodiscard]] device create();
 
   private:
-    VkPhysicalDevice physical_device_;
+    const physical_device_info& device_info_;
     VkDeviceCreateInfo info_{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
     };
-    std::vector<queue_builder> queue_builders_;
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos_;
+    std::array<float, 16> queue_priorities_; // we assume that we don't need more than 16 queues
     std::vector<const char *> enabled_extension_names_;
     std::vector<const char *> enabled_layer_names_;
     VkPhysicalDeviceFeatures enabled_features_;

@@ -13,6 +13,7 @@ class StructFmtGenerator(GeneratorBase):
                    s.name not in ignored_structs and s.category == 'struct' and not s.alias]
         ignored_members = ['sType', 'pNext']
         void_cast_categories = ['handle', 'funcpointer']
+        inlined_structs = ['VkExtent2D', 'VkExtent3D', 'VkOffset2D', 'VkOffset3D']
 
         search_list = [locals(), global_env]
 

@@ -18,6 +18,25 @@
 namespace cory {
 namespace vk {
 
+/**
+ * @brief utility to shorten the typical enumerate pattern you need in c++
+ *
+ * For example:
+ *
+ *      std::vector<VkExtensionProperties> instance_extensions =
+ *          vk_enumerate<VkExtensionProperties>(vkEnumerateInstanceExtensionProperties, nullptr);
+ *
+ */
+template <typename ReturnT, typename FunctionT, typename... FunctionParameters>
+std::vector<ReturnT> vk_enumerate(FunctionT func, FunctionParameters... parameters)
+{
+    uint32_t count = 0;
+    func(parameters..., &count, nullptr);
+    std::vector<ReturnT> values{size_t(count)};
+    func(parameters..., &count, values.data());
+    return values;
+}
+
 template <typename WrappedVkType> class basic_vk_wrapper {
   public:
     using vk_type = WrappedVkType;

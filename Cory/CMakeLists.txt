@@ -14,26 +14,26 @@ find_package(shaderc)
 find_package(doctest)
 
 set(CORY_UTILS_SOURCES
-  "src/utils/executor.cpp"
+#  "src/utils/executor.cpp"
 )
 
 set(CORY_VK_SOURCES
- src/vk/buffer.cpp
- src/vk/command_buffer.cpp
- src/vk/command_pool.cpp
- #src/vk/graphics_context.cpp
- src/vk/image.cpp
- src/vk/image_view.cpp
- src/vk/instance.cpp
- src/vk/queue.cpp
- src/vk/swapchain.cpp
- src/vk/test_utils.cpp
- src/vk/utils.cpp
- src/vk/device.cpp
- src/vk/render_pass.cpp
- src/vk/graphics_pipeline.cpp
- src/vk/fence.cpp
- src/vk/shader.cpp
+# src/vk/buffer.cpp
+# src/vk/command_buffer.cpp
+# src/vk/command_pool.cpp
+# #src/vk/graphics_context.cpp
+# src/vk/image.cpp
+# src/vk/image_view.cpp
+# src/vk/instance.cpp
+# src/vk/queue.cpp
+# src/vk/swapchain.cpp
+# src/vk/test_utils.cpp
+# src/vk/utils.cpp
+# src/vk/device.cpp
+# src/vk/render_pass.cpp
+# src/vk/graphics_pipeline.cpp
+# src/vk/fence.cpp
+# src/vk/shader.cpp
  )
 
 set(CORY_SOURCES
@@ -48,9 +48,9 @@ set(CORY_SOURCES
   #"src/Mesh.cpp"
   src/Profiling.cpp
   #"src/Shader.cpp"
-  src/Utils.cpp
+#  src/Utils.cpp
   #"src/VkBuilders.cpp"
-  src/VkUtils.cpp
+#  src/VkUtils.cpp
 )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
@@ -73,6 +73,7 @@ target_include_directories (${TARGET_NAME}
 
 target_link_libraries(${TARGET_NAME}
         PUBLIC
+        cvk::cvk
         ${VULKAN_LIBRARIES}
         spdlog::spdlog
         fmt::fmt
@@ -113,6 +114,8 @@ target_include_directories(${TARGET_NAME} PUBLIC
         PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Cory>
         )
+
+add_library(Cory::Cory ALIAS Cory)
 
 ###### TEST BINARY
 

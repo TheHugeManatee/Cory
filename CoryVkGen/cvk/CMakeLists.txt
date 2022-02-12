@@ -30,7 +30,7 @@ set(CVK_SOURCES
         src/context.cpp
         src/device_builder.cpp
         src/queue.cpp
-        )
+        src/utils.cpp)
 
 add_library(${TARGET_NAME} STATIC
         ${CVK_GENERATED_HEADERS}

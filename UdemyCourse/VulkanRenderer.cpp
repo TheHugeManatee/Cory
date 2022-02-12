@@ -1,9 +1,11 @@
 #include "VulkanRenderer.h"
 
-#include <Cory/Log.h>
-#include <Cory/vk/queue.h>
-#include <Cory/vk/utils.h>
 #include <cvk/FmtStruct.h>
+#include <cvk/context.h>
+#include <cvk/debug_utils_messenger_builder.h>
+#include <cvk/instance_builder.h>
+
+#include <Cory/Log.h>
 
 #include <fmt/format.h>
 #include <fmt/ostream.h>
@@ -24,16 +26,12 @@ std::vector<ReturnT> vk_enumerate(FunctionT func, FunctionParameters... paramete
 VulkanRenderer::VulkanRenderer(GLFWwindow *window)
     : window_{window}
     , instance_{createInstance()}
-    , physicalDevice_{pickPhysicalDevice()}
-    , device_{createLogicalDevice()}
+    , context_{createContext()}
 {
 }
-VulkanRenderer::~VulkanRenderer()
-{
-    // nope
-}
+VulkanRenderer::~VulkanRenderer() = default;
 
-cory::vk::instance VulkanRenderer::createInstance()
+cvk::instance VulkanRenderer::createInstance()
 {
     VkApplicationInfo app_info{.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                                .pApplicationName = "Udemy Vulkan Renderer",
@@ -47,28 +45,28 @@ cory::vk::instance VulkanRenderer::createInstance()
     const char **glfwExtensions;
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
     std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
-    CO_CORE_INFO("GLFW requires {} instance extensions", glfwExtensionCount);
+    CO_APP_INFO("GLFW requires {} instance extensions", glfwExtensionCount);
 
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-    const auto unsupported_extensions = cory::vk::instance::unsupported_extensions(extensions);
+    const auto unsupported_extensions = cvk::instance::unsupported_extensions(extensions);
     if (!unsupported_extensions.empty()) {
         throw std::runtime_error(
             fmt::format("Some required instances are not supported: {}", unsupported_extensions));
     }
 
-    auto debug_message = cory::vk::debug_utils_messenger_builder()
+    auto debug_message = cvk::debug_utils_messenger_builder()
                              .message_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
                                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
                                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
                              .message_type(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                                            VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
                                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-                             .user_callback(cory::vk::default_debug_callback);
+                             .user_callback(cvk::default_debug_callback);
 
     const std::vector<const char *> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
-    auto instance = cory::vk::instance_builder()
+    auto instance = cvk::instance_builder()
                         .application_info(app_info)
                         .enabled_extensions(extensions)
                         .enabled_layers(validationLayers)
@@ -79,40 +77,4 @@ cory::vk::instance VulkanRenderer::createInstance()
     return instance;
 }
 
-cory::vk::physical_device_info VulkanRenderer::pickPhysicalDevice()
-{
-    const auto devices = instance_.physical_devices();
-    std::optional<cory::vk::physical_device_info> pickedDevice;
-
-    // prefer any discrete GPU
-    for (const auto &info : devices) {
-        if (!pickedDevice && info.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-            pickedDevice = info;
-        }
-    }
-    // if no discrete available, just use the first device available
-    auto picked = pickedDevice.value_or(devices[0]);
-    spdlog::info("Using {}", picked.properties.deviceName);
-
-    return picked;
-}
-cory::vk::device VulkanRenderer::createLogicalDevice()
-{
-    // just enable everything! :)
-    VkPhysicalDeviceFeatures enabledFeatures = physicalDevice_.features;
-    //    spdlog::info("Available Queue families:");
-    //    for (const auto &qfp : physicalDevice_.queue_family_properties) {
-    //        spdlog::info("{}", qfp);
-    //    }
-    std::vector<const char *> extensions{};
-
-    // build the device
-    auto device = cory::vk::device_builder(physicalDevice_)
-                      .add_queue(VK_QUEUE_GRAPHICS_BIT)
-                      .enabled_features(enabledFeatures)
-                      .enabled_extension_names(extensions)
-                      .create();
-
-    spdlog::info("Logical device created");
-    return device;
-}
+cvk::context VulkanRenderer::createContext() { return cvk::context(instance_); }

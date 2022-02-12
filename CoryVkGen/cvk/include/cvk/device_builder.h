@@ -1,28 +1,16 @@
 #pragma once
 
-#include "queue.h"
+#include "device.h"
+#include "physical_device.h"
 
-#include <vulkan/vulkan.h>
+#include <array>
+#include <set>
 
-#include <vector>
-#include <memory>
-
-namespace cory::vk {
-
-class device : public basic_vk_wrapper<VkDevice> {
-  public:
-    explicit device(std::shared_ptr<struct VkDevice_T> vk_resource_ptr)
-        : basic_vk_wrapper{std::move(vk_resource_ptr)}
-    {
-    }
-  private:
-};
-
-struct physical_device_info;
+namespace cvk {
 
 class device_builder {
   public:
-    device_builder(const physical_device_info& deviceInfo)
+    device_builder(const physical_device &deviceInfo)
         : device_info_{deviceInfo}
     {
     }
@@ -39,19 +27,20 @@ class device_builder {
         return *this;
     }
 
-    [[nodiscard]] device_builder& add_queue(VkQueueFlags flags, float priority = 1.0f);
+    // add a queue to create
+    [[nodiscard]] device_builder &add_queues(const std::set<uint32_t> &familyIndices);
 
     [[nodiscard]] device_builder &
     enabled_layer_names(std::vector<const char *> enabledLayerNames) noexcept
     {
-        enabled_layer_names_ = enabledLayerNames;
+        enabled_layer_names_ = std::move(enabledLayerNames);
         return *this;
     }
 
     [[nodiscard]] device_builder &
     enabled_extension_names(std::vector<const char *> enabledExtensionNames) noexcept
     {
-        enabled_extension_names_ = enabledExtensionNames;
+        enabled_extension_names_ = std::move(enabledExtensionNames);
         return *this;
     }
 
@@ -62,17 +51,19 @@ class device_builder {
         return *this;
     }
 
-    [[nodiscard]] device create();
+    [[nodiscard]] cvk::device create();
 
   private:
-    const physical_device_info& device_info_;
+    const physical_device &device_info_;
     VkDeviceCreateInfo info_{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
     };
     std::vector<VkDeviceQueueCreateInfo> queue_create_infos_;
-    std::array<float, 16> queue_priorities_; // we assume that we don't need more than 16 queues
+    std::array<float, 16>
+        queue_priorities_{}; // we assume that we don't need more than 16 queues :)
     std::vector<const char *> enabled_extension_names_;
     std::vector<const char *> enabled_layer_names_;
-    VkPhysicalDeviceFeatures enabled_features_;
+    VkPhysicalDeviceFeatures enabled_features_{};
 };
-}
+
+} // namespace cvk

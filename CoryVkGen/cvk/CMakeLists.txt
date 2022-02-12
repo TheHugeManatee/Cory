@@ -4,6 +4,7 @@ find_package(Vulkan REQUIRED FATAL_ERROR)
 find_package(spdlog)
 find_package(fmt)
 find_package(glfw3)
+find_package(glm)
 
 set(CVK_SOURCES
         # .h
@@ -14,13 +15,22 @@ set(CVK_SOURCES
         include/cvk/util/algorithms.h
         include/cvk/util/container.h
         include/cvk/util/executor.h
+        include/cvk/context.h
         include/cvk/core.h
         include/cvk/instance_builder.h
+        include/cvk/device_builder.h
+        include/cvk/physical_device.h
+        include/cvk/debug_utils_messenger_builder.h
+        include/cvk/queue.h
         # .cpp
         src/instance.cpp
         src/log.cpp
         src/util/executor.cpp
-        src/instance_builder.cpp)
+        src/instance_builder.cpp
+        src/context.cpp
+        src/device_builder.cpp
+        src/queue.cpp
+        )
 
 add_library(${TARGET_NAME} STATIC
         ${CVK_GENERATED_HEADERS}
@@ -34,6 +44,8 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         spdlog::spdlog
         fmt::fmt
         glfw::glfw
+        glm::glm
+        Cory::ThirdParty
         )
 target_include_directories(${TARGET_NAME} PUBLIC
         ${VULKAN_INCLUDE_DIR}
@@ -61,7 +73,9 @@ add_executable(cvk_test
         test/instance.cpp
         test/test_main.cpp
         test/test_utils.cpp
-        test/executor.cpp)
+        test/executor.cpp
+        test/queue.cpp
+        )
 target_link_libraries(cvk_test ${TARGET_NAME} doctest::doctest)
 doctest_force_link_static_lib_in_target(cvk_test cvk)
 target_compile_features(cvk_test PRIVATE cxx_std_20)

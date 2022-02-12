@@ -4,11 +4,18 @@
 #include <vulkan/vulkan.h>
 
 #include <algorithm>
+#include <numeric>
 #include <optional>
 #include <type_traits>
 #include <vector>
 
 namespace cvk {
+
+template <typename ErrorType, typename... FmtArgs>
+ErrorType format_error(std::string_view fmtString, FmtArgs &&...args)
+{
+    return ErrorType(fmt::format(fmtString, std::forward<FmtArgs>(args)...));
+}
 
 /**
  * wrapper/adaptation macro for VMA memory usage
@@ -59,24 +66,6 @@ struct swap_chain_support {
                                              VkImageTiling tiling,
                                              VkFormatFeatureFlags features) noexcept;
 
-template <typename ScoringFunctor>
-std::optional<uint32_t>
-find_best_queue_family(const std::vector<VkQueueFamilyProperties> &queue_family_properties,
-                       ScoringFunctor scoring_func)
-{
-    // if eligible, score is 32 - number of total set bits
-    // the thought is the lower the number of set bits,
-    // the more "specialized" the family is and therefore more optimal
-    std::vector<int> scores;
-    std::transform(queue_family_properties.begin(),
-                   queue_family_properties.end(),
-                   std::back_inserter(scores),
-                   scoring_func);
-    auto best_it = std::max_element(scores.begin(), scores.end());
-    if (*best_it == 0) return {};
-    return static_cast<uint32_t>(std::distance(scores.begin(), best_it));
-}
-
 // create a shared pointer to a vulkan resource, for ex. to VkImage_T (because VkImage_T* ==
 // VkImage) with a custom deallocation function that destroys the resource appropriately, for
 // example by calling the VkDestroy* functions. by wrapping the objects in a shared_ptr, we get
@@ -117,6 +106,17 @@ collect_vk_objects(const std::vector<CoryWrapperType> &vector_of_wrappers)
                    [](const auto &wrapper) { return wrapper.get(); });
 
     return vk_objects;
+}
+
+template <typename Container> std::string join(const Container &c, const std::string& delim)
+{
+    if (c.empty()) return "";
+    if (c.size() == 1) return c.front();
+    std::string joined = c.front();
+    for (const auto &v : c) {
+        joined += delim + v;
+    }
+    return joined;
 }
 
 } // namespace cvk

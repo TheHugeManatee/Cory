@@ -1,12 +1,12 @@
 #pragma once
 
-//#include "graphics_context.h"
 #include <cvk/utils.h>
+#include <cvk/context.h>
 
 #include <vulkan/vulkan.h>
 
 namespace cvk {
-    class instance;
+class instance;
 }
 namespace cvkt {
 
@@ -24,7 +24,7 @@ test_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
  *
  * @note each invocation of this function will reset the count reported by debug_message_count
  */
-cvk::instance& test_instance();
+cvk::instance &test_instance();
 
 /**
  * @brief Query the number of debug messages from the validation layers since the last call to
@@ -34,7 +34,7 @@ uint64_t debug_message_count();
 
 // access to a global context singleton. the context will be created as a headless context, i.e. no
 // associated surface and no present capabilities!
-// graphics_context create_test_context();
+cvk::context test_context();
 
 /// initialize the vulkan instance and device to run the tests.
 void test_init();

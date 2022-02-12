@@ -7,7 +7,7 @@
 
 namespace cvk {
 
-std::vector<const char *> instance::unsupported_extensions(std::vector<const char *> extensions)
+std::vector<const char *> instance::unsupported_extensions(const std::vector<const char *>& extensions)
 {
     auto instanceExtensions =
         vk_enumerate<VkExtensionProperties>(vkEnumerateInstanceExtensionProperties, nullptr);
@@ -26,9 +26,9 @@ std::vector<const char *> instance::unsupported_extensions(std::vector<const cha
     return unsupportedExtensions;
 }
 
-physical_device_info instance::device_info(VkPhysicalDevice device)
+physical_device instance::device_info(VkPhysicalDevice device)
 {
-    physical_device_info dev_info;
+    physical_device dev_info;
     dev_info.device = device;
     vkGetPhysicalDeviceProperties(device, &dev_info.properties);
     vkGetPhysicalDeviceFeatures(device, &dev_info.features);
@@ -43,14 +43,14 @@ physical_device_info instance::device_info(VkPhysicalDevice device)
     return dev_info;
 }
 
-std::vector<physical_device_info> instance::physical_devices()
+std::vector<physical_device> instance::physical_devices()
 {
     uint32_t numDevices;
     vkEnumeratePhysicalDevices(instance_ptr_.get(), &numDevices, nullptr);
     std::vector<VkPhysicalDevice> devices(numDevices);
     vkEnumeratePhysicalDevices(instance_ptr_.get(), &numDevices, devices.data());
 
-    std::vector<physical_device_info> props(numDevices);
+    std::vector<physical_device> props;
     for (const auto &p : devices) {
         props.push_back(device_info(p));
     }

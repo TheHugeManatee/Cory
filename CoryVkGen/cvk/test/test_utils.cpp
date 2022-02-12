@@ -1,9 +1,9 @@
 #include "test_utils.h"
 
+#include <cvk/debug_utils_messenger_builder.h>
 #include <cvk/instance.h>
 #include <cvk/instance_builder.h>
 #include <cvk/log.h>
-#include <cvk/utils.h>
 
 #include <stdexcept>
 
@@ -65,22 +65,17 @@ cvk::instance &test_instance()
     return test_inst;
 }
 
-// cvk::graphics_context test_context()
-//{
-//     const auto devices = test_instance().physical_devices();
-//     std::optional<cvk::physical_device_info> pickedDevice;
-//     for (const auto &info : devices) {
-//         if (!pickedDevice && info.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-//         {
-//             pickedDevice = info;
-//         }
-//     }
-//
-//     // create a context
-//     return graphics_context(test_instance(), pickedDevice->device);
-// }
+cvk::context test_context()
+{
+    // create a context
+    return {test_instance()};
+}
 
-void test_init() { test_instance(); }
+void test_init()
+{
+    // force initialization of instance
+    test_instance();
+}
 uint64_t debug_message_count() { return test_debug_message_count; }
 
 } // namespace cvkt

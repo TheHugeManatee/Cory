@@ -55,7 +55,7 @@ get_max_usable_sample_count(const VkPhysicalDeviceProperties &props) noexcept
 struct swap_chain_support {
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
+    std::vector<VkPresentModeKHR> present_modes;
 };
 
 [[nodiscard]] swap_chain_support query_swap_chain_support(VkPhysicalDevice device,

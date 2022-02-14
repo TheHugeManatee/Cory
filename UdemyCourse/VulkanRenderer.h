@@ -21,5 +21,6 @@ class VulkanRenderer {
   private:
     GLFWwindow *window_;
     cvk::instance instance_;
+    cvk::surface surface_;
     cvk::context context_;
 };

@@ -1,5 +1,6 @@
 #include <cvk/utils.h>
 
+#include "core.h"
 #include <cvk/log.h>
 
 namespace cvk {
@@ -27,4 +28,18 @@ default_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
     return false;
 }
+
+swap_chain_support query_swap_chain_support(VkPhysicalDevice device, VkSurfaceKHR surface)
+{
+    swap_chain_support details;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+    details.formats =
+        vk_enumerate<VkSurfaceFormatKHR>(vkGetPhysicalDeviceSurfaceFormatsKHR, device, surface);
+    details.present_modes =
+        vk_enumerate<VkPresentModeKHR>(vkGetPhysicalDeviceSurfacePresentModesKHR, device, surface);
+
+    return details;
+}
+
 } // namespace cvk

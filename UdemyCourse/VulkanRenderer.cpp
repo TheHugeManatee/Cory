@@ -77,4 +77,14 @@ cvk::instance VulkanRenderer::createInstance()
     return instance;
 }
 
-cvk::context VulkanRenderer::createContext() { return cvk::context(instance_); }
+cvk::context VulkanRenderer::createContext()
+{
+    VkSurfaceKHR surface;
+    VK_CHECKED_CALL(glfwCreateWindowSurface(instance_.get(), window_, nullptr, &surface),
+                    "Could not create surface via GLFW!");
+
+    surface_ = cvk::surface{cvk::make_shared_resource(
+        surface, [inst = instance_.get()](auto *ptr) { vkDestroySurfaceKHR(inst, ptr, nullptr); })};
+
+    return {instance_, surface_};
+}

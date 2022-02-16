@@ -2,8 +2,10 @@
 
 #include "core.h"
 #include "device.h"
+#include "fence.h"
 #include "instance.h"
 #include "physical_device.h"
+#include "semaphore.h"
 #include "utils.h"
 
 #include <vulkan/vulkan.h>
@@ -21,10 +23,9 @@ namespace cvk {
 
 /// wrapper for a VkSurface
 using surface = basic_vk_wrapper<VkSurfaceKHR>;
-/// wrapper for a VkSemaphore
-using semaphore = basic_vk_wrapper<VkSemaphore>;
 
 class queue;
+class swapchain;
 
 struct context_queues {
     ~context_queues();
@@ -50,8 +51,7 @@ class context {
             std::vector<const char *> requested_extensions = {},
             std::vector<const char *> requested_layers = {});
 
-    // nothing to do here!
-    ~context() = default;
+    ~context();
 
     // === basic copy&move interface ===
     context(const context &) = delete;
@@ -60,9 +60,9 @@ class context {
     context &operator=(context &&) = default;
 
     /// creates a new fence
-    // fence create_fence(VkFenceCreateFlags flags = {});
+    fence create_fence(VkFenceCreateFlags flags = {});
     /// creates a new semaphore
-    // semaphore create_semaphore(VkSemaphoreCreateFlags = {});
+    semaphore create_semaphore(VkSemaphoreCreateFlags = {});
 
     // === command buffer submission ===
 
@@ -92,9 +92,10 @@ class context {
     }
     //[[nodiscard]] const auto &device_info() const noexcept { return physical_device_; }
     //[[nodiscard]] auto &instance() const noexcept { return instance_; }
-    //[[nodiscard]] auto physical_device() const noexcept { return physical_device_info_.device; }
-    [[nodiscard]] auto device() noexcept -> VkDevice { return device_.get(); };
-    [[nodiscard]] auto allocator() noexcept { return vma_allocator_.get(); }
+    [[nodiscard]] auto vk_physical_device() const noexcept { return physical_device_.device; }
+    [[nodiscard]] auto vk_surface() noexcept -> VkSurfaceKHR { return surface_.get(); };
+    [[nodiscard]] auto vk_device() noexcept -> VkDevice { return device_.get(); };
+    [[nodiscard]] auto vk_allocator() noexcept { return vma_allocator_.get(); }
 
     //    [[nodiscard]] auto max_msaa_samples() const noexcept { return max_msaa_samples_; }
     //    [[nodiscard]] auto default_color_format() const noexcept { return default_color_format_; }
@@ -102,6 +103,9 @@ class context {
     //    {
     //        return default_depth_stencil_format_;
     //    }
+
+    // query which formats and color spaces are supported by the device+surface combination
+    swap_chain_support query_swap_chain_support();
 
   private:
     // figures out which queues to create and returns the respective family indices
@@ -123,7 +127,7 @@ class context {
 
     std::shared_ptr<VmaAllocator_T> vma_allocator_{};
 
-    //    std::optional<cvk::swapchain> swapchain_;
+    std::unique_ptr<swapchain> swapchain_;
 
     //    VkSampleCountFlagBits max_msaa_samples_;
     //    VkFormat default_color_format_;

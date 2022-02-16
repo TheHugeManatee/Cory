@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <Cory/Log.h>
+#include <cvk/log.h>
 
 #include <spdlog/spdlog.h>
 
@@ -19,6 +20,7 @@ GLFWwindow *initWindow(const std::string &window_name, uint32_t width, uint32_t 
 int main(int argc, char **argv)
 {
     Cory::Log::Init();
+    cvk::log::set_level(spdlog::level::debug);
 
     CO_APP_INFO("Compat test running");
 

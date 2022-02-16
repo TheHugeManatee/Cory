@@ -8,11 +8,9 @@
 #include <string>
 #include <string_view>
 
-namespace cory {
+namespace cvk {
 
-namespace vk {
-
-class graphics_context;
+class context;
 
 /**
  * @brief named vulkan resource attached to a context
@@ -22,7 +20,7 @@ template <typename Derived, typename ResourcePtr> class resource {
   public:
     using resource_ptr_t = ResourcePtr;
 
-    resource(graphics_context &ctx, ResourcePtr resource, std::string_view name)
+    resource(context &ctx, ResourcePtr resource, std::string_view name)
         : ctx_{ctx}
         , resource_{resource}
         , name_{name}
@@ -35,9 +33,8 @@ template <typename Derived, typename ResourcePtr> class resource {
 
   protected:
     std::string name_;
-    graphics_context &ctx_;
+    cvk::context &ctx_;
     ResourcePtr resource_;
 };
 
-} // namespace vk
-} // namespace cory
+} // namespace cvk

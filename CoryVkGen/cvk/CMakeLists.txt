@@ -22,6 +22,14 @@ set(CVK_SOURCES
         include/cvk/physical_device.h
         include/cvk/debug_utils_messenger_builder.h
         include/cvk/queue.h
+        include/cvk/swapchain.h
+        include/cvk/swapchain_builder.h
+        include/cvk/fence.h
+        include/cvk/resource.h
+        include/cvk/image.h
+        include/cvk/image_builder.h
+        include/cvk/image_view.h
+        include/cvk/image_view_builder.h
         # .cpp
         src/instance.cpp
         src/log.cpp
@@ -30,7 +38,15 @@ set(CVK_SOURCES
         src/context.cpp
         src/device_builder.cpp
         src/queue.cpp
-        src/utils.cpp)
+        src/utils.cpp
+        src/swapchain.cpp
+        src/swapchain_builder.cpp
+        src/fence.cpp
+        src/image.cpp
+        src/image_builder.cpp
+        src/image_view.cpp
+        src/image_view_builder.cpp
+        )
 
 add_library(${TARGET_NAME} STATIC
         ${CVK_GENERATED_HEADERS}

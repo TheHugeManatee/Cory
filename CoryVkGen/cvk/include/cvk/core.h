@@ -2,10 +2,9 @@
 
 #include <fmt/format.h>
 
-#include <vector>
 #include <memory>
 #include <stdexcept>
-
+#include <vector>
 
 #define VK_CHECKED_CALL(x, err)                                                                    \
     do {                                                                                           \
@@ -44,7 +43,7 @@ template <typename WrappedVkType> class basic_vk_wrapper {
     using vk_shared_ptr = std::shared_ptr<vk_opaque_type>;
 
     explicit basic_vk_wrapper(vk_shared_ptr vk_resource_ptr = {})
-        : vk_resource_ptr_{vk_resource_ptr}
+        : vk_resource_ptr_{std::move(vk_resource_ptr)}
     {
     }
 
@@ -54,4 +53,4 @@ template <typename WrappedVkType> class basic_vk_wrapper {
   private:
     vk_shared_ptr vk_resource_ptr_;
 };
-}
+} // namespace cvk

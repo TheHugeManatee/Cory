@@ -1,50 +1,18 @@
 #pragma once
 
-#include "resource.h"
-#include "utils.h"
-
-#include <glm.h>
+#include "image.h"
 
 #include <vulkan/vulkan.h>
 
-namespace cory {
-namespace vk {
+namespace cvk {
 
-class graphics_context;
-class image_builder;
-
-class image : public resource<image, std::shared_ptr<VkImage_T>> {
-  public:
-    // create from builder
-    image(image_builder &builder);
-
-    // initialize from existing VkImage object
-    image(graphics_context &ctx_,
-          std::shared_ptr<VkImage_T>& vk_resource_ptr,
-          VkImageType image_type,
-          VkFormat image_format,
-          glm::uvec3 image_size,
-          uint32_t image_mip_levels = 0,
-          std::string_view name = {});
-
-    [[nodiscard]] VkImageType type() const noexcept { return type_; }
-    [[nodiscard]] const auto &size() const noexcept { return size_; }
-    [[nodiscard]] auto format() const noexcept { return format_; }
-    [[nodiscard]] auto mip_levels() const noexcept { return mip_levels_; }
-    [[nodiscard]] VkImage get() const noexcept { return resource_.get(); }
-
-  private:
-    VkImageType type_;
-    glm::uvec3 size_;
-    VkFormat format_;
-    uint32_t mip_levels_;
-};
+class context;
 
 class image_builder {
   public:
     friend class image;
-    image_builder(graphics_context &context)
-        : ctx_{context}
+    image_builder(context &ctx)
+        : ctx_{ctx}
     {
     }
 
@@ -164,10 +132,10 @@ class image_builder {
         name_ = name;
         return *this;
     }
-    [[nodiscard]] image create() { return image(*this); }
+    [[nodiscard]] image create();
 
   private:
-    graphics_context &ctx_;
+    context &ctx_;
     VkImageCreateInfo info_{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .extent = {1, 1, 1},
@@ -178,6 +146,4 @@ class image_builder {
     std::string_view name_;
     device_memory_usage usage_{device_memory_usage::eGpuOnly};
 };
-
-} // namespace vk
-} // namespace cory
+} // namespace cvk

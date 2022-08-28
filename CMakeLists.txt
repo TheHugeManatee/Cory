@@ -44,17 +44,20 @@ include(Coverage)
 ### Run conan install so we don't have to do it manually
 if (NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
     message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-    file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/v0.16.1/conan.cmake"
+    file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/0.18.1/conan.cmake"
             "${CMAKE_BINARY_DIR}/conan.cmake"
-            EXPECTED_HASH SHA256=396e16d0f5eabdc6a14afddbcfff62a54a7ee75c6da23f32f7a31bc85db23484
             TLS_VERIFY ON)
 endif ()
 include(${CMAKE_BINARY_DIR}/conan.cmake)
 conan_cmake_autodetect(conan_settings)
+message("Conan autodetected settings: ${conan_settings}")
 # fixup RelWithDebInfo to Release (most packages don't have a RelWithDebInfo build)
 string(REGEX REPLACE "RelWithDebInfo" "Release" conan_settings "${conan_settings}")
-message("Conan autodetected settings: ${conan_settings}")
-conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_SOURCE_DIR} SETTINGS ${conan_settings} OUTPUT_QUIET)
+message("Running CONAN command. This might take a while if libraries need to be built.")
+conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_SOURCE_DIR}
+                    SETTINGS ${conan_settings}
+                    BUILD missing
+                    OUTPUT_QUIET)
 
 # add this to find the conan-generated Find*.cmake files
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR})

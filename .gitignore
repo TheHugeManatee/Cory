@@ -16,3 +16,4 @@ __pycache__/
 .cvkg-env/
 .venv/
 venv/
+cmake-build-*/

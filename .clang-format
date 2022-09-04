@@ -1,0 +1,18 @@
+BasedOnStyle: LLVM
+UseTab: Never
+IndentWidth: 4
+BreakBeforeBraces: Stroustrup
+BreakConstructorInitializers: BeforeComma
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+TabWidth: 2
+ColumnLimit: 100
+
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
+AlignOperands: true
+AllowAllConstructorInitializersOnNextLine: false
+AllowShortBlocksOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
+BinPackArguments: false
+BinPackParameters: false

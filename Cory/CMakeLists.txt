@@ -11,6 +11,7 @@ find_package(glm)
 find_package(glfw3)
 find_package(imgui)
 find_package(shaderc)
+find_package(Magnum REQUIRED Vk)
 
 set(CORY_HEADERS
     include/Cory/Cory.hpp
@@ -46,6 +47,7 @@ target_link_libraries(${TARGET_NAME}
         PRIVATE
         Cory::project_warnings
         Cory::project_options
+        Magnum::Vk
         )
 
 # Define a macro that allows consumers of this lib to know when they link against it

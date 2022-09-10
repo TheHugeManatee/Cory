@@ -2,9 +2,10 @@
 > Vulkan toy renderer/playground
 
 ## Goals
-This project is inteded to be a toy rendering engine to familiarize myself with vulkan.
-I also use it to test more modern C++ features.
+This project is intended to be a toy rendering engine to familiarize myself with vulkan.
 
+I also use it to test more modern C++ features such as coroutines and the executors proposal.
+As such, it uses features that are only supported in rather modern compilers. 
 
 #### Short Term
  - establish basic structures for a reusable rendering lib
@@ -40,21 +41,12 @@ I also use it to test more modern C++ features.
  - glm, https://github.com/g-truc/glm, MIT / Happy Bunny License
  - stb_image, https://github.com/nothings/stb, MIT / Public Domain
  - tinyobjloader, https://github.com/tinyobjloader/tinyobjloader, MIT License
- - Vulkan Memory Allocator, https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator, MIT License
- - refl-cpp, https://github.com/veselink1/refl-cpp, MIT license
  - Modified `CameraManipulator` Class, https://github.com/KhronosGroup/Vulkan-Hpp/tree/master/samples/RayTracing, Apache 2.0 License
  - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT License
- - imGuIZMO.quat for totation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause License
+ - imGuIZMO.quat for rotation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause License
 
-### Other referenced third party libraries
+### Other used third party libraries
 See `conanfile.txt` for the exact versions used, but there is of course always some flexibility in using different versions.
- - glfw
- - glew
- - spdlog
- - libfmt
- - doctest
- - imgui
- - shaderc
 
 
 ## Building
@@ -62,30 +54,15 @@ Roughly:
 ```
 git clone https://github.com/TheHugeManatee/Cory
 cd Cory
+cd Cory/conan-recipes
+conan export corrade @2022.09.10
+conan export magnum @2022.09.10
+cd ..
 mkdir build && cd build
 conan install .. -s build_type=Debug
-conan install .. -s build_type=Release
+# -or- conan install .. -s build_type=Release
 cmake ..
 cmake --build .
-```
-
-## FAQ / Interesting tidbits
-
-### `std::shared_ptr<VkSurfaceKHR_T>` - what in the heck is this?
-I use this idiom often to store references to vulkan-managed objects, which are nothing more than opaque pointers: in this case, `VkSurfaceKHR` is a pointer to `VkSurfaceKHR_T`, so we use this as the template type. Using a `std::shared_ptr` in this way gives us a reference-counted mechanism and allows us to supply a custom deallocator by attaching a lambda, in which we can
-call the respective `vkDestroy*` method. 
-
-Check out this example, which uses an immediately invoked lambda for some extra coolness:
-```
-    // initialize the surface
-    auto surface = [&, instance_ptr = instance.get()]() -> std::shared_ptr<VkSurfaceKHR_T> {
-        VkSurfaceKHR surface;
-        VK_CHECKED_CALL(glfwCreateWindowSurface(instance.get(), window, nullptr, &surface),
-                        "Could not create window surface");
-        // return a shared_ptr with custom deallocator to destroy the surface
-        return {surface,
-                [instance_ptr](VkSurfaceKHR s) { vkDestroySurfaceKHR(instance_ptr, s, nullptr); }};
-    }();
 ```
 
 ### Cory?

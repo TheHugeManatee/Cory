@@ -4,34 +4,38 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
-find_package(spdlog)
-find_package(fmt)
+find_package(spdlog REQUIRED)
+find_package(fmt REQUIRED)
 find_package(GLEW)
-find_package(glm)
+find_package(glm REQUIRED)
 find_package(glfw3)
-find_package(imgui)
+find_package(imgui REQUIRED)
 find_package(shaderc)
 find_package(Magnum REQUIRED Vk)
+find_package(Microsoft.GSL REQUIRED)
 
 set(CORY_HEADERS
-    include/Cory/Cory.hpp
-  )
+        include/Cory/Cory.hpp
+        include/Cory/Core/Log.hpp
+        include/Cory/Core/Utils.hpp
+        include/Cory/Core/CpuBuffer.hpp include/Cory/Core/Math.h)
 
 set(CORY_SOURCES
-  src/Cory.cpp
-)
+        src/Cory.cpp
+        src/Core/Log.cpp
+        src/Core/Utils.cpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 
 add_library(${TARGET_NAME} STATIC
-  ${CORY_HEADERS}
-  ${CORY_SOURCES}
-)
+        ${CORY_HEADERS}
+        ${CORY_SOURCES}
+        )
 
-target_include_directories (${TARGET_NAME}
-  PUBLIC
-    ${VULKAN_INCLUDE_DIRS}
-)
+target_include_directories(${TARGET_NAME}
+        PUBLIC
+        ${VULKAN_INCLUDE_DIRS}
+        )
 
 target_link_libraries(${TARGET_NAME}
         PUBLIC
@@ -40,6 +44,7 @@ target_link_libraries(${TARGET_NAME}
         fmt::fmt
         GLEW::GLEW
         glm::glm
+        Microsoft.GSL::GSL
         glfw::glfw
         imgui::imgui
         shaderc::shaderc
@@ -52,8 +57,12 @@ target_link_libraries(${TARGET_NAME}
 
 # Define a macro that allows consumers of this lib to know when they link against it
 target_compile_definitions(${TARGET_NAME}
-  PUBLIC
-    HAVE_CORY)
+        PUBLIC
+        HAVE_CORY
+        GLM_FORCE_RADIANS
+        GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+        GLM_FORCE_DEPTH_ZERO_TO_ONE
+        GLM_ENABLE_EXPERIMENTAL)
 
 # for now, we hardcode the resource path until we have a proper resource management in place
 target_compile_definitions(${TARGET_NAME} PUBLIC "RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
@@ -78,9 +87,9 @@ add_library(Cory::Cory ALIAS Cory)
 
 ###### TEST BINARY
 
-if(ENABLE_TESTING)
-  add_subdirectory(test)
-endif()
+if (CORY_BUILD_TESTS)
+    add_subdirectory(test)
+endif ()
 
 ###### INSTALLATION
 

@@ -13,12 +13,13 @@ find_package(imgui REQUIRED)
 find_package(shaderc)
 find_package(Magnum REQUIRED Vk)
 find_package(Microsoft.GSL REQUIRED)
+find_package(range-v3 REQUIRED)
 
 set(CORY_HEADERS
         include/Cory/Cory.hpp
         include/Cory/Core/Log.hpp
         include/Cory/Core/Utils.hpp
-        include/Cory/Core/CpuBuffer.hpp include/Cory/Core/Math.h)
+        include/Cory/Core/CpuBuffer.hpp include/Cory/Core/Math.h include/Cory/Core/SlotMap.hpp)
 
 set(CORY_SOURCES
         src/Cory.cpp
@@ -49,6 +50,7 @@ target_link_libraries(${TARGET_NAME}
         imgui::imgui
         shaderc::shaderc
         Cory::ThirdParty
+        range-v3::range-v3
         PRIVATE
         Cory::project_warnings
         Cory::project_options

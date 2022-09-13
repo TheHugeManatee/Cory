@@ -3,17 +3,17 @@ cmake_minimum_required(VERSION 3.15...3.23)
 project(CmakeConfigPackageTests LANGUAGES CXX)
 
 # ---- Test as standalone project the exported config package ----
+message("Cory Tests enabled.")
+if (PROJECT_IS_TOP_LEVEL OR TEST_INSTALLED_VERSION)
+    enable_testing()
 
-if(PROJECT_IS_TOP_LEVEL OR TEST_INSTALLED_VERSION)
-  enable_testing()
+    find_package(Cory CONFIG REQUIRED) # for intro, project_options, ...
 
-  find_package(Cory CONFIG REQUIRED) # for intro, project_options, ...
-
-  if(NOT TARGET Cory::project_options)
-    message(FATAL_ERROR "Required config package not found!")
-    return() # be strictly paranoid for Template Janitor github action! CK
-  endif()
-endif()
+    if (NOT TARGET Cory::project_options)
+        message(FATAL_ERROR "Required config package not found!")
+        return() # be strictly paranoid for Template Janitor github action! CK
+    endif ()
+endif ()
 
 # ---- Dependencies ----
 
@@ -21,9 +21,10 @@ find_package(Catch2 REQUIRED)
 
 include(Catch)
 
-add_library(${TARGET_NAME}_TestLib OBJECT 
-    Cory_Test.cpp
-)
+add_library(${TARGET_NAME}_TestLib OBJECT
+        Cory_Test.cpp
+        Utils_Test.cpp
+        SlotMap_Test.cpp)
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(${TARGET_NAME}_TestLib PRIVATE Cory::project_options)
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Cory::${TARGET_NAME})
@@ -39,23 +40,23 @@ add_test(NAME cli.version_matches COMMAND ${TARGET_NAME} --version)
 set_tests_properties(cli.version_matches PROPERTIES PASS_REGULAR_EXPRESSION "${PROJECT_VERSION}")
 
 add_executable(${TARGET_NAME}_Tests catch_main.cpp)
-target_link_libraries(${TARGET_NAME}_Tests PRIVATE 
-    Cory::project_warnings 
-    Cory::project_options 
-    ${TARGET_NAME}_TestLib
-    )
+target_link_libraries(${TARGET_NAME}_Tests PRIVATE
+        Cory::project_warnings
+        Cory::project_options
+        ${TARGET_NAME}_TestLib
+        )
 
 # automatically discover tests that are defined in catch based test files you can modify the unittests. Set TEST_PREFIX
 # to whatever you want, or use different for different binaries
 catch_discover_tests(
-  ${TARGET_NAME}_Tests
-  TEST_PREFIX
-  "unittests."
-  REPORTER
-  xml
-  OUTPUT_DIR
-  .
-  OUTPUT_PREFIX
-  "unittests."
-  OUTPUT_SUFFIX
-  .xml)
+        ${TARGET_NAME}_Tests
+        TEST_PREFIX
+        "unittests."
+        REPORTER
+        xml
+        OUTPUT_DIR
+        .
+        OUTPUT_PREFIX
+        "unittests."
+        OUTPUT_SUFFIX
+        .xml)

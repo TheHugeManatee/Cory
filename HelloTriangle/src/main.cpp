@@ -1,9 +1,11 @@
 #include <Cory/Cory.hpp>
 
-#include <spdlog/spdlog.h>
+#include <Cory/Core/Log.hpp>
 
 int main()
 {
-    spdlog::info("Cory value is {}", Cory::test_function());
-    spdlog::info("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
+    Cory::Log::Init();
+
+    CO_APP_INFO("Cory value is {}", Cory::test_function());
+    CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
 }

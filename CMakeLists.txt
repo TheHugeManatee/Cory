@@ -26,11 +26,12 @@ set(CMAKE_PDB_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 include(CMakeDependentOption)# This is a really useful scripts that creates options that depends on other options. It can even be used with generator expressions !
 
 # Custom modules and scripts
-
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
-#include(LTO)
 include(Warnings)
-#include(Coverage)
+
+# disable this to debug conan-related problems
+option(CORY_CONAN_CMAKE_SILENT_OUTPUT "Silence conan output in CMake config" ON )
+set(CONAN_CMAKE_SILENT_OUTPUT ${CORY_CONAN_CMAKE_SILENT_OUTPUT})
 
 ### Run conan install so we don't have to do it manually
 if (NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
@@ -54,10 +55,6 @@ conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_SOURCE_DIR}
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_BINARY_DIR})
 
-## doctest static lib helper
-include(cmake/doctest_force_link_static_lib_in_target.cmake)
-# DOCTEST_CONFIG_DISABLE for disabling doctest altogether - might be nice for production build
-
 ###############
 ##  OPTIONS  ##
 ###############
@@ -79,8 +76,11 @@ option(CORY_BUILD_USE_DOXYGEN "Add a doxygen target to generate the documentatio
 # Use your own option for tests, in case people use your library through add_subdirectory
 cmake_dependent_option(CORY_BUILD_TESTS
         "Enable tests targets" ON # By default we want tests if CTest is enabled
-        "BUILD_TESTING" OFF # Stay coherent with CTest variables
+        "BUILD_TESTING" ON # Stay coherent with CTest variables
         )
+
+#include(CTest)
+
 
 # currently, we just map a hardcoded path for our resources - no fancy
 # resource bundling or deployment yet

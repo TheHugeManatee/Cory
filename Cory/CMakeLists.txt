@@ -13,23 +13,25 @@ find_package(imgui REQUIRED)
 find_package(shaderc)
 find_package(Magnum REQUIRED Vk)
 find_package(Microsoft.GSL REQUIRED)
+find_package(magic_enum REQUIRED)
 find_package(range-v3 REQUIRED)
 
-set(CORY_HEADERS
-        include/Cory/Cory.hpp
-        include/Cory/Core/Log.hpp
-        include/Cory/Core/Utils.hpp
-        include/Cory/Core/CpuBuffer.hpp include/Cory/Core/Math.h include/Cory/Core/SlotMap.hpp)
 
 set(CORY_SOURCES
         src/Cory.cpp
+        include/Cory/Cory.hpp
+        include/Cory/Core/CpuBuffer.hpp
+        include/Cory/Core/Math.hpp
+        include/Cory/Core/SlotMap.hpp
         src/Core/Log.cpp
-        src/Core/Utils.cpp)
+        include/Cory/Core/Log.hpp
+        src/Core/Utils.cpp
+        include/Cory/Core/Utils.hpp
+        src/Core/Context.cpp include/Cory/Core/Context.hpp include/Cory/Core/FmtUtils.hpp include/Cory/Core/VulkanUtils.hpp src/Core/VulkanUtils.cpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 
 add_library(${TARGET_NAME} STATIC
-        ${CORY_HEADERS}
         ${CORY_SOURCES}
         )
 
@@ -51,10 +53,12 @@ target_link_libraries(${TARGET_NAME}
         shaderc::shaderc
         Cory::ThirdParty
         range-v3::range-v3
+
         PRIVATE
         Cory::project_warnings
         Cory::project_options
         Magnum::Vk
+        magic_enum::magic_enum
         )
 
 # Define a macro that allows consumers of this lib to know when they link against it

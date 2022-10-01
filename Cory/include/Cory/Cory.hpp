@@ -7,5 +7,5 @@ namespace Cory {
     std::string queryVulkanInstanceVersion();
 
     // temporary main function for prototyping
-    void main();
+    void playground_main();
 }

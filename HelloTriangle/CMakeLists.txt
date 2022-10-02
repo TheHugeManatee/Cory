@@ -7,7 +7,7 @@ find_package(range-v3 REQUIRED)
 # Always list the files explicitly
 add_executable(${TARGET_NAME}
         src/main.cpp
-        )
+        src/HelloTriangleApplication.cpp src/HelloTriangleApplication.hpp)
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)

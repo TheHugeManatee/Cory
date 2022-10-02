@@ -1,12 +1,10 @@
 #include <Cory/Cory.hpp>
 
-#include <Magnum/Vk/Version.h>
-
 #include <Corrade/Containers/StringView.h>
 #include <Magnum/Vk/ExtensionProperties.h>
 #include <Magnum/Vk/Extensions.h>
-
 #include <Magnum/Vk/LayerProperties.h>
+#include <Magnum/Vk/Version.h>
 
 #include <fmt/core.h>
 
@@ -15,7 +13,11 @@
 
 namespace Cory {
 
-int test_function() { return 42; }
+void Init() {
+    // initialize all static objects in the correct order
+    Cory::Log::Init();
+}
+
 std::string queryVulkanInstanceVersion()
 {
     auto version = Magnum::Vk::enumerateInstanceVersion();
@@ -24,13 +26,6 @@ std::string queryVulkanInstanceVersion()
 }
 
 void dumpInstanceInformation();
-void playground_main()
-{
-
-    dumpInstanceInformation();
-
-    Cory::Context context;
-}
 
 void dumpInstanceInformation()
 {
@@ -48,6 +43,13 @@ void dumpInstanceInformation()
     for (const auto name : extensions.names()) {
         CO_CORE_INFO("    {:<25}: {}", name.data(), extensions.isSupported(name));
     }
+}
+
+void playground_main()
+{
+    dumpInstanceInformation();
+
+    Cory::Context context;
 }
 
 } // namespace Cory

@@ -6,8 +6,11 @@
 
 #include <Cory/Core/Common.hpp>
 
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/Instance.h>
+namespace Magnum::Vk {
+class Device;
+class Instance;
+class CommandPool;
+} // namespace Magnum::Vk
 
 // Vulkan forward definitions
 struct VkDebugUtilsMessengerCallbackDataEXT;
@@ -51,8 +54,9 @@ class Context {
 
     bool isHeadless() const;
 
-    Magnum::Vk::Instance &instance() const;
-    Magnum::Vk::Device &device() const;
+    Magnum::Vk::Instance &instance();
+    Magnum::Vk::Device &device();
+    Magnum::Vk::CommandPool &commandPool();
 
   private:
     std::unique_ptr<struct ContextPrivate> data;

@@ -4,6 +4,8 @@
 #include <Cory/Core/Log.hpp>
 #include <Cory/Core/VulkanUtils.hpp>
 
+#include <Magnum/Vk/Instance.h>
+#include <Magnum/Vk/Device.h>
 // clang-format off
 #include <MagnumExternal/Vulkan/flextVk.h>
 #include <MagnumExternal/Vulkan/flextVkGlobal.h>

@@ -17,10 +17,11 @@ HelloTriangleApplication::HelloTriangleApplication()
     Cory::ResourceLocator::addSearchPath(TRIANGLE_RESOURCE_DIR);
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
-
+    static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 768};
     ctx_ = std::make_unique<Cory::Context>();
-    window_ = std::make_unique<Cory::Window>(*ctx_, glm::i32vec2{1024, 768}, "HelloTriangle");
+    window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
+                                                   WINDOW_SIZE,
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
 }

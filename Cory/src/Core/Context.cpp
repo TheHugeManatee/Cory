@@ -5,8 +5,9 @@
 #include <Cory/Core/VulkanUtils.hpp>
 
 #include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/StringView.h>
+#include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Vk/BufferCreateInfo.h>
+#include <Magnum/Vk/CommandPoolCreateInfo.h>
 #include <Magnum/Vk/DeviceCreateInfo.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/ExtensionProperties.h>
@@ -45,6 +46,8 @@ struct ContextPrivate {
 
     Vk::Queue graphicsQueue{Corrade::NoCreate};
     Vk::Queue computeQueue{Corrade::NoCreate};
+
+    Vk::CommandPool commandPool{Corrade::NoCreate};
 };
 
 Context::Context()
@@ -52,15 +55,13 @@ Context::Context()
 {
     data->name = "CCtx";
 
-    using namespace Corrade::Containers::Literals;
-    const auto app_name{"Cory-based Vulkan Application"_s};
+    const auto app_name{"Cory-based Vulkan Application"};
 
-    data->instance.create(
-        Vk::InstanceCreateInfo{}
-            .setApplicationInfo(app_name, Vk::version(1, 0, 0))
-            .addEnabledLayers({"VK_LAYER_KHRONOS_validation"_s})
-            .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
-            .addEnabledExtensions({"VK_KHR_surface"_s, "VK_KHR_win32_surface"_s}));
+    data->instance.create(Vk::InstanceCreateInfo{}
+                              .setApplicationInfo(app_name, Vk::version(1, 0, 0))
+                              .addEnabledLayers({"VK_LAYER_KHRONOS_validation"})
+                              .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
+                              .addEnabledExtensions({"VK_KHR_surface", "VK_KHR_win32_surface"}));
     data->instance.populateGlobalFunctionPointers();
 
     Vk::DeviceProperties properties = Vk::pickDevice(data->instance);
@@ -68,7 +69,7 @@ Context::Context()
 
     Vk::ExtensionProperties extensions = properties.enumerateExtensionProperties();
     Vk::DeviceCreateInfo info{properties, &extensions};
-    info.addEnabledExtensions({"VK_KHR_swapchain"_s});
+    info.addEnabledExtensions({"VK_KHR_swapchain"});
 
     // configure a Graphics and a Compute queue - assumes that there is a family that
     // supports both graphics and compute, which is probably not universal
@@ -83,6 +84,9 @@ Context::Context()
     nameVulkanObject(data->device, data->device, fmt::format("{} Logical Device", data->name));
 
     setupDebugMessenger();
+
+    data->commandPool =
+        Vk::CommandPool{data->device, Vk::CommandPoolCreateInfo{graphicsAndComputeFamily}};
 }
 
 void Context::setupDebugMessenger()
@@ -151,7 +155,8 @@ void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
 }
 
 bool Context::isHeadless() const { return data->isHeadless; }
-Vk::Instance &Context::instance() const { return data->instance; }
-Vk::Device &Context::device() const { return data->device; }
+Vk::Instance &Context::instance() { return data->instance; }
+Vk::Device &Context::device() { return data->device; }
+Vk::CommandPool &Context::commandPool() { return data->commandPool; }
 
 } // namespace Cory

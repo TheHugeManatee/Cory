@@ -3,21 +3,60 @@
 #include <Cory/Core/Context.hpp>
 #include <Cory/Core/Log.hpp>
 #include <Cory/Core/ResourceLocator.hpp>
-#include <Cory/Core/Utils.hpp>
+
+#include <Corrade/Containers/StringStlView.h>
+#include <Magnum/Math/Range.h>
+#include <Magnum/Vk/MeshLayout.h>
+#include <Magnum/Vk/Pipeline.h>
+#include <Magnum/Vk/PipelineLayoutCreateInfo.h>
+#include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
+#include <Magnum/Vk/RenderPassCreateInfo.h>
+#include <Magnum/Vk/ShaderSet.h>
+
+namespace Vk = Magnum::Vk;
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
+                                   glm::vec2 viewportDimensions,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
     : ctx_{context}
 {
-    createGraphicsPipeline(std::move(vertFile), std::move(fragFile));
+    createGraphicsPipeline(viewportDimensions, std::move(vertFile), std::move(fragFile));
 }
 
-void TrianglePipeline::createGraphicsPipeline(std::filesystem::path vertFile,
+TrianglePipeline::~TrianglePipeline() = default;
+
+void TrianglePipeline::createGraphicsPipeline(glm::vec2 viewportDimensions,
+                                              std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
+    CO_APP_INFO("Starting shader compilation");
     vertexShader_ = Cory::Shader(ctx_, Cory::ShaderSource{Cory::ResourceLocator::locate(vertFile)});
-    fragmentShader_ = Cory::Shader(ctx_, Cory::ShaderSource{Cory::ResourceLocator::locate(fragFile)});
     CO_APP_INFO("Vertex shader code size: {}", vertexShader_.size());
+    fragmentShader_ =
+        Cory::Shader(ctx_, Cory::ShaderSource{Cory::ResourceLocator::locate(fragFile)});
     CO_APP_INFO("Fragment shader code size: {}", fragmentShader_.size());
+
+    Vk::ShaderSet shaderSet{};
+    using namespace Corrade::Containers::Literals;
+    shaderSet.addShader(Vk::ShaderStage::Vertex, vertexShader_.module(), "main");
+    shaderSet.addShader(Vk::ShaderStage::Fragment, fragmentShader_.module(), "main");
+
+    Vk::MeshLayout meshLayout{Vk::MeshPrimitive::Triangles};
+    // probably not needed but just to follow the tutorial exactly
+    meshLayout.vkPipelineInputAssemblyStateCreateInfo().primitiveRestartEnable = false;
+
+    Vk::PipelineLayout pipelineLayout{ctx_.device(), Vk::PipelineLayoutCreateInfo{}};
+
+    Vk::RenderPass renderPass{
+        ctx_.device(), Vk::RenderPassCreateInfo{}
+        // todo
+    };
+
+    Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
+        shaderSet, meshLayout, pipelineLayout, renderPass, 0, 1};
+    rasterizationPipelineCreateInfo.setViewport(
+        {{0.0f, 0.0f}, {viewportDimensions.x, viewportDimensions.y}});
+    pipeline_ =
+        std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <string>
 
@@ -15,12 +16,18 @@ enum class DebugMessageSeverity {
     Error = 0x00001000,
 };
 
-enum class DebugMessageTypeBits {
+enum class DebugMessageType {
     General = 0x00000001,
     Validation = 0x00000002,
     Performance = 0x00000004,
     DeviceAddressBinding = 0x00000008, ///< Provided by VK_EXT_device_address_binding_report
 };
+} // namespace Cory
+template <> struct magic_enum::customize::enum_range<Cory::DebugMessageType> {
+    static constexpr bool is_flags = true;
+};
+
+namespace Cory {
 
 /**
  * The main context for cory
@@ -35,7 +42,7 @@ class Context {
     // receive and process a message from the vulkan debug utils - should not be called directly,
     // only exposed for REASONS
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
-                                  DebugMessageTypeBits messageType,
+                                  DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 
   private:

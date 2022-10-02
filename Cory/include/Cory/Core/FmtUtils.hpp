@@ -72,6 +72,7 @@ struct fmt::formatter<E, std::enable_if_t<std::is_enum_v<E> && magic_enum::custo
                 return this->fmt::formatter<std::string_view, char>::format(std::string_view{name.data(), name.size()}, ctx);
             }
         }
+        // fallback - format as an integer + hex value
         return fmt::format_to(ctx.out(), "{} (0x{:X})", magic_enum::enum_integer<D>(e), magic_enum::enum_integer<D>(e));
     }
 };

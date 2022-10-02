@@ -15,8 +15,6 @@
 #include <Magnum/Vk/Version.h>
 #include <MagnumExternal/Vulkan/flextVkGlobal.h>
 
-#include <magic_enum.hpp>
-
 namespace Vk = Magnum::Vk;
 
 namespace Cory {
@@ -25,13 +23,13 @@ namespace detail {
 
 VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                      VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                     const ::VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                                      void *pUserData)
 {
     Context *context = static_cast<Context *>(pUserData);
 
     context->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
-                                      static_cast<DebugMessageTypeBits>(messageType),
+                                      static_cast<DebugMessageType>(messageType),
                                       pCallbackData);
     return VK_TRUE;
 }
@@ -119,14 +117,14 @@ Context::Context()
 
 Context::~Context()
 {
-    // instance needs to be released explicitly!
+    // instance needs to be released explicitly, otherwise there will be validation errors!
     // data->instance.release();
 }
 
 std::string Context::getName() const { return data->name; }
 
 void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
-                                       DebugMessageTypeBits messageType,
+                                       DebugMessageType messageType,
                                        const VkDebugUtilsMessengerCallbackDataEXT *callbackData)
 {
     auto level = [&]() {

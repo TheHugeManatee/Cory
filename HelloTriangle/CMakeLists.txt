@@ -2,6 +2,7 @@ set(TARGET_NAME "HelloTriangle")
 
 find_package(Vulkan REQUIRED)
 find_package(GLEW REQUIRED)
+find_package(range-v3 REQUIRED)
 
 # Always list the files explicitly
 add_executable(${TARGET_NAME}
@@ -23,6 +24,7 @@ target_link_libraries(${TARGET_NAME}
         Cory::ThirdParty
         Vulkan::Vulkan
         GLEW::GLEW
+        range-v3::range-v3
         )
 
 

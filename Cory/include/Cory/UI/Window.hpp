@@ -6,6 +6,7 @@
 #include <Cory/Core/Common.hpp>
 
 struct GLFWwindow;
+typedef struct VkSurfaceKHR_T* VkSurfaceKHR;
 
 namespace Cory {
 
@@ -19,9 +20,12 @@ class Window : NoCopy, NoMove {
     [[nodiscard]] bool shouldClose() const;
 
   private:
+    void createSurface();
+
     Context& ctx_;
     std::string windowName_;
     GLFWwindow *window_{};
+    VkSurfaceKHR surface_{};
 };
 
 } // namespace Cory

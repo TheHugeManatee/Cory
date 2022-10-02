@@ -66,11 +66,11 @@ target_link_libraries(${TARGET_NAME}
         Cory::ThirdParty
         range-v3::range-v3
         magic_enum::magic_enum
+        Magnum::Vk
 
         PRIVATE
         Cory::project_warnings
         Cory::project_options
-        Magnum::Vk
         )
 
 # Define a macro that allows consumers of this lib to know when they link against it

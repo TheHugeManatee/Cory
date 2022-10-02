@@ -4,8 +4,12 @@
 #include <memory>
 #include <string>
 
+#include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/Instance.h>
+
 // Vulkan forward definitions
 struct VkDebugUtilsMessengerCallbackDataEXT;
+using VkInstance = struct VkInstance_T *;
 
 namespace Cory {
 
@@ -45,7 +49,10 @@ class Context {
                                   DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 
-    bool isHeadless();
+    bool isHeadless() const;
+
+    Magnum::Vk::Instance &instance() const;
+    Magnum::Vk::Device &device() const;
 
   private:
     std::unique_ptr<struct ContextPrivate> data;

@@ -4,6 +4,7 @@
 #include <Cory/Core/Log.hpp>
 #include <Cory/Core/VulkanUtils.hpp>
 
+#include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/StringView.h>
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/DeviceCreateInfo.h>
@@ -37,6 +38,7 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
 
 struct ContextPrivate {
     std::string name;
+    bool isHeadless{false};
     Vk::Instance instance{Corrade::NoCreate};
     VkDebugUtilsMessengerEXT debugMessenger{};
     Vk::Device device{Corrade::NoCreate};
@@ -50,35 +52,34 @@ Context::Context()
 {
     data->name = "CCtx";
 
-    const Corrade::Containers::StringView app_name{"Cory-based Vulkan Application"};
+    using namespace Corrade::Containers::Literals;
+    const auto app_name{"Cory-based Vulkan Application"_s};
 
     data->instance.create(
         Vk::InstanceCreateInfo{}
             .setApplicationInfo(app_name, Vk::version(1, 0, 0))
-            .addEnabledLayers({Corrade::Containers::StringView{"VK_LAYER_KHRONOS_validation"}})
-            .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>());
+            .addEnabledLayers({"VK_LAYER_KHRONOS_validation"_s})
+            .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
+            .addEnabledExtensions({"VK_KHR_surface"_s, "VK_KHR_win32_surface"_s}));
     data->instance.populateGlobalFunctionPointers();
 
     Vk::DeviceProperties properties = Vk::pickDevice(data->instance);
+    CO_APP_INFO("Using device {}", properties.name());
+
     Vk::ExtensionProperties extensions = properties.enumerateExtensionProperties();
+    Vk::DeviceCreateInfo info{properties, &extensions};
+    info.addEnabledExtensions({"VK_KHR_swapchain"_s});
 
-    /* Move the device properties to the info structure, pass extension properties
-       to allow reuse as well */
-    Vk::DeviceCreateInfo info{std::move(properties), &extensions};
-    if (extensions.isSupported<Vk::Extensions::EXT::index_type_uint8>())
-        info.addEnabledExtensions<Vk::Extensions::EXT::index_type_uint8>();
-    // TODO add swapchain extension if necessary
-    // if (extensions.isSupported("VK_NV_mesh_shader"_s))
-    //     info.addEnabledExtensions({"VK_NV_mesh_shader"_s});
+    // configure a Graphics and a Compute queue - assumes that there is a family that
+    // supports both graphics and compute, which is probably not universal
+    auto graphicsAndComputeFamily =
+        properties.pickQueueFamily(Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
+    info.addQueues(
+        graphicsAndComputeFamily, {1.0f, 1.0f}, {data->graphicsQueue, data->computeQueue});
 
-    // TODO fix
-    info.addQueues(0, {1.0f}, {data->graphicsQueue});
-    // info.addQueues(1, {1.0f}, {data->computeQueue});
-
-    /* Finally, be sure to move the info structure to the device as well */
     data->device.create(data->instance, std::move(info));
     data->device.populateGlobalFunctionPointers();
-
+    // set a debug name for the logical device
     nameVulkanObject(data->device, data->device, fmt::format("{} Logical Device", data->name));
 
     setupDebugMessenger();
@@ -148,6 +149,9 @@ void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
     if (severity == DebugMessageSeverity::Error) { __debugbreak(); }
 #endif
 }
-bool Context::isHeadless() { return false; }
+
+bool Context::isHeadless() const { return data->isHeadless; }
+Vk::Instance &Context::instance() const { return data->instance; }
+Vk::Device &Context::device() const { return data->device; }
 
 } // namespace Cory

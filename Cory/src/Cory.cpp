@@ -10,6 +10,9 @@
 
 #include <Cory/Core/Context.hpp>
 #include <Cory/Core/Log.hpp>
+#include <Magnum/Vk/DeviceProperties.h>
+
+namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
@@ -25,20 +28,18 @@ std::string queryVulkanInstanceVersion()
         "{}.{}.{}", versionMajor(version), versionMinor(version), versionPatch(version));
 }
 
-void dumpInstanceInformation();
-
 void dumpInstanceInformation()
 {
     CO_CORE_INFO("Instance version: {}", queryVulkanInstanceVersion());
 
-    Magnum::Vk::LayerProperties layers = Magnum::Vk::enumerateLayerProperties();
+    Vk::LayerProperties layers = Vk::enumerateLayerProperties();
     CO_CORE_INFO("Supported layers  [{}]", layers.count());
     for (const auto name : layers.names()) {
         CO_CORE_INFO("    {:<25}: {}", name.data(), layers.isSupported(name));
     }
-    Magnum::Vk::InstanceExtensionProperties extensions =
+    Vk::InstanceExtensionProperties extensions =
         /* ... including extensions exposed only by the extra layers */
-        Magnum::Vk::enumerateInstanceExtensionProperties(layers.names());
+        Vk::enumerateInstanceExtensionProperties(layers.names());
     CO_CORE_INFO("Supported extensions  [{}]", extensions.count());
     for (const auto name : extensions.names()) {
         CO_CORE_INFO("    {:<25}: {}", name.data(), extensions.isSupported(name));

@@ -2,9 +2,12 @@
 
 #include <Cory/Core/Context.hpp>
 #include <Cory/Core/Log.hpp>
+#include <Cory/Core/VulkanUtils.hpp>
 
 // clang-format off
+#include <MagnumExternal/Vulkan/flextVk.h>
 #include <MagnumExternal/Vulkan/flextVkGlobal.h>
+#define VK_VERSION_1_0
 #include <GLFW/glfw3.h>
 // clang-format on
 
@@ -18,18 +21,28 @@ Window::Window(Context &context, glm::ivec2 dimensions, std::string windowName)
 
     glfwInit();
 
-    // prevent OpenGL usage
+    // prevent OpenGL usage - vulkan all the way baybeee
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
     // no resizing for now - swapchain is complicated
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     window_ = glfwCreateWindow(dimensions.x, dimensions.y, windowName_.c_str(), nullptr, nullptr);
+
+    createSurface();
 }
 
 Window::~Window()
 {
+    vkDestroySurfaceKHR(ctx_.instance().handle(), surface_, nullptr);
     glfwDestroyWindow(window_);
     glfwTerminate();
+}
+
+void Window::createSurface()
+{
+    auto ret = glfwCreateWindowSurface(ctx_.instance().handle(), window_, nullptr, &surface_);
+    CO_CORE_ASSERT(ret == VK_SUCCESS, "Could not create surface!");
+    nameRawVulkanObject(ctx_.device().handle(), surface_, "Main Window Surface");
 }
 
 bool Window::shouldClose() const { return glfwWindowShouldClose(window_); }

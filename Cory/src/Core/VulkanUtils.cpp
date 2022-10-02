@@ -3,7 +3,9 @@
 #include <Magnum/Vk/Buffer.h>
 #include <Magnum/Vk/Device.h>
 #include <MagnumExternal/Vulkan/flextVkGlobal.h>
+
 #include <type_traits>
+
 
 namespace Cory {
 
@@ -30,6 +32,9 @@ void nameRawVulkanObject(VkDevice device, VulkanObjectHandle handle, std::string
     if constexpr (std::is_same_v<VulkanObjectHandle, VkBuffer>) {
         objectNameInfo.objectType = VK_OBJECT_TYPE_BUFFER;
     }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkSurfaceKHR>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_SURFACE_KHR;
+    }
 
     vkSetDebugUtilsObjectNameEXT(device, &objectNameInfo);
 }
@@ -49,6 +54,7 @@ void nameVulkanObject(DeviceHandle &device, MagnumVulkanObjectHandle &handle, st
         Magnum::Vk::Device & device, type & handle, std::string_view name)
 
 INSTANTIATE(VkDebugUtilsMessengerEXT);
+INSTANTIATE(VkSurfaceKHR);
 INSTANTIATE_MAGNUM(Magnum::Vk::Device);
 INSTANTIATE_MAGNUM(Magnum::Vk::Buffer);
 

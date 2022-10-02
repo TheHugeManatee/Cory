@@ -29,7 +29,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE  OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// modified by Jakob Weiss <jakob.jw.weiss@gmail.com> 2022 to work with libfmt
+// modified by Jakob Weiss <jakob.jw.weiss@gmail.com> 2022
+//  - change to work with lib{fmt} (change namespace, add const)
+//  - do not throw on unknown values, format them as integers instead
 
 #ifndef NEARGYE_MAGIC_ENUM_FORMAT_HPP
 #define NEARGYE_MAGIC_ENUM_FORMAT_HPP
@@ -59,7 +61,7 @@ constexpr bool enum_format_enabled() noexcept {
 
 template <typename E>
 struct fmt::formatter<E, std::enable_if_t<std::is_enum_v<E> && magic_enum::customize::enum_format_enabled<E>(), char>> : fmt::formatter<std::string_view, char> {
-    auto format(E e, format_context& ctx) {
+    auto format(E e, format_context& ctx) const {
         using D = std::decay_t<E>;
         if constexpr (magic_enum::detail::is_flags_v<D>) {
             if (auto name = magic_enum::enum_flags_name<D>(e); !name.empty()) {
@@ -70,8 +72,7 @@ struct fmt::formatter<E, std::enable_if_t<std::is_enum_v<E> && magic_enum::custo
                 return this->fmt::formatter<std::string_view, char>::format(std::string_view{name.data(), name.size()}, ctx);
             }
         }
-        constexpr auto type_name = magic_enum::enum_type_name<E>();
-        throw fmt::format_error("Type of " + std::string{type_name.data(), type_name.size()} + " enum value: " + std::to_string(magic_enum::enum_integer<D>(e)) + " is not exists.");
+        return fmt::format_to(ctx.out(), "{} (0x{:X})", magic_enum::enum_integer<D>(e), magic_enum::enum_integer<D>(e));
     }
 };
 

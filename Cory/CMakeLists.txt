@@ -27,7 +27,13 @@ set(CORY_SOURCES
         include/Cory/Core/Log.hpp
         src/Core/Utils.cpp
         include/Cory/Core/Utils.hpp
-        src/Core/Context.cpp include/Cory/Core/Context.hpp include/Cory/Core/FmtUtils.hpp include/Cory/Core/VulkanUtils.hpp src/Core/VulkanUtils.cpp)
+        src/Core/Context.cpp 
+        include/Cory/Core/Context.hpp 
+        include/Cory/Core/FmtUtils.hpp 
+        include/Cory/Core/VulkanUtils.hpp 
+        src/Core/VulkanUtils.cpp 
+        include/Cory/Core/BitField.hpp
+        )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 
@@ -53,12 +59,12 @@ target_link_libraries(${TARGET_NAME}
         shaderc::shaderc
         Cory::ThirdParty
         range-v3::range-v3
+        magic_enum::magic_enum
 
         PRIVATE
         Cory::project_warnings
         Cory::project_options
         Magnum::Vk
-        magic_enum::magic_enum
         )
 
 # Define a macro that allows consumers of this lib to know when they link against it

@@ -5,7 +5,7 @@
 #include <array>
 #include <vector>
 
-#include <range/v3/to_container.hpp>
+#include <range/v3/range/conversion.hpp>
 #include <range/v3/view/reverse.hpp>
 #include <range/v3/view/transform.hpp>
 

@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 
+#include <Cory/Core/Common.hpp>
+
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/Instance.h>
 
@@ -27,9 +29,7 @@ enum class DebugMessageType {
     DeviceAddressBinding = 0x00000008, ///< Provided by VK_EXT_device_address_binding_report
 };
 } // namespace Cory
-template <> struct magic_enum::customize::enum_range<Cory::DebugMessageType> {
-    static constexpr bool is_flags = true;
-};
+DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
 
 namespace Cory {
 

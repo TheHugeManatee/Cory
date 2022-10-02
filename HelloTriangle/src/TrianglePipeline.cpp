@@ -1,10 +1,14 @@
 #include "TrianglePipeline.hpp"
 
+#include <Cory/Core/Context.hpp>
 #include <Cory/Core/Log.hpp>
 #include <Cory/Core/ResourceLocator.hpp>
 #include <Cory/Core/Utils.hpp>
 
-TrianglePipeline::TrianglePipeline(std::filesystem::path vertFile, std::filesystem::path fragFile)
+TrianglePipeline::TrianglePipeline(Cory::Context &context,
+                                   std::filesystem::path vertFile,
+                                   std::filesystem::path fragFile)
+    : ctx_{context}
 {
     createGraphicsPipeline(std::move(vertFile), std::move(fragFile));
 }
@@ -12,9 +16,8 @@ TrianglePipeline::TrianglePipeline(std::filesystem::path vertFile, std::filesyst
 void TrianglePipeline::createGraphicsPipeline(std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
-    auto vertCode = Cory::readFile(Cory::ResourceLocator::locate(vertFile));
-    auto fragCode = Cory::readFile(Cory::ResourceLocator::locate(fragFile));
-
-    CO_APP_INFO("Vertex shader code size: {}", vertCode.size());
-    CO_APP_INFO("Fragment shader code size: {}", fragCode.size());
+    vertexShader_ = Cory::Shader(ctx_, Cory::ShaderSource{Cory::ResourceLocator::locate(vertFile)});
+    fragmentShader_ = Cory::Shader(ctx_, Cory::ShaderSource{Cory::ResourceLocator::locate(fragFile)});
+    CO_APP_INFO("Vertex shader code size: {}", vertexShader_.size());
+    CO_APP_INFO("Fragment shader code size: {}", fragmentShader_.size());
 }

@@ -39,7 +39,8 @@ set(CORY_SOURCES
         include/Cory/Core/Common.hpp
         src/Core/ResourceLocator.cpp
         include/Cory/Core/ResourceLocator.hpp
-        )
+        src/UI/Shader.cpp 
+        include/Cory/UI/Shader.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

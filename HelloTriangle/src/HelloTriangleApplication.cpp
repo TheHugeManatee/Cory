@@ -20,8 +20,9 @@ HelloTriangleApplication::HelloTriangleApplication()
 
     ctx_ = std::make_unique<Cory::Context>();
     window_ = std::make_unique<Cory::Window>(*ctx_, glm::i32vec2{1024, 768}, "HelloTriangle");
-    pipeline_ =
-        std::make_unique<TrianglePipeline>("simple_shader.vert.spv", "simple_shader.frag.spv");
+    pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
+                                                   std::filesystem::path{"simple_shader.vert"},
+                                                   std::filesystem::path{"simple_shader.frag"});
 }
 
 HelloTriangleApplication::~HelloTriangleApplication() = default;

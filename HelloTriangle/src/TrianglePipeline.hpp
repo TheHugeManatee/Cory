@@ -6,11 +6,24 @@
 
 #include <filesystem>
 
-class TrianglePipeline {
+#include <Cory/Core/Common.hpp>
+#include <Cory/UI/Shader.hpp>
+
+namespace Cory {
+class Context;
+}
+
+class TrianglePipeline : Cory::NoCopy {
   public:
-    TrianglePipeline(std::filesystem::path vertFile, std::filesystem::path fragFile);
+    TrianglePipeline(Cory::Context &context,
+                     std::filesystem::path vertFile,
+                     std::filesystem::path fragFile);
 
   private:
     void createGraphicsPipeline(std::filesystem::path vertFile, std::filesystem::path fragFile);
 
+    Cory::Context &ctx_;
+
+    Cory::Shader vertexShader_;
+    Cory::Shader fragmentShader_;
 };

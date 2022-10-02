@@ -1,22 +1,24 @@
 #pragma once
 
-#include <string>
 #include <glm/vec2.hpp>
+#include <string>
+
+#include <Cory/Core/Common.hpp>
 
 struct GLFWwindow;
 
 namespace Cory {
 
-class Window {
+class Window : NoCopy, NoMove {
   public:
     Window(glm::i32vec2 dimensions, std::string windowName);
     ~Window();
 
-    bool shouldClose();
+    [[nodiscard]] bool shouldClose() const;
 
   private:
     std::string windowName_;
-    GLFWwindow* window_{};
+    GLFWwindow *window_{};
 };
 
 } // namespace Cory

@@ -33,7 +33,12 @@ set(CORY_SOURCES
         include/Cory/Core/VulkanUtils.hpp 
         src/Core/VulkanUtils.cpp 
         include/Cory/Core/BitField.hpp
-        src/UI/Window.cpp include/Cory/UI/Window.hpp src/UI/Application.cpp include/Cory/UI/Application.hpp)
+        src/UI/Window.cpp 
+        include/Cory/UI/Window.hpp 
+        src/UI/Application.cpp 
+        include/Cory/UI/Application.hpp 
+        include/Cory/Core/Common.hpp
+        )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

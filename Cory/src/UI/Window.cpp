@@ -24,5 +24,5 @@ Window::~Window()
     glfwTerminate();
 }
 
-bool Window::shouldClose() { return glfwWindowShouldClose(window_); }
+bool Window::shouldClose() const { return glfwWindowShouldClose(window_); }
 } // namespace Cory

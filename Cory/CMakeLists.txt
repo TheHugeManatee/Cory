@@ -16,7 +16,6 @@ find_package(Microsoft.GSL REQUIRED)
 find_package(magic_enum REQUIRED)
 find_package(range-v3 REQUIRED)
 
-
 set(CORY_SOURCES
         src/Cory.cpp
         include/Cory/Cory.hpp
@@ -38,6 +37,8 @@ set(CORY_SOURCES
         src/UI/Application.cpp 
         include/Cory/UI/Application.hpp 
         include/Cory/Core/Common.hpp
+        src/Core/ResourceLocator.cpp
+        include/Cory/Core/ResourceLocator.hpp
         )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
@@ -82,7 +83,7 @@ target_compile_definitions(${TARGET_NAME}
         GLM_ENABLE_EXPERIMENTAL)
 
 # for now, we hardcode the resource path until we have a proper resource management in place
-target_compile_definitions(${TARGET_NAME} PUBLIC "RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
+target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
 
 # generate the export header for this library
 include(GenerateExportHeader)

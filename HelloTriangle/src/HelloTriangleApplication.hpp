@@ -5,8 +5,10 @@
 #include <memory>
 
 class TrianglePipeline;
+
 namespace Cory {
 class Window;
+class Context;
 }
 
 class HelloTriangleApplication : public Cory::Application {
@@ -17,6 +19,7 @@ class HelloTriangleApplication : public Cory::Application {
     void run() override;
 
   private:
+    std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;
 };

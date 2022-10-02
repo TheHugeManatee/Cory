@@ -9,14 +9,17 @@ struct GLFWwindow;
 
 namespace Cory {
 
+class Context;
+
 class Window : NoCopy, NoMove {
   public:
-    Window(glm::i32vec2 dimensions, std::string windowName);
+    Window(Context &context, glm::i32vec2 dimensions, std::string windowName);
     ~Window();
 
     [[nodiscard]] bool shouldClose() const;
 
   private:
+    Context& ctx_;
     std::string windowName_;
     GLFWwindow *window_{};
 };

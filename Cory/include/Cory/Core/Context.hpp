@@ -45,8 +45,11 @@ class Context {
                                   DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 
+    bool isHeadless();
+
   private:
     std::unique_ptr<struct ContextPrivate> data;
+    void setupDebugMessenger();
 };
 
 } // namespace Cory

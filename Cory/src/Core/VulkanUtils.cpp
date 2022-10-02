@@ -1,11 +1,14 @@
 #include <Cory/Core/VulkanUtils.hpp>
 
+#include <Magnum/Vk/Buffer.h>
+#include <Magnum/Vk/Device.h>
 #include <MagnumExternal/Vulkan/flextVkGlobal.h>
 #include <type_traits>
 
 namespace Cory {
+
 template <typename VulkanObjectHandle>
-void setObjectName(VkDevice device, VulkanObjectHandle handle, std::string_view name)
+void nameRawVulkanObject(VkDevice device, VulkanObjectHandle handle, std::string_view name)
 {
     VkDebugUtilsObjectNameInfoEXT objectNameInfo{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -18,6 +21,9 @@ void setObjectName(VkDevice device, VulkanObjectHandle handle, std::string_view 
     if constexpr (std::is_same_v<VulkanObjectHandle, VkInstance>) {
         objectNameInfo.objectType = VK_OBJECT_TYPE_INSTANCE;
     }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDebugUtilsMessengerEXT>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT;
+    }
     if constexpr (std::is_same_v<VulkanObjectHandle, VkDevice>) {
         objectNameInfo.objectType = VK_OBJECT_TYPE_DEVICE;
     }
@@ -28,11 +34,22 @@ void setObjectName(VkDevice device, VulkanObjectHandle handle, std::string_view 
     vkSetDebugUtilsObjectNameEXT(device, &objectNameInfo);
 }
 
-// explicitly instantiate for known types
-#define INSTANTIATE(type) template void setObjectName<type>(VkDevice device, type handle, std::string_view name)
+template <typename DeviceHandle, typename MagnumVulkanObjectHandle>
+void nameVulkanObject(DeviceHandle &device, MagnumVulkanObjectHandle &handle, std::string_view name)
+{
+    nameRawVulkanObject(device.handle(), handle.handle(), name);
+}
 
-INSTANTIATE(VkDevice);
-INSTANTIATE(VkInstance);
-INSTANTIATE(VkBuffer);
+// explicitly instantiate for known types
+#define INSTANTIATE(type)                                                                          \
+    template void nameRawVulkanObject<type>(VkDevice device, type handle, std::string_view name)
+
+#define INSTANTIATE_MAGNUM(type)                                                                   \
+    template void nameVulkanObject<Magnum::Vk::Device, type>(                                      \
+        Magnum::Vk::Device & device, type & handle, std::string_view name)
+
+INSTANTIATE(VkDebugUtilsMessengerEXT);
+INSTANTIATE_MAGNUM(Magnum::Vk::Device);
+INSTANTIATE_MAGNUM(Magnum::Vk::Buffer);
 
 } // namespace Cory

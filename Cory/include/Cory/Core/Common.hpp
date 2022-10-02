@@ -16,6 +16,7 @@ struct NoCopy {
 struct NoMove {
     NoMove() = default;
     NoMove(NoMove &&) = delete;
+    NoMove& operator=(NoMove &&) = delete;
 };
 
 

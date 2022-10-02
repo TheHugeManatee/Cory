@@ -27,7 +27,7 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
                                      void *pUserData)
 {
     Context *context = static_cast<Context *>(pUserData);
-
+    // CO_APP_ERROR("Vulkan error: {}", pCallbackData->pMessage);
     context->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
                                       static_cast<DebugMessageType>(messageType),
                                       pCallbackData);
@@ -38,6 +38,7 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
 struct ContextPrivate {
     std::string name;
     Vk::Instance instance{Corrade::NoCreate};
+    VkDebugUtilsMessengerEXT debugMessenger{};
     Vk::Device device{Corrade::NoCreate};
 
     Vk::Queue graphicsQueue{Corrade::NoCreate};
@@ -56,7 +57,35 @@ Context::Context()
             .setApplicationInfo(app_name, Vk::version(1, 0, 0))
             .addEnabledLayers({Corrade::Containers::StringView{"VK_LAYER_KHRONOS_validation"}})
             .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>());
+    data->instance.populateGlobalFunctionPointers();
 
+    Vk::DeviceProperties properties = Vk::pickDevice(data->instance);
+    Vk::ExtensionProperties extensions = properties.enumerateExtensionProperties();
+
+    /* Move the device properties to the info structure, pass extension properties
+       to allow reuse as well */
+    Vk::DeviceCreateInfo info{std::move(properties), &extensions};
+    if (extensions.isSupported<Vk::Extensions::EXT::index_type_uint8>())
+        info.addEnabledExtensions<Vk::Extensions::EXT::index_type_uint8>();
+    // TODO add swapchain extension if necessary
+    // if (extensions.isSupported("VK_NV_mesh_shader"_s))
+    //     info.addEnabledExtensions({"VK_NV_mesh_shader"_s});
+
+    // TODO fix
+    info.addQueues(0, {1.0f}, {data->graphicsQueue});
+    // info.addQueues(1, {1.0f}, {data->computeQueue});
+
+    /* Finally, be sure to move the info structure to the device as well */
+    data->device.create(data->instance, std::move(info));
+    data->device.populateGlobalFunctionPointers();
+
+    nameVulkanObject(data->device, data->device, fmt::format("{} Logical Device", data->name));
+
+    setupDebugMessenger();
+}
+
+void Context::setupDebugMessenger()
+{
     VkDebugUtilsMessengerCreateInfoEXT dbgMessengerCreateInfo{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
         .pNext = nullptr,
@@ -70,55 +99,28 @@ Context::Context()
                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
         .pfnUserCallback = detail::debugUtilsMessengerCallback,
         .pUserData = nullptr};
-    VkDebugUtilsMessengerEXT debugMessenger{};
-    data->instance.populateGlobalFunctionPointers();
-
-    Vk::DeviceProperties properties = Vk::pickDevice(data->instance);
-    Vk::ExtensionProperties extensions = properties.enumerateExtensionProperties();
-
-    /* Move the device properties to the info structure, pass extension properties
-       to allow reuse as well */
-    Vk::DeviceCreateInfo info{std::move(properties), &extensions};
-    if (extensions.isSupported<Vk::Extensions::EXT::index_type_uint8>())
-        info.addEnabledExtensions<Vk::Extensions::EXT::index_type_uint8>();
-    // if (extensions.isSupported("VK_NV_mesh_shader"_s))
-    //     info.addEnabledExtensions({"VK_NV_mesh_shader"_s});
-
-    // TODO fix
-    info.addQueues(0, {1.0f}, {data->graphicsQueue});
-    // info.addQueues(1, {1.0f}, {data->computeQueue});
-
-    /* Finally, be sure to move the info structure to the device as well */
-    data->device.create(data->instance, std::move(info));
-    data->device.populateGlobalFunctionPointers();
-    setObjectName(
-        data->device.handle(), data->device.handle(), fmt::format("{} Logical Device", data->name));
-
-    // test creating a random buffer
-    VkBuffer buffer{};
-    data->device->CreateBuffer(data->device,
-                               Vk::BufferCreateInfo{Vk::BufferUsage::StorageTexelBuffer, 4096},
-                               nullptr,
-                               &buffer);
-    setObjectName(data->device.handle(), buffer, "Test Buffer");
 
     vkCreateDebugUtilsMessengerEXT(
-        data->instance.handle(), &dbgMessengerCreateInfo, nullptr, &debugMessenger);
+        data->instance.handle(), &dbgMessengerCreateInfo, nullptr, &data->debugMessenger);
 
     VkDebugUtilsMessengerCallbackDataEXT messageCallbackData{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT};
-    auto message = fmt::format("Cory context '{}' initialized.", data->name);
+    auto message =
+        fmt::format("Cory context '{}' initialized and debug messenger attached.", data->name);
     messageCallbackData.pMessage = message.c_str();
     vkSubmitDebugUtilsMessageEXT(data->instance.handle(),
                                  VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
                                  VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
                                  &messageCallbackData);
+
+    // this seems to crash - not sure if driver or implementation bug...
+    // nameRawVulkanObject(
+    //    data->device.handle(), debugMessenger, fmt::format("{} Debug Messenger", data->name));
 }
 
 Context::~Context()
 {
-    // instance needs to be released explicitly, otherwise there will be validation errors!
-    // data->instance.release();
+    vkDestroyDebugUtilsMessengerEXT(data->instance.handle(), data->debugMessenger, nullptr);
 }
 
 std::string Context::getName() const { return data->name; }
@@ -142,12 +144,10 @@ void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
     }();
 
     Log::GetCoreLogger()->log(level, "[VulkanDebugMsg:{}] {}", messageType, callbackData->pMessage);
-    if (severity == DebugMessageSeverity::Error) {
-#if _MSC_VER
-        __debugbreak();
+#if _MSC_VER && _DEBUG
+    if (severity == DebugMessageSeverity::Error) { __debugbreak(); }
 #endif
-        std::abort();
-    }
 }
+bool Context::isHeadless() { return false; }
 
 } // namespace Cory

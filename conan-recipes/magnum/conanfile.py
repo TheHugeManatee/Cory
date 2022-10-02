@@ -145,7 +145,19 @@ class MagnumConan(ConanFile):
 
     short_paths = True
     generators = "cmake", "cmake_find_package"
-    exports_sources = ["CMakeLists.txt", "cmake/*"]
+    exports_sources = ["CMakeLists.txt", "cmake/*", "patches/*"]
+
+    def version_suffix(self):
+        try:
+            user = self.user
+            channel = self.channel
+        except:
+            suffix = self.version
+        else:
+            suffix = f"{self.version}@{user}/{channel}"
+
+        print(f"VERSION_SUFFIX = {suffix}")
+        return suffix
 
     @property
     def _source_subfolder(self):
@@ -212,7 +224,7 @@ class MagnumConan(ConanFile):
             del self.options.fPIC
 
     def requirements(self):
-        self.requires("corrade/{}".format(self.version))
+        self.requires("corrade/{}".format(self.version_suffix()))
         if self.options.audio:
             self.requires("openal/1.21.1")
         if self.options.gl:
@@ -270,7 +282,7 @@ class MagnumConan(ConanFile):
             raise ConanInvalidConfiguration("magnum_font_converter requires tga_image_converter")
 
     def build_requirements(self):
-        self.build_requires("corrade/{}".format(self.version))
+        self.build_requires("corrade/{}".format(self.version_suffix()))
 
     def source(self):
         tools.get(**self.conan_data["sources"][self.version],

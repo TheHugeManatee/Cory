@@ -16,8 +16,8 @@ libunifex/cci.20220430
 andreasbuhr-cppcoro/cci.20210113
 ms-gsl/4.0.0
 
-corrade/2022.09.10
-magnum/2022.09.10
+corrade/2022.09.10_vk13@TheHugeManatee/custom
+magnum/2022.09.10_vk13@TheHugeManatee/custom
 
 [generators]
 cmake_find_package

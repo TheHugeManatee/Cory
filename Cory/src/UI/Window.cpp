@@ -8,11 +8,14 @@
 
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/Instance.h>
+#include <Magnum/Vk/Queue.h>
 // clang-format off
 #include <MagnumExternal/Vulkan/flextVk.h>
 #define VK_VERSION_1_0
 #include <GLFW/glfw3.h>
 // clang-format on
+
+#include <range/v3/algorithm/contains.hpp>
 
 namespace Cory {
 
@@ -59,18 +62,48 @@ void Window::createSurface()
 
 void Window::createSwapChain()
 {
-    static constexpr uint32_t FRAMES_IN_FLIGHT = 3;
-
     SwapChainSupportDetails swapChainSupport =
         SwapChainSupportDetails::query(ctx_, surface_.handle());
 
+    uint32_t imageCount = swapChainSupport.chooseImageCount();
+
     VkSwapchainCreateInfoKHR createInfo{.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
 
-    createInfo.presentMode = swapChainSupport.chooseSwapPresentMode();
-    // createInfo.f =  swapChainSupport.chooseSwapSurfaceFormat();
-    createInfo.imageExtent = swapChainSupport.chooseSwapExtent(toVkExtent2D(dimensions_));
+    auto surfaceFormat = swapChainSupport.chooseSwapSurfaceFormat();
 
-    throw std::logic_error{"SwapChain not yet created!"};
-    // SwapChain chain(ctx_, FRAMES_IN_FLIGHT, surface_, createInfo);
+    createInfo.surface = surface_;
+    createInfo.minImageCount = imageCount;
+    createInfo.imageFormat = surfaceFormat.format;
+    createInfo.imageColorSpace = surfaceFormat.colorSpace;
+    createInfo.imageExtent = swapChainSupport.chooseSwapExtent(toVkExtent2D(dimensions_));
+    createInfo.imageArrayLayers = 1;
+    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    if (!ranges::contains(swapChainSupport.presentFamilies, ctx_.graphicsQueueFamily())) {
+        // TODO need to fix this at some point, but currently we don't spend the effort to
+        //      create a separate present queue if necessary - needs fixing in the Context
+        //      constructor!
+        // uint32_t queueFamilyIndices[] = {indices.graphicsFamily, indices.presentFamily};
+        // createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        // createInfo.queueFamilyIndexCount = 2;
+        // createInfo.pQueueFamilyIndices = queueFamilyIndices;
+        throw std::runtime_error(fmt::format("graphics queue does not support presenting"));
+    }
+    else {
+        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        createInfo.queueFamilyIndexCount = 0;     // Optional
+        createInfo.pQueueFamilyIndices = nullptr; // Optional
+    }
+
+    createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+    createInfo.presentMode = swapChainSupport.chooseSwapPresentMode();
+    createInfo.clipped = VK_TRUE;
+
+    createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+    swapChain_ = std::make_unique<SwapChain>(ctx_, surface_, createInfo);
 }
+
 } // namespace Cory

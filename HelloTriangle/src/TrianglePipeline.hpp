@@ -22,13 +22,13 @@ class Context;
 class TrianglePipeline : Cory::NoCopy {
   public:
     TrianglePipeline(Cory::Context &context,
-                     glm::vec2 viewportDimensions,
+                     glm::u32vec2 swapChainDimensions,
                      std::filesystem::path vertFile,
                      std::filesystem::path fragFile);
     ~TrianglePipeline();
 
   private:
-    void createGraphicsPipeline(glm::vec2 viewportDimensions,
+    void createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
                                 std::filesystem::path vertFile,
                                 std::filesystem::path fragFile);
 

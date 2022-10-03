@@ -46,7 +46,9 @@ struct ContextPrivate {
     Vk::Device device{Corrade::NoCreate};
 
     Vk::Queue graphicsQueue{Corrade::NoCreate};
+    uint32_t graphicsQueueFamily{};
     Vk::Queue computeQueue{Corrade::NoCreate};
+    uint32_t computeQueueFamily{};
 
     Vk::CommandPool commandPool{Corrade::NoCreate};
 };
@@ -74,10 +76,10 @@ Context::Context()
 
     // configure a Graphics and a Compute queue - assumes that there is a family that
     // supports both graphics and compute, which is probably not universal
-    auto graphicsAndComputeFamily = data->physicalDevice.pickQueueFamily(
+    data->graphicsQueueFamily = data->computeQueueFamily = data->physicalDevice.pickQueueFamily(
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
     info.addQueues(
-        graphicsAndComputeFamily, {1.0f, 1.0f}, {data->graphicsQueue, data->computeQueue});
+        data->graphicsQueueFamily, {1.0f, 1.0f}, {data->graphicsQueue, data->computeQueue});
 
     data->device.create(data->instance, std::move(info));
     data->device.populateGlobalFunctionPointers();
@@ -87,7 +89,7 @@ Context::Context()
     setupDebugMessenger();
 
     data->commandPool =
-        Vk::CommandPool{data->device, Vk::CommandPoolCreateInfo{graphicsAndComputeFamily}};
+        Vk::CommandPool{data->device, Vk::CommandPoolCreateInfo{data->graphicsQueueFamily}};
 }
 
 void Context::setupDebugMessenger()
@@ -161,12 +163,11 @@ Semaphore Context::createSemaphore()
 
     VkSemaphore semaphore;
     THROW_ON_ERROR(device()->CreateSemaphore(data->device, &create_info, nullptr, &semaphore),
-                    "failed to create a semaphore object");
-    auto vk_resource_ptr =
-        std::shared_ptr<VkSemaphore_T>(semaphore, [&device = data->device](VkSemaphore f) {
-            device->DestroySemaphore(device, f, nullptr);
-        });
-    return Semaphore{std::move(vk_resource_ptr)};
+                   "failed to create a semaphore object");
+
+    return Semaphore{semaphore, [&device = data->device](VkSemaphore f) {
+                         device->DestroySemaphore(device, f, nullptr);
+                     }};
 }
 
 Vk::Fence Context::createFence(Cory::FenceCreateMode mode)
@@ -183,5 +184,9 @@ Vk::Instance &Context::instance() { return data->instance; }
 Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data->physicalDevice; }
 Vk::Device &Context::device() { return data->device; }
 Vk::CommandPool &Context::commandPool() { return data->commandPool; }
+Magnum::Vk::Queue &Context::graphicsQueue() { return data->graphicsQueue; }
+uint32_t Context::graphicsQueueFamily() const { return data->graphicsQueueFamily; }
+Magnum::Vk::Queue &Context::computeQueue() { return data->computeQueue; }
+uint32_t Context::computeQueueFamily() const { return data->computeQueueFamily; }
 
 } // namespace Cory

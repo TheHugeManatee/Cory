@@ -16,17 +16,17 @@
 namespace Vk = Magnum::Vk;
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
-                                   glm::vec2 viewportDimensions,
+                                   glm::u32vec2 swapChainDimensions,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
     : ctx_{context}
 {
-    createGraphicsPipeline(viewportDimensions, std::move(vertFile), std::move(fragFile));
+    createGraphicsPipeline(swapChainDimensions, std::move(vertFile), std::move(fragFile));
 }
 
 TrianglePipeline::~TrianglePipeline() = default;
 
-void TrianglePipeline::createGraphicsPipeline(glm::vec2 viewportDimensions,
+void TrianglePipeline::createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
@@ -38,7 +38,6 @@ void TrianglePipeline::createGraphicsPipeline(glm::vec2 viewportDimensions,
     CO_APP_INFO("Fragment shader code size: {}", fragmentShader_.size());
 
     Vk::ShaderSet shaderSet{};
-    using namespace Corrade::Containers::Literals;
     shaderSet.addShader(Vk::ShaderStage::Vertex, vertexShader_.module(), "main");
     shaderSet.addShader(Vk::ShaderStage::Fragment, fragmentShader_.module(), "main");
 
@@ -55,8 +54,9 @@ void TrianglePipeline::createGraphicsPipeline(glm::vec2 viewportDimensions,
 
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
         shaderSet, meshLayout, pipelineLayout, renderPass, 0, 1};
-    rasterizationPipelineCreateInfo.setViewport(
-        {{0.0f, 0.0f}, {viewportDimensions.x, viewportDimensions.y}});
+
+    const glm::vec2 corner = swapChainDimensions;
+    rasterizationPipelineCreateInfo.setViewport({{0.0f, 0.0f}, {corner.x, corner.y}});
     pipeline_ =
         std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));
 }

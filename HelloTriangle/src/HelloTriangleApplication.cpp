@@ -6,6 +6,7 @@
 #include <Cory/Core/Context.hpp>
 #include <Cory/Core/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
+#include <Cory/UI/SwapChain.hpp>
 #include <Cory/UI/Window.hpp>
 
 #include <GLFW/glfw3.h>
@@ -20,8 +21,9 @@ HelloTriangleApplication::HelloTriangleApplication()
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 768};
     ctx_ = std::make_unique<Cory::Context>();
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
+
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
-                                                   WINDOW_SIZE,
+                                                   window_->swapChain().extent(),
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
 }

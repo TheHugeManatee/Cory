@@ -22,7 +22,8 @@ class Window : NoCopy, NoMove {
 
     [[nodiscard]] bool shouldClose() const;
 
-    glm::i32vec2 dimensions() { return dimensions_; }
+    glm::i32vec2 dimensions() const { return dimensions_; }
+    SwapChain &swapChain() { return *swapChain_; };
 
   private:
     void createSurface();

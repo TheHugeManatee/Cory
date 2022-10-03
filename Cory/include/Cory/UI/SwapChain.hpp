@@ -25,10 +25,13 @@ struct SwapChainSupportDetails {
     VkSurfaceFormatKHR chooseSwapSurfaceFormat() const;
     VkPresentModeKHR chooseSwapPresentMode() const;
     VkExtent2D chooseSwapExtent(VkExtent2D windowExtent) const;
+    uint32_t chooseImageCount() const;
 
     VkSurfaceCapabilitiesKHR capabilities;
     std::vector<VkSurfaceFormatKHR> formats;
     std::vector<VkPresentModeKHR> presentModes;
+
+    std::vector<uint32_t> presentFamilies;
 };
 
 struct FrameContext {
@@ -40,10 +43,9 @@ struct FrameContext {
     bool shouldRecreateSwapChain{false};
 };
 
-class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR>, NoCopy {
+class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
     SwapChain(Context &ctx,
-              uint32_t maxFramesInFlight,
               VkSurfaceKHR surface,
               VkSwapchainCreateInfoKHR createInfo);
 
@@ -84,7 +86,7 @@ class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR>, NoCopy {
 
     std::vector<Magnum::Vk::Image> images_{};
     Magnum::Vk::PixelFormat imageFormat_{};
-    glm::uvec2 extent_{};
+    glm::u32vec2 extent_{};
     std::vector<Magnum::Vk::ImageView> imageViews_{};
 
     // manage frame resources currently in flight

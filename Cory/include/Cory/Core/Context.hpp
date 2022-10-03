@@ -68,6 +68,11 @@ class Context : NoCopy, NoMove {
     Magnum::Vk::Device &device();
     Magnum::Vk::CommandPool &commandPool();
 
+    Magnum::Vk::Queue &graphicsQueue();
+    uint32_t graphicsQueueFamily() const;
+    Magnum::Vk::Queue &computeQueue();
+    uint32_t computeQueueFamily() const;
+
   private:
     std::unique_ptr<struct ContextPrivate> data;
     void setupDebugMessenger();

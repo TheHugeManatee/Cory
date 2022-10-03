@@ -11,6 +11,7 @@
 #include <Magnum/Vk/ImageCreateInfo.h>
 #include <Magnum/Vk/ImageViewCreateInfo.h>
 #include <Magnum/Vk/Instance.h>
+#include <Magnum/Vk/Queue.h>
 
 namespace Vk = Magnum::Vk;
 
@@ -43,6 +44,17 @@ SwapChainSupportDetails SwapChainSupportDetails::query(Context &ctx, VkSurfaceKH
         instance->GetPhysicalDeviceSurfacePresentModesKHR(
             physicalDevice, surface, &presentModeCount, details.presentModes.data());
     }
+
+    // enumerate all queue families that have present support
+    VkBool32 presentSupport = false;
+    auto queueFamilyProperties = physicalDevice.queueFamilyProperties();
+    for (uint32_t i = 0; i < physicalDevice.queueFamilyCount(); ++i) {
+        instance->GetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surface, &presentSupport);
+        if (queueFamilyProperties[i].queueFamilyProperties.queueCount > 0 && presentSupport) {
+            details.presentFamilies.push_back(i);
+        }
+    }
+
     return details;
 }
 
@@ -89,11 +101,17 @@ VkExtent2D SwapChainSupportDetails::chooseSwapExtent(VkExtent2D windowExtent) co
     }
 }
 
-SwapChain::SwapChain(Context &ctx,
-                     uint32_t maxFramesInFlight,
-                     VkSurfaceKHR surface,
-                     VkSwapchainCreateInfoKHR createInfo)
-    : maxFramesInFlight_{maxFramesInFlight}
+uint32_t SwapChainSupportDetails::chooseImageCount() const
+{
+    uint32_t imageCount = capabilities.minImageCount + 1;
+    if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
+        imageCount = capabilities.maxImageCount;
+    }
+    return imageCount;
+}
+
+SwapChain::SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo)
+    : maxFramesInFlight_{createInfo.minImageCount}
     , ctx_{&ctx}
     , imageFormat_{toMagnum(createInfo.imageFormat)}
     , extent_{createInfo.imageExtent.width, createInfo.imageExtent.height}
@@ -132,13 +150,8 @@ FrameContext SwapChain::nextImage()
     nextFrameInFlight_ = (nextFrameInFlight_ + 1) % maxFramesInFlight_;
 
     FrameContext fc;
-    VkResult result =
-        ctx_->device()->AcquireNextImageKHR(ctx_->device(),
-                                            handle(),
-                                            UINT64_MAX,
-                                            imageAcquired_[nextFrameInFlight_].handle(),
-                                            nullptr,
-                                            &fc.index);
+    VkResult result = ctx_->device()->AcquireNextImageKHR(
+        ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameInFlight_], nullptr, &fc.index);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         fc.shouldRecreateSwapChain = true;
@@ -175,26 +188,25 @@ void SwapChain::present(FrameContext &fc)
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
     presentInfo.waitSemaphoreCount = 1;
-    VkSemaphore waitSemaphores[1] = {fc.rendered->handle()};
+    VkSemaphore waitSemaphores[1] = {*fc.rendered};
     presentInfo.pWaitSemaphores = waitSemaphores;
 
-    VkSwapchainKHR swapChains[] = {handle()};
+    VkSwapchainKHR swapChains[] = {*this};
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
 
     presentInfo.pImageIndices = &fc.index;
 
-    throw std::logic_error{"need to figure out present queue first!"};
-    // vkQueuePresentKHR(ctx_.present_queue().get(), &presentInfo);
+    ctx_->device()->QueuePresentKHR(ctx_->graphicsQueue(), &presentInfo);
 }
 
 void SwapChain::createImageViews()
 {
     uint32_t num_images;
     auto &device = ctx_->device();
-    device->GetSwapchainImagesKHR(device, handle(), &num_images, nullptr);
+    device->GetSwapchainImagesKHR(device, *this, &num_images, nullptr);
     std::vector<VkImage> swapchainImages(num_images);
-    device->GetSwapchainImagesKHR(device, handle(), &num_images, swapchainImages.data());
+    device->GetSwapchainImagesKHR(device, *this, &num_images, swapchainImages.data());
 
     // create a vk::image for each of the SwapChain images
     std::ranges::transform(swapchainImages, std::back_inserter(images_), [&](VkImage img) {

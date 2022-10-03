@@ -4,7 +4,10 @@
 #include <memory>
 #include <string>
 
-#include <Cory/Core/Common.hpp>
+#include <Cory/Base/Common.hpp>
+#include <Cory/Core/Semaphore.hpp>
+#include <Cory/Core/VulkanUtils.hpp>
+#include <Cory/UI/Fence.hpp>
 
 namespace Magnum::Vk {
 class Device;
@@ -31,6 +34,11 @@ enum class DebugMessageType {
     Performance = 0x00000004,
     DeviceAddressBinding = 0x00000008, ///< Provided by VK_EXT_device_address_binding_report
 };
+enum class FenceCreateMode {
+    Unsignaled,
+    Signaled
+};
+
 } // namespace Cory
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
 
@@ -51,6 +59,9 @@ class Context {
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
                                   DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
+
+    [[nodiscard]] Semaphore createSemaphore();
+    [[nodiscard]] Fence createFence(FenceCreateMode mode);
 
     bool isHeadless() const;
 

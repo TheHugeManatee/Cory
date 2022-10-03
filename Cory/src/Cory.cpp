@@ -1,6 +1,10 @@
 #include <Cory/Cory.hpp>
 
+#include <Cory/Base/Log.hpp>
+#include <Cory/Core/Context.hpp>
+
 #include <Corrade/Containers/StringView.h>
+#include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/ExtensionProperties.h>
 #include <Magnum/Vk/Extensions.h>
 #include <Magnum/Vk/LayerProperties.h>
@@ -8,9 +12,6 @@
 
 #include <fmt/core.h>
 
-#include <Cory/Core/Context.hpp>
-#include <Cory/Core/Log.hpp>
-#include <Magnum/Vk/DeviceProperties.h>
 
 namespace Vk = Magnum::Vk;
 

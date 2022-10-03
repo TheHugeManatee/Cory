@@ -35,10 +35,7 @@ enum class DebugMessageType {
     Performance = 0x00000004,
     DeviceAddressBinding = 0x00000008, ///< Provided by VK_EXT_device_address_binding_report
 };
-enum class FenceCreateMode {
-    Unsignaled,
-    Signaled
-};
+enum class FenceCreateMode { Unsignaled, Signaled };
 
 } // namespace Cory
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
@@ -48,7 +45,7 @@ namespace Cory {
 /**
  * The main context for cory
  */
-class Context {
+class Context : NoCopy, NoMove {
   public:
     Context();
     ~Context();
@@ -67,6 +64,7 @@ class Context {
     bool isHeadless() const;
 
     Magnum::Vk::Instance &instance();
+    Magnum::Vk::DeviceProperties &physicalDevice();
     Magnum::Vk::Device &device();
     Magnum::Vk::CommandPool &commandPool();
 

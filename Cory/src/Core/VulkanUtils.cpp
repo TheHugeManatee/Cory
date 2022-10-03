@@ -48,13 +48,13 @@ void nameVulkanObject(DeviceHandle &device, MagnumVulkanObjectHandle &handle, st
     template void nameRawVulkanObject<Magnum::Vk::Device, type>(                                   \
         Magnum::Vk::Device & device, type handle, std::string_view name)
 
-#define INSTANTIATE_MAGNUM(type)                                                                   \
+#define INSTANTIATE_WRAPPED(type)                                                                  \
     template void nameVulkanObject<Magnum::Vk::Device, type>(                                      \
         Magnum::Vk::Device & device, type & handle, std::string_view name)
 
 INSTANTIATE(VkDebugUtilsMessengerEXT);
-INSTANTIATE(VkSurfaceKHR);
-INSTANTIATE_MAGNUM(Magnum::Vk::Device);
-INSTANTIATE_MAGNUM(Magnum::Vk::Buffer);
+INSTANTIATE_WRAPPED(BasicVkObjectWrapper<VkSurfaceKHR>);
+INSTANTIATE_WRAPPED(Magnum::Vk::Device);
+INSTANTIATE_WRAPPED(Magnum::Vk::Buffer);
 
 } // namespace Cory

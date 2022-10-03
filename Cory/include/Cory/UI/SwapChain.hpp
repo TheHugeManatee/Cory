@@ -8,6 +8,7 @@
 #include <Magnum/Vk/Fence.h>
 #include <Magnum/Vk/Image.h>
 #include <Magnum/Vk/ImageView.h>
+#include <MagnumExternal/Vulkan/flextVk.h>
 
 #include <glm/vec2.hpp>
 
@@ -18,6 +19,18 @@ namespace Cory {
 
 class Context;
 
+struct SwapChainSupportDetails {
+    static SwapChainSupportDetails query(Context &ctx, VkSurfaceKHR surface);
+
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat() const;
+    VkPresentModeKHR chooseSwapPresentMode() const;
+    VkExtent2D chooseSwapExtent(VkExtent2D windowExtent) const;
+
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+};
+
 struct FrameContext {
     uint32_t index{};
     Magnum::Vk::ImageView *view{};
@@ -27,10 +40,10 @@ struct FrameContext {
     bool shouldRecreateSwapChain{false};
 };
 
-class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR>, NoCopy, NoMove {
+class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR>, NoCopy {
   public:
-    SwapChain(uint32_t max_frames_in_flight,
-              Context &ctx,
+    SwapChain(Context &ctx,
+              uint32_t maxFramesInFlight,
               VkSurfaceKHR surface,
               VkSwapchainCreateInfoKHR createInfo);
 
@@ -67,7 +80,7 @@ class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR>, NoCopy, NoMove {
     void createImageViews();
 
   private:
-    Context &ctx_;
+    Context *ctx_;
 
     std::vector<Magnum::Vk::Image> images_{};
     Magnum::Vk::PixelFormat imageFormat_{};

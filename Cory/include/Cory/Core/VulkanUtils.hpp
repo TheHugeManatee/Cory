@@ -22,7 +22,7 @@ void nameVulkanObject(DeviceHandle &device,
                       MagnumVulkanObjectHandle &handle,
                       std::string_view name);
 
-#define VK_CHECKED_CALL(x, err)                                                                    \
+#define THROW_ON_ERROR(x, err)                                                                    \
     do {                                                                                           \
         if (auto code = (x); code != VK_SUCCESS) {                                                 \
             throw std::runtime_error(fmt::format(#x " failed with {}: {}", code, (err)));          \
@@ -35,10 +35,22 @@ template <typename WrappedVkType> class BasicVkObjectWrapper {
     using VkOpaqueType = std::remove_pointer_t<VkType>;
     using VkSharedPtr = std::shared_ptr<VkOpaqueType>;
 
-    BasicVkObjectWrapper(VkSharedPtr vkResourcePtr = {})
+    /* implicit */ BasicVkObjectWrapper(VkSharedPtr vkResourcePtr = {})
         : vkResourcePtr_{vkResourcePtr}
     {
     }
+
+    template <typename DeleterFn> void wrap(VkType resource, DeleterFn &&deleter)
+    {
+        vkResourcePtr_ = {resource, std::forward<DeleterFn>(deleter)};
+    }
+
+    // moveable
+    BasicVkObjectWrapper(BasicVkObjectWrapper &&rhs) = default;
+    BasicVkObjectWrapper &operator=(BasicVkObjectWrapper &&) = default;
+    // copyable
+    BasicVkObjectWrapper(const BasicVkObjectWrapper &rhs) = default;
+    BasicVkObjectWrapper &operator=(const BasicVkObjectWrapper &rhs) = default;
 
     VkType handle() { return vkResourcePtr_.get(); }
     bool has_value() const { return vkResourcePtr_.get() != nullptr; }

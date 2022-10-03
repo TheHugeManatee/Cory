@@ -42,6 +42,7 @@ struct ContextPrivate {
     bool isHeadless{false};
     Vk::Instance instance{Corrade::NoCreate};
     VkDebugUtilsMessengerEXT debugMessenger{};
+    Vk::DeviceProperties physicalDevice{Corrade::NoCreate};
     Vk::Device device{Corrade::NoCreate};
 
     Vk::Queue graphicsQueue{Corrade::NoCreate};
@@ -64,17 +65,17 @@ Context::Context()
                               .addEnabledExtensions({"VK_KHR_surface", "VK_KHR_win32_surface"}));
     data->instance.populateGlobalFunctionPointers();
 
-    Vk::DeviceProperties properties = Vk::pickDevice(data->instance);
-    CO_APP_INFO("Using device {}", properties.name());
+    data->physicalDevice = Vk::pickDevice(data->instance);
+    CO_APP_INFO("Using device {}", data->physicalDevice.name());
 
-    Vk::ExtensionProperties extensions = properties.enumerateExtensionProperties();
-    Vk::DeviceCreateInfo info{properties, &extensions};
+    Vk::ExtensionProperties extensions = data->physicalDevice.enumerateExtensionProperties();
+    Vk::DeviceCreateInfo info{data->physicalDevice, &extensions};
     info.addEnabledExtensions({"VK_KHR_swapchain"});
 
     // configure a Graphics and a Compute queue - assumes that there is a family that
     // supports both graphics and compute, which is probably not universal
-    auto graphicsAndComputeFamily =
-        properties.pickQueueFamily(Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
+    auto graphicsAndComputeFamily = data->physicalDevice.pickQueueFamily(
+        Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
     info.addQueues(
         graphicsAndComputeFamily, {1.0f, 1.0f}, {data->graphicsQueue, data->computeQueue});
 
@@ -159,9 +160,8 @@ Semaphore Context::createSemaphore()
     VkSemaphoreCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0};
 
     VkSemaphore semaphore;
-    VK_CHECKED_CALL(
-        device()->CreateSemaphore(data->device, &create_info, nullptr, &semaphore),
-        "failed to create a semaphore object");
+    THROW_ON_ERROR(device()->CreateSemaphore(data->device, &create_info, nullptr, &semaphore),
+                    "failed to create a semaphore object");
     auto vk_resource_ptr =
         std::shared_ptr<VkSemaphore_T>(semaphore, [&device = data->device](VkSemaphore f) {
             device->DestroySemaphore(device, f, nullptr);
@@ -180,6 +180,7 @@ Vk::Fence Context::createFence(Cory::FenceCreateMode mode)
 
 bool Context::isHeadless() const { return data->isHeadless; }
 Vk::Instance &Context::instance() { return data->instance; }
+Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data->physicalDevice; }
 Vk::Device &Context::device() { return data->device; }
 Vk::CommandPool &Context::commandPool() { return data->commandPool; }
 

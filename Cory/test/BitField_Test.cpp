@@ -1,7 +1,7 @@
 #include <catch2/catch.hpp>
 
-#include <Cory/Core/BitField.hpp>
-#include <Cory/Core/FmtUtils.hpp>
+#include <Cory/Base/BitField.hpp>
+#include <Cory/Base/FmtUtils.hpp>
 
 #include <fmt/format.h>
 

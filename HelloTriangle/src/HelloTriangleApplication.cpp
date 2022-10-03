@@ -2,8 +2,8 @@
 
 #include "TrianglePipeline.hpp"
 
+#include <Cory/Base/Log.hpp>
 #include <Cory/Core/Context.hpp>
-#include <Cory/Core/Log.hpp>
 #include <Cory/Core/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/UI/Window.hpp>

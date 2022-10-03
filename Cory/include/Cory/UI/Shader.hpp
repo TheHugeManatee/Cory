@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Cory/Core/Common.hpp>
+#include <Cory/Base/Common.hpp>
 
 #include <Magnum/Vk/Shader.h>
 #include <MagnumExternal/Vulkan/flextVk.h>

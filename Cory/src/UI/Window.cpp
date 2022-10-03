@@ -1,7 +1,7 @@
 #include "Cory/UI/Window.hpp"
 
+#include <Cory/Base/Log.hpp>
 #include <Cory/Core/Context.hpp>
-#include <Cory/Core/Log.hpp>
 #include <Cory/Core/VulkanUtils.hpp>
 
 #include <Magnum/Vk/Instance.h>
@@ -26,7 +26,7 @@ Window::Window(Context &context, glm::ivec2 dimensions, std::string windowName)
     // prevent OpenGL usage - vulkan all the way baybeee
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    // no resizing for now - swapchain is complicated
+    // no resizing for now - SwapChain is complicated
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     window_ = glfwCreateWindow(dimensions.x, dimensions.y, windowName_.c_str(), nullptr, nullptr);
 

@@ -1,7 +1,7 @@
 #include <Cory/Core/Context.hpp>
 
-#include <Cory/Core/FmtUtils.hpp>
-#include <Cory/Core/Log.hpp>
+#include <Cory/Base/FmtUtils.hpp>
+#include <Cory/Base/Log.hpp>
 #include <Cory/Core/VulkanUtils.hpp>
 
 #include <Corrade/Containers/Array.h>
@@ -152,6 +152,39 @@ void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
 #if _MSC_VER && _DEBUG
     if (severity == DebugMessageSeverity::Error) { __debugbreak(); }
 #endif
+}
+
+Semaphore Context::createSemaphore()
+{
+    VkSemaphoreCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0};
+
+    VkSemaphore semaphore;
+    VK_CHECKED_CALL(vkCreateSemaphore(data->device.handle(), &create_info, nullptr, &semaphore),
+                    "failed to create a semaphore object");
+    auto vk_resource_ptr =
+        std::shared_ptr<VkSemaphore_T>(semaphore, [dev = data->device.handle()](VkSemaphore f) {
+            vkDestroySemaphore(dev, f, nullptr);
+        });
+    return Semaphore{std::move(vk_resource_ptr)};
+}
+
+Fence Context::createFence(Cory::FenceCreateMode mode)
+{
+    // fixme: we probably want a pool here!
+    VkFenceCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+
+    if (mode == FenceCreateMode::Signaled) { create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; }
+
+    VkFence created_fence;
+    VK_CHECKED_CALL(vkCreateFence(data->device.handle(), &create_info, nullptr, &created_fence),
+                    "failed to create a fence object");
+
+    auto vk_resource_ptr =
+        std::shared_ptr<VkFence_T>(created_fence, [dev = data->device.handle()](VkFence f) {
+            vkDestroyFence(dev, f, nullptr);
+        });
+
+    return {*this, vk_resource_ptr};
 }
 
 bool Context::isHeadless() const { return data->isHeadless; }

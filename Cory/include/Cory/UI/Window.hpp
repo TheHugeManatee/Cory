@@ -3,7 +3,7 @@
 #include <glm/vec2.hpp>
 #include <string>
 
-#include <Cory/Core/Common.hpp>
+#include <Cory/Base/Common.hpp>
 
 struct GLFWwindow;
 typedef struct VkSurfaceKHR_T* VkSurfaceKHR;

@@ -1,6 +1,6 @@
 #include <Cory/Core/ResourceLocator.hpp>
 
-#include <Cory/Core/Log.hpp>
+#include <Cory/Base/Log.hpp>
 
 #include <fmt/core.h>
 

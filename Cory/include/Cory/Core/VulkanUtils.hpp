@@ -12,8 +12,8 @@ concept isMagnumVulkanHandle = requires(T v) { v.handle(); };
 
 namespace Cory {
 //// set an object name on a "raw" vulkan handle
-template <typename VulkanObjectHandle>
-void nameRawVulkanObject(VkDevice device, VulkanObjectHandle handle, std::string_view name);
+template <typename DeviceHandle, typename VulkanObjectHandle>
+void nameRawVulkanObject(DeviceHandle &device, VulkanObjectHandle handle, std::string_view name);
 
 // set an object name on a magnum vulkan handle (magnum vulkan handles always have a .handle()
 // function)
@@ -40,11 +40,10 @@ template <typename WrappedVkType> class BasicVkObjectWrapper {
     {
     }
 
-    VkType get() { return vkResourcePtr_.get(); }
+    VkType handle() { return vkResourcePtr_.get(); }
     bool has_value() const { return vkResourcePtr_.get() != nullptr; }
-    VkType handle() { return *vkResourcePtr_; }
 
-  private:
+  protected:
     VkSharedPtr vkResourcePtr_;
 };
 

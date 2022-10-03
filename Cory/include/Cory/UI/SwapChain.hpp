@@ -1,11 +1,11 @@
 #pragma once
 
-#include <Cory/UI/ImageView.hpp>
 #include <Cory/UI/Fence.hpp>
 
 #include "Cory/Base/Common.hpp"
 #include <Cory/Core/Semaphore.hpp>
 
+#include <Magnum/Vk/Fence.h>
 #include <Magnum/Vk/Image.h>
 #include <Magnum/Vk/ImageView.h>
 
@@ -14,29 +14,30 @@
 #include <cstdint>
 #include <vector>
 
-
 namespace Cory {
 
 class Context;
 
 struct FrameContext {
     uint32_t index{};
-    ImageView view;
-    Fence inFlight;
-    Semaphore acquired;
-    Semaphore rendered;
+    Magnum::Vk::ImageView *view{};
+    Magnum::Vk::Fence *inFlight{};
+    Semaphore *acquired{};
+    Semaphore *rendered{};
     bool shouldRecreateSwapChain{false};
 };
 
-class SwapChain : NoCopy, NoMove {
+class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR>, NoCopy, NoMove {
   public:
-    SwapChain(uint32_t max_frames_in_flight, Context &ctx,  VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo);
+    SwapChain(uint32_t max_frames_in_flight,
+              Context &ctx,
+              VkSurfaceKHR surface,
+              VkSwapchainCreateInfoKHR createInfo);
 
-    [[nodiscard]] auto get() noexcept { return swapchain_ptr_.get(); }
     [[nodiscard]] auto &images() const noexcept { return images_; }
     [[nodiscard]] auto format() const noexcept { return imageFormat_; }
     [[nodiscard]] auto extent() const noexcept { return extent_; }
-    [[nodiscard]] auto &views() const noexcept { return image_views_; }
+    [[nodiscard]] auto &views() const noexcept { return imageViews_; }
     [[nodiscard]] auto size() const noexcept { return images_.size(); }
 
     /**
@@ -71,18 +72,15 @@ class SwapChain : NoCopy, NoMove {
     std::vector<Magnum::Vk::Image> images_{};
     Magnum::Vk::PixelFormat imageFormat_{};
     glm::uvec2 extent_{};
-    std::vector<Magnum::Vk::ImageView> image_views_{};
-
-    std::shared_ptr<VkSwapchainKHR_T> swapchain_ptr_;
+    std::vector<Magnum::Vk::ImageView> imageViews_{};
 
     // manage frame resources currently in flight
     const uint32_t maxFramesInFlight_;
     uint32_t nextFrameInFlight_{};
-    std::vector<Fence> inFlightFences_{};
-    std::vector<Fence> imageFences_{};
+    std::vector<Magnum::Vk::Fence> inFlightFences_{};
+    std::vector<Magnum::Vk::Fence *> imageFences_{};
     std::vector<Semaphore> imageAcquired_{};
     std::vector<Semaphore> imageRendered_{};
 };
 
-
-}
+} // namespace Cory

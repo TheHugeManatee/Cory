@@ -8,7 +8,6 @@
 #include <Magnum/Vk/Device.h>
 // clang-format off
 #include <MagnumExternal/Vulkan/flextVk.h>
-#include <MagnumExternal/Vulkan/flextVkGlobal.h>
 #define VK_VERSION_1_0
 #include <GLFW/glfw3.h>
 // clang-format on
@@ -35,16 +34,16 @@ Window::Window(Context &context, glm::ivec2 dimensions, std::string windowName)
 
 Window::~Window()
 {
-    vkDestroySurfaceKHR(ctx_.instance().handle(), surface_, nullptr);
+    ctx_.instance()->DestroySurfaceKHR(ctx_.instance(), surface_, nullptr);
     glfwDestroyWindow(window_);
     glfwTerminate();
 }
 
 void Window::createSurface()
 {
-    auto ret = glfwCreateWindowSurface(ctx_.instance().handle(), window_, nullptr, &surface_);
+    auto ret = glfwCreateWindowSurface(ctx_.instance(), window_, nullptr, &surface_);
     CO_CORE_ASSERT(ret == VK_SUCCESS, "Could not create surface!");
-    nameRawVulkanObject(ctx_.device().handle(), surface_, "Main Window Surface");
+    nameRawVulkanObject(ctx_.device(), surface_, "Main Window Surface");
 }
 
 bool Window::shouldClose() const { return glfwWindowShouldClose(window_); }

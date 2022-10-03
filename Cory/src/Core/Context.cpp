@@ -12,10 +12,10 @@
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/ExtensionProperties.h>
 #include <Magnum/Vk/Extensions.h>
+#include <Magnum/Vk/FenceCreateInfo.h>
 #include <Magnum/Vk/InstanceCreateInfo.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/Version.h>
-#include <MagnumExternal/Vulkan/flextVkGlobal.h>
 
 namespace Vk = Magnum::Vk;
 
@@ -105,18 +105,18 @@ void Context::setupDebugMessenger()
         .pfnUserCallback = detail::debugUtilsMessengerCallback,
         .pUserData = nullptr};
 
-    vkCreateDebugUtilsMessengerEXT(
-        data->instance.handle(), &dbgMessengerCreateInfo, nullptr, &data->debugMessenger);
+    instance()->CreateDebugUtilsMessengerEXT(
+        data->instance, &dbgMessengerCreateInfo, nullptr, &data->debugMessenger);
 
     VkDebugUtilsMessengerCallbackDataEXT messageCallbackData{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT};
     auto message =
         fmt::format("Cory context '{}' initialized and debug messenger attached.", data->name);
     messageCallbackData.pMessage = message.c_str();
-    vkSubmitDebugUtilsMessageEXT(data->instance.handle(),
-                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
-                                 &messageCallbackData);
+    instance()->SubmitDebugUtilsMessageEXT(data->instance,
+                                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+                                           VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
+                                           &messageCallbackData);
 
     // this seems to crash - not sure if driver or implementation bug...
     // nameRawVulkanObject(
@@ -125,7 +125,7 @@ void Context::setupDebugMessenger()
 
 Context::~Context()
 {
-    vkDestroyDebugUtilsMessengerEXT(data->instance.handle(), data->debugMessenger, nullptr);
+    instance()->DestroyDebugUtilsMessengerEXT(data->instance, data->debugMessenger, nullptr);
 }
 
 std::string Context::getName() const { return data->name; }
@@ -159,32 +159,23 @@ Semaphore Context::createSemaphore()
     VkSemaphoreCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0};
 
     VkSemaphore semaphore;
-    VK_CHECKED_CALL(vkCreateSemaphore(data->device.handle(), &create_info, nullptr, &semaphore),
-                    "failed to create a semaphore object");
+    VK_CHECKED_CALL(
+        device()->CreateSemaphore(data->device, &create_info, nullptr, &semaphore),
+        "failed to create a semaphore object");
     auto vk_resource_ptr =
-        std::shared_ptr<VkSemaphore_T>(semaphore, [dev = data->device.handle()](VkSemaphore f) {
-            vkDestroySemaphore(dev, f, nullptr);
+        std::shared_ptr<VkSemaphore_T>(semaphore, [&device = data->device](VkSemaphore f) {
+            device->DestroySemaphore(device, f, nullptr);
         });
     return Semaphore{std::move(vk_resource_ptr)};
 }
 
-Fence Context::createFence(Cory::FenceCreateMode mode)
+Vk::Fence Context::createFence(Cory::FenceCreateMode mode)
 {
-    // fixme: we probably want a pool here!
-    VkFenceCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+    if (mode == FenceCreateMode::Signaled) {
+        return Vk::Fence{data->device, Vk::FenceCreateInfo{Vk::FenceCreateInfo::Flag::Signaled}};
+    }
 
-    if (mode == FenceCreateMode::Signaled) { create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; }
-
-    VkFence created_fence;
-    VK_CHECKED_CALL(vkCreateFence(data->device.handle(), &create_info, nullptr, &created_fence),
-                    "failed to create a fence object");
-
-    auto vk_resource_ptr =
-        std::shared_ptr<VkFence_T>(created_fence, [dev = data->device.handle()](VkFence f) {
-            vkDestroyFence(dev, f, nullptr);
-        });
-
-    return {*this, vk_resource_ptr};
+    return Vk::Fence{data->device, Vk::FenceCreateInfo{}};
 }
 
 bool Context::isHeadless() const { return data->isHeadless; }

@@ -9,7 +9,6 @@
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/ImageCreateInfo.h>
 #include <Magnum/Vk/ImageViewCreateInfo.h>
-#include <MagnumExternal/Vulkan/flextVkGlobal.h>
 
 namespace Vk = Magnum::Vk;
 
@@ -30,13 +29,14 @@ SwapChain::SwapChain(uint32_t maxFramesInFlight,
     CO_CORE_DEBUG("    Extent:            {}x{}", extent_.x, extent_.y);
 
     VkSwapchainKHR vkSwapchain;
-    VK_CHECKED_CALL(vkCreateSwapchainKHR(ctx.device().handle(), &createInfo, nullptr, &vkSwapchain),
-                    "Could not initialize SwapChain!");
 
-    swapchain_ptr_ = std::shared_ptr<VkSwapchainKHR_T>(
-        vkSwapchain, [dev = ctx.device().handle()](VkSwapchainKHR s) {
-            vkDestroySwapchainKHR(dev, s, nullptr);
-        });
+    VK_CHECKED_CALL(
+        ctx.device()->CreateSwapchainKHR(ctx.device(), &createInfo, nullptr, &vkSwapchain),
+        "Could not initialize SwapChain!");
+
+    vkResourcePtr_ = std::shared_ptr<VkSwapchainKHR_T>(vkSwapchain, [&ctx](VkSwapchainKHR s) {
+        ctx.device()->DestroySwapchainKHR(ctx.device(), s, nullptr);
+    });
 
     createImageViews();
 
@@ -48,7 +48,7 @@ SwapChain::SwapChain(uint32_t maxFramesInFlight,
     }
 
     // initialize an array of (empty) fences, one for each image in the swap chain
-    imageFences_.resize(image_views_.size());
+    imageFences_.resize(imageViews_.size(), nullptr);
 }
 
 FrameContext SwapChain::nextImage()
@@ -57,12 +57,13 @@ FrameContext SwapChain::nextImage()
     nextFrameInFlight_ = (nextFrameInFlight_ + 1) % maxFramesInFlight_;
 
     FrameContext fc;
-    VkResult result = vkAcquireNextImageKHR(ctx_.device().handle(),
-                                            swapchain_ptr_.get(),
-                                            UINT64_MAX,
-                                            imageAcquired_[nextFrameInFlight_].get(),
-                                            nullptr,
-                                            &fc.index);
+    VkResult result =
+        ctx_.device()->AcquireNextImageKHR(ctx_.device(),
+                                           handle(),
+                                           UINT64_MAX,
+                                           imageAcquired_[nextFrameInFlight_].handle(),
+                                           nullptr,
+                                           &fc.index);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         fc.shouldRecreateSwapChain = true;
@@ -75,20 +76,20 @@ FrameContext SwapChain::nextImage()
     fc.shouldRecreateSwapChain = false;
 
     // wait for the fence of the previous frame operating on that image
-    if (imageFences_[fc.index].has_value()) { imageFences_[fc.index].wait(); }
+    if (imageFences_[fc.index] != nullptr) { imageFences_[fc.index]->wait(); }
 
     // assign the image a new fence and reset it
-    imageFences_[fc.index] = inFlightFences_[nextFrameInFlight_];
-    fc.inFlight = inFlightFences_[nextFrameInFlight_];
-    fc.inFlight.reset();
+    imageFences_[fc.index] = &inFlightFences_[nextFrameInFlight_];
+    fc.inFlight = &inFlightFences_[nextFrameInFlight_];
+    fc.inFlight->reset();
 
     // assign the semaphores to the struct
-    fc.inFlight = inFlightFences_[nextFrameInFlight_];
-    fc.acquired = imageAcquired_[nextFrameInFlight_];
-    fc.rendered = imageRendered_[nextFrameInFlight_];
+    fc.inFlight = &inFlightFences_[nextFrameInFlight_];
+    fc.acquired = &imageAcquired_[nextFrameInFlight_];
+    fc.rendered = &imageRendered_[nextFrameInFlight_];
 
     // get the image view
-    fc.view = image_views_[fc.index];
+    fc.view = &imageViews_[fc.index];
 
     return fc;
 }
@@ -99,26 +100,26 @@ void SwapChain::present(FrameContext &fc)
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
     presentInfo.waitSemaphoreCount = 1;
-    VkSemaphore waitSemaphores[1] = {fc.rendered.get()};
+    VkSemaphore waitSemaphores[1] = {fc.rendered->handle()};
     presentInfo.pWaitSemaphores = waitSemaphores;
 
-    VkSwapchainKHR swapChains[] = {swapchain_ptr_.get()};
+    VkSwapchainKHR swapChains[] = {handle()};
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapChains;
 
     presentInfo.pImageIndices = &fc.index;
 
     throw std::logic_error{"need to figure out present queue first!"};
-    //vkQueuePresentKHR(ctx_.present_queue().get(), &presentInfo);
+    // vkQueuePresentKHR(ctx_.present_queue().get(), &presentInfo);
 }
 
 void SwapChain::createImageViews()
 {
     uint32_t num_images;
-    vkGetSwapchainImagesKHR(ctx_.device().handle(), swapchain_ptr_.get(), &num_images, nullptr);
+    ctx_.device()->GetSwapchainImagesKHR(ctx_.device(), handle(), &num_images, nullptr);
     std::vector<VkImage> swapchainImages(num_images);
-    vkGetSwapchainImagesKHR(
-        ctx_.device().handle(), swapchain_ptr_.get(), &num_images, swapchainImages.data());
+    ctx_.device()->GetSwapchainImagesKHR(
+        ctx_.device(), handle(), &num_images, swapchainImages.data());
 
     // create a vk::image for each of the SwapChain images
     std::ranges::transform(swapchainImages, std::back_inserter(images_), [&](VkImage img) {
@@ -126,7 +127,7 @@ void SwapChain::createImageViews()
     });
 
     // create an image view for each of the SwapChain images
-    std::ranges::transform(images_, std::back_inserter(image_views_), [&](Vk::Image &img) {
+    std::ranges::transform(images_, std::back_inserter(imageViews_), [&](Vk::Image &img) {
         return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{img}};
     });
 

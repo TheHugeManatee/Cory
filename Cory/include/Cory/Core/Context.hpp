@@ -7,7 +7,8 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Core/Semaphore.hpp>
 #include <Cory/Core/VulkanUtils.hpp>
-#include <Cory/UI/Fence.hpp>
+
+#include <Magnum/Vk/Fence.h>
 
 namespace Magnum::Vk {
 class Device;
@@ -61,7 +62,7 @@ class Context {
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 
     [[nodiscard]] Semaphore createSemaphore();
-    [[nodiscard]] Fence createFence(FenceCreateMode mode);
+    [[nodiscard]] Magnum::Vk::Fence createFence(FenceCreateMode mode);
 
     bool isHeadless() const;
 

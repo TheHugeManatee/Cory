@@ -34,7 +34,7 @@ set(CORY_SOURCES
         include/Cory/RenderCore/Semaphore.hpp
         include/Cory/RenderCore/VulkanUtils.hpp
         include/Cory/Renderer/Shader.hpp
-        include/Cory/Renderer/SwapChain.hpp
+        include/Cory/Renderer/Swapchain.hpp
         src/Application/Application.cpp
         src/Application/Window.cpp
         src/Base/Log.cpp
@@ -44,7 +44,7 @@ set(CORY_SOURCES
         src/Base/ResourceLocator.cpp
         src/RenderCore/VulkanUtils.cpp
         src/Renderer/Shader.cpp
-        src/Renderer/SwapChain.cpp
+        src/Renderer/Swapchain.cpp
         )
 
 file(GLOB_RECURSE HEADERS "include/*.h")

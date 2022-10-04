@@ -7,7 +7,7 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/RenderCore/Context.hpp>
-#include <Cory/Renderer/SwapChain.hpp>
+#include <Cory/Renderer/Swapchain.hpp>
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/Reference.h>
@@ -25,8 +25,6 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
-#include <glm/gtc/constants.hpp>
-
 #include <math.h>
 
 namespace Vk = Magnum::Vk;
@@ -43,7 +41,7 @@ HelloTriangleApplication::HelloTriangleApplication()
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
 
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
-                                                   window_->swapChain(),
+                                                   window_->swapchain(),
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
 
@@ -57,10 +55,10 @@ void HelloTriangleApplication::run()
     while (!window_->shouldClose()) {
         glfwPollEvents();
         // TODO process events?
-        auto frameCtx = window_->swapChain().nextImage();
+        auto frameCtx = window_->swapchain().nextImage();
 
         if (frameCtx.shouldRecreateSwapChain) {
-            throw std::logic_error{"SwapChain recreation not implemented yet!"};
+            throw std::logic_error{"Swapchain recreation not implemented yet!"};
         }
 
         recordCommands(frameCtx);
@@ -81,7 +79,7 @@ void HelloTriangleApplication::run()
         // AAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHH (todo: fix command buffer lifetime)
         frameCtx.inFlight->wait();
 
-        window_->swapChain().present(frameCtx);
+        window_->swapchain().present(frameCtx);
     }
 
     // wait until last frame is finished rendering
@@ -113,11 +111,11 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
 void HelloTriangleApplication::createFramebuffers()
 {
-    auto swapChainExtent = window_->swapChain().extent();
-    Magnum::Vector3i framebufferSize(swapChainExtent.x, swapChainExtent.y, 1);
+    auto swapchainExtent = window_->swapchain().extent();
+    Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
     frameBuffers_ =
-        ranges::views::zip(window_->swapChain().imageViews(), window_->swapChain().depthViews()) |
+        ranges::views::zip(window_->swapchain().imageViews(), window_->swapchain().depthViews()) |
         ranges::views::transform([&](auto views) {
             auto &[colorView, depthView] = views;
 

@@ -18,8 +18,8 @@ namespace Cory {
 
 class Context;
 
-struct SwapChainSupportDetails {
-    static SwapChainSupportDetails query(Context &ctx, VkSurfaceKHR surface);
+struct SwapchainSupportDetails {
+    static SwapchainSupportDetails query(Context &ctx, VkSurfaceKHR surface);
 
     VkSurfaceFormatKHR chooseSwapSurfaceFormat() const;
     VkPresentModeKHR chooseSwapPresentMode() const;
@@ -45,9 +45,9 @@ struct FrameContext {
     Magnum::Vk::CommandBuffer commandBuffer{Magnum::NoCreate};
 };
 
-class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR> {
+class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
-    SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo);
+    Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo);
 
     [[nodiscard]] auto &images() const noexcept { return images_; }
     [[nodiscard]] auto colorFormat() const noexcept { return imageFormat_; }
@@ -59,8 +59,8 @@ class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     [[nodiscard]] auto size() const noexcept { return images_.size(); }
 
     /**
-     * acquire the next image. this method will obtain a SwapChain image index from the underlying
-     * SwapChain. it will then wait for work on the image from a previous frame to be completed by
+     * acquire the next image. this method will obtain a Swapchain image index from the underlying
+     * Swapchain. it will then wait for work on the image from a previous frame to be completed by
      * waiting for the corresponding fence.
      *
      * upon acquiring the next image through this method and before calling the corresponding

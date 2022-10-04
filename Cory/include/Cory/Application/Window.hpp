@@ -13,7 +13,7 @@ typedef struct VkSurfaceKHR_T *VkSurfaceKHR;
 namespace Cory {
 
 class Context;
-class SwapChain;
+class Swapchain;
 
 class Window : NoCopy, NoMove {
   public:
@@ -23,7 +23,7 @@ class Window : NoCopy, NoMove {
     [[nodiscard]] bool shouldClose() const;
 
     glm::i32vec2 dimensions() const { return dimensions_; }
-    SwapChain &swapChain() { return *swapChain_; };
+    Swapchain &swapchain() { return *swapchain_; };
 
   private:
     void createSurface();
@@ -34,7 +34,7 @@ class Window : NoCopy, NoMove {
     glm::i32vec2 dimensions_;
     GLFWwindow *window_{};
     BasicVkObjectWrapper<VkSurfaceKHR> surface_{};
-    std::unique_ptr<SwapChain> swapChain_;
+    std::unique_ptr<Swapchain> swapchain_;
 };
 
 } // namespace Cory

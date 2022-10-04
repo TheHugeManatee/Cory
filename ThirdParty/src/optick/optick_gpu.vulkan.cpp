@@ -250,7 +250,7 @@ namespace Optick
 		} while (r != VK_SUCCESS);
 	}
 
-	void GPUProfilerVulkan::Flip(void* /*swapChain*/)
+	void GPUProfilerVulkan::Flip(void* /*swapchain*/)
 	{
 		OPTICK_CATEGORY("GPUProfilerVulkan::Flip", Category::Debug);
 

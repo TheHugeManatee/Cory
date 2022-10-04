@@ -1,10 +1,10 @@
-#include <Cory/UI/Shader.hpp>
+#include <Cory/Renderer/Shader.hpp>
 
+#include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Utils.hpp>
-#include <Cory/Core/Context.hpp>
-#include <Cory/Core/ResourceLocator.hpp>
-#include <Cory/Core/VulkanUtils.hpp>
+#include <Cory/RenderCore/Context.hpp>
+#include <Cory/RenderCore/VulkanUtils.hpp>
 
 #include <Corrade/Containers/ArrayViewStl.h>
 #include <Magnum/Vk/ShaderCreateInfo.h>

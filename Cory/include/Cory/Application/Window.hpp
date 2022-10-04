@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/Core/VulkanUtils.hpp>
+#include <Cory/RenderCore/VulkanUtils.hpp>
 
 #include <glm/vec2.hpp>
 #include <memory>
@@ -13,7 +13,7 @@ typedef struct VkSurfaceKHR_T *VkSurfaceKHR;
 namespace Cory {
 
 class Context;
-class SwapChain;
+class Swapchain;
 
 class Window : NoCopy, NoMove {
   public:
@@ -23,18 +23,18 @@ class Window : NoCopy, NoMove {
     [[nodiscard]] bool shouldClose() const;
 
     glm::i32vec2 dimensions() const { return dimensions_; }
-    SwapChain &swapChain() { return *swapChain_; };
+    Swapchain &swapchain() { return *swapchain_; };
 
   private:
     void createSurface();
-    void createSwapChain();
+    void createSwapchain();
 
     Context &ctx_;
     std::string windowName_;
     glm::i32vec2 dimensions_;
     GLFWwindow *window_{};
     BasicVkObjectWrapper<VkSurfaceKHR> surface_{};
-    std::unique_ptr<SwapChain> swapChain_;
+    std::unique_ptr<Swapchain> swapchain_;
 };
 
 } // namespace Cory

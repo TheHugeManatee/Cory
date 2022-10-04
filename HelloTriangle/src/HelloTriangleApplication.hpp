@@ -1,8 +1,7 @@
 #pragma once
 
-#include <Cory/UI/Application.hpp>
-
-#include <Cory/UI/SwapChain.hpp>
+#include <Cory/Application/Application.hpp>
+#include <Cory/Renderer/Swapchain.hpp>
 
 #include <Magnum/Vk/Framebuffer.h>
 
@@ -36,5 +35,5 @@ class HelloTriangleApplication : public Cory::Application {
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;
-    std::vector<Magnum::Vk::Framebuffer> frameBuffers_;
+    std::vector<Magnum::Vk::Framebuffer> framebuffers_;
 };

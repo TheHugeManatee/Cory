@@ -1,4 +1,4 @@
-#include <Cory/Core/ResourceLocator.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
 
 #include <Cory/Base/Log.hpp>
 

@@ -2,12 +2,12 @@
 
 #include "TrianglePipeline.hpp"
 
+#include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Core/Context.hpp>
-#include <Cory/Core/ResourceLocator.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
-#include <Cory/UI/SwapChain.hpp>
-#include <Cory/UI/Window.hpp>
+#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/Swapchain.hpp>
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/Reference.h>
@@ -25,8 +25,6 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
-#include <glm/gtc/constants.hpp>
-
 #include <math.h>
 
 namespace Vk = Magnum::Vk;
@@ -43,7 +41,7 @@ HelloTriangleApplication::HelloTriangleApplication()
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
 
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
-                                                   window_->swapChain(),
+                                                   window_->swapchain(),
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
 
@@ -57,10 +55,10 @@ void HelloTriangleApplication::run()
     while (!window_->shouldClose()) {
         glfwPollEvents();
         // TODO process events?
-        auto frameCtx = window_->swapChain().nextImage();
+        auto frameCtx = window_->swapchain().nextImage();
 
-        if (frameCtx.shouldRecreateSwapChain) {
-            throw std::logic_error{"SwapChain recreation not implemented yet!"};
+        if (frameCtx.shouldRecreateSwapchain) {
+            throw std::logic_error{"Swapchain recreation not implemented yet!"};
         }
 
         recordCommands(frameCtx);
@@ -72,16 +70,16 @@ void HelloTriangleApplication::run()
         Vk::SubmitInfo submitInfo{};
         submitInfo.setCommandBuffers({frameCtx.commandBuffer});
         submitInfo->pWaitSemaphores = waitSemaphores.data();
-        submitInfo->waitSemaphoreCount = waitSemaphores.size();
+        submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
         submitInfo->pWaitDstStageMask = waitStages.data();
         submitInfo->pSignalSemaphores = signalSemaphores.data();
-        submitInfo->signalSemaphoreCount = signalSemaphores.size();
+        submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
 
         ctx_->graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
         // AAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHH (todo: fix command buffer lifetime)
         frameCtx.inFlight->wait();
 
-        window_->swapChain().present(frameCtx);
+        window_->swapchain().present(frameCtx);
     }
 
     // wait until last frame is finished rendering
@@ -99,7 +97,7 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     cmdBuffer.bindPipeline(pipeline_->pipeline());
     cmdBuffer.beginRenderPass(
         // VK_SUBPASS_CONTENTS_INLINE is implicit somewhere in here I assume
-        Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), frameBuffers_[frameCtx.index]}
+        Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), framebuffers_[frameCtx.index]}
             .clearColor(0, clearColor)
             .clearDepthStencil(1, 1.0, 0));
 
@@ -113,11 +111,11 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
 void HelloTriangleApplication::createFramebuffers()
 {
-    auto swapChainExtent = window_->swapChain().extent();
-    Magnum::Vector3i framebufferSize(swapChainExtent.x, swapChainExtent.y, 1);
+    auto swapchainExtent = window_->swapchain().extent();
+    Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
-    frameBuffers_ =
-        ranges::views::zip(window_->swapChain().imageViews(), window_->swapChain().depthViews()) |
+    framebuffers_ =
+        ranges::views::zip(window_->swapchain().imageViews(), window_->swapchain().depthViews()) |
         ranges::views::transform([&](auto views) {
             auto &[colorView, depthView] = views;
 

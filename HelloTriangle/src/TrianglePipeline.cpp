@@ -1,9 +1,9 @@
 #include "TrianglePipeline.hpp"
 
 #include <Cory/Base/Log.hpp>
-#include <Cory/Core/Context.hpp>
-#include <Cory/Core/ResourceLocator.hpp>
-#include <Cory/UI/SwapChain.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/Swapchain.hpp>
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>
@@ -19,17 +19,17 @@
 namespace Vk = Magnum::Vk;
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
-                                   const Cory::SwapChain &swapChain,
+                                   const Cory::Swapchain &swapchain,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
     : ctx_{context}
 {
-    createGraphicsPipeline(swapChain, std::move(vertFile), std::move(fragFile));
+    createGraphicsPipeline(swapchain, std::move(vertFile), std::move(fragFile));
 }
 
 TrianglePipeline::~TrianglePipeline() = default;
 
-void TrianglePipeline::createGraphicsPipeline(const Cory::SwapChain &swapChain,
+void TrianglePipeline::createGraphicsPipeline(const Cory::Swapchain &swapchain,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
@@ -50,8 +50,8 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::SwapChain &swapChain,
 
     Vk::PipelineLayout pipelineLayout{ctx_.device(), Vk::PipelineLayoutCreateInfo{}};
 
-    Vk::PixelFormat colorFormat = swapChain.colorFormat();
-    Vk::PixelFormat depthFormat = swapChain.depthFormat();
+    Vk::PixelFormat colorFormat = swapchain.colorFormat();
+    Vk::PixelFormat depthFormat = swapchain.depthFormat();
 
     int32_t sampleCount = 1; // change eventually for multisampling?
 
@@ -96,7 +96,7 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::SwapChain &swapChain,
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
         shaderSet, meshLayout, pipelineLayout, *mainRenderPass_, 0, 1};
 
-    const glm::vec2 corner = swapChain.extent();
+    const glm::vec2 corner = swapchain.extent();
     rasterizationPipelineCreateInfo.setViewport({{0.0f, 0.0f}, {corner.x, corner.y}});
     pipeline_ =
         std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));

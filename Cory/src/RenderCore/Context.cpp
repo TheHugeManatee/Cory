@@ -1,8 +1,8 @@
-#include <Cory/Core/Context.hpp>
+#include <Cory/RenderCore/Context.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Core/VulkanUtils.hpp>
+#include <Cory/RenderCore/VulkanUtils.hpp>
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/StringStlView.h>

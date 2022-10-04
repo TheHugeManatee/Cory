@@ -5,7 +5,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/UI/Shader.hpp>
+#include <Cory/Renderer/Shader.hpp>
 
 #include <glm/vec2.hpp>
 
@@ -18,13 +18,13 @@ class RenderPass;
 
 namespace Cory {
 class Context;
-class SwapChain;
+class Swapchain;
 } // namespace Cory
 
 class TrianglePipeline : Cory::NoCopy {
   public:
     TrianglePipeline(Cory::Context &context,
-                     const Cory::SwapChain &swapChain,
+                     const Cory::Swapchain &swapchain,
                      std::filesystem::path vertFile,
                      std::filesystem::path fragFile);
     ~TrianglePipeline();
@@ -34,7 +34,7 @@ class TrianglePipeline : Cory::NoCopy {
     Magnum::Vk::Pipeline &pipeline() { return *pipeline_; }
 
   private:
-    void createGraphicsPipeline(const Cory::SwapChain &swapChain,
+    void createGraphicsPipeline(const Cory::Swapchain &swapchain,
                                 std::filesystem::path vertFile,
                                 std::filesystem::path fragFile);
 

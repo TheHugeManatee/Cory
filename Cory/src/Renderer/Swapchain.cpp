@@ -1,10 +1,10 @@
-#include <Cory/UI/SwapChain.hpp>
+#include <Cory/Renderer/Swapchain.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Core/APIConversion.hpp>
-#include <Cory/Core/Context.hpp>
-#include <Cory/Core/VulkanUtils.hpp>
+#include <Cory/RenderCore/APIConversion.hpp>
+#include <Cory/RenderCore/Context.hpp>
+#include <Cory/RenderCore/VulkanUtils.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/CommandPool.h>
@@ -22,9 +22,9 @@ namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
-SwapChainSupportDetails SwapChainSupportDetails::query(Context &ctx, VkSurfaceKHR surface)
+SwapchainSupportDetails SwapchainSupportDetails::query(Context &ctx, VkSurfaceKHR surface)
 {
-    SwapChainSupportDetails details;
+    SwapchainSupportDetails details;
     Vk::Instance &instance = ctx.instance();
     Vk::DeviceProperties &physicalDevice = ctx.physicalDevice();
 
@@ -63,7 +63,7 @@ SwapChainSupportDetails SwapChainSupportDetails::query(Context &ctx, VkSurfaceKH
     return details;
 }
 
-VkSurfaceFormatKHR SwapChainSupportDetails::chooseSwapSurfaceFormat() const
+VkSurfaceFormatKHR SwapchainSupportDetails::chooseSwapSurfaceFormat() const
 {
     for (const auto &availableFormat : formats) {
         if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
@@ -75,20 +75,18 @@ VkSurfaceFormatKHR SwapChainSupportDetails::chooseSwapSurfaceFormat() const
     return formats[0];
 }
 
-VkPresentModeKHR SwapChainSupportDetails::chooseSwapPresentMode() const
+VkPresentModeKHR SwapchainSupportDetails::chooseSwapPresentMode() const
 {
     for (const auto &availablePresentMode : presentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            CO_CORE_DEBUG("Present mode: Mailbox");
             return availablePresentMode;
         }
     }
 
-    CO_CORE_DEBUG("Present mode: V-Sync (FIFO)");
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D SwapChainSupportDetails::chooseSwapExtent(VkExtent2D windowExtent) const
+VkExtent2D SwapchainSupportDetails::chooseSwapExtent(VkExtent2D windowExtent) const
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
@@ -106,7 +104,7 @@ VkExtent2D SwapChainSupportDetails::chooseSwapExtent(VkExtent2D windowExtent) co
     }
 }
 
-uint32_t SwapChainSupportDetails::chooseImageCount() const
+uint32_t SwapchainSupportDetails::chooseImageCount() const
 {
     uint32_t imageCount = capabilities.minImageCount + 1;
     if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
@@ -115,7 +113,7 @@ uint32_t SwapChainSupportDetails::chooseImageCount() const
     return imageCount;
 }
 
-SwapChain::SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo)
+Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo)
     : maxFramesInFlight_{createInfo.minImageCount}
     , ctx_{&ctx}
     , imageFormat_{toMagnum(createInfo.imageFormat)}
@@ -125,13 +123,13 @@ SwapChain::SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
 
     THROW_ON_ERROR(
         ctx_->device()->CreateSwapchainKHR(ctx_->device(), &createInfo, nullptr, &vkSwapchain),
-        "Could not initialize SwapChain!");
+        "Could not initialize Swapchain!");
 
     wrap(vkSwapchain, [ctx = ctx_](VkSwapchainKHR s) {
         ctx->device()->DestroySwapchainKHR(ctx->device(), s, nullptr);
     });
     nameRawVulkanObject(
-        ctx_->device(), vkSwapchain, fmt::format("Main SwapChain {}x{}", extent_.x, extent_.y));
+        ctx_->device(), vkSwapchain, fmt::format("Main Swapchain {}x{}", extent_.x, extent_.y));
 
     depthFormat_ = Magnum::Vk::PixelFormat::Depth32F; // TODO implement dynamic selection instead
                                                       //      of hardcoded format
@@ -139,14 +137,14 @@ SwapChain::SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     createDepthResources();
     createSyncObjects();
 
-    CO_CORE_DEBUG("SwapChain configuration:");
+    CO_CORE_DEBUG("Swapchain configuration:");
     CO_CORE_DEBUG("    Surface Format:    {}, {}", imageFormat_, createInfo.imageColorSpace);
     CO_CORE_DEBUG("    Present Mode:      {}", createInfo.presentMode);
     CO_CORE_DEBUG("    Extent:            {}x{}", extent_.x, extent_.y);
     CO_CORE_DEBUG("    Images:            {}", images_.size());
 }
 
-FrameContext SwapChain::nextImage()
+FrameContext Swapchain::nextImage()
 {
     // advance the image index
     ++nextFrameNumber_;
@@ -162,14 +160,14 @@ FrameContext SwapChain::nextImage()
         ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameIndex], nullptr, &fc.index);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        fc.shouldRecreateSwapChain = true;
+        fc.shouldRecreateSwapchain = true;
         return fc;
     }
     CO_CORE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
                    "failed to acquire swap chain image: {}",
                    result);
 
-    fc.shouldRecreateSwapChain = false;
+    fc.shouldRecreateSwapchain = false;
 
     // wait for the fence of the previous frame operating on that image
     if (imageFences_[fc.index] != nullptr) { imageFences_[fc.index]->wait(); }
@@ -196,7 +194,7 @@ FrameContext SwapChain::nextImage()
     return fc;
 }
 
-void SwapChain::present(FrameContext &fc)
+void Swapchain::present(FrameContext &fc)
 {
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -205,16 +203,16 @@ void SwapChain::present(FrameContext &fc)
     VkSemaphore waitSemaphores[1] = {*fc.rendered};
     presentInfo.pWaitSemaphores = waitSemaphores;
 
-    VkSwapchainKHR swapChains[] = {*this};
+    VkSwapchainKHR swapchains[] = {*this};
     presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = swapChains;
+    presentInfo.pSwapchains = swapchains;
 
     presentInfo.pImageIndices = &fc.index;
 
     ctx_->device()->QueuePresentKHR(ctx_->graphicsQueue(), &presentInfo);
 }
 
-void SwapChain::createDepthResources()
+void Swapchain::createDepthResources()
 {
     Magnum::Vector2i size(extent_.x, extent_.y);
     int32_t samples = 1;
@@ -236,7 +234,7 @@ void SwapChain::createDepthResources()
         ranges::to<std::vector<Vk::ImageView>>;
 }
 
-void SwapChain::createImageViews()
+void Swapchain::createImageViews()
 {
     uint32_t num_images;
     auto &device = ctx_->device();
@@ -244,14 +242,14 @@ void SwapChain::createImageViews()
     std::vector<VkImage> swapchainImages(num_images);
     device->GetSwapchainImagesKHR(device, *this, &num_images, swapchainImages.data());
 
-    // create a Vk::Image for each of the SwapChain images - when wrapped like this,
+    // create a Vk::Image for each of the Swapchain images - when wrapped like this,
     // Vk::Image will not attempt to destroy the image on destruction
     images_ = swapchainImages | ranges::views::transform([&](VkImage img) mutable {
                   return Vk::Image::wrap(device, img, imageFormat_);
               }) |
               ranges::to<std::vector<Vk::Image>>;
 
-    // create a Vk::ImageView for each of the SwapChain images
+    // create a Vk::ImageView for each of the Swapchain images
     imageViews_ = images_ | ranges::views::transform([&](Vk::Image &img) mutable {
                       return Vk::ImageView{device, Vk::ImageViewCreateInfo2D{img}};
                   }) |
@@ -259,20 +257,20 @@ void SwapChain::createImageViews()
 
     // name all objects
     for (uint32_t i = 0; i < num_images; ++i) {
-        nameVulkanObject(device, images_[i], fmt::format("SwapChain Image {}", i));
-        nameVulkanObject(device, imageViews_[i], fmt::format("SwapChain ImageView {}", i));
+        nameVulkanObject(device, images_[i], fmt::format("Swapchain Image {}", i));
+        nameVulkanObject(device, imageViews_[i], fmt::format("Swapchain ImageView {}", i));
     }
 }
 
-void SwapChain::createSyncObjects()
+void Swapchain::createSyncObjects()
 {
     // create all the semaphores needed to manage each parallel frame in flight
     for (uint32_t i = 0; i < maxFramesInFlight_; ++i) {
         imageAcquired_.emplace_back(
-            ctx_->createSemaphore(fmt::format("SwapChain Img {} Acquired", i)));
+            ctx_->createSemaphore(fmt::format("Swapchain Img {} Acquired", i)));
         imageRendered_.emplace_back(
-            ctx_->createSemaphore(fmt::format("SwapChain Img {} Rendered", i)));
-        inFlightFences_.emplace_back(ctx_->createFence(fmt::format("SwapChain Img {} in flight", i),
+            ctx_->createSemaphore(fmt::format("Swapchain Img {} Rendered", i)));
+        inFlightFences_.emplace_back(ctx_->createFence(fmt::format("Swapchain Img {} in flight", i),
                                                        FenceCreateMode::Signaled));
     }
 

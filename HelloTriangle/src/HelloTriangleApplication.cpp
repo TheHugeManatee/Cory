@@ -2,12 +2,12 @@
 
 #include "TrianglePipeline.hpp"
 
+#include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Core/Context.hpp>
-#include <Cory/Core/ResourceLocator.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
-#include <Cory/UI/SwapChain.hpp>
-#include <Cory/UI/Window.hpp>
+#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/SwapChain.hpp>
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/Reference.h>
@@ -72,10 +72,10 @@ void HelloTriangleApplication::run()
         Vk::SubmitInfo submitInfo{};
         submitInfo.setCommandBuffers({frameCtx.commandBuffer});
         submitInfo->pWaitSemaphores = waitSemaphores.data();
-        submitInfo->waitSemaphoreCount = waitSemaphores.size();
+        submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
         submitInfo->pWaitDstStageMask = waitStages.data();
         submitInfo->pSignalSemaphores = signalSemaphores.data();
-        submitInfo->signalSemaphoreCount = signalSemaphores.size();
+        submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
 
         ctx_->graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
         // AAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHH (todo: fix command buffer lifetime)

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/Core/Semaphore.hpp>
+#include <Cory/RenderCore/Semaphore.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Fence.h>

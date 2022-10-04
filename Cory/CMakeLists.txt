@@ -17,6 +17,8 @@ find_package(shaderc)
 find_package(spdlog REQUIRED)
 
 set(CORY_SOURCES
+        include/Cory/Application/Application.hpp
+        include/Cory/Application/Window.hpp
         include/Cory/Base/BitField.hpp
         include/Cory/Base/Common.hpp
         include/Cory/Base/FmtUtils.hpp
@@ -24,27 +26,25 @@ set(CORY_SOURCES
         include/Cory/Base/Math.hpp
         include/Cory/Base/SlotMap.hpp
         include/Cory/Base/Utils.hpp
-        include/Cory/Core/APIConversion.hpp
-        include/Cory/Core/Context.hpp
-        include/Cory/Core/CpuBuffer.hpp
-        include/Cory/Core/ResourceLocator.hpp
-        include/Cory/Core/Semaphore.hpp
-        include/Cory/Core/VulkanUtils.hpp
         include/Cory/Cory.hpp
-        include/Cory/UI/Application.hpp
-        include/Cory/UI/Shader.hpp
-        include/Cory/UI/SwapChain.hpp
-        include/Cory/UI/Window.hpp
+        include/Cory/RenderCore/APIConversion.hpp
+        include/Cory/RenderCore/Context.hpp
+        include/Cory/RenderCore/CpuBuffer.hpp
+        include/Cory/Base/ResourceLocator.hpp
+        include/Cory/RenderCore/Semaphore.hpp
+        include/Cory/RenderCore/VulkanUtils.hpp
+        include/Cory/Renderer/Shader.hpp
+        include/Cory/Renderer/SwapChain.hpp
+        src/Application/Application.cpp
+        src/Application/Window.cpp
         src/Base/Log.cpp
         src/Base/Utils.cpp
-        src/Core/Context.cpp
-        src/Core/ResourceLocator.cpp
-        src/Core/VulkanUtils.cpp
         src/Cory.cpp
-        src/UI/Application.cpp
-        src/UI/Shader.cpp
-        src/UI/SwapChain.cpp
-        src/UI/Window.cpp
+        src/RenderCore/Context.cpp
+        src/Base/ResourceLocator.cpp
+        src/RenderCore/VulkanUtils.cpp
+        src/Renderer/Shader.cpp
+        src/Renderer/SwapChain.cpp
         )
 
 file(GLOB_RECURSE HEADERS "include/*.h")

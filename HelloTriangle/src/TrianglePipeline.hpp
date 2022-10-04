@@ -5,7 +5,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/UI/Shader.hpp>
+#include <Cory/Renderer/Shader.hpp>
 
 #include <glm/vec2.hpp>
 

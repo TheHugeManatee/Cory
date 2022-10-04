@@ -1,9 +1,9 @@
 #include "TrianglePipeline.hpp"
 
 #include <Cory/Base/Log.hpp>
-#include <Cory/Core/Context.hpp>
-#include <Cory/Core/ResourceLocator.hpp>
-#include <Cory/UI/SwapChain.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/SwapChain.hpp>
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>

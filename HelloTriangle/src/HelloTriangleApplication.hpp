@@ -1,8 +1,7 @@
 #pragma once
 
-#include <Cory/UI/Application.hpp>
-
-#include <Cory/UI/SwapChain.hpp>
+#include <Cory/Application/Application.hpp>
+#include <Cory/Renderer/SwapChain.hpp>
 
 #include <Magnum/Vk/Framebuffer.h>
 

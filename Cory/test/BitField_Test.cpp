@@ -119,6 +119,5 @@ TEST_CASE("BitField", "[Cory/Utils]")
         bitfield.set(BitValues::First).set(BitValues::Third).set(BitValues::Highest);
         auto formatted_set_bits = fmt::format("{}", bitfield);
         CHECK(formatted_set_bits == "0x80000005 [Highest | Third | First]");
-        fmt::print("{}", bitfield.bits());
     }
 }

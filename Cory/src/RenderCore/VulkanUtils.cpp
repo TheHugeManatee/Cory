@@ -1,6 +1,6 @@
-#include <Cory/Core/VulkanUtils.hpp>
+#include <Cory/RenderCore/VulkanUtils.hpp>
 
-#include <Cory/Core/Semaphore.hpp>
+#include <Cory/RenderCore/Semaphore.hpp>
 
 #include <Magnum/Vk/Buffer.h>
 #include <Magnum/Vk/CommandBuffer.h>

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/Core/VulkanUtils.hpp>
+#include <Cory/RenderCore/VulkanUtils.hpp>
 
 #include <glm/vec2.hpp>
 #include <memory>

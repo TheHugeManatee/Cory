@@ -66,7 +66,7 @@ SwapchainSupportDetails SwapchainSupportDetails::query(Context &ctx, VkSurfaceKH
 VkSurfaceFormatKHR SwapchainSupportDetails::chooseSwapSurfaceFormat() const
 {
     for (const auto &availableFormat : formats) {
-        if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
             availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return availableFormat;
         }

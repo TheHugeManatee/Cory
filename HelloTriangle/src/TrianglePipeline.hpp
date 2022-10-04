@@ -23,12 +23,14 @@ class TrianglePipeline : Cory::NoCopy {
   public:
     TrianglePipeline(Cory::Context &context,
                      glm::u32vec2 swapChainDimensions,
+                     Magnum::Vk::PixelFormat swapChainPixelFormat,
                      std::filesystem::path vertFile,
                      std::filesystem::path fragFile);
     ~TrianglePipeline();
 
   private:
     void createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
+                                Magnum::Vk::PixelFormat swapChainPixelFormat,
                                 std::filesystem::path vertFile,
                                 std::filesystem::path fragFile);
 

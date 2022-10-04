@@ -6,9 +6,11 @@
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>
+#include <Magnum/Vk/Image.h> // for Vk::ImageLayout
 #include <Magnum/Vk/MeshLayout.h>
 #include <Magnum/Vk/Pipeline.h>
 #include <Magnum/Vk/PipelineLayoutCreateInfo.h>
+#include <Magnum/Vk/PixelFormat.h>
 #include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
 #include <Magnum/Vk/RenderPassCreateInfo.h>
 #include <Magnum/Vk/ShaderSet.h>
@@ -17,16 +19,19 @@ namespace Vk = Magnum::Vk;
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
                                    glm::u32vec2 swapChainDimensions,
+                                   Magnum::Vk::PixelFormat swapChainPixelFormat,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
     : ctx_{context}
 {
-    createGraphicsPipeline(swapChainDimensions, std::move(vertFile), std::move(fragFile));
+    createGraphicsPipeline(
+        swapChainDimensions, swapChainPixelFormat, std::move(vertFile), std::move(fragFile));
 }
 
 TrianglePipeline::~TrianglePipeline() = default;
 
 void TrianglePipeline::createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
+                                              Magnum::Vk::PixelFormat swapChainPixelFormat,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
@@ -47,10 +52,47 @@ void TrianglePipeline::createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
 
     Vk::PipelineLayout pipelineLayout{ctx_.device(), Vk::PipelineLayoutCreateInfo{}};
 
+    Vk::PixelFormat colorFormat = swapChainPixelFormat;
+    Vk::PixelFormat depthFormat{VK_FORMAT_D32_SFLOAT}; // TODO change to dynamic picking of a format
+    int32_t sampleCount = 1;                           // change eventually
+
     Vk::RenderPass renderPass{
-        ctx_.device(), Vk::RenderPassCreateInfo{}
-        // todo
-    };
+        ctx_.device(),
+        Vk::RenderPassCreateInfo{}
+            .setAttachments(
+                // color
+                {Vk::AttachmentDescription{
+                     colorFormat,
+                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
+                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
+                     Vk::ImageLayout::Undefined,
+                     Vk::ImageLayout{
+                         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR}, // this is not mapped yet by magnum
+                     sampleCount},
+                 // depth
+                 Vk::AttachmentDescription{
+                     depthFormat,
+                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
+                     {Vk::AttachmentStoreOperation::DontCare,
+                      Vk::AttachmentStoreOperation::DontCare},
+                     Vk::ImageLayout::Undefined,
+                     Vk::ImageLayout::DepthStencilAttachment,
+                     sampleCount}})
+            .addSubpass(Vk::SubpassDescription{}
+                            .setColorAttachments(
+                                {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}})
+                            .setDepthStencilAttachment({Vk::AttachmentReference{
+                                1, Vk::ImageLayout::DepthStencilAttachment}}))
+            .setDependencies(
+                {Vk::SubpassDependency{Vk::SubpassDependency::External,           // srcSubpass
+                                       0,                                         // dstSubpass
+                                       Vk::PipelineStage::ColorAttachmentOutput | // srcStages
+                                           Vk::PipelineStage::EarlyFragmentTests, //
+                                       Vk::PipelineStage::ColorAttachmentOutput | // dstStages
+                                           Vk::PipelineStage::EarlyFragmentTests, //
+                                       Vk::Access{},                              // srcAccess
+                                       Vk::Access::ColorAttachmentWrite |         // dstAccess
+                                           Vk::Access::DepthStencilAttachmentWrite}})}; //
 
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
         shaderSet, meshLayout, pipelineLayout, renderPass, 0, 1};

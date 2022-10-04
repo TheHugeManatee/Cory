@@ -24,6 +24,7 @@ HelloTriangleApplication::HelloTriangleApplication()
 
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
                                                    window_->swapChain().extent(),
+                                                   window_->swapChain().format(),
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
 }

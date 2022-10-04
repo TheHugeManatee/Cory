@@ -79,12 +79,12 @@ target_link_libraries(${TARGET_NAME}
         Cory::project_options
         )
 
-# Define a macro that allows consumers of this lib to know when they link against it
 target_compile_definitions(${TARGET_NAME}
         PUBLIC
+        # Define a macro that allows consumers of this lib to know when they link against it
         HAVE_CORY
+        # set up some GLM defaults that match our project better
         GLM_FORCE_RADIANS
-        GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
         GLM_FORCE_DEPTH_ZERO_TO_ONE
         GLM_ENABLE_EXPERIMENTAL)
 

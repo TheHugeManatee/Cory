@@ -9,17 +9,22 @@
 #include <Cory/RenderCore/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
+#include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/Reference.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/Vector3.h>
+#include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/FramebufferCreateInfo.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/RenderPass.h>
+#include <Magnum/Vk/VertexFormat.h>
 
 #include <GLFW/glfw3.h>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
@@ -27,9 +32,12 @@
 
 #include <math.h>
 
+#include <array>
+
 namespace Vk = Magnum::Vk;
 
 HelloTriangleApplication::HelloTriangleApplication()
+    : mesh_{}
 {
     Cory::Init();
 
@@ -40,8 +48,10 @@ HelloTriangleApplication::HelloTriangleApplication()
     ctx_ = std::make_unique<Cory::Context>();
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
 
+    createGeometry();
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
                                                    window_->swapchain(),
+                                                   *mesh_,
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
 
@@ -101,8 +111,8 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
             .clearColor(0, clearColor)
             .clearDepthStencil(1, 1.0, 0));
 
-    // draw our non-existent triangle
-    ctx_->device()->CmdDraw(cmdBuffer, 3, 1, 0, 0);
+    // draw our triangle mesh
+    cmdBuffer.draw(*mesh_);
 
     cmdBuffer.endRenderPass();
 
@@ -125,4 +135,43 @@ void HelloTriangleApplication::createFramebuffers()
                                                              framebufferSize});
         }) |
         ranges::to<std::vector<Vk::Framebuffer>>;
+}
+void HelloTriangleApplication::createGeometry()
+{
+#pragma pack(push, 1)
+    // note: currently can't use glm types because we use
+    struct Vertex {
+        glm::vec3 pos;
+        glm::vec3 tex;
+        glm::vec4 col;
+    };
+#pragma pack(pop)
+    static_assert(sizeof(Vertex) == 10 * sizeof(float));
+
+    uint32_t binding = 0;
+    mesh_ = std::make_unique<Vk::Mesh>(
+        Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
+            .addBinding(binding, sizeof(Vertex))
+            .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
+            .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
+            .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float)));
+
+    // set up the fixed mesh - note that the 'data' variable manages
+    // the lifetime of the memory mapping
+    {
+        const uint64_t numVertices = 3;
+        Vk::Buffer vertices{
+            ctx_->device(),
+            Vk::BufferCreateInfo{Vk::BufferUsage::VertexBuffer, numVertices * sizeof(Vertex)},
+            Magnum::Vk::MemoryFlag::HostCoherent | Magnum::Vk::MemoryFlag::HostVisible};
+
+        Corrade::Containers::Array<char, Vk::MemoryMapDeleter> data =
+            vertices.dedicatedMemory().map();
+
+        auto &view = reinterpret_cast<std::array<Vertex, 3> &>(*data.data());
+        view[0] = Vertex{{0.0f, -0.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
+        view[1] = Vertex{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
+        view[2] = Vertex{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
+        mesh_->addVertexBuffer(0, std::move(vertices), 0).setCount(numVertices);
+    }
 }

@@ -25,6 +25,7 @@ class TrianglePipeline : Cory::NoCopy {
   public:
     TrianglePipeline(Cory::Context &context,
                      const Cory::Swapchain &swapchain,
+                     const Magnum::Vk::Mesh &mesh,
                      std::filesystem::path vertFile,
                      std::filesystem::path fragFile);
     ~TrianglePipeline();
@@ -35,6 +36,7 @@ class TrianglePipeline : Cory::NoCopy {
 
   private:
     void createGraphicsPipeline(const Cory::Swapchain &swapchain,
+                                const Magnum::Vk::Mesh &mesh,
                                 std::filesystem::path vertFile,
                                 std::filesystem::path fragFile);
 

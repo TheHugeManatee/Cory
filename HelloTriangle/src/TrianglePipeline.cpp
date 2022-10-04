@@ -8,6 +8,7 @@
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>
 #include <Magnum/Vk/Image.h> // for Vk::ImageLayout
+#include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/MeshLayout.h>
 #include <Magnum/Vk/Pipeline.h>
 #include <Magnum/Vk/PipelineLayoutCreateInfo.h>
@@ -20,16 +21,18 @@ namespace Vk = Magnum::Vk;
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
                                    const Cory::Swapchain &swapchain,
+                                   const Magnum::Vk::Mesh &mesh,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
     : ctx_{context}
 {
-    createGraphicsPipeline(swapchain, std::move(vertFile), std::move(fragFile));
+    createGraphicsPipeline(swapchain, mesh, std::move(vertFile), std::move(fragFile));
 }
 
 TrianglePipeline::~TrianglePipeline() = default;
 
 void TrianglePipeline::createGraphicsPipeline(const Cory::Swapchain &swapchain,
+                                              const Magnum::Vk::Mesh &mesh,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
@@ -43,10 +46,6 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Swapchain &swapchain,
     Vk::ShaderSet shaderSet{};
     shaderSet.addShader(Vk::ShaderStage::Vertex, vertexShader_.module(), "main");
     shaderSet.addShader(Vk::ShaderStage::Fragment, fragmentShader_.module(), "main");
-
-    Vk::MeshLayout meshLayout{Vk::MeshPrimitive::Triangles};
-    // probably not needed but just to follow the tutorial exactly
-    meshLayout.vkPipelineInputAssemblyStateCreateInfo().primitiveRestartEnable = false;
 
     Vk::PipelineLayout pipelineLayout{ctx_.device(), Vk::PipelineLayoutCreateInfo{}};
 
@@ -94,7 +93,7 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Swapchain &swapchain,
                                            Vk::Access::DepthStencilAttachmentWrite}}));
 
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
-        shaderSet, meshLayout, pipelineLayout, *mainRenderPass_, 0, 1};
+        shaderSet, mesh.layout(), pipelineLayout, *mainRenderPass_, 0, 1};
 
     const glm::vec2 corner = swapchain.extent();
     rasterizationPipelineCreateInfo.setViewport({{0.0f, 0.0f}, {corner.x, corner.y}});

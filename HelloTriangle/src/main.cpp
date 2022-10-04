@@ -1,14 +1,20 @@
-#include <Cory/Cory.hpp>
+#include "HelloTriangleApplication.hpp"
 
-#include <Cory/Core/Log.hpp>
+#include <cstdlib>
+#include <stdexcept>
+
+#include <spdlog/spdlog.h>
 
 int main()
 {
-    Cory::Log::Init();
+    try {
+        HelloTriangleApplication app{};
 
-    CO_APP_INFO("Cory value is {}", Cory::test_function());
-    CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
-
-    Cory::playground_main();
-
+        app.run();
+    }
+    catch (const std::exception &e) {
+        spdlog::critical("Uncaught exception on main thread: {}", e.what());
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }

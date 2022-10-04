@@ -3,7 +3,13 @@
 #include <string>
 
 namespace Cory {
-    int test_function();
+    /**
+     * Initialize the library.
+     *
+     * Mostly takes care of initializing all static (global) objects.
+     *
+     */
+    void Init();
     std::string queryVulkanInstanceVersion();
 
     // temporary main function for prototyping

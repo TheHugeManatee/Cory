@@ -55,8 +55,8 @@ Roughly:
 git clone https://github.com/TheHugeManatee/Cory
 cd Cory
 cd Cory/conan-recipes
-conan export corrade @2022.09.10
-conan export magnum @2022.09.10
+conan export corrade 2022.09.10_vk13@TheHugeManatee/custom
+conan export magnum 2022.09.10_vk13@TheHugeManatee/custom
 cd ..
 mkdir build && cd build
 conan install .. -s build_type=Debug

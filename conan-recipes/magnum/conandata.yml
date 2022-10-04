@@ -5,3 +5,11 @@ sources:
   "2022.09.10":
     url: https://github.com/mosra/magnum/archive/da5d2fa958f22844adaec90e894e85270ed0a631.zip
     sha256: a471d87ef240acd324d787f2ffc68f8ba127d4dcbf1fa5a568de4d1f287d1d00
+  "2022.09.10_vk13":
+    url: https://github.com/mosra/magnum/archive/da5d2fa958f22844adaec90e894e85270ed0a631.zip
+    sha256: a471d87ef240acd324d787f2ffc68f8ba127d4dcbf1fa5a568de4d1f287d1d00
+
+patches:
+  "2022.09.10_vk13":
+    - base_path: "source_subfolder"
+      patch_file: "patches/0001-update-flextvk-to-1.3.224-with-some-KHR-extensions.patch"

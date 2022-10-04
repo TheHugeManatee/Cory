@@ -4,35 +4,47 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
-find_package(spdlog REQUIRED)
-find_package(fmt REQUIRED)
 find_package(GLEW)
-find_package(glm REQUIRED)
-find_package(glfw3)
-find_package(imgui REQUIRED)
-find_package(shaderc)
 find_package(Magnum REQUIRED Vk)
 find_package(Microsoft.GSL REQUIRED)
+find_package(fmt REQUIRED)
+find_package(glfw3)
+find_package(glm REQUIRED)
+find_package(imgui REQUIRED)
 find_package(magic_enum REQUIRED)
 find_package(range-v3 REQUIRED)
-
+find_package(shaderc)
+find_package(spdlog REQUIRED)
 
 set(CORY_SOURCES
-        src/Cory.cpp
-        include/Cory/Cory.hpp
+        include/Cory/Base/BitField.hpp
+        include/Cory/Base/Common.hpp
+        include/Cory/Base/FmtUtils.hpp
+        include/Cory/Base/Log.hpp
+        include/Cory/Base/Math.hpp
+        include/Cory/Base/SlotMap.hpp
+        include/Cory/Base/Utils.hpp
+        include/Cory/Core/APIConversion.hpp
+        include/Cory/Core/Context.hpp
         include/Cory/Core/CpuBuffer.hpp
-        include/Cory/Core/Math.hpp
-        include/Cory/Core/SlotMap.hpp
-        src/Core/Log.cpp
-        include/Cory/Core/Log.hpp
-        src/Core/Utils.cpp
-        include/Cory/Core/Utils.hpp
-        src/Core/Context.cpp 
-        include/Cory/Core/Context.hpp 
-        include/Cory/Core/FmtUtils.hpp 
-        include/Cory/Core/VulkanUtils.hpp 
-        src/Core/VulkanUtils.cpp 
-        include/Cory/Core/BitField.hpp
+        include/Cory/Core/ResourceLocator.hpp
+        include/Cory/Core/Semaphore.hpp
+        include/Cory/Core/VulkanUtils.hpp
+        include/Cory/Cory.hpp
+        include/Cory/UI/Application.hpp
+        include/Cory/UI/Shader.hpp
+        include/Cory/UI/SwapChain.hpp
+        include/Cory/UI/Window.hpp
+        src/Base/Log.cpp
+        src/Base/Utils.cpp
+        src/Core/Context.cpp
+        src/Core/ResourceLocator.cpp
+        src/Core/VulkanUtils.cpp
+        src/Cory.cpp
+        src/UI/Application.cpp
+        src/UI/Shader.cpp
+        src/UI/SwapChain.cpp
+        src/UI/Window.cpp
         )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
@@ -49,22 +61,22 @@ target_include_directories(${TARGET_NAME}
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         ${VULKAN_LIBRARIES}
-        spdlog::spdlog
-        fmt::fmt
-        GLEW::GLEW
-        glm::glm
-        Microsoft.GSL::GSL
-        glfw::glfw
-        imgui::imgui
-        shaderc::shaderc
         Cory::ThirdParty
-        range-v3::range-v3
+        GLEW::GLEW
+        Magnum::Vk
+        Microsoft.GSL::GSL
+        fmt::fmt
+        glfw::glfw
+        glm::glm
+        imgui::imgui
         magic_enum::magic_enum
+        range-v3::range-v3
+        shaderc::shaderc
+        spdlog::spdlog
 
         PRIVATE
         Cory::project_warnings
         Cory::project_options
-        Magnum::Vk
         )
 
 # Define a macro that allows consumers of this lib to know when they link against it
@@ -77,7 +89,7 @@ target_compile_definitions(${TARGET_NAME}
         GLM_ENABLE_EXPERIMENTAL)
 
 # for now, we hardcode the resource path until we have a proper resource management in place
-target_compile_definitions(${TARGET_NAME} PUBLIC "RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
+target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
 
 # generate the export header for this library
 include(GenerateExportHeader)

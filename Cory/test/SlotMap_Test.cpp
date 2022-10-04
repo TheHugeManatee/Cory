@@ -1,6 +1,6 @@
 #include <catch2/catch.hpp>
 
-#include <Cory/Core/SlotMap.hpp>
+#include <Cory/Base/SlotMap.hpp>
 
 #include <range/v3/view.hpp>
 

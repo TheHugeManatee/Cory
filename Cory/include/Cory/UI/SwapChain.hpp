@@ -35,12 +35,13 @@ struct SwapChainSupportDetails {
 
 struct FrameContext {
     uint32_t index{};
+    uint64_t frameNumber{};
+    bool shouldRecreateSwapChain{false};
     Magnum::Vk::ImageView *colorView{};
     Magnum::Vk::ImageView *depthView{};
     Magnum::Vk::Fence *inFlight{};
     Semaphore *acquired{};
     Semaphore *rendered{};
-    bool shouldRecreateSwapChain{false};
     Magnum::Vk::CommandBuffer commandBuffer{Magnum::NoCreate};
 };
 
@@ -93,7 +94,7 @@ class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     Magnum::Vk::PixelFormat depthFormat_{};
     glm::u32vec2 extent_{};
     const uint32_t maxFramesInFlight_{};
-    uint32_t nextFrameInFlight_{};
+    uint64_t nextFrameNumber_{};
 
     // these are images with memory owned by the swapchain
     std::vector<Magnum::Vk::Image> images_{};

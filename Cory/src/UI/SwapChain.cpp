@@ -149,15 +149,17 @@ SwapChain::SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
 FrameContext SwapChain::nextImage()
 {
     // advance the image index
-    nextFrameInFlight_ = (nextFrameInFlight_ + 1) % maxFramesInFlight_;
+    ++nextFrameNumber_;
+    uint32_t nextFrameIndex = static_cast<uint32_t>(nextFrameNumber_ % maxFramesInFlight_);
 
-    FrameContext fc;
+    FrameContext fc{.index = nextFrameIndex, .frameNumber = nextFrameNumber_};
+
     // TODO evaluate if this design is suboptimal - we essentially block here until
     //      we can acquire the next image, however the client could *potentially* already
     //      record commands into the command buffer without having that image (except for
     //      the final render pass that renders to the texture?)
     VkResult result = ctx_->device()->AcquireNextImageKHR(
-        ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameInFlight_], nullptr, &fc.index);
+        ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameIndex], nullptr, &fc.index);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         fc.shouldRecreateSwapChain = true;
@@ -173,18 +175,18 @@ FrameContext SwapChain::nextImage()
     if (imageFences_[fc.index] != nullptr) { imageFences_[fc.index]->wait(); }
 
     // assign the image a new fence and reset it
-    imageFences_[fc.index] = &inFlightFences_[nextFrameInFlight_];
-    fc.inFlight = &inFlightFences_[nextFrameInFlight_];
+    imageFences_[fc.index] = &inFlightFences_[nextFrameIndex];
+    fc.inFlight = &inFlightFences_[nextFrameIndex];
     fc.inFlight->reset();
 
     // assign the semaphores to the struct
-    fc.inFlight = &inFlightFences_[nextFrameInFlight_];
-    fc.acquired = &imageAcquired_[nextFrameInFlight_];
-    fc.rendered = &imageRendered_[nextFrameInFlight_];
+    fc.inFlight = &inFlightFences_[nextFrameIndex];
+    fc.acquired = &imageAcquired_[nextFrameIndex];
+    fc.rendered = &imageRendered_[nextFrameIndex];
 
     // get the image views
-    fc.colorView = &imageViews_[fc.index];
-    fc.depthView = &depthImageViews_[fc.index];
+    fc.colorView = &imageViews_[nextFrameIndex];
+    fc.depthView = &depthImageViews_[nextFrameIndex];
 
     // create a command buffer
     // TODO evaluate if it is more optimal to reuse command buffers?!

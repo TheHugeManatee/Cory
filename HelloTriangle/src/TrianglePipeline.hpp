@@ -13,31 +13,37 @@
 
 namespace Magnum::Vk {
 class Pipeline;
-}
+class RenderPass;
+} // namespace Magnum::Vk
 
 namespace Cory {
 class Context;
-}
+class SwapChain;
+} // namespace Cory
 
 class TrianglePipeline : Cory::NoCopy {
   public:
     TrianglePipeline(Cory::Context &context,
-                     glm::u32vec2 swapChainDimensions,
-                     Magnum::Vk::PixelFormat swapChainPixelFormat,
+                     const Cory::SwapChain &swapChain,
                      std::filesystem::path vertFile,
                      std::filesystem::path fragFile);
     ~TrianglePipeline();
 
+    // this pipeline only has one renderpass
+    Magnum::Vk::RenderPass &mainRenderPass() { return *mainRenderPass_; }
+    Magnum::Vk::Pipeline &pipeline() { return *pipeline_; }
+
   private:
-    void createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
-                                Magnum::Vk::PixelFormat swapChainPixelFormat,
+    void createGraphicsPipeline(const Cory::SwapChain &swapChain,
                                 std::filesystem::path vertFile,
                                 std::filesystem::path fragFile);
 
+  private:
     Cory::Context &ctx_;
 
     Cory::Shader vertexShader_;
     Cory::Shader fragmentShader_;
 
     std::unique_ptr<Magnum::Vk::Pipeline> pipeline_;
+    std::unique_ptr<Magnum::Vk::RenderPass> mainRenderPass_;
 };

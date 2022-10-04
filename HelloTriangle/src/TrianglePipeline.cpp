@@ -3,6 +3,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Core/Context.hpp>
 #include <Cory/Core/ResourceLocator.hpp>
+#include <Cory/UI/SwapChain.hpp>
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>
@@ -18,20 +19,17 @@
 namespace Vk = Magnum::Vk;
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
-                                   glm::u32vec2 swapChainDimensions,
-                                   Magnum::Vk::PixelFormat swapChainPixelFormat,
+                                   const Cory::SwapChain &swapChain,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
     : ctx_{context}
 {
-    createGraphicsPipeline(
-        swapChainDimensions, swapChainPixelFormat, std::move(vertFile), std::move(fragFile));
+    createGraphicsPipeline(swapChain, std::move(vertFile), std::move(fragFile));
 }
 
 TrianglePipeline::~TrianglePipeline() = default;
 
-void TrianglePipeline::createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
-                                              Magnum::Vk::PixelFormat swapChainPixelFormat,
+void TrianglePipeline::createGraphicsPipeline(const Cory::SwapChain &swapChain,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
@@ -52,11 +50,12 @@ void TrianglePipeline::createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
 
     Vk::PipelineLayout pipelineLayout{ctx_.device(), Vk::PipelineLayoutCreateInfo{}};
 
-    Vk::PixelFormat colorFormat = swapChainPixelFormat;
-    Vk::PixelFormat depthFormat{VK_FORMAT_D32_SFLOAT}; // TODO change to dynamic picking of a format
-    int32_t sampleCount = 1;                           // change eventually
+    Vk::PixelFormat colorFormat = swapChain.colorFormat();
+    Vk::PixelFormat depthFormat = swapChain.depthFormat();
 
-    Vk::RenderPass renderPass{
+    int32_t sampleCount = 1; // change eventually for multisampling?
+
+    mainRenderPass_ = std::make_unique<Vk::RenderPass>(
         ctx_.device(),
         Vk::RenderPassCreateInfo{}
             .setAttachments(
@@ -92,12 +91,12 @@ void TrianglePipeline::createGraphicsPipeline(glm::u32vec2 swapChainDimensions,
                                            Vk::PipelineStage::EarlyFragmentTests, //
                                        Vk::Access{},                              // srcAccess
                                        Vk::Access::ColorAttachmentWrite |         // dstAccess
-                                           Vk::Access::DepthStencilAttachmentWrite}})}; //
+                                           Vk::Access::DepthStencilAttachmentWrite}}));
 
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
-        shaderSet, meshLayout, pipelineLayout, renderPass, 0, 1};
+        shaderSet, meshLayout, pipelineLayout, *mainRenderPass_, 0, 1};
 
-    const glm::vec2 corner = swapChainDimensions;
+    const glm::vec2 corner = swapChain.extent();
     rasterizationPipelineCreateInfo.setViewport({{0.0f, 0.0f}, {corner.x, corner.y}});
     pipeline_ =
         std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));

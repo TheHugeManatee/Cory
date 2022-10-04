@@ -36,7 +36,7 @@ Window::Window(Context &context, glm::i32vec2 dimensions, std::string windowName
     window_ = glfwCreateWindow(dimensions_.x, dimensions_.y, windowName_.c_str(), nullptr, nullptr);
 
     createSurface();
-    createSwapChain();
+    createSwapchain();
 }
 
 Window::~Window()
@@ -60,7 +60,7 @@ void Window::createSurface()
     nameVulkanObject(ctx_.device(), surface_, "Main Window Surface");
 }
 
-void Window::createSwapChain()
+void Window::createSwapchain()
 {
     SwapchainSupportDetails swapchainSupport =
         SwapchainSupportDetails::query(ctx_, surface_.handle());

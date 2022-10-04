@@ -57,7 +57,7 @@ void HelloTriangleApplication::run()
         // TODO process events?
         auto frameCtx = window_->swapchain().nextImage();
 
-        if (frameCtx.shouldRecreateSwapChain) {
+        if (frameCtx.shouldRecreateSwapchain) {
             throw std::logic_error{"Swapchain recreation not implemented yet!"};
         }
 
@@ -97,7 +97,7 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     cmdBuffer.bindPipeline(pipeline_->pipeline());
     cmdBuffer.beginRenderPass(
         // VK_SUBPASS_CONTENTS_INLINE is implicit somewhere in here I assume
-        Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), frameBuffers_[frameCtx.index]}
+        Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), framebuffers_[frameCtx.index]}
             .clearColor(0, clearColor)
             .clearDepthStencil(1, 1.0, 0));
 
@@ -114,7 +114,7 @@ void HelloTriangleApplication::createFramebuffers()
     auto swapchainExtent = window_->swapchain().extent();
     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
-    frameBuffers_ =
+    framebuffers_ =
         ranges::views::zip(window_->swapchain().imageViews(), window_->swapchain().depthViews()) |
         ranges::views::transform([&](auto views) {
             auto &[colorView, depthView] = views;

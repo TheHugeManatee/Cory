@@ -160,14 +160,14 @@ FrameContext Swapchain::nextImage()
         ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameIndex], nullptr, &fc.index);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        fc.shouldRecreateSwapChain = true;
+        fc.shouldRecreateSwapchain = true;
         return fc;
     }
     CO_CORE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
                    "failed to acquire swap chain image: {}",
                    result);
 
-    fc.shouldRecreateSwapChain = false;
+    fc.shouldRecreateSwapchain = false;
 
     // wait for the fence of the previous frame operating on that image
     if (imageFences_[fc.index] != nullptr) { imageFences_[fc.index]->wait(); }

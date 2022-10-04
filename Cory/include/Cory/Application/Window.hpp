@@ -27,7 +27,7 @@ class Window : NoCopy, NoMove {
 
   private:
     void createSurface();
-    void createSwapChain();
+    void createSwapchain();
 
     Context &ctx_;
     std::string windowName_;

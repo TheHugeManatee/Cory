@@ -36,7 +36,7 @@ struct SwapchainSupportDetails {
 struct FrameContext {
     uint32_t index{};
     uint64_t frameNumber{};
-    bool shouldRecreateSwapChain{false};
+    bool shouldRecreateSwapchain{false};
     Magnum::Vk::ImageView *colorView{};
     Magnum::Vk::ImageView *depthView{};
     Magnum::Vk::Fence *inFlight{};

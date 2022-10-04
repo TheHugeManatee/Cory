@@ -176,11 +176,14 @@ Semaphore Context::createSemaphore(std::string_view name)
 
 Vk::Fence Context::createFence(std::string_view name, Cory::FenceCreateMode mode)
 {
+    Vk::Fence fence{Corrade::NoCreate};
     if (mode == FenceCreateMode::Signaled) {
-        return Vk::Fence{data->device, Vk::FenceCreateInfo{Vk::FenceCreateInfo::Flag::Signaled}};
+        fence = Vk::Fence{data->device, Vk::FenceCreateInfo{Vk::FenceCreateInfo::Flag::Signaled}};
     }
 
-    return Vk::Fence{data->device, Vk::FenceCreateInfo{}};
+    fence = Vk::Fence{data->device, Vk::FenceCreateInfo{}};
+    nameVulkanObject(data->device, fence, name);
+    return fence;
 }
 
 bool Context::isHeadless() const { return data->isHeadless; }

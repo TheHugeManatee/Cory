@@ -32,7 +32,6 @@ set(CORY_SOURCES
         include/Cory/Core/VulkanUtils.hpp
         include/Cory/Cory.hpp
         include/Cory/UI/Application.hpp
-        include/Cory/UI/Fence.hpp
         include/Cory/UI/Shader.hpp
         include/Cory/UI/SwapChain.hpp
         include/Cory/UI/Window.hpp
@@ -43,7 +42,6 @@ set(CORY_SOURCES
         src/Core/VulkanUtils.cpp
         src/Cory.cpp
         src/UI/Application.cpp
-        src/UI/Fence.cpp
         src/UI/Shader.cpp
         src/UI/SwapChain.cpp
         src/UI/Window.cpp

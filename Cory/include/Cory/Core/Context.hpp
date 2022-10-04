@@ -1,14 +1,16 @@
 #pragma once
 
-#include <magic_enum.hpp>
-#include <memory>
-#include <string>
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Core/Semaphore.hpp>
 #include <Cory/Core/VulkanUtils.hpp>
 
 #include <Magnum/Vk/Fence.h>
+
+#include <magic_enum.hpp>
+#include <memory>
+#include <string>
+#include <string_view>
 
 namespace Magnum::Vk {
 class Device;
@@ -58,8 +60,9 @@ class Context : NoCopy, NoMove {
                                   DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 
-    [[nodiscard]] Semaphore createSemaphore();
-    [[nodiscard]] Magnum::Vk::Fence createFence(FenceCreateMode mode);
+    [[nodiscard]] Semaphore createSemaphore(std::string_view name = "");
+    [[nodiscard]] Magnum::Vk::Fence createFence(std::string_view name = "",
+                                                FenceCreateMode mode = {});
 
     bool isHeadless() const;
 

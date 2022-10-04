@@ -83,8 +83,10 @@ Context::Context()
 
     data->device.create(data->instance, std::move(info));
     data->device.populateGlobalFunctionPointers();
-    // set a debug name for the logical device
-    nameVulkanObject(data->device, data->device, fmt::format("{} Logical Device", data->name));
+    // set a debug name for the logical device and queues
+    nameVulkanObject(data->device, data->device, fmt::format("[{}] Logical Device", data->name));
+    nameVulkanObject(data->device, data->graphicsQueue, fmt::format("[{}] Graphics", data->name));
+    nameVulkanObject(data->device, data->computeQueue, fmt::format("[{}] Compute", data->name));
 
     setupDebugMessenger();
 
@@ -157,7 +159,7 @@ void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
 #endif
 }
 
-Semaphore Context::createSemaphore()
+Semaphore Context::createSemaphore(std::string_view name)
 {
     VkSemaphoreCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0};
 
@@ -165,12 +167,14 @@ Semaphore Context::createSemaphore()
     THROW_ON_ERROR(device()->CreateSemaphore(data->device, &create_info, nullptr, &semaphore),
                    "failed to create a semaphore object");
 
+    if (!name.empty()) { nameRawVulkanObject(data->device, semaphore, name); }
+
     return Semaphore{semaphore, [&device = data->device](VkSemaphore f) {
                          device->DestroySemaphore(device, f, nullptr);
                      }};
 }
 
-Vk::Fence Context::createFence(Cory::FenceCreateMode mode)
+Vk::Fence Context::createFence(std::string_view name, Cory::FenceCreateMode mode)
 {
     if (mode == FenceCreateMode::Signaled) {
         return Vk::Fence{data->device, Vk::FenceCreateInfo{Vk::FenceCreateInfo::Flag::Signaled}};

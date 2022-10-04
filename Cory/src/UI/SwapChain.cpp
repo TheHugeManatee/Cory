@@ -6,12 +6,17 @@
 #include <Cory/Core/Context.hpp>
 #include <Cory/Core/VulkanUtils.hpp>
 
+#include <Magnum/Vk/CommandBuffer.h>
+#include <Magnum/Vk/CommandPool.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/ImageCreateInfo.h>
 #include <Magnum/Vk/ImageViewCreateInfo.h>
 #include <Magnum/Vk/Instance.h>
 #include <Magnum/Vk/Queue.h>
+
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/transform.hpp>
 
 namespace Vk = Magnum::Vk;
 
@@ -116,11 +121,6 @@ SwapChain::SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     , imageFormat_{toMagnum(createInfo.imageFormat)}
     , extent_{createInfo.imageExtent.width, createInfo.imageExtent.height}
 {
-    CO_CORE_DEBUG("SwapChain configuration:");
-    CO_CORE_DEBUG("    Surface Format:    {}, {}", imageFormat_, createInfo.imageColorSpace);
-    CO_CORE_DEBUG("    Present Mode:      {}", createInfo.presentMode);
-    CO_CORE_DEBUG("    Extent:            {}x{}", extent_.x, extent_.y);
-
     VkSwapchainKHR vkSwapchain;
 
     THROW_ON_ERROR(
@@ -130,18 +130,20 @@ SwapChain::SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     wrap(vkSwapchain, [ctx = ctx_](VkSwapchainKHR s) {
         ctx->device()->DestroySwapchainKHR(ctx->device(), s, nullptr);
     });
+    nameRawVulkanObject(
+        ctx_->device(), vkSwapchain, fmt::format("Main SwapChain {}x{}", extent_.x, extent_.y));
 
+    depthFormat_ = Magnum::Vk::PixelFormat::Depth32F; // TODO implement dynamic selection instead
+                                                      //      of hardcoded format
     createImageViews();
+    createDepthResources();
+    createSyncObjects();
 
-    // create all the semaphores needed to manage each parallel frame in flight
-    for (uint32_t i = 0; i < maxFramesInFlight_; ++i) {
-        imageAcquired_.emplace_back(ctx_->createSemaphore());
-        imageRendered_.emplace_back(ctx_->createSemaphore());
-        inFlightFences_.emplace_back(ctx_->createFence(FenceCreateMode::Signaled));
-    }
-
-    // initialize an array of (empty) fences, one for each image in the swap chain
-    imageFences_.resize(imageViews_.size(), nullptr);
+    CO_CORE_DEBUG("SwapChain configuration:");
+    CO_CORE_DEBUG("    Surface Format:    {}, {}", imageFormat_, createInfo.imageColorSpace);
+    CO_CORE_DEBUG("    Present Mode:      {}", createInfo.presentMode);
+    CO_CORE_DEBUG("    Extent:            {}x{}", extent_.x, extent_.y);
+    CO_CORE_DEBUG("    Images:            {}", images_.size());
 }
 
 FrameContext SwapChain::nextImage()
@@ -150,6 +152,10 @@ FrameContext SwapChain::nextImage()
     nextFrameInFlight_ = (nextFrameInFlight_ + 1) % maxFramesInFlight_;
 
     FrameContext fc;
+    // TODO evaluate if this design is suboptimal - we essentially block here until
+    //      we can acquire the next image, however the client could *potentially* already
+    //      record commands into the command buffer without having that image (except for
+    //      the final render pass that renders to the texture?)
     VkResult result = ctx_->device()->AcquireNextImageKHR(
         ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameInFlight_], nullptr, &fc.index);
 
@@ -176,8 +182,14 @@ FrameContext SwapChain::nextImage()
     fc.acquired = &imageAcquired_[nextFrameInFlight_];
     fc.rendered = &imageRendered_[nextFrameInFlight_];
 
-    // get the image view
-    fc.view = &imageViews_[fc.index];
+    // get the image views
+    fc.colorView = &imageViews_[fc.index];
+    fc.depthView = &depthImageViews_[fc.index];
+
+    // create a command buffer
+    // TODO evaluate if it is more optimal to reuse command buffers?!
+    fc.commandBuffer = ctx_->commandPool().allocate();
+    nameVulkanObject(ctx_->device(), fc.commandBuffer, fmt::format("Frame #{}", fc.index));
 
     return fc;
 }
@@ -200,6 +212,28 @@ void SwapChain::present(FrameContext &fc)
     ctx_->device()->QueuePresentKHR(ctx_->graphicsQueue(), &presentInfo);
 }
 
+void SwapChain::createDepthResources()
+{
+    Magnum::Vector2i size(extent_.x, extent_.y);
+    int32_t samples = 1;
+    int32_t levels = 1;
+
+    depthImages_ =
+        images_ | ranges::views::transform([&](const Vk::Image &colorImage) {
+            auto usage = Vk::ImageUsage::DepthStencilAttachment;
+            return Vk::Image{ctx_->device(),
+                             Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, samples},
+                             Vk::MemoryFlag::DeviceLocal};
+        }) |
+        ranges::to<std::vector<Vk::Image>>;
+
+    depthImageViews_ =
+        depthImages_ | ranges::views::transform([&](Vk::Image &depthImage) {
+            return Vk::ImageView{ctx_->device(), Vk::ImageViewCreateInfo2D{depthImage}};
+        }) |
+        ranges::to<std::vector<Vk::ImageView>>;
+}
+
 void SwapChain::createImageViews()
 {
     uint32_t num_images;
@@ -208,16 +242,40 @@ void SwapChain::createImageViews()
     std::vector<VkImage> swapchainImages(num_images);
     device->GetSwapchainImagesKHR(device, *this, &num_images, swapchainImages.data());
 
-    // create a vk::image for each of the SwapChain images
-    std::ranges::transform(swapchainImages, std::back_inserter(images_), [&](VkImage img) {
-        return Vk::Image::wrap(device, img, imageFormat_);
-    });
+    // create a Vk::Image for each of the SwapChain images - when wrapped like this,
+    // Vk::Image will not attempt to destroy the image on destruction
+    images_ = swapchainImages | ranges::views::transform([&](VkImage img) mutable {
+                  return Vk::Image::wrap(device, img, imageFormat_);
+              }) |
+              ranges::to<std::vector<Vk::Image>>;
 
-    // create an image view for each of the SwapChain images
-    std::ranges::transform(images_, std::back_inserter(imageViews_), [&](Vk::Image &img) {
-        return Vk::ImageView{device, Vk::ImageViewCreateInfo2D{img}};
-    });
+    // create a Vk::ImageView for each of the SwapChain images
+    imageViews_ = images_ | ranges::views::transform([&](Vk::Image &img) mutable {
+                      return Vk::ImageView{device, Vk::ImageViewCreateInfo2D{img}};
+                  }) |
+                  ranges::to<std::vector<Vk::ImageView>>;
 
-    CO_CORE_DEBUG("    Images:            {}", images_.size());
+    // name all objects
+    for (uint32_t i = 0; i < num_images; ++i) {
+        nameVulkanObject(device, images_[i], fmt::format("SwapChain Image {}", i));
+        nameVulkanObject(device, imageViews_[i], fmt::format("SwapChain ImageView {}", i));
+    }
 }
+
+void SwapChain::createSyncObjects()
+{
+    // create all the semaphores needed to manage each parallel frame in flight
+    for (uint32_t i = 0; i < maxFramesInFlight_; ++i) {
+        imageAcquired_.emplace_back(
+            ctx_->createSemaphore(fmt::format("SwapChain Img {} Acquired", i)));
+        imageRendered_.emplace_back(
+            ctx_->createSemaphore(fmt::format("SwapChain Img {} Rendered", i)));
+        inFlightFences_.emplace_back(ctx_->createFence(fmt::format("SwapChain Img {} in flight", i),
+                                                       FenceCreateMode::Signaled));
+    }
+
+    // initialize an array of (empty) fences, one for each image in the swap chain
+    imageFences_.resize(imageViews_.size(), nullptr);
+}
+
 } // namespace Cory

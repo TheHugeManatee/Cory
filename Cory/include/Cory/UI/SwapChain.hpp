@@ -1,14 +1,13 @@
 #pragma once
 
-#include <Cory/UI/Fence.hpp>
-
-#include "Cory/Base/Common.hpp"
+#include <Cory/Base/Common.hpp>
 #include <Cory/Core/Semaphore.hpp>
 
+#include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Fence.h>
 #include <Magnum/Vk/Image.h>
 #include <Magnum/Vk/ImageView.h>
-#include <MagnumExternal/Vulkan/flextVk.h>
+#include <Magnum/Vk/Vulkan.h>
 
 #include <glm/vec2.hpp>
 
@@ -36,23 +35,26 @@ struct SwapChainSupportDetails {
 
 struct FrameContext {
     uint32_t index{};
-    Magnum::Vk::ImageView *view{};
+    Magnum::Vk::ImageView *colorView{};
+    Magnum::Vk::ImageView *depthView{};
     Magnum::Vk::Fence *inFlight{};
     Semaphore *acquired{};
     Semaphore *rendered{};
     bool shouldRecreateSwapChain{false};
+    Magnum::Vk::CommandBuffer commandBuffer{Magnum::NoCreate};
 };
 
 class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
-    SwapChain(Context &ctx,
-              VkSurfaceKHR surface,
-              VkSwapchainCreateInfoKHR createInfo);
+    SwapChain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo);
 
     [[nodiscard]] auto &images() const noexcept { return images_; }
-    [[nodiscard]] auto format() const noexcept { return imageFormat_; }
+    [[nodiscard]] auto colorFormat() const noexcept { return imageFormat_; }
+    [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
+    [[nodiscard]] auto &depthImages() const noexcept { return depthImages_; }
+    [[nodiscard]] auto depthFormat() const noexcept { return depthFormat_; }
+    [[nodiscard]] auto &depthViews() noexcept { return depthImageViews_; }
     [[nodiscard]] auto extent() const noexcept { return extent_; }
-    [[nodiscard]] auto &views() const noexcept { return imageViews_; }
     [[nodiscard]] auto size() const noexcept { return images_.size(); }
 
     /**
@@ -79,19 +81,28 @@ class SwapChain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     void present(FrameContext &fc);
 
   private:
+    void createDepthResources();
     void createImageViews();
+    void createSyncObjects();
 
   private:
-    Context *ctx_;
+    Context *ctx_{};
 
-    std::vector<Magnum::Vk::Image> images_{};
+    // general information about the swapchain setup
     Magnum::Vk::PixelFormat imageFormat_{};
+    Magnum::Vk::PixelFormat depthFormat_{};
     glm::u32vec2 extent_{};
-    std::vector<Magnum::Vk::ImageView> imageViews_{};
-
-    // manage frame resources currently in flight
-    const uint32_t maxFramesInFlight_;
+    const uint32_t maxFramesInFlight_{};
     uint32_t nextFrameInFlight_{};
+
+    // these are images with memory owned by the swapchain
+    std::vector<Magnum::Vk::Image> images_{};
+    std::vector<Magnum::Vk::ImageView> imageViews_{};
+    // these are created separately through createDepthResources()
+    std::vector<Magnum::Vk::Image> depthImages_{};
+    std::vector<Magnum::Vk::ImageView> depthImageViews_{};
+
+    // for each frame in flight, we also keep a set of additional resources
     std::vector<Magnum::Vk::Fence> inFlightFences_{};
     std::vector<Magnum::Vk::Fence *> imageFences_{};
     std::vector<Semaphore> imageAcquired_{};

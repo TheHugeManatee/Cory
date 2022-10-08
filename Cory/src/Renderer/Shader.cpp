@@ -28,7 +28,7 @@ class FileIncludeHandler : public shaderc::CompileOptions::IncluderInterface {
                                        const char *requesting_source,
                                        size_t include_depth) override
     {
-        CO_CORE_INFO("Include file {} from {}", requested_source, requesting_source);
+        CO_CORE_DEBUG("Include file {} from {}", requested_source, requesting_source);
 
         auto resolvedLocation = ResourceLocator::locate(requested_source);
 

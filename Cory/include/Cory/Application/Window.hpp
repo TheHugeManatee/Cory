@@ -29,7 +29,7 @@ class Window : NoCopy, NoMove {
     Swapchain &swapchain() { return *swapchain_; };
 
     FrameContext nextSwapchainImage();
-    void present(FrameContext&& frameCtx);
+    void submitAndPresent(FrameContext&& frameCtx);
 
     Callback<glm::i32vec2> onSwapchainResized;
 

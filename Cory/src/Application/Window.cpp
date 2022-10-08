@@ -141,8 +141,22 @@ FrameContext Window::nextSwapchainImage()
 
     return frameCtx;
 }
-void Window::present(FrameContext &&frameCtx)
+void Window::submitAndPresent(FrameContext &&frameCtx)
 {
+    std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
+    std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
+
+    Magnum::Vk::SubmitInfo submitInfo{};
+    submitInfo.setCommandBuffers({*frameCtx.commandBuffer});
+    submitInfo->pWaitSemaphores = waitSemaphores.data();
+    submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+    submitInfo->pWaitDstStageMask = waitStages.data();
+    submitInfo->pSignalSemaphores = signalSemaphores.data();
+    submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+
+    ctx_.graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
+
     swapchain_->present(frameCtx);
 
     if (fpsCounter_.lap()) {

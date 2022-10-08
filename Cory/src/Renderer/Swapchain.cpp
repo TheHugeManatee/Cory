@@ -135,6 +135,12 @@ Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     createDepthResources();
     createSyncObjects();
 
+    // initialize command buffers
+    commandBuffers_ = images_ | ranges::views::transform([&](Vk::Image &img) mutable {
+                          return Vk::CommandBuffer{Corrade::NoCreate};
+                      }) |
+                      ranges::to<std::vector<Vk::CommandBuffer>>;
+
     CO_CORE_DEBUG("Swapchain configuration:");
     CO_CORE_DEBUG("    Surface Format:    {}, {}", imageFormat_, createInfo.imageColorSpace);
     CO_CORE_DEBUG("    Present Mode:      {}", createInfo.presentMode);
@@ -186,8 +192,9 @@ FrameContext Swapchain::nextImage()
 
     // create a command buffer
     // TODO evaluate if it is more optimal to reuse command buffers?!
-    fc.commandBuffer = ctx_->commandPool().allocate();
-    nameVulkanObject(ctx_->device(), fc.commandBuffer, fmt::format("Frame #{}", fc.index));
+    commandBuffers_[nextFrameIndex] = ctx_->commandPool().allocate();
+    fc.commandBuffer = &commandBuffers_[nextFrameIndex];
+    nameVulkanObject(ctx_->device(), *fc.commandBuffer, fmt::format("Frame #{}", fc.frameNumber));
 
     return fc;
 }

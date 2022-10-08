@@ -42,7 +42,7 @@ struct FrameContext {
     Magnum::Vk::Fence *inFlight{};
     Semaphore *acquired{};
     Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer commandBuffer{Magnum::NoCreate};
+    Magnum::Vk::CommandBuffer* commandBuffer{};
 };
 
 class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
@@ -108,6 +108,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     std::vector<Magnum::Vk::Fence *> imageFences_{};
     std::vector<Semaphore> imageAcquired_{};
     std::vector<Semaphore> imageRendered_{};
+    std::vector<Magnum::Vk::CommandBuffer> commandBuffers_{};
 };
 
 } // namespace Cory

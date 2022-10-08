@@ -4,6 +4,7 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/RenderCore/VulkanUtils.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
+#include <Cory/Base/Profiling.hpp>
 
 #include <glm/vec2.hpp>
 #include <memory>
@@ -28,6 +29,8 @@ class Window : NoCopy, NoMove {
     Swapchain &swapchain() { return *swapchain_; };
 
     FrameContext nextSwapchainImage();
+    void submitAndPresent(FrameContext&& frameCtx);
+
     Callback<glm::i32vec2> onSwapchainResized;
 
   private:
@@ -41,6 +44,7 @@ class Window : NoCopy, NoMove {
     GLFWwindow *window_{};
     BasicVkObjectWrapper<VkSurfaceKHR> surface_{};
     std::unique_ptr<Swapchain> swapchain_;
+    LapTimer fpsCounter_;
 };
 
 } // namespace Cory

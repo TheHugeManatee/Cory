@@ -23,6 +23,7 @@ Window::Window(Context &context, glm::i32vec2 dimensions, std::string windowName
     : ctx_{context}
     , dimensions_(dimensions)
     , windowName_{std::move(windowName)}
+    , fpsCounter_{std::chrono::milliseconds{2000}}
 {
     CO_CORE_ASSERT(!ctx_.isHeadless(), "Cannot initialize window with a headless context!");
 
@@ -139,6 +140,33 @@ FrameContext Window::nextSwapchainImage()
     }
 
     return frameCtx;
+}
+void Window::submitAndPresent(FrameContext &&frameCtx)
+{
+    std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
+    std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
+
+    Magnum::Vk::SubmitInfo submitInfo{};
+    submitInfo.setCommandBuffers({*frameCtx.commandBuffer});
+    submitInfo->pWaitSemaphores = waitSemaphores.data();
+    submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+    submitInfo->pWaitDstStageMask = waitStages.data();
+    submitInfo->pSignalSemaphores = signalSemaphores.data();
+    submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+
+    ctx_.graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
+
+    swapchain_->present(frameCtx);
+
+    if (fpsCounter_.lap()) {
+        auto s = fpsCounter_.stats();
+        auto fps = fmt::format("FPS: {:3.2f} ({:3.2f} ms)",
+                               float(1'000'000'000) / float(s.avg),
+                               float(s.avg) / 1'000'000);
+        CO_CORE_INFO(fps);
+        glfwSetWindowTitle(window_, fps.c_str());
+    }
 }
 
 } // namespace Cory

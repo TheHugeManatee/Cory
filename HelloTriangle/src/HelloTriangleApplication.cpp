@@ -4,6 +4,7 @@
 
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/RenderCore/Context.hpp>
@@ -48,25 +49,20 @@ HelloTriangleApplication::HelloTriangleApplication()
     ctx_ = std::make_unique<Cory::Context>();
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
 
-    // we currently don't use dynamic pipeline state so we have to
-    // recreate the full pipeline when swapchain has been resized
-    window_->onSwapchainResized([&](auto) {
+    auto recreatePipeline = [&](glm::i32vec2) {
         pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
                                                        window_->swapchain(),
                                                        *mesh_,
                                                        std::filesystem::path{"simple_shader.vert"},
                                                        std::filesystem::path{"simple_shader.frag"});
         createFramebuffers();
-    });
+    };
 
     createGeometry();
-    pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
-                                                   window_->swapchain(),
-                                                   *mesh_,
-                                                   std::filesystem::path{"simple_shader.vert"},
-                                                   std::filesystem::path{"simple_shader.frag"});
-
-    createFramebuffers();
+    recreatePipeline(window_->dimensions());
+    // we currently don't use dynamic pipeline state so we have to
+    // recreate the full pipeline when swapchain has been resized
+    window_->onSwapchainResized(recreatePipeline);
 }
 
 HelloTriangleApplication::~HelloTriangleApplication() = default;
@@ -80,23 +76,7 @@ void HelloTriangleApplication::run()
 
         recordCommands(frameCtx);
 
-        // todo refactor this somewhat
-        std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
-        std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
-        Vk::SubmitInfo submitInfo{};
-        submitInfo.setCommandBuffers({frameCtx.commandBuffer});
-        submitInfo->pWaitSemaphores = waitSemaphores.data();
-        submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-        submitInfo->pWaitDstStageMask = waitStages.data();
-        submitInfo->pSignalSemaphores = signalSemaphores.data();
-        submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-
-        ctx_->graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
-        // AAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHH (todo: fix command buffer lifetime)
-        frameCtx.inFlight->wait();
-
-        window_->swapchain().present(frameCtx);
+        window_->submitAndPresent(std::move(frameCtx));
     }
 
     // wait until last frame is finished rendering
@@ -108,12 +88,11 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     float t = (float)frameCtx.frameNumber / 10000.0f;
     Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
 
-    Vk::CommandBuffer &cmdBuffer = frameCtx.commandBuffer;
+    Vk::CommandBuffer &cmdBuffer = *frameCtx.commandBuffer;
 
     cmdBuffer.begin(Vk::CommandBufferBeginInfo{});
     cmdBuffer.bindPipeline(pipeline_->pipeline());
     cmdBuffer.beginRenderPass(
-        // VK_SUBPASS_CONTENTS_INLINE is implicit somewhere in here I assume
         Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), framebuffers_[frameCtx.index]}
             .clearColor(0, clearColor)
             .clearDepthStencil(1, 1.0, 0));

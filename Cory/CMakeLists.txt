@@ -45,7 +45,7 @@ set(CORY_SOURCES
         src/RenderCore/VulkanUtils.cpp
         src/Renderer/Shader.cpp
         src/Renderer/Swapchain.cpp
-        )
+        include/Cory/Base/Callback.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

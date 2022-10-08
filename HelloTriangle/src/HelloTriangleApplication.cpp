@@ -4,6 +4,7 @@
 
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/RenderCore/Context.hpp>
@@ -96,7 +97,7 @@ void HelloTriangleApplication::run()
         // AAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHH (todo: fix command buffer lifetime)
         frameCtx.inFlight->wait();
 
-        window_->swapchain().present(frameCtx);
+        window_->present(std::move(frameCtx));
     }
 
     // wait until last frame is finished rendering

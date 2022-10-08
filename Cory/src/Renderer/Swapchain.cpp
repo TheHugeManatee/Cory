@@ -187,7 +187,7 @@ FrameContext Swapchain::nextImage()
     // create a command buffer
     // TODO evaluate if it is more optimal to reuse command buffers?!
     fc.commandBuffer = ctx_->commandPool().allocate();
-    nameVulkanObject(ctx_->device(), fc.commandBuffer, fmt::format("Frame #{}", fc.index));
+    nameVulkanObject(ctx_->device(), fc.commandBuffer, fmt::format("Frame #{}", fc.frameNumber));
 
     return fc;
 }

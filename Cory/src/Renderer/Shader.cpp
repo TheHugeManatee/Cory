@@ -1,7 +1,7 @@
 #include <Cory/Renderer/Shader.hpp>
 
-#include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
 #include <Cory/RenderCore/Context.hpp>
 #include <Cory/RenderCore/VulkanUtils.hpp>
@@ -102,7 +102,7 @@ ShaderSource::ShaderSource(std::filesystem::path filePath, ShaderType type)
 
 std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool optimize)
 {
-    shaderc::Compiler compiler;
+    static shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetIncluder(std::make_unique<FileIncludeHandler>());
 
@@ -119,7 +119,8 @@ std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool opti
         compiler.CompileGlslToSpv(source.source(), kind, source_name.c_str(), options);
 
     if (spvModule.GetCompilationStatus() != shaderc_compilation_status_success) {
-        CO_CORE_ERROR(spvModule.GetErrorMessage());
+        CO_CORE_ERROR(
+            "Failed to compile {}: {}", source.filePath().string(), spvModule.GetErrorMessage());
         return std::vector<uint32_t>();
     }
 

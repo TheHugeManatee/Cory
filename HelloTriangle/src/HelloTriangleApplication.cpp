@@ -48,6 +48,17 @@ HelloTriangleApplication::HelloTriangleApplication()
     ctx_ = std::make_unique<Cory::Context>();
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
 
+    // we currently don't use dynamic pipeline state so we have to
+    // recreate the full pipeline when swapchain has been resized
+    window_->onSwapchainResized([&](auto) {
+        pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
+                                                       window_->swapchain(),
+                                                       *mesh_,
+                                                       std::filesystem::path{"simple_shader.vert"},
+                                                       std::filesystem::path{"simple_shader.frag"});
+        createFramebuffers();
+    });
+
     createGeometry();
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
                                                    window_->swapchain(),
@@ -65,11 +76,7 @@ void HelloTriangleApplication::run()
     while (!window_->shouldClose()) {
         glfwPollEvents();
         // TODO process events?
-        auto frameCtx = window_->swapchain().nextImage();
-
-        if (frameCtx.shouldRecreateSwapchain) {
-            throw std::logic_error{"Swapchain recreation not implemented yet!"};
-        }
+        auto frameCtx = window_->nextSwapchainImage();
 
         recordCommands(frameCtx);
 

@@ -3,14 +3,14 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/RenderCore/APIConversion.hpp>
 #include <Cory/RenderCore/Context.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/Instance.h>
 #include <Magnum/Vk/Queue.h>
 // clang-format off
-#include <MagnumExternal/Vulkan/flextVk.h>
+#include <Magnum/Vk/Vulkan.h>
 #define VK_VERSION_1_0
 #include <GLFW/glfw3.h>
 // clang-format on
@@ -31,12 +31,11 @@ Window::Window(Context &context, glm::i32vec2 dimensions, std::string windowName
     // prevent OpenGL usage - vulkan all the way baybeee
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    // no resizing for now - Swapchain is complicated
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     window_ = glfwCreateWindow(dimensions_.x, dimensions_.y, windowName_.c_str(), nullptr, nullptr);
+    glfwSetWindowUserPointer(window_, this);
 
-    createSurface();
-    createSwapchain();
+    surface_ = createSurface();
+    swapchain_ = createSwapchain();
 }
 
 Window::~Window()
@@ -47,20 +46,32 @@ Window::~Window()
 
 bool Window::shouldClose() const { return glfwWindowShouldClose(window_); }
 
-void Window::createSurface()
+void Window::framebufferResized(glm::i32vec2 newDimensions)
 {
-    VkSurfaceKHR surface;
-    auto ret = glfwCreateWindowSurface(ctx_.instance(), window_, nullptr, &surface);
-    surface_ =
-        std::shared_ptr<VkSurfaceKHR_T>{surface, [&instance = ctx_.instance()](auto s) {
-                                            instance->DestroySurfaceKHR(instance, s, nullptr);
-                                        }};
-
-    CO_CORE_ASSERT(ret == VK_SUCCESS, "Could not create surface!");
-    nameVulkanObject(ctx_.device(), surface_, "Main Window Surface");
+    ctx_.device()->DeviceWaitIdle(ctx_.device());
+    dimensions_ = newDimensions;
+    swapchain_.reset(); // clear old swapchain objects before creating the new ones
+    swapchain_ = createSwapchain();
+    // onSwapchainResized(newDimensions);
 }
 
-void Window::createSwapchain()
+BasicVkObjectWrapper<VkSurfaceKHR> Window::createSurface()
+{
+    VkSurfaceKHR surfaceHandle;
+    auto ret = glfwCreateWindowSurface(ctx_.instance(), window_, nullptr, &surfaceHandle);
+
+    BasicVkObjectWrapper<VkSurfaceKHR> surface{
+        surfaceHandle, [&instance = ctx_.instance()](auto s) {
+            instance->DestroySurfaceKHR(instance, s, nullptr);
+        }};
+
+    CO_CORE_ASSERT(ret == VK_SUCCESS, "Could not create surface!");
+    nameVulkanObject(ctx_.device(), surface, "Main Window Surface");
+
+    return surface;
+}
+
+std::unique_ptr<Swapchain> Window::createSwapchain()
 {
     SwapchainSupportDetails swapchainSupport =
         SwapchainSupportDetails::query(ctx_, surface_.handle());
@@ -103,7 +114,31 @@ void Window::createSwapchain()
 
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    swapchain_ = std::make_unique<Swapchain>(ctx_, surface_, createInfo);
+    return std::make_unique<Swapchain>(ctx_, surface_, createInfo);
+}
+
+FrameContext Window::nextSwapchainImage()
+{
+    FrameContext frameCtx = swapchain_->nextImage();
+
+    // if the swapchain needs resizing, we
+    if (frameCtx.shouldRecreateSwapchain) {
+        do {
+            glfwPollEvents();
+            VkSurfaceCapabilitiesKHR capabilities{};
+            ctx_.instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
+                ctx_.physicalDevice(), surface_, &capabilities);
+            dimensions_ = {capabilities.currentExtent.width, capabilities.currentExtent.height};
+        } while (dimensions_.x == 0 || dimensions_.y == 0);
+
+        ctx_.device()->DeviceWaitIdle(ctx_.device());
+        swapchain_.reset();
+        swapchain_ = createSwapchain();
+        onSwapchainResized.invoke(dimensions_);
+        return nextSwapchainImage();
+    }
+
+    return frameCtx;
 }
 
 } // namespace Cory

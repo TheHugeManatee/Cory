@@ -78,9 +78,7 @@ VkSurfaceFormatKHR SwapchainSupportDetails::chooseSwapSurfaceFormat() const
 VkPresentModeKHR SwapchainSupportDetails::chooseSwapPresentMode() const
 {
     for (const auto &availablePresentMode : presentModes) {
-        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            return availablePresentMode;
-        }
+        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) { return availablePresentMode; }
     }
 
     return VK_PRESENT_MODE_FIFO_KHR;
@@ -257,8 +255,11 @@ void Swapchain::createImageViews()
 
     // name all objects
     for (uint32_t i = 0; i < num_images; ++i) {
-        nameVulkanObject(device, images_[i], fmt::format("Swapchain Image {}", i));
-        nameVulkanObject(device, imageViews_[i], fmt::format("Swapchain ImageView {}", i));
+        nameVulkanObject(
+            device, images_[i], fmt::format("Swapchain {}x{} Image {}", extent_.x, extent_.y, i));
+        nameVulkanObject(device,
+                         imageViews_[i],
+                         fmt::format("Swapchain {}x{} ImageView {}", extent_.x, extent_.y, i));
     }
 }
 

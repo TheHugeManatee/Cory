@@ -4,7 +4,7 @@
 
 #include <range/v3/view.hpp>
 
-TEST_CASE("SlotMap", "[Cory/Utils]")
+TEST_CASE("SlotMap", "[Cory/Base]")
 {
     Cory::SlotMap<float> sm;
 

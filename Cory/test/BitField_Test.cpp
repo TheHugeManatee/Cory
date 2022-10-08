@@ -17,7 +17,7 @@ template <> struct magic_enum::customize::enum_range<BitValues> {
     static constexpr bool is_flags = true;
 };
 
-TEST_CASE("BitField", "[Cory/Utils]")
+TEST_CASE("BitField", "[Cory/Base]")
 {
     SECTION("Default-initialized state")
     {

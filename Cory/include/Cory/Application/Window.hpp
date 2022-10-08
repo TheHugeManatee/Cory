@@ -1,7 +1,9 @@
 #pragma once
 
+#include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/Swapchain.hpp>
 
 #include <glm/vec2.hpp>
 #include <memory>
@@ -13,7 +15,6 @@ typedef struct VkSurfaceKHR_T *VkSurfaceKHR;
 namespace Cory {
 
 class Context;
-class Swapchain;
 
 class Window : NoCopy, NoMove {
   public:
@@ -23,11 +24,16 @@ class Window : NoCopy, NoMove {
     [[nodiscard]] bool shouldClose() const;
 
     glm::i32vec2 dimensions() const { return dimensions_; }
+
     Swapchain &swapchain() { return *swapchain_; };
 
+    FrameContext nextSwapchainImage();
+    Callback<glm::i32vec2> onSwapchainResized;
+
   private:
-    void createSurface();
-    void createSwapchain();
+    void framebufferResized(glm::i32vec2 newDimensions);
+    BasicVkObjectWrapper<VkSurfaceKHR> createSurface();
+    std::unique_ptr<Swapchain> createSwapchain();
 
     Context &ctx_;
     std::string windowName_;

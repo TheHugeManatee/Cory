@@ -74,20 +74,11 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
                      Vk::AttachmentStoreOperation::DontCare},
                     Vk::ImageLayout::Undefined,
                     Vk::ImageLayout::DepthStencilAttachment,
-                    sampleCount},
-                // resolve to swapchain image
-                Vk::AttachmentDescription{
-                    colorFormat,
-                    {Vk::AttachmentLoadOperation::DontCare, Vk::AttachmentLoadOperation::DontCare},
-                    {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
-                    Vk::ImageLayout::Undefined,                       // initialLayout
-                    Vk::ImageLayout{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR}, // finalLayout
-                    1},
+                    sampleCount}
             })
             .addSubpass(Vk::SubpassDescription{}
                             .setColorAttachments(
-                                {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}},
-                                {Vk::AttachmentReference{2, Vk::ImageLayout::ColorAttachment}})
+                                {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}})
                             .setDepthStencilAttachment({Vk::AttachmentReference{
                                 1, Vk::ImageLayout::DepthStencilAttachment}}))
             .setDependencies({Vk::SubpassDependency{

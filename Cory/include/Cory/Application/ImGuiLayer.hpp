@@ -15,18 +15,19 @@ namespace Cory {
 
 class Context;
 class Window;
+class FrameContext;
 
 class ImGuiLayer {
   public:
     ImGuiLayer();
     ~ImGuiLayer();
 
-    void init(Window &window, Context &ctx, VkImageView renderedImage);
+    void init(Window &window, Context &ctx);
 
     void deinit(Context &ctx);
 
     void newFrame(Context &ctx);
-    void drawFrame(Context &ctx, uint32_t currentFrameIdx);
+    void recordFrameCommands(Context &ctx, FrameContext& frameCtx);
 
   private:
     struct Private;

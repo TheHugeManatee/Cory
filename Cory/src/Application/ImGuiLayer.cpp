@@ -6,6 +6,7 @@
 #include <Cory/RenderCore/Context.hpp>
 #include <Cory/RenderCore/SingleShotCommandBuffer.hpp>
 #include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/Swapchain.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -58,13 +59,8 @@ namespace {
             }};
 }
 
-Vk::RenderPass
-createImguiRenderpass(Context &ctx, Vk::PixelFormat format, VkSampleCountFlags msaaSamples)
+Vk::RenderPass createImguiRenderpass(Context &ctx, Vk::PixelFormat format, int32_t msaaSamples)
 {
-    CO_CORE_ASSERT(msaaSamples == VK_SAMPLE_COUNT_1_BIT,
-                   "Currently only single sample count is supported");
-    int sampleCount = 1;
-
     return Vk::RenderPass(
         ctx.device(),
         Vk::RenderPassCreateInfo{}
@@ -76,15 +72,15 @@ createImguiRenderpass(Context &ctx, Vk::PixelFormat format, VkSampleCountFlags m
                      {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
                      Vk::ImageLayout::ColorAttachment, // initialLayout
                      Vk::ImageLayout::ColorAttachment, // finalLayout
-                     sampleCount},
+                     msaaSamples},
                  // resolve
                  Vk::AttachmentDescription{
                      format,
                      {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
                      {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
-                     Vk::ImageLayout::ColorAttachment,                 // initialLayout
+                     Vk::ImageLayout::Undefined,                       // initialLayout
                      Vk::ImageLayout{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR}, // finalLayout
-                     sampleCount}})
+                     1}})
             .addSubpass(Vk::SubpassDescription{}.setColorAttachments(
                 {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}},
                 {Vk::AttachmentReference{1, Vk::ImageLayout::ColorAttachment}}))
@@ -122,7 +118,7 @@ ImGuiLayer::ImGuiLayer()
 
 ImGuiLayer::~ImGuiLayer() = default;
 
-void ImGuiLayer::init(Window &window, Context &ctx, VkImageView renderedImage)
+void ImGuiLayer::init(Window &window, Context &ctx)
 {
     data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
     data_->descriptorPool = createImguiDescriptorPool(ctx);
@@ -132,13 +128,13 @@ void ImGuiLayer::init(Window &window, Context &ctx, VkImageView renderedImage)
     const Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
     data_->framebuffers =
-        ranges::views::zip(window.colorViews(), window.depthViews()) |
-        ranges::views::transform([&](auto views) {
-            auto &[colorView, depthView] = views;
+        window.swapchain().imageViews() | ranges::views::transform([&](auto &swapchainImage) {
+            auto &colorView = window.colorView();
 
             return Vk::Framebuffer(ctx.device(),
-                                   Vk::FramebufferCreateInfo{
-                                       data_->renderPass, {colorView, depthView}, framebufferSize});
+                                   Vk::FramebufferCreateInfo{data_->renderPass,
+                                                             {colorView, swapchainImage},
+                                                             framebufferSize});
         }) |
         ranges::to<std::vector<Vk::Framebuffer>>;
 
@@ -251,19 +247,18 @@ void ImGuiLayer::newFrame(Context &ctx)
     ImGui::NewFrame();
 }
 
-void ImGuiLayer::drawFrame(Context &ctx, uint32_t currentFrameIdx)
+void ImGuiLayer::recordFrameCommands(Context &ctx, FrameContext &frameCtx)
 {
-    auto cmdBuf = SingleShotCommandBuffer(ctx);
     // Rendering
     ImGui::Render();
 
     // TODO: VK_SUBPASS_CONTENTS_INLINE?
-    cmdBuf->beginRenderPass(
-        Vk::RenderPassBeginInfo{data_->renderPass, data_->framebuffers[currentFrameIdx]}
+    frameCtx.commandBuffer->beginRenderPass(
+        Vk::RenderPassBeginInfo{data_->renderPass, data_->framebuffers[frameCtx.index]}
             .clearColor(0, data_->clearValue)
             .clearDepthStencil(1, 0.0f, 0));
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuf);
-    cmdBuf->endRenderPass();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *frameCtx.commandBuffer);
+    frameCtx.commandBuffer->endRenderPass();
 }
 
 } // namespace Cory

@@ -165,7 +165,7 @@ FrameContext Window::nextSwapchainImage()
         return nextSwapchainImage();
     }
 
-    frameCtx.colorView = &colorImageViews_[frameCtx.index];
+    frameCtx.colorView = &colorImageView_;
     frameCtx.depthView = &depthImageViews_[frameCtx.index];
 
     return frameCtx;
@@ -205,26 +205,18 @@ void Window::createColorAndDepthResources()
     const Magnum::Vector2i size(extent.x, extent.y);
     const int levels = 1;
 
-    // color images
-    colorImages_ =
-        swapchain_->images() | ranges::views::transform([&](const Vk::Image &colorImage) {
-            auto usage = Vk::ImageUsage::ColorAttachment;
-            return Vk::Image{
-                ctx_.device(),
-                Vk::ImageCreateInfo2D{usage, colorFormat_, size, levels, sampleCount_},
-                Vk::MemoryFlag::DeviceLocal};
-        }) |
-        ranges::to<std::vector<Vk::Image>>;
+    // color image
+    colorImage_ =
+        Vk::Image{ctx_.device(),
+                  Vk::ImageCreateInfo2D{
+                      Vk::ImageUsage::ColorAttachment, colorFormat_, size, levels, sampleCount_},
+                  Vk::MemoryFlag::DeviceLocal};
 
-    colorImageViews_ =
-        colorImages_ | ranges::views::transform([&](Vk::Image &colorImage) {
-            return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage}};
-        }) |
-        ranges::to<std::vector<Vk::ImageView>>;
+    colorImageView_ = Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage_}};
 
     // depth
     depthImages_ =
-        colorImages_ | ranges::views::transform([&](const Vk::Image &colorImage) {
+        swapchain().images() | ranges::views::transform([&](const Vk::Image &colorImage) {
             auto usage = Vk::ImageUsage::DepthStencilAttachment;
             return Vk::Image{ctx_.device(),
                              Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},

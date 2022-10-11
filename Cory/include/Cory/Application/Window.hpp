@@ -44,10 +44,10 @@ class Window : NoCopy, NoMove {
     [[nodiscard]] int32_t sampleCount() const noexcept { return sampleCount_; }
     /// pixel format of the offscreen color images
     [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return colorFormat_; }
-    /// access the offscreen color images
-    [[nodiscard]] auto &colorImages() const noexcept { return colorImages_; }
-    /// access the offscreen color image views
-    [[nodiscard]] auto &colorViews() noexcept { return colorImageViews_; }
+    /// access the offscreen color image
+    [[nodiscard]] auto &colorImage() const noexcept { return colorImage_; }
+    /// access the offscreen color image view
+    [[nodiscard]] auto &colorView() noexcept { return colorImageView_; }
     /// pixel format of the offscreen depth images
     [[nodiscard]] Magnum::Vk::PixelFormat depthFormat() const noexcept { return depthFormat_; }
     /// access the offscreen depth images
@@ -79,8 +79,8 @@ class Window : NoCopy, NoMove {
     std::unique_ptr<Swapchain> swapchain_;
     Magnum::Vk::PixelFormat colorFormat_;
     Magnum::Vk::PixelFormat depthFormat_;
-    std::vector<Magnum::Vk::Image> colorImages_;
-    std::vector<Magnum::Vk::ImageView> colorImageViews_;
+    Magnum::Vk::Image colorImage_{Corrade::NoCreate};
+    Magnum::Vk::ImageView colorImageView_{Corrade::NoCreate};
     std::vector<Magnum::Vk::Image> depthImages_;
     std::vector<Magnum::Vk::ImageView> depthImageViews_;
 

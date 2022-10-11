@@ -171,7 +171,7 @@ FrameContext Swapchain::nextImage()
     CO_CORE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
                    "failed to acquire swap chain image: {}",
                    result);
-    
+
     // advance the image index
     ++nextFrameNumber_;
     fc.frameNumber = nextFrameNumber_;

@@ -2,6 +2,7 @@
 
 #include "TrianglePipeline.hpp"
 
+#include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Profiling.hpp>
@@ -41,6 +42,7 @@ namespace Vk = Magnum::Vk;
 
 HelloTriangleApplication::HelloTriangleApplication()
     : mesh_{}
+    , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
 {
     Cory::Init();
 
@@ -72,6 +74,8 @@ HelloTriangleApplication::HelloTriangleApplication()
     // we currently don't use dynamic pipeline state so we have to
     // recreate the full pipeline when swapchain has been resized
     window_->onSwapchainResized(recreatePipeline);
+
+    // imguiLayer_->init(*window_, *ctx_, )
 }
 
 HelloTriangleApplication::~HelloTriangleApplication()
@@ -123,10 +127,10 @@ void HelloTriangleApplication::createFramebuffers()
     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
     framebuffers_ =
-        ranges::views::zip(
-            window_->colorViews(), window_->depthViews(), window_->swapchain().imageViews()) |
+        ranges::views::zip(window_->depthViews(), window_->swapchain().imageViews()) |
         ranges::views::transform([&](auto views) {
-            auto &[color, depth, swapchainImage] = views;
+            auto &[depth, swapchainImage] = views;
+            auto &color = window_->colorView();
 
             return Vk::Framebuffer(ctx_->device(),
                                    Vk::FramebufferCreateInfo{pipeline_->mainRenderPass(),

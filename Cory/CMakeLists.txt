@@ -18,6 +18,7 @@ find_package(spdlog REQUIRED)
 
 set(CORY_SOURCES
         include/Cory/Application/Application.hpp
+        include/Cory/Application/ImGuiLayer.hpp
         include/Cory/Application/Window.hpp
         include/Cory/Base/BitField.hpp
         include/Cory/Base/Common.hpp
@@ -36,6 +37,7 @@ set(CORY_SOURCES
         include/Cory/Renderer/Shader.hpp
         include/Cory/Renderer/Swapchain.hpp
         src/Application/Application.cpp
+        src/Application/ImGuiLayer.cpp
         src/Application/Window.cpp
         src/Base/Log.cpp
         src/Base/Utils.cpp
@@ -46,7 +48,7 @@ set(CORY_SOURCES
         src/Renderer/Shader.cpp
         src/Renderer/Swapchain.cpp
         include/Cory/Base/Callback.hpp
-        src/Base/Profiling.cpp 
+        src/Base/Profiling.cpp
         include/Cory/Base/Profiling.hpp
         src/RenderCore/SingleShotCommandBuffer.cpp
         include/Cory/RenderCore/SingleShotCommandBuffer.hpp

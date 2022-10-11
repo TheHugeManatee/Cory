@@ -47,7 +47,10 @@ set(CORY_SOURCES
         src/Renderer/Swapchain.cpp
         include/Cory/Base/Callback.hpp
         src/Base/Profiling.cpp 
-        include/Cory/Base/Profiling.hpp)
+        include/Cory/Base/Profiling.hpp
+        src/RenderCore/SingleShotCommandBuffer.cpp
+        include/Cory/RenderCore/SingleShotCommandBuffer.hpp
+        )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

@@ -148,6 +148,8 @@ Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     CO_CORE_DEBUG("    Images:            {}", images_.size());
 }
 
+Swapchain::~Swapchain() { CO_CORE_TRACE("Destroying Cory::Swapchain."); }
+
 FrameContext Swapchain::nextImage()
 {
     // advance the image index

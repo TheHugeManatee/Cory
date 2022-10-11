@@ -31,6 +31,9 @@ class Window : NoCopy, NoMove {
     FrameContext nextSwapchainImage();
     void submitAndPresent(FrameContext&& frameCtx);
 
+    [[nodiscard]] GLFWwindow *handle() { return window_.get(); }
+    [[nodiscard]] const GLFWwindow *handle() const { return window_.get(); }
+
     Callback<glm::i32vec2> onSwapchainResized;
 
   private:
@@ -41,7 +44,7 @@ class Window : NoCopy, NoMove {
     Context &ctx_;
     std::string windowName_;
     glm::i32vec2 dimensions_;
-    GLFWwindow *window_{};
+    std::shared_ptr<GLFWwindow> window_{};
     BasicVkObjectWrapper<VkSurfaceKHR> surface_{};
     std::unique_ptr<Swapchain> swapchain_;
     LapTimer fpsCounter_;

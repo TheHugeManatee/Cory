@@ -54,44 +54,45 @@ struct ContextPrivate {
 };
 
 Context::Context()
-    : data{std::make_unique<ContextPrivate>()}
+    : data_{std::make_unique<ContextPrivate>()}
 {
-    data->name = "CCtx";
+    data_->name = "CCtx";
 
     const auto app_name{"Cory-based Vulkan Application"};
 
-    data->instance.create(Vk::InstanceCreateInfo{}
-                              .setApplicationInfo(app_name, Vk::version(1, 0, 0))
-                              .addEnabledLayers({"VK_LAYER_KHRONOS_validation"})
-                              .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
-                              .addEnabledExtensions({"VK_KHR_surface", "VK_KHR_win32_surface"}));
-    data->instance.populateGlobalFunctionPointers();
+    data_->instance.create(Vk::InstanceCreateInfo{}
+                               .setApplicationInfo(app_name, Vk::version(1, 0, 0))
+                               .addEnabledLayers({"VK_LAYER_KHRONOS_validation"})
+                               .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
+                               .addEnabledExtensions({"VK_KHR_surface", "VK_KHR_win32_surface"}));
+    data_->instance.populateGlobalFunctionPointers();
 
-    data->physicalDevice = Vk::pickDevice(data->instance);
-    CO_APP_INFO("Using device {}", data->physicalDevice.name());
+    data_->physicalDevice = Vk::pickDevice(data_->instance);
+    CO_APP_INFO("Using device {}", data_->physicalDevice.name());
 
-    Vk::ExtensionProperties extensions = data->physicalDevice.enumerateExtensionProperties();
-    Vk::DeviceCreateInfo info{data->physicalDevice, &extensions};
+    Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
+    Vk::DeviceCreateInfo info{data_->physicalDevice, &extensions};
     info.addEnabledExtensions({"VK_KHR_swapchain"});
 
     // configure a Graphics and a Compute queue - assumes that there is a family that
     // supports both graphics and compute, which is probably not universal
-    data->graphicsQueueFamily = data->computeQueueFamily = data->physicalDevice.pickQueueFamily(
+    data_->graphicsQueueFamily = data_->physicalDevice.pickQueueFamily(
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
     info.addQueues(
-        data->graphicsQueueFamily, {1.0f, 1.0f}, {data->graphicsQueue, data->computeQueue});
+        data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
 
-    data->device.create(data->instance, std::move(info));
-    data->device.populateGlobalFunctionPointers();
+    data_->device.create(data_->instance, std::move(info));
+    data_->device.populateGlobalFunctionPointers();
     // set a debug name for the logical device and queues
-    nameVulkanObject(data->device, data->device, fmt::format("[{}] Logical Device", data->name));
-    nameVulkanObject(data->device, data->graphicsQueue, fmt::format("[{}] Graphics", data->name));
-    nameVulkanObject(data->device, data->computeQueue, fmt::format("[{}] Compute", data->name));
+    nameVulkanObject(data_->device, data_->device, fmt::format("[{}] Logical Device", data_->name));
+    nameVulkanObject(
+        data_->device, data_->graphicsQueue, fmt::format("[{}] Graphics", data_->name));
+    //nameVulkanObject(data_->device, data_->computeQueue, fmt::format("[{}] Compute", data_->name));
 
     setupDebugMessenger();
 
-    data->commandPool =
-        Vk::CommandPool{data->device, Vk::CommandPoolCreateInfo{data->graphicsQueueFamily}};
+    data_->commandPool =
+        Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
 }
 
 void Context::setupDebugMessenger()
@@ -111,14 +112,14 @@ void Context::setupDebugMessenger()
         .pUserData = nullptr};
 
     instance()->CreateDebugUtilsMessengerEXT(
-        data->instance, &dbgMessengerCreateInfo, nullptr, &data->debugMessenger);
+        data_->instance, &dbgMessengerCreateInfo, nullptr, &data_->debugMessenger);
 
     VkDebugUtilsMessengerCallbackDataEXT messageCallbackData{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT};
     auto message =
-        fmt::format("Cory context '{}' initialized and debug messenger attached.", data->name);
+        fmt::format("Cory context '{}' initialized and debug messenger attached.", data_->name);
     messageCallbackData.pMessage = message.c_str();
-    instance()->SubmitDebugUtilsMessageEXT(data->instance,
+    instance()->SubmitDebugUtilsMessageEXT(data_->instance,
                                            VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
                                            VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
                                            &messageCallbackData);
@@ -130,10 +131,11 @@ void Context::setupDebugMessenger()
 
 Context::~Context()
 {
-    instance()->DestroyDebugUtilsMessengerEXT(data->instance, data->debugMessenger, nullptr);
+    instance()->DestroyDebugUtilsMessengerEXT(data_->instance, data_->debugMessenger, nullptr);
+    CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
 }
 
-std::string Context::getName() const { return data->name; }
+std::string Context::getName() const { return data_->name; }
 
 void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
                                        DebugMessageType messageType,
@@ -164,12 +166,12 @@ Semaphore Context::createSemaphore(std::string_view name)
     VkSemaphoreCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0};
 
     VkSemaphore semaphore;
-    THROW_ON_ERROR(device()->CreateSemaphore(data->device, &create_info, nullptr, &semaphore),
+    THROW_ON_ERROR(device()->CreateSemaphore(data_->device, &create_info, nullptr, &semaphore),
                    "failed to create a semaphore object");
 
-    if (!name.empty()) { nameRawVulkanObject(data->device, semaphore, name); }
+    if (!name.empty()) { nameRawVulkanObject(data_->device, semaphore, name); }
 
-    return Semaphore{semaphore, [&device = data->device](VkSemaphore f) {
+    return Semaphore{semaphore, [&device = data_->device](VkSemaphore f) {
                          device->DestroySemaphore(device, f, nullptr);
                      }};
 }
@@ -178,22 +180,22 @@ Vk::Fence Context::createFence(std::string_view name, Cory::FenceCreateMode mode
 {
     Vk::Fence fence{Corrade::NoCreate};
     if (mode == FenceCreateMode::Signaled) {
-        fence = Vk::Fence{data->device, Vk::FenceCreateInfo{Vk::FenceCreateInfo::Flag::Signaled}};
+        fence = Vk::Fence{data_->device, Vk::FenceCreateInfo{Vk::FenceCreateInfo::Flag::Signaled}};
     }
 
-    fence = Vk::Fence{data->device, Vk::FenceCreateInfo{}};
-    nameVulkanObject(data->device, fence, name);
+    fence = Vk::Fence{data_->device, Vk::FenceCreateInfo{}};
+    nameVulkanObject(data_->device, fence, name);
     return fence;
 }
 
-bool Context::isHeadless() const { return data->isHeadless; }
-Vk::Instance &Context::instance() { return data->instance; }
-Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data->physicalDevice; }
-Vk::Device &Context::device() { return data->device; }
-Vk::CommandPool &Context::commandPool() { return data->commandPool; }
-Magnum::Vk::Queue &Context::graphicsQueue() { return data->graphicsQueue; }
-uint32_t Context::graphicsQueueFamily() const { return data->graphicsQueueFamily; }
-Magnum::Vk::Queue &Context::computeQueue() { return data->computeQueue; }
-uint32_t Context::computeQueueFamily() const { return data->computeQueueFamily; }
+bool Context::isHeadless() const { return data_->isHeadless; }
+Vk::Instance &Context::instance() { return data_->instance; }
+Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data_->physicalDevice; }
+Vk::Device &Context::device() { return data_->device; }
+Vk::CommandPool &Context::commandPool() { return data_->commandPool; }
+Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
+uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }
+Magnum::Vk::Queue &Context::computeQueue() { return data_->computeQueue; }
+uint32_t Context::computeQueueFamily() const { return data_->computeQueueFamily; }
 
 } // namespace Cory

@@ -48,6 +48,7 @@ struct FrameContext {
 class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
     Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo);
+    ~Swapchain();
 
     [[nodiscard]] auto &images() const noexcept { return images_; }
     [[nodiscard]] auto colorFormat() const noexcept { return imageFormat_; }

@@ -77,7 +77,7 @@ class Context : NoCopy, NoMove {
     uint32_t computeQueueFamily() const;
 
   private:
-    std::unique_ptr<struct ContextPrivate> data;
+    std::unique_ptr<struct ContextPrivate> data_;
     void setupDebugMessenger();
 };
 

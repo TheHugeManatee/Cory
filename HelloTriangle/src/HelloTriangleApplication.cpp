@@ -65,7 +65,10 @@ HelloTriangleApplication::HelloTriangleApplication()
     window_->onSwapchainResized(recreatePipeline);
 }
 
-HelloTriangleApplication::~HelloTriangleApplication() = default;
+HelloTriangleApplication::~HelloTriangleApplication()
+{
+    CO_APP_TRACE("Destroying HelloTriangleApplication");
+}
 
 void HelloTriangleApplication::run()
 {

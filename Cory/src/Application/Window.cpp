@@ -32,20 +32,27 @@ Window::Window(Context &context, glm::i32vec2 dimensions, std::string windowName
     // prevent OpenGL usage - vulkan all the way baybeee
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    window_ = glfwCreateWindow(dimensions_.x, dimensions_.y, windowName_.c_str(), nullptr, nullptr);
-    glfwSetWindowUserPointer(window_, this);
+    { // create the glfw window
+        auto windowHandle =
+            glfwCreateWindow(dimensions_.x, dimensions_.y, windowName_.c_str(), nullptr, nullptr);
+        window_ = std::shared_ptr<GLFWwindow>(windowHandle, [=](auto *ptr) {
+            CO_CORE_TRACE("Destroying GLFW context");
+            glfwDestroyWindow(ptr);
+            glfwTerminate();
+        });
+        glfwSetWindowUserPointer(window_.get(), this);
+    }
 
     surface_ = createSurface();
     swapchain_ = createSwapchain();
 }
 
-Window::~Window()
-{
-    glfwDestroyWindow(window_);
-    glfwTerminate();
-}
+Window::~Window() { CO_CORE_TRACE("Destroying Cory::Window {}", windowName_); }
 
-bool Window::shouldClose() const { return glfwWindowShouldClose(window_); }
+bool Window::shouldClose() const
+{
+    return glfwWindowShouldClose(const_cast<GLFWwindow *>(handle()));
+}
 
 void Window::framebufferResized(glm::i32vec2 newDimensions)
 {
@@ -59,7 +66,7 @@ void Window::framebufferResized(glm::i32vec2 newDimensions)
 BasicVkObjectWrapper<VkSurfaceKHR> Window::createSurface()
 {
     VkSurfaceKHR surfaceHandle;
-    auto ret = glfwCreateWindowSurface(ctx_.instance(), window_, nullptr, &surfaceHandle);
+    auto ret = glfwCreateWindowSurface(ctx_.instance(), handle(), nullptr, &surfaceHandle);
 
     BasicVkObjectWrapper<VkSurfaceKHR> surface{
         surfaceHandle, [&instance = ctx_.instance()](auto s) {
@@ -161,11 +168,12 @@ void Window::submitAndPresent(FrameContext &&frameCtx)
 
     if (fpsCounter_.lap()) {
         auto s = fpsCounter_.stats();
-        auto fps = fmt::format("FPS: {:3.2f} ({:3.2f} ms)",
+        auto fps = fmt::format("{} FPS: {:3.2f} ({:3.2f} ms)",
+                               windowName_,
                                float(1'000'000'000) / float(s.avg),
                                float(s.avg) / 1'000'000);
         CO_CORE_INFO(fps);
-        glfwSetWindowTitle(window_, fps.c_str());
+        glfwSetWindowTitle(handle(), fps.c_str());
     }
 }
 

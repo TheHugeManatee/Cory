@@ -111,7 +111,10 @@ uint32_t SwapchainSupportDetails::chooseImageCount() const
     return imageCount;
 }
 
-Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo, int32_t sampleCount)
+Swapchain::Swapchain(Context &ctx,
+                     VkSurfaceKHR surface,
+                     VkSwapchainCreateInfoKHR createInfo,
+                     int32_t sampleCount)
     : maxFramesInFlight_{createInfo.minImageCount}
     , ctx_{&ctx}
     , imageFormat_{toMagnum(createInfo.imageFormat)}
@@ -150,11 +153,9 @@ Swapchain::~Swapchain() { CO_CORE_TRACE("Destroying Cory::Swapchain."); }
 
 FrameContext Swapchain::nextImage()
 {
-    // advance the image index
-    ++nextFrameNumber_;
-    uint32_t nextFrameIndex = static_cast<uint32_t>(nextFrameNumber_ % maxFramesInFlight_);
+    uint32_t nextFrameIndex = static_cast<uint32_t>((nextFrameNumber_ + 1) % maxFramesInFlight_);
 
-    FrameContext fc{.index = nextFrameIndex, .frameNumber = nextFrameNumber_};
+    FrameContext fc{.index = nextFrameIndex};
 
     // TODO evaluate if this design is suboptimal - we essentially block here until
     //      we can acquire the next image, however the client could *potentially* already
@@ -163,14 +164,17 @@ FrameContext Swapchain::nextImage()
     VkResult result = ctx_->device()->AcquireNextImageKHR(
         ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameIndex], nullptr, &fc.index);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         fc.shouldRecreateSwapchain = true;
         return fc;
     }
     CO_CORE_ASSERT(result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR,
                    "failed to acquire swap chain image: {}",
                    result);
-
+    
+    // advance the image index
+    ++nextFrameNumber_;
+    fc.frameNumber = nextFrameNumber_;
     fc.shouldRecreateSwapchain = false;
 
     // wait for the fence of the previous frame operating on that image

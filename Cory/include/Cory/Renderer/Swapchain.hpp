@@ -42,7 +42,7 @@ struct FrameContext {
     Magnum::Vk::Fence *inFlight{};
     Semaphore *acquired{};
     Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer* commandBuffer{};
+    Magnum::Vk::CommandBuffer *commandBuffer{};
 };
 
 class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
@@ -51,13 +51,13 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     ~Swapchain();
 
     [[nodiscard]] auto &images() const noexcept { return images_; }
-    [[nodiscard]] auto colorFormat() const noexcept { return imageFormat_; }
+    [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return imageFormat_; }
     [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
     [[nodiscard]] auto &depthImages() const noexcept { return depthImages_; }
-    [[nodiscard]] auto depthFormat() const noexcept { return depthFormat_; }
+    [[nodiscard]] Magnum::Vk::PixelFormat depthFormat() const noexcept { return depthFormat_; }
     [[nodiscard]] auto &depthViews() noexcept { return depthImageViews_; }
-    [[nodiscard]] auto extent() const noexcept { return extent_; }
-    [[nodiscard]] auto size() const noexcept { return images_.size(); }
+    [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
+    [[nodiscard]] size_t size() const noexcept { return images_.size(); }
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying

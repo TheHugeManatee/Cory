@@ -111,10 +111,11 @@ uint32_t SwapchainSupportDetails::chooseImageCount() const
     return imageCount;
 }
 
-Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo)
+Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo, int32_t sampleCount)
     : maxFramesInFlight_{createInfo.minImageCount}
     , ctx_{&ctx}
     , imageFormat_{toMagnum(createInfo.imageFormat)}
+    , sampleCount_{sampleCount}
     , extent_{createInfo.imageExtent.width, createInfo.imageExtent.height}
 {
     VkSwapchainKHR vkSwapchain;
@@ -129,10 +130,7 @@ Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     nameRawVulkanObject(
         ctx_->device(), vkSwapchain, fmt::format("Main Swapchain {}x{}", extent_.x, extent_.y));
 
-    depthFormat_ = Magnum::Vk::PixelFormat::Depth32F; // TODO implement dynamic selection instead
-                                                      //      of hardcoded format
     createImageViews();
-    createDepthResources();
     createSyncObjects();
 
     // initialize command buffers
@@ -188,9 +186,8 @@ FrameContext Swapchain::nextImage()
     fc.acquired = &imageAcquired_[nextFrameIndex];
     fc.rendered = &imageRendered_[nextFrameIndex];
 
-    // get the image views
-    fc.colorView = &imageViews_[nextFrameIndex];
-    fc.depthView = &depthImageViews_[nextFrameIndex];
+    // get the swapchain image view
+    fc.swapchainImage = &imageViews_[nextFrameIndex];
 
     // create a command buffer
     // TODO evaluate if it is more optimal to reuse command buffers?!
@@ -217,28 +214,6 @@ void Swapchain::present(FrameContext &fc)
     presentInfo.pImageIndices = &fc.index;
 
     ctx_->device()->QueuePresentKHR(ctx_->graphicsQueue(), &presentInfo);
-}
-
-void Swapchain::createDepthResources()
-{
-    Magnum::Vector2i size(extent_.x, extent_.y);
-    int32_t samples = 1;
-    int32_t levels = 1;
-
-    depthImages_ =
-        images_ | ranges::views::transform([&](const Vk::Image &colorImage) {
-            auto usage = Vk::ImageUsage::DepthStencilAttachment;
-            return Vk::Image{ctx_->device(),
-                             Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, samples},
-                             Vk::MemoryFlag::DeviceLocal};
-        }) |
-        ranges::to<std::vector<Vk::Image>>;
-
-    depthImageViews_ =
-        depthImages_ | ranges::views::transform([&](Vk::Image &depthImage) {
-            return Vk::ImageView{ctx_->device(), Vk::ImageViewCreateInfo2D{depthImage}};
-        }) |
-        ranges::to<std::vector<Vk::ImageView>>;
 }
 
 void Swapchain::createImageViews()

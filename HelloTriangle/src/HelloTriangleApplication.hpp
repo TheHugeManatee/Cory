@@ -36,6 +36,7 @@ class HelloTriangleApplication : public Cory::Application {
     void recordCommands(Cory::FrameContext &frameCtx);
 
   private:
+    uint32_t sampleCount{1};
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;

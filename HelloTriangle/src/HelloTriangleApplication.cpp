@@ -18,6 +18,7 @@
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/FramebufferCreateInfo.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/RenderPass.h>
@@ -44,14 +45,21 @@ HelloTriangleApplication::HelloTriangleApplication()
 
     Cory::ResourceLocator::addSearchPath(TRIANGLE_RESOURCE_DIR);
 
+    ctx_ = std::make_unique<Cory::Context>();
+    // determine msaa sample count to use - for simplicity, we use either 8 or one sample
+    const auto &limits = ctx_->physicalDevice().properties().properties.limits;
+    VkSampleCountFlags counts =
+        limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+    int msaaSamples = counts & VK_SAMPLE_COUNT_8_BIT ? 8 : 1;
+    CO_APP_INFO("MSAA sample count: {}", msaaSamples);
+
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 768};
-    ctx_ = std::make_unique<Cory::Context>();
-    window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
+    window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
     auto recreatePipeline = [&](glm::i32vec2) {
         pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
-                                                       window_->swapchain(),
+                                                       *window_,
                                                        *mesh_,
                                                        std::filesystem::path{"simple_shader.vert"},
                                                        std::filesystem::path{"simple_shader.frag"});
@@ -114,13 +122,15 @@ void HelloTriangleApplication::createFramebuffers()
     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
     framebuffers_ =
-        ranges::views::zip(window_->swapchain().imageViews(), window_->swapchain().depthViews()) |
+        ranges::views::zip(window_->colorViews(),
+                           window_->depthViews(),
+                           window_->swapchain().imageViews()) |
         ranges::views::transform([&](auto views) {
-            auto &[colorView, depthView] = views;
+            auto &[color, depth, swapchainImage] = views;
 
             return Vk::Framebuffer(ctx_->device(),
                                    Vk::FramebufferCreateInfo{pipeline_->mainRenderPass(),
-                                                             {colorView, depthView},
+                                                             {color, depth, swapchainImage},
                                                              framebufferSize});
         }) |
         ranges::to<std::vector<Vk::Framebuffer>>;

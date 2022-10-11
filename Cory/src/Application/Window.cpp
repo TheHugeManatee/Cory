@@ -7,8 +7,11 @@
 
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/DeviceProperties.h>
+#include <Magnum/Vk/ImageCreateInfo.h>
+#include <Magnum/Vk/ImageViewCreateInfo.h>
 #include <Magnum/Vk/Instance.h>
 #include <Magnum/Vk/Queue.h>
+
 // clang-format off
 #include <Magnum/Vk/Vulkan.h>
 #define VK_VERSION_1_0
@@ -16,11 +19,21 @@
 // clang-format on
 
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/transform.hpp>
+
+#include <thread>
+
+namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
-Window::Window(Context &context, glm::i32vec2 dimensions, std::string windowName)
+Window::Window(Context &context,
+               glm::i32vec2 dimensions,
+               std::string windowName,
+               int32_t sampleCount)
     : ctx_{context}
+    , sampleCount_{sampleCount}
     , dimensions_(dimensions)
     , windowName_{std::move(windowName)}
     , fpsCounter_{std::chrono::milliseconds{2000}}
@@ -45,6 +58,11 @@ Window::Window(Context &context, glm::i32vec2 dimensions, std::string windowName
 
     surface_ = createSurface();
     swapchain_ = createSwapchain();
+
+    colorFormat_ = swapchain_->colorFormat();
+    depthFormat_ = Vk::PixelFormat::Depth32F; // TODO implement dynamic selection instead
+                                              //      of hardcoded format
+    createColorAndDepthResources();
 }
 
 Window::~Window() { CO_CORE_TRACE("Destroying Cory::Window {}", windowName_); }
@@ -56,11 +74,7 @@ bool Window::shouldClose() const
 
 void Window::framebufferResized(glm::i32vec2 newDimensions)
 {
-    ctx_.device()->DeviceWaitIdle(ctx_.device());
-    dimensions_ = newDimensions;
-    swapchain_.reset(); // clear old swapchain objects before creating the new ones
-    swapchain_ = createSwapchain();
-    // onSwapchainResized(newDimensions);
+    return glfwWindowShouldClose(const_cast<GLFWwindow *>(handle()));
 }
 
 BasicVkObjectWrapper<VkSurfaceKHR> Window::createSurface()
@@ -122,29 +136,42 @@ std::unique_ptr<Swapchain> Window::createSwapchain()
 
     createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    return std::make_unique<Swapchain>(ctx_, surface_, createInfo);
+    return std::make_unique<Swapchain>(ctx_, surface_, createInfo, sampleCount_);
 }
 
 FrameContext Window::nextSwapchainImage()
 {
     FrameContext frameCtx = swapchain_->nextImage();
 
-    // if the swapchain needs resizing, we
+    // if the swapchain needs resizing, we wait for
     if (frameCtx.shouldRecreateSwapchain) {
+        // wait until the surface dimensions are non-zero - this might happen
+        // while the app is minimized or the window has been resized to zero height
+        // or width, in which case we don't render anything
         do {
             glfwPollEvents();
             VkSurfaceCapabilitiesKHR capabilities{};
             ctx_.instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
                 ctx_.physicalDevice(), surface_, &capabilities);
             dimensions_ = {capabilities.currentExtent.width, capabilities.currentExtent.height};
+            std::this_thread::yield();
         } while (dimensions_.x == 0 || dimensions_.y == 0);
 
         ctx_.device()->DeviceWaitIdle(ctx_.device());
+
+        // recreate the necessary resized resources and notify client code via
+        // the onSwaphcainResized callback
         swapchain_.reset();
         swapchain_ = createSwapchain();
+        createColorAndDepthResources();
         onSwapchainResized.invoke(dimensions_);
+
+        // retry the whole thing
         return nextSwapchainImage();
     }
+
+    frameCtx.colorView = &colorImageViews_[frameCtx.index];
+    frameCtx.depthView = &depthImageViews_[frameCtx.index];
 
     return frameCtx;
 }
@@ -175,6 +202,46 @@ void Window::submitAndPresent(FrameContext &&frameCtx)
         CO_CORE_INFO(fps);
         glfwSetWindowTitle(handle(), fps.c_str());
     }
+}
+
+void Window::createColorAndDepthResources()
+{
+    const auto extent = swapchain_->extent();
+    const Magnum::Vector2i size(extent.x, extent.y);
+    const int levels = 1;
+
+    // color images
+    colorImages_ =
+        swapchain_->images() | ranges::views::transform([&](const Vk::Image &colorImage) {
+            auto usage = Vk::ImageUsage::ColorAttachment;
+            return Vk::Image{
+                ctx_.device(),
+                Vk::ImageCreateInfo2D{usage, colorImage.format(), size, levels, sampleCount_},
+                Vk::MemoryFlag::DeviceLocal};
+        }) |
+        ranges::to<std::vector<Vk::Image>>;
+
+    colorImageViews_ =
+        colorImages_ | ranges::views::transform([&](Vk::Image &colorImage) {
+            return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage}};
+        }) |
+        ranges::to<std::vector<Vk::ImageView>>;
+
+    // depth
+    depthImages_ =
+        colorImages_ | ranges::views::transform([&](const Vk::Image &colorImage) {
+            auto usage = Vk::ImageUsage::DepthStencilAttachment;
+            return Vk::Image{ctx_.device(),
+                             Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},
+                             Vk::MemoryFlag::DeviceLocal};
+        }) |
+        ranges::to<std::vector<Vk::Image>>;
+
+    depthImageViews_ =
+        depthImages_ | ranges::views::transform([&](Vk::Image &depthImage) {
+            return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
+        }) |
+        ranges::to<std::vector<Vk::ImageView>>;
 }
 
 } // namespace Cory

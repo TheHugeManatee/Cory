@@ -20,6 +20,7 @@
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/FramebufferCreateInfo.h>
+#include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/RenderPass.h>
 #include <Magnum/Vk/VertexFormat.h>
@@ -122,9 +123,8 @@ void HelloTriangleApplication::createFramebuffers()
     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
     framebuffers_ =
-        ranges::views::zip(window_->colorViews(),
-                           window_->depthViews(),
-                           window_->swapchain().imageViews()) |
+        ranges::views::zip(
+            window_->colorViews(), window_->depthViews(), window_->swapchain().imageViews()) |
         ranges::views::transform([&](auto views) {
             auto &[color, depth, swapchainImage] = views;
 

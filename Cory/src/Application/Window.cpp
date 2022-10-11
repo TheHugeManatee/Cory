@@ -72,11 +72,6 @@ bool Window::shouldClose() const
     return glfwWindowShouldClose(const_cast<GLFWwindow *>(handle()));
 }
 
-void Window::framebufferResized(glm::i32vec2 newDimensions)
-{
-    return glfwWindowShouldClose(const_cast<GLFWwindow *>(handle()));
-}
-
 BasicVkObjectWrapper<VkSurfaceKHR> Window::createSurface()
 {
     VkSurfaceKHR surfaceHandle;
@@ -216,7 +211,7 @@ void Window::createColorAndDepthResources()
             auto usage = Vk::ImageUsage::ColorAttachment;
             return Vk::Image{
                 ctx_.device(),
-                Vk::ImageCreateInfo2D{usage, colorImage.format(), size, levels, sampleCount_},
+                Vk::ImageCreateInfo2D{usage, colorFormat_, size, levels, sampleCount_},
                 Vk::MemoryFlag::DeviceLocal};
         }) |
         ranges::to<std::vector<Vk::Image>>;

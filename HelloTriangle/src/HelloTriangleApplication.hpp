@@ -4,7 +4,6 @@
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <Magnum/Vk/Framebuffer.h>
-#include <Magnum/Vk/Mesh.h>
 
 #include <memory>
 
@@ -16,7 +15,6 @@ class Context;
 } // namespace Cory
 
 namespace Magnum::Vk {
-class Framebuffer;
 class Mesh;
 }
 

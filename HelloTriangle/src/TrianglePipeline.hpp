@@ -18,13 +18,13 @@ class RenderPass;
 
 namespace Cory {
 class Context;
-class Swapchain;
+class Window;
 } // namespace Cory
 
 class TrianglePipeline : Cory::NoCopy {
   public:
     TrianglePipeline(Cory::Context &context,
-                     const Cory::Swapchain &swapchain,
+                     const Cory::Window &window,
                      const Magnum::Vk::Mesh &mesh,
                      std::filesystem::path vertFile,
                      std::filesystem::path fragFile);
@@ -35,7 +35,7 @@ class TrianglePipeline : Cory::NoCopy {
     Magnum::Vk::Pipeline &pipeline() { return *pipeline_; }
 
   private:
-    void createGraphicsPipeline(const Cory::Swapchain &swapchain,
+    void createGraphicsPipeline(const Cory::Window &window,
                                 const Magnum::Vk::Mesh &mesh,
                                 std::filesystem::path vertFile,
                                 std::filesystem::path fragFile);

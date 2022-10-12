@@ -37,27 +37,28 @@ struct FrameContext {
     uint32_t index{};
     uint64_t frameNumber{};
     bool shouldRecreateSwapchain{false};
+    Magnum::Vk::ImageView *swapchainImage{};
     Magnum::Vk::ImageView *colorView{};
     Magnum::Vk::ImageView *depthView{};
     Magnum::Vk::Fence *inFlight{};
     Semaphore *acquired{};
     Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer* commandBuffer{};
+    Magnum::Vk::CommandBuffer *commandBuffer{};
 };
 
 class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
-    Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo);
+    Swapchain(Context &ctx,
+              VkSurfaceKHR surface,
+              VkSwapchainCreateInfoKHR createInfo,
+              int32_t sampleCount);
     ~Swapchain();
 
     [[nodiscard]] auto &images() const noexcept { return images_; }
-    [[nodiscard]] auto colorFormat() const noexcept { return imageFormat_; }
+    [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return imageFormat_; }
     [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
-    [[nodiscard]] auto &depthImages() const noexcept { return depthImages_; }
-    [[nodiscard]] auto depthFormat() const noexcept { return depthFormat_; }
-    [[nodiscard]] auto &depthViews() noexcept { return depthImageViews_; }
-    [[nodiscard]] auto extent() const noexcept { return extent_; }
-    [[nodiscard]] auto size() const noexcept { return images_.size(); }
+    [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
+    [[nodiscard]] size_t size() const noexcept { return images_.size(); }
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying
@@ -83,7 +84,6 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     void present(FrameContext &fc);
 
   private:
-    void createDepthResources();
     void createImageViews();
     void createSyncObjects();
 
@@ -92,7 +92,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
 
     // general information about the swapchain setup
     Magnum::Vk::PixelFormat imageFormat_{};
-    Magnum::Vk::PixelFormat depthFormat_{};
+    int32_t sampleCount_{1};
     glm::u32vec2 extent_{};
     const uint32_t maxFramesInFlight_{};
     uint64_t nextFrameNumber_{};
@@ -100,9 +100,6 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     // these are images with memory owned by the swapchain
     std::vector<Magnum::Vk::Image> images_{};
     std::vector<Magnum::Vk::ImageView> imageViews_{};
-    // these are created separately through createDepthResources()
-    std::vector<Magnum::Vk::Image> depthImages_{};
-    std::vector<Magnum::Vk::ImageView> depthImageViews_{};
 
     // for each frame in flight, we also keep a set of additional resources
     std::vector<Magnum::Vk::Fence> inFlightFences_{};

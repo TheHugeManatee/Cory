@@ -2,6 +2,7 @@
 
 #include "TrianglePipeline.hpp"
 
+#include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Profiling.hpp>
@@ -18,7 +19,9 @@
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/FramebufferCreateInfo.h>
+#include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/RenderPass.h>
 #include <Magnum/Vk/VertexFormat.h>
@@ -26,6 +29,7 @@
 #include <GLFW/glfw3.h>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+#include <imgui.h>
 
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
@@ -39,19 +43,27 @@ namespace Vk = Magnum::Vk;
 
 HelloTriangleApplication::HelloTriangleApplication()
     : mesh_{}
+    , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
 {
     Cory::Init();
 
     Cory::ResourceLocator::addSearchPath(TRIANGLE_RESOURCE_DIR);
 
+    ctx_ = std::make_unique<Cory::Context>();
+    // determine msaa sample count to use - for simplicity, we use either 8 or one sample
+    const auto &limits = ctx_->physicalDevice().properties().properties.limits;
+    VkSampleCountFlags counts =
+        limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+    int msaaSamples = counts & VK_SAMPLE_COUNT_8_BIT ? 8 : 1;
+    CO_APP_INFO("MSAA sample count: {}", msaaSamples);
+
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 768};
-    ctx_ = std::make_unique<Cory::Context>();
-    window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle");
+    window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
     auto recreatePipeline = [&](glm::i32vec2) {
         pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
-                                                       window_->swapchain(),
+                                                       *window_,
                                                        *mesh_,
                                                        std::filesystem::path{"simple_shader.vert"},
                                                        std::filesystem::path{"simple_shader.frag"});
@@ -62,11 +74,14 @@ HelloTriangleApplication::HelloTriangleApplication()
     recreatePipeline(window_->dimensions());
     // we currently don't use dynamic pipeline state so we have to
     // recreate the full pipeline when swapchain has been resized
-    window_->onSwapchainResized(recreatePipeline);
+    window_->onSwapchainResized.connect(recreatePipeline);
+
+    imguiLayer_->init(*window_, *ctx_);
 }
 
 HelloTriangleApplication::~HelloTriangleApplication()
 {
+    imguiLayer_->deinit(*ctx_);
     CO_APP_TRACE("Destroying HelloTriangleApplication");
 }
 
@@ -74,8 +89,11 @@ void HelloTriangleApplication::run()
 {
     while (!window_->shouldClose()) {
         glfwPollEvents();
+        imguiLayer_->newFrame(*ctx_);
         // TODO process events?
         auto frameCtx = window_->nextSwapchainImage();
+
+        ImGui::ShowDemoWindow();
 
         recordCommands(frameCtx);
 
@@ -105,6 +123,8 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     cmdBuffer.endRenderPass();
 
+    imguiLayer_->recordFrameCommands(*ctx_, frameCtx);
+
     cmdBuffer.end();
 }
 
@@ -113,18 +133,17 @@ void HelloTriangleApplication::createFramebuffers()
     auto swapchainExtent = window_->swapchain().extent();
     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
-    framebuffers_ =
-        ranges::views::zip(window_->swapchain().imageViews(), window_->swapchain().depthViews()) |
-        ranges::views::transform([&](auto views) {
-            auto &[colorView, depthView] = views;
+    framebuffers_ = window_->depthViews() | ranges::views::transform([&](auto &depth) {
+                        auto &color = window_->colorView();
 
-            return Vk::Framebuffer(ctx_->device(),
-                                   Vk::FramebufferCreateInfo{pipeline_->mainRenderPass(),
-                                                             {colorView, depthView},
-                                                             framebufferSize});
-        }) |
-        ranges::to<std::vector<Vk::Framebuffer>>;
+                        return Vk::Framebuffer(
+                            ctx_->device(),
+                            Vk::FramebufferCreateInfo{
+                                pipeline_->mainRenderPass(), {color, depth}, framebufferSize});
+                    }) |
+                    ranges::to<std::vector<Vk::Framebuffer>>;
 }
+
 void HelloTriangleApplication::createGeometry()
 {
 #pragma pack(push, 1)

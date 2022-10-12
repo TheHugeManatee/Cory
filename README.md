@@ -8,7 +8,8 @@ I also use it to test more modern C++ features such as coroutines and the execut
 As such, it uses features that are only supported in rather modern compilers. 
 
 #### Short Term
- - ImGui integration
+ - push constants
+ - descriptor set/shader uniforms abstraction
  - Window and event system
 
 #### Mid Term
@@ -23,6 +24,7 @@ As such, it uses features that are only supported in rather modern compilers.
  - Play around with ray tracing
 
 #### Done
+ - ImGui integration
  - Performance and Logging classes
  - Refactoring of vulkan classes towards a reusable code base
 

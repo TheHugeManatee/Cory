@@ -25,6 +25,8 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
+#include <kdbindings/signal.h>
+
 namespace Vk = Magnum::Vk;
 
 namespace Cory {
@@ -94,6 +96,23 @@ Vk::RenderPass createImguiRenderpass(Context &ctx, Vk::PixelFormat format, int32
             }}));
 }
 
+std::vector<Vk::Framebuffer>
+createFramebuffers(Context &ctx, Window &window, Vk::RenderPass &renderPass)
+{
+    const auto swapchainExtent = window.dimensions();
+    const Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
+
+    return window.swapchain().imageViews() | ranges::views::transform([&](auto &swapchainImage) {
+               auto &colorView = window.colorView();
+
+               return Vk::Framebuffer(ctx.device(),
+                                      Vk::FramebufferCreateInfo{renderPass,
+                                                                {colorView, swapchainImage},
+                                                                framebufferSize});
+           }) |
+           ranges::_to_::to<std::vector<Vk::Framebuffer>>;
+}
+
 } // namespace
 
 struct ImGuiLayer::Private {
@@ -101,6 +120,7 @@ struct ImGuiLayer::Private {
     BasicVkObjectWrapper<VkDescriptorPool> descriptorPool;
     std::vector<Vk::Framebuffer> framebuffers;
     Magnum::Color4 clearValue{};
+    KDBindings::ConnectionHandle handle{};
 };
 
 void check_vk_result(VkResult err)
@@ -116,27 +136,21 @@ ImGuiLayer::ImGuiLayer()
     data_->clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
 }
 
-ImGuiLayer::~ImGuiLayer() = default;
+ImGuiLayer::~ImGuiLayer()
+{
+    data_->handle.disconnect();
+}
 
 void ImGuiLayer::init(Window &window, Context &ctx)
 {
-    data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
     data_->descriptorPool = createImguiDescriptorPool(ctx);
 
-    // create frame buffer for imgui render pass
-    const auto swapchainExtent = window.dimensions();
-    const Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
-
-    data_->framebuffers =
-        window.swapchain().imageViews() | ranges::views::transform([&](auto &swapchainImage) {
-            auto &colorView = window.colorView();
-
-            return Vk::Framebuffer(ctx.device(),
-                                   Vk::FramebufferCreateInfo{data_->renderPass,
-                                                             {colorView, swapchainImage},
-                                                             framebufferSize});
-        }) |
-        ranges::to<std::vector<Vk::Framebuffer>>;
+    auto recreateSizedResources = [&](glm::i32vec2 s) {
+        data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
+        data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
+    };
+    recreateSizedResources({});
+    data_->handle = window.onSwapchainResized.connect(recreateSizedResources);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();

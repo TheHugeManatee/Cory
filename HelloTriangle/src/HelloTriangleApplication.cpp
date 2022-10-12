@@ -74,7 +74,7 @@ HelloTriangleApplication::HelloTriangleApplication()
     recreatePipeline(window_->dimensions());
     // we currently don't use dynamic pipeline state so we have to
     // recreate the full pipeline when swapchain has been resized
-    window_->onSwapchainResized(recreatePipeline);
+    window_->onSwapchainResized.connect(recreatePipeline);
 
     imguiLayer_->init(*window_, *ctx_);
 }

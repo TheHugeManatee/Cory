@@ -159,7 +159,7 @@ FrameContext Window::nextSwapchainImage()
         swapchain_.reset();
         swapchain_ = createSwapchain();
         createColorAndDepthResources();
-        onSwapchainResized.invoke(dimensions_);
+        onSwapchainResized.emit(dimensions_);
 
         // retry the whole thing
         return nextSwapchainImage();

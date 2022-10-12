@@ -23,7 +23,6 @@ class ImGuiLayer {
     ~ImGuiLayer();
 
     void init(Window &window, Context &ctx);
-
     void deinit(Context &ctx);
 
     void newFrame(Context &ctx);

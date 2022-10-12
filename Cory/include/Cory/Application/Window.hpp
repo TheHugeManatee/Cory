@@ -9,6 +9,8 @@
 #include <Magnum/Vk/Image.h>
 #include <Magnum/Vk/ImageView.h>
 
+#include <kdbindings/signal.h>
+
 #include <glm/vec2.hpp>
 #include <memory>
 #include <string>
@@ -56,12 +58,12 @@ class Window : NoCopy, NoMove {
     [[nodiscard]] auto &depthViews() noexcept { return depthImageViews_; }
 
     /**
-     * This callback is called whenever the swapchain is resized and the application should
+     * This signal is emitted whenever the swapchain is resized and the application should
      * create new, appropriately sized resources.
      *
      * It is called from within `nextSwapchainImage()` if a swapchain resize event is detected.
      */
-    Callback<glm::i32vec2> onSwapchainResized;
+    KDBindings::Signal<glm::i32vec2> onSwapchainResized;
 
   private:
     [[nodiscard]] BasicVkObjectWrapper<VkSurfaceKHR> createSurface();

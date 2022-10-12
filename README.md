@@ -45,9 +45,10 @@ The integration is transparent, which means that if you have a suitable conan in
  - Modified `CameraManipulator` Class, https://github.com/KhronosGroup/Vulkan-Hpp/tree/master/samples/RayTracing, Apache 2.0 License
  - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT License
  - imGuIZMO.quat for rotation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause License
+ - KDBindings, https://github.com/KDAB/KDBindings, MIT License
 
 ### Other used third party libraries
-See `conanfile.txt` for the exact versions used, but there is of course always some flexibility in using different versions.
+See `conanfile.txt` for the other libraries and their exact versions used, but there is of course always some flexibility in using different versions.
 
 
 ## Building

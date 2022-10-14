@@ -39,6 +39,7 @@ template <typename StoredType> class SlotMap {
 
     template <typename... InitArgs> SlotMapHandle emplace(InitArgs... args)
     {
+        // check if we need to allocate more chunks
         if (freeList_.empty()) {
             // allocate a new chunk and add the leftovers to the free list
             const auto num_chunks = objectChunkTable_.size();
@@ -48,8 +49,8 @@ template <typename StoredType> class SlotMap {
 
             for (uint64_t i = CHUNK_SIZE - 1; i > 0; --i) {
                 const auto idx = num_chunks * CHUNK_SIZE + i;
-                chunk[i].id = makeIdentifier(idx, 0);
-                freeList_.push_back(idx);
+                chunk[i].id = makeIdentifier(static_cast<uint32_t>(idx), 0);
+                freeList_.push_back(static_cast<uint32_t>(idx));
             }
             const auto idx = num_chunks * CHUNK_SIZE;
             chunk[0].id = makeIdentifier(static_cast<uint32_t>(idx), 0);
@@ -58,6 +59,7 @@ template <typename StoredType> class SlotMap {
             return chunk[0].id;
         }
 
+        // get the next free index
         int free = freeList_.back();
         freeList_.pop_back();
 
@@ -74,6 +76,11 @@ template <typename StoredType> class SlotMap {
     SlotMapHandle insert(const StoredType &value) { return emplace(value); }
 
     // release the object, invalidating previous handles and reclaiming the memory for future use
+    void release(SlotMapHandle id)
+    {
+        return insert(StoredType{arguments...});
+    }
+
     void release(SlotMapHandle id)
     {
         const auto idx = getIndex(id);

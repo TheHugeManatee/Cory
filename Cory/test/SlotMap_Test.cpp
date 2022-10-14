@@ -9,17 +9,23 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
 {
     Cory::SlotMap<float> sm;
 
-    auto h1 = sm.insert();
-    auto h2 = sm.insert();
+    auto h1 = sm.insert(1.0f);
+    auto h2 = sm.insert(2.0f);
+    CHECK(sm[h1] == 1.0f);
+    CHECK(sm[h2] == 2.0f);
     CHECK(h1 != h2);
 
+    // updating values in-place does not update the version
     sm[h1] = 41.0;
     sm[h2] = 42.0;
     CHECK(sm[h1] == 41.0);
     CHECK(sm[h2] == 42.0);
 
+    // save address for later
     auto h1_address = &sm[h1];
     auto h2_address = &sm[h2];
+
+    // check size makes sense
     CHECK(sm.size() == 2);
 
     SECTION("Adding many elements and ensure memory stability")
@@ -43,12 +49,21 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
         CHECK_THROWS(sm[h2]);
         CHECK(sm.size() == 1);
 
-        auto h3 = sm.insert();
+        auto h3 = sm.insert(3.0);
         CHECK(h3 != h2);
         auto h3_address = &sm[h3];
         // ensure slots are reused but access through the ID still throws
         CHECK(h3_address == h2_address);
         CHECK_THROWS(sm[h2]);
+    }
+
+    SECTION("Updating a value") {
+        auto h3 = sm.update(h2, 3.0);
+
+        // h2 should be retired
+        CHECK_THROWS(sm[h2]);
+        // new value should be stored in that handle
+        CHECK(sm[h3] == 3.0);
     }
 }
 

@@ -8,6 +8,7 @@ find_package(GLEW)
 find_package(Magnum REQUIRED Vk)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
+find_package(cppcoro REQUIRED)
 find_package(glfw3)
 find_package(glm REQUIRED)
 find_package(imgui REQUIRED)
@@ -52,6 +53,8 @@ set(CORY_SOURCES
         include/Cory/Base/Profiling.hpp
         src/RenderCore/SingleShotCommandBuffer.cpp
         include/Cory/RenderCore/SingleShotCommandBuffer.hpp
+        include/Cory/Framegraph/Framegraph.hpp
+        src/Framegraph/Framegraph.cpp
         )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
@@ -78,6 +81,7 @@ target_link_libraries(${TARGET_NAME}
         imgui::imgui
         magic_enum::magic_enum
         range-v3::range-v3
+        cppcoro::cppcoro
         shaderc::shaderc
         spdlog::spdlog
 

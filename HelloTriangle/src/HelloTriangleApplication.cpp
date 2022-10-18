@@ -61,20 +61,17 @@ HelloTriangleApplication::HelloTriangleApplication()
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 768};
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
-    auto recreatePipeline = [&](glm::i32vec2) {
-        pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
-                                                       *window_,
-                                                       *mesh_,
-                                                       std::filesystem::path{"simple_shader.vert"},
-                                                       std::filesystem::path{"simple_shader.frag"});
-        createFramebuffers();
-    };
+    auto recreateSizedResources = [&](glm::i32vec2) { createFramebuffers(); };
 
     createGeometry();
-    recreatePipeline(window_->dimensions());
-    // we currently don't use dynamic pipeline state so we have to
-    // recreate the full pipeline when swapchain has been resized
-    window_->onSwapchainResized.connect(recreatePipeline);
+    pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
+                                                   *window_,
+                                                   *mesh_,
+                                                   std::filesystem::path{"simple_shader.vert"},
+                                                   std::filesystem::path{"simple_shader.frag"});
+    createFramebuffers();
+    recreateSizedResources(window_->dimensions());
+    window_->onSwapchainResized.connect(recreateSizedResources);
 
     imguiLayer_->init(*window_, *ctx_);
 }
@@ -117,6 +114,19 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
         Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), framebuffers_[frameCtx.index]}
             .clearColor(0, clearColor)
             .clearDepthStencil(1, 1.0, 0));
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(window_->dimensions().x);
+    viewport.height = static_cast<float>(window_->dimensions().y);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor{{0, 0},
+                     {static_cast<uint32_t>(window_->dimensions().x),
+                      static_cast<uint32_t>(window_->dimensions().y)}};
+    ctx_->device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
+    ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
     // draw our triangle mesh
     cmdBuffer.draw(*mesh_);

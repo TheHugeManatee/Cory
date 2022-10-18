@@ -57,25 +57,24 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
     mainRenderPass_ = std::make_unique<Vk::RenderPass>(
         ctx_.device(),
         Vk::RenderPassCreateInfo{}
-            .setAttachments({
-                // offscreen color
-                Vk::AttachmentDescription{
-                    colorFormat,
-                    {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                    {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
-                    Vk::ImageLayout::Undefined,
-                    Vk::ImageLayout::ColorAttachment,
-                    sampleCount},
-                // offscreen depth
-                Vk::AttachmentDescription{
-                    depthFormat,
-                    {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                    {Vk::AttachmentStoreOperation::DontCare,
-                     Vk::AttachmentStoreOperation::DontCare},
-                    Vk::ImageLayout::Undefined,
-                    Vk::ImageLayout::DepthStencilAttachment,
-                    sampleCount}
-            })
+            .setAttachments(
+                {// offscreen color
+                 Vk::AttachmentDescription{
+                     colorFormat,
+                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
+                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
+                     Vk::ImageLayout::Undefined,
+                     Vk::ImageLayout::ColorAttachment,
+                     sampleCount},
+                 // offscreen depth
+                 Vk::AttachmentDescription{
+                     depthFormat,
+                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
+                     {Vk::AttachmentStoreOperation::DontCare,
+                      Vk::AttachmentStoreOperation::DontCare},
+                     Vk::ImageLayout::Undefined,
+                     Vk::ImageLayout::DepthStencilAttachment,
+                     sampleCount}})
             .addSubpass(Vk::SubpassDescription{}
                             .setColorAttachments(
                                 {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}})
@@ -93,8 +92,15 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
         shaderSet, mesh.layout(), pipelineLayout, *mainRenderPass_, 0, 1};
 
-    const glm::vec2 corner = window.dimensions();
-    rasterizationPipelineCreateInfo.setViewport({{0.0f, 0.0f}, {corner.x, corner.y}});
+    // configure dynamic state - one viewport and scissor configured but no dimensions specified
+    rasterizationPipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
+                                                     Vk::DynamicRasterizationState::Scissor);
+    VkPipelineViewportStateCreateInfo viewportState{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1,
+    };
+    rasterizationPipelineCreateInfo->pViewportState = &viewportState;
 
     // multisampling setup
     VkPipelineMultisampleStateCreateInfo multisampling{};

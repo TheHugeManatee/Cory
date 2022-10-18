@@ -13,6 +13,7 @@
 #include <imgui_impl_vulkan.h>
 
 #include <Magnum/Math/Color.h>
+#include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/FramebufferCreateInfo.h>
@@ -116,6 +117,7 @@ createFramebuffers(Context &ctx, Window &window, Vk::RenderPass &renderPass)
 } // namespace
 
 struct ImGuiLayer::Private {
+    Window *window;
     Vk::RenderPass renderPass{Corrade::NoCreate};
     BasicVkObjectWrapper<VkDescriptorPool> descriptorPool;
     std::vector<Vk::Framebuffer> framebuffers;
@@ -143,14 +145,15 @@ ImGuiLayer::~ImGuiLayer()
 
 void ImGuiLayer::init(Window &window, Context &ctx)
 {
+    data_->window = &window;
     data_->descriptorPool = createImguiDescriptorPool(ctx);
+    data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
 
     auto recreateSizedResources = [&](glm::i32vec2 s) {
-        data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
         data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
     };
-    recreateSizedResources({});
     data_->handle = window.onSwapchainResized.connect(recreateSizedResources);
+    recreateSizedResources({});
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -244,6 +247,20 @@ void ImGuiLayer::recordFrameCommands(Context &ctx, FrameContext &frameCtx)
         Vk::RenderPassBeginInfo{data_->renderPass, data_->framebuffers[frameCtx.index]}
             .clearColor(0, data_->clearValue)
             .clearDepthStencil(1, 0.0f, 0));
+
+    auto windowDim = data_->window->dimensions();
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(windowDim.x);
+    viewport.height = static_cast<float>(windowDim.y);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor{{0, 0},
+                     {static_cast<uint32_t>(windowDim.x), static_cast<uint32_t>(windowDim.y)}};
+    ctx.device()->CmdSetViewport(*frameCtx.commandBuffer, 0, 1, &viewport);
+    ctx.device()->CmdSetScissor(*frameCtx.commandBuffer, 0, 1, &scissor);
+
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *frameCtx.commandBuffer);
     frameCtx.commandBuffer->endRenderPass();
 }

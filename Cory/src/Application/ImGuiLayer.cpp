@@ -138,7 +138,7 @@ ImGuiLayer::ImGuiLayer()
 
 ImGuiLayer::~ImGuiLayer()
 {
-    data_->handle.disconnect();
+    CO_CORE_ASSERT(!data_, "ImGuiLayer::deinit() needs to be called before destruction of the layer!");
 }
 
 void ImGuiLayer::init(Window &window, Context &ctx)
@@ -163,7 +163,6 @@ void ImGuiLayer::init(Window &window, Context &ctx)
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsClassic();
 
     ImGui_ImplGlfw_InitForVulkan(window.handle(), true);
 
@@ -209,39 +208,13 @@ void ImGuiLayer::init(Window &window, Context &ctx)
     // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f,
     // NULL, io.Fonts->GetGlyphRangesJapanese()); IM_ASSERT(font != NULL);
 
-    // Upload Fonts
+    // Upload Fonts - the SingleShotCommandBuffer syncs implicitly on destruction
     {
-        // Use any command queue
-        // VkCommandPool command_pool = wd->Frames[wd->FrameIndex].CommandPool;
-        // VkCommandBuffer command_buffer =
-        // wd->Frames[wd->FrameIndex].CommandBuffer;
-
-        // err = vkResetCommandPool(g_Device, command_pool, 0);
-        // check_vk_result(err);
-        /*VkCommandBufferBeginInfo begin_info = {};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        err = vkBeginCommandBuffer(command_buffer, &begin_info);
-        check_vk_result(err);*/
-        {
-            SingleShotCommandBuffer cmdBuff(ctx);
-            ImGui_ImplVulkan_CreateFontsTexture(cmdBuff);
-        }
-
-        // VkSubmitInfo end_info = {};
-        // end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        // end_info.commandBufferCount = 1;
-        // end_info.pCommandBuffers = &command_buffer;
-        // err = vkEndCommandBuffer(command_buffer);
-        // check_vk_result(err);
-        // err = vkQueueSubmit(g_Queue, 1, &end_info, VK_NULL_HANDLE);
-        // check_vk_result(err);
-
-        // todo: probably not needed, the SingleShotCommandBuffer already syncs
-        ctx.device()->DeviceWaitIdle(ctx.device());
-
-        ImGui_ImplVulkan_DestroyFontUploadObjects();
+        SingleShotCommandBuffer cmdBuff(ctx);
+        ImGui_ImplVulkan_CreateFontsTexture(cmdBuff);
     }
+
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 
 void ImGuiLayer::deinit(Context &ctx)

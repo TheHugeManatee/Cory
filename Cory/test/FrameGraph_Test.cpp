@@ -1,67 +1,101 @@
 #include <catch2/catch.hpp>
 
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 
 #include <cppcoro/sync_wait.hpp>
-
+#include <cppcoro/when_all.hpp>
 using namespace Cory;
 namespace FG = Cory::Framegraph;
 
 /*TODO*/ cppcoro::task<FG::TextureHandle> depthPass(FG::Framegraph &graph, glm::u32vec3 size)
 {
-    FG::Builder &builder = graph.declarePass("DepthPrepass");
+    FG::Builder builder = graph.declarePass("DepthPrepass");
 
-    std::string_view renderPassHandle{"depth"};
-    FG::MutableTextureHandle depthHandle =
-        co_await builder.create("depth", size, {/* D32 */}, {/* CAO */});
+    FG::MutableTextureHandle depthInputHandle = co_await builder.create(
+        "depthTexture", size, FG::PixelFormat::D32, FG::Layout::DepthStencilAttachment);
 
-    auto rsrc = co_await builder.acquireResources(depthHandle);
-
-    co_return depthHandle;
-
-    // TODO: define render pass
-    // TODO: record commands
+    co_return FG::TextureHandle{
+        .name = depthInputHandle.name,
+        .size = depthInputHandle.size,
+        .format = depthInputHandle.format,
+        .layout = depthInputHandle.layout,
+        .resource = [](auto depthInputHandle) -> cppcoro::shared_task<FG::Texture> {
+            auto render_to = co_await depthInputHandle.resource;
+            CO_APP_INFO("Rendering depth pass");
+            // TODO render pass and commands
+            co_return render_to;
+        }(depthInputHandle)};
 }
 
-/*TODO*/ cppcoro::task<void> mainPass(FG::Framegraph graph, FG::TextureHandle depthHandle)
+struct MainOut {
+    FG::TextureHandle color;
+    FG::TextureHandle depth;
+    FG::TextureHandle normal;
+};
+/*TODO*/ cppcoro::task<MainOut> mainPass(FG::Framegraph graph,
+                                         cppcoro::task<FG::TextureHandle> &depthInput)
 {
-    FG::Builder &builder = graph.declarePass("MainPass");
-    FG::TextureHandle depth = co_await builder.read("depth", depthHandle);
+    FG::Builder builder = graph.declarePass("MainPass");
+    auto depthHandle = co_await depthInput;
 
-    FG::MutableTextureHandle color =
-        co_await builder.create("color", depth.size, {/* RGBA32F */}, {/* CAO */});
-    FG::MutableTextureHandle normal =
-        co_await builder.create("normal", depth.size, {/* RGBA32F */}, {/* CAO */});
+    FG::TextureHandle depth = co_await builder.read(depthHandle);
+    FG::MutableTextureHandle colorWritable = co_await builder.create(
+        "colorTexture", depth.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
+    FG::MutableTextureHandle normalWritable = co_await builder.create(
+        "normalTexture", depth.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
 
-    co_return color;
-    // TODO: define render pass
-    // TODO: record commands
+    struct ResultTextures {
+        FG::Texture color;
+        FG::Texture depth;
+        FG::Texture normal;
+    };
+
+    auto render_result = [](auto colorWritable,
+                            auto depth,
+                            auto normalWritable) -> cppcoro::shared_task<ResultTextures> {
+        // wait until the textures are allocated and available
+        auto [colorTex, depthTex, normalTex] = co_await cppcoro::when_all(
+            colorWritable.resource, depth.resource, normalWritable.resource);
+        CO_CORE_INFO("Rendering main pass");
+        // TODO render pass and commands
+        co_return ResultTextures{colorTex, depthTex, normalTex};
+    }(colorWritable, depth, normalWritable);
+
+    co_return MainOut{{.name = colorWritable.name,
+                       .size = colorWritable.size,
+                       .format = colorWritable.format,
+                       .layout = colorWritable.layout,
+                       .resource = [](auto render_result) -> cppcoro::shared_task<FG::Texture> {
+                           auto rendered = co_await render_result;
+                           co_return rendered.color;
+                       }(render_result)},
+                      depth,
+                      {.name = normalWritable.name,
+                       .size = normalWritable.size,
+                       .format = normalWritable.format,
+                       .layout = normalWritable.layout,
+                       .resource = [](auto render_result) -> cppcoro::shared_task<FG::Texture> {
+                           auto rendered = co_await render_result;
+                           co_return rendered.normal;
+                       }(render_result)}};
 }
-
-// cppcoro::task<void> postprocess(FG::Builder builder)
-//{
-//     // inputs
-//     FG::TextureHandle color = co_await builder.read("color", {/* TODO */});
-//     FG::TextureHandle depth = co_await builder.read("depth", {/* TODO */});
-//
-//     // output
-//     FG::MutableTextureHandle final = co_await builder.create("final", {/* TODO */});
-//
-//     // TODO: define render pass
-//     // TODO: record commands
-// }
 
 TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 {
+    Cory::Log::Init();
+
     FG::Framegraph fg;
+    CO_CORE_INFO("Framegraph setup");
 
-    auto build_task = fg.build([&](FG::Builder &builder) -> cppcoro::task<void> {
-        auto depthHandle = co_await depthPass(fg, {800, 600, 1});
+    auto depthHandle = depthPass(fg, {800, 600, 1});
+    auto colorOut = mainPass(fg, depthHandle);
 
-        auto colorHandle = co_await mainPass(fg, depthHandle);
+    CO_CORE_INFO("Request final image handle");
+    FG::TextureHandle finalColor = cppcoro::sync_wait(colorOut).color;
 
-        co_return;
-    });
+    CO_CORE_INFO("Request final rendered image");
+    FG::Texture colorTexture = cppcoro::sync_wait(finalColor.resource);
 
-    cppcoro::sync_wait(build_task);
+    CO_CORE_INFO("Rendering finished");
 }

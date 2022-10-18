@@ -1,132 +1,186 @@
 #pragma once
 
-#include <Cory/Base/SlotMap.hpp>
+#include <Cory/Base/Log.hpp>
+#include <Cory/Base/FmtUtils.hpp>
 
+#include <cppcoro/shared_task.hpp>
 #include <cppcoro/task.hpp>
 #include <cppcoro/when_all_ready.hpp>
 #include <glm/vec3.hpp>
 
 #include <concepts>
+#include <set>
 #include <string_view>
+#include <unordered_map>
 
 namespace Cory::Framegraph {
 
 using PlaceholderT = uint64_t;
+enum PixelFormat { D32, RGBA32 };
+enum Layout { ColorAttachment, DepthStencilAttachment, TransferSource, PresentSource };
+using SlotMapHandle = uint64_t;
 
 struct ResourceHandle {
     SlotMapHandle handle;
 };
 
 struct Texture {
+    std::string name;
     glm::u32vec3 size;
-    PlaceholderT format;
-    PlaceholderT currentLayout;
+    PixelFormat format;
+    Layout currentLayout;
     PlaceholderT resource; // the Vk::Image
 };
 
 struct TextureHandle {
+    std::string name;
     glm::u32vec3 size;
-    PlaceholderT format;
-    PlaceholderT currentLayout;
-
-    SlotMapHandle handle;
+    PixelFormat format;
+    Layout layout;
+    cppcoro::shared_task<Texture> resource;
 };
-struct MutableTextureHandle {
-    glm::u32vec3 size;
-    PlaceholderT format;
-    PlaceholderT currentLayout;
 
-    SlotMapHandle handle;
+struct MutableTextureHandle {
+    std::string name;
+    glm::u32vec3 size;
+    PixelFormat format;
+    Layout layout;
+    cppcoro::shared_task<Texture> resource;
 
     /*implicit*/ operator TextureHandle() const
     {
-        return {.size = size, .format = format, .currentLayout = currentLayout, .handle = handle};
+        return {
+            .name = name, .size = size, .format = format, .layout = layout, .resource = resource};
     }
 };
 
-// base template
-template <typename ResourceHandle> struct ResourcePtrHelper {};
-template <typename ResourceHandle>
-    requires std::is_same_v<ResourceHandle, TextureHandle>
-struct ResourcePtrHelper<ResourceHandle> {
-    using Type = Texture &;
-};
-template <typename ResourceHandle>
-    requires std::is_same_v<ResourceHandle, MutableTextureHandle>
-struct ResourcePtrHelper<ResourceHandle> {
-    using Type = const Texture &;
-};
-template <typename ResourceHandle>
-using ResourcePtr = typename ResourcePtrHelper<ResourceHandle>::Type;
-
-class Builder {
+class DependencyGraph {
   public:
-    cppcoro::task<TextureHandle> read(std::string_view name /**/, TextureHandle handle)
+    void recordCreates(std::string pass, TextureHandle resource)
     {
-        const auto &t = resources_[handle.handle];
-        co_return TextureHandle{
-            .size = t.size, .format = t.format, .currentLayout = t.format, .handle = handle.handle};
+        CO_CORE_INFO("{} creates {}", pass, resource.name);
+        creates_.emplace_back(pass, resource);
     }
-    cppcoro::task<MutableTextureHandle>
-    create(std::string_view name, glm::u32vec3 size, PlaceholderT format, PlaceholderT finalLayout)
+    void recordReads(std::string pass, TextureHandle resource)
     {
-        // todo actually create a resource
-        auto handle = resources_.insert(
-            {.size = size, .format = format, .currentLayout = finalLayout, .resource = {}});
-        co_return MutableTextureHandle{
-            .size = size, .format = format, .currentLayout = finalLayout, .handle = handle};
+        CO_CORE_INFO("{} reads {} with layout {}", pass, resource.name, resource.layout);
+        reads_.emplace_back(pass, resource);
     }
-    cppcoro::task<MutableTextureHandle> write(std::string_view /**/, ResourceHandle handle)
+    void recordWrites(std::string pass, TextureHandle resource)
     {
-        auto &t = resources_[handle.handle];
-
-        auto updated_handle = resources_.update(handle.handle,
-                                                {.size = t.size,
-                                                 .format = t.format,
-                                                 .currentLayout = t.currentLayout,
-                                                 .resource = t.resource});
-        co_return MutableTextureHandle{.size = t.size,
-                                       .format = t.format,
-                                       .currentLayout = t.currentLayout,
-                                       .handle = updated_handle};
-    }
-
-    template <typename... Handles> auto acquireResources(Handles... handles)
-    {
-        return cppcoro::when_all_ready(acquireResource(handles)...);
+        CO_CORE_INFO("{} writes {} as layout {}", pass, resource.name, resource.layout);
+        writes_.emplace_back(pass, resource);
     }
 
   private:
-    cppcoro::task<const Texture &> acquireResource(const TextureHandle &h)
+    using Record = std::tuple<std::string, TextureHandle>;
+    std::vector<Record> creates_;
+    std::vector<Record> reads_;
+    std::vector<Record> writes_;
+};
+
+class TextureResourceManager {
+  public:
+    Texture allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout)
     {
-        co_return resources_[h.handle];
-    }
-    cppcoro::task<Texture &> acquireResource(const MutableTextureHandle &h)
-    {
-        co_return resources_[h.handle];
+        auto handle = nextHandle_++;
+        resources_.emplace(handle,
+                           Texture{.name = std::move(name),
+                                   .size = size,
+                                   .format = format,
+                                   .currentLayout = layout,
+                                   .resource = {}});
+        return resources_[handle];
     }
 
-    SlotMap<Texture> resources_;
+  private:
+    SlotMapHandle nextHandle_;
+    std::unordered_map<SlotMapHandle, Texture> resources_;
+};
+
+class Builder {
+  public:
+    Builder(std::string_view passName,
+            DependencyGraph &graph,
+            TextureResourceManager &resourceManager)
+        : passName_{passName}
+        , graph_{graph}
+        , resources_{resourceManager}
+    {
+    }
+
+    // declares a dependency to the named resource
+    cppcoro::task<TextureHandle> read(TextureHandle &h)
+    {
+        graph_.recordReads(passName_, h);
+
+        co_return TextureHandle{
+            .size = h.size, .format = h.format, .layout = h.layout, .resource = h.resource};
+    }
+
+    cppcoro::task<MutableTextureHandle>
+    create(std::string name, glm::u32vec3 size, PixelFormat format, Layout finalLayout)
+    {
+        // coroutine that will allocate and return the texture
+        auto do_allocate = [](TextureResourceManager &resources,
+                              std::string name,
+                              glm::u32vec3 size,
+                              PixelFormat format,
+                              Layout finalLayout) -> cppcoro::shared_task<Texture> {
+            CO_CORE_INFO("Creating texture {} of {}x{}x{} ({} {})",
+                         name,
+                         size.x,
+                         size.y,
+                         size.z,
+                         format,
+                         finalLayout);
+
+            co_return resources.allocate(name, size, format, finalLayout);
+        };
+
+        MutableTextureHandle handle{.name = name,
+                                    .size = size,
+                                    .format = format,
+                                    .layout = finalLayout,
+                                    .resource =
+                                        do_allocate(resources_, name, size, format, finalLayout)};
+        graph_.recordCreates(passName_, handle);
+        co_return handle;
+    }
+
+    cppcoro::task<MutableTextureHandle> write(TextureHandle handle)
+    {
+        graph_.recordWrites(passName_, handle);
+
+        co_return MutableTextureHandle{.name = handle.name,
+                                       .size = handle.size,
+                                       .format = handle.format,
+                                       .layout = handle.layout,
+                                       .resource = handle.resource};
+    }
+
+  private:
+    std::string passName_;
+    DependencyGraph graph_;
+    TextureResourceManager &resources_;
 };
 
 class Framegraph {
   public:
-    template <typename Functor>
-        requires(std::invocable<Functor, Builder &>)
-    cppcoro::task<void> build(Functor &&functor)
-    {
-        co_await functor(builder_);
-        compile();
-        co_return;
-    }
-    void execute();
+    void execute(){
+        // todo
+    };
 
-    Builder &declarePass(std::string_view name);
+    Builder declarePass(std::string_view name) { return Builder{name, graph_, resources_}; }
 
   private:
-    void compile();
+    void compile()
+    {
+        // TODO
+    }
 
-    Builder builder_;
+    DependencyGraph graph_;
+    TextureResourceManager resources_;
 };
 
 } // namespace Cory::Framegraph

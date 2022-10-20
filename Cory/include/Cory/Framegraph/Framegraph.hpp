@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Cory/Base/Log.hpp>
 #include <Cory/Base/FmtUtils.hpp>
+#include <Cory/Base/Log.hpp>
 
 #include <cppcoro/shared_task.hpp>
 #include <cppcoro/task.hpp>
@@ -16,8 +16,9 @@
 namespace Cory::Framegraph {
 
 using PlaceholderT = uint64_t;
-enum PixelFormat { D32, RGBA32 };
-enum Layout { ColorAttachment, DepthStencilAttachment, TransferSource, PresentSource };
+enum class PixelFormat { D32, RGBA32 };
+enum class Layout { ColorAttachment, DepthStencilAttachment, TransferSource, PresentSource };
+enum class ResourceState { Clear, DontCare, Keep };
 using SlotMapHandle = uint64_t;
 
 struct ResourceHandle {
@@ -58,17 +59,24 @@ class DependencyGraph {
   public:
     void recordCreates(std::string pass, TextureHandle resource)
     {
-        CO_CORE_INFO("{} creates {}", pass, resource.name);
+        CO_CORE_DEBUG("Pass {}: Creates '{}' as {}x{}x{} ({} {})",
+                      pass,
+                      resource.name,
+                      resource.size.x,
+                      resource.size.y,
+                      resource.size.z,
+                      resource.format,
+                      resource.layout);
         creates_.emplace_back(pass, resource);
     }
     void recordReads(std::string pass, TextureHandle resource)
     {
-        CO_CORE_INFO("{} reads {} with layout {}", pass, resource.name, resource.layout);
+        CO_CORE_DEBUG("Pass {}: Reads '{}' with layout {}", pass, resource.name, resource.layout);
         reads_.emplace_back(pass, resource);
     }
     void recordWrites(std::string pass, TextureHandle resource)
     {
-        CO_CORE_INFO("{} writes {} as layout {}", pass, resource.name, resource.layout);
+        CO_CORE_DEBUG("Pass {}: Writes '{}' as layout {}", pass, resource.name, resource.layout);
         writes_.emplace_back(pass, resource);
     }
 
@@ -83,6 +91,13 @@ class TextureResourceManager {
   public:
     Texture allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout)
     {
+        CO_CORE_DEBUG("Allocating texture '{}' of {}x{}x{} ({} {})",
+                      name,
+                      size.x,
+                      size.y,
+                      size.z,
+                      format,
+                      layout);
         auto handle = nextHandle_++;
         resources_.emplace(handle,
                            Texture{.name = std::move(name),
@@ -98,6 +113,26 @@ class TextureResourceManager {
     std::unordered_map<SlotMapHandle, Texture> resources_;
 };
 
+template <typename Callable, typename... Arguments>
+TextureHandle
+performWrite(MutableTextureHandle &handle, Callable &&writeOperation, Arguments... args)
+{
+    return TextureHandle{.name = handle.name,
+                         .size = handle.size,
+                         .format = handle.format,
+                         .layout = handle.layout,
+                         .resource = writeOperation(handle, std::forward<Arguments>(args)...)};
+}
+
+template <typename Callable, typename... Arguments>
+cppcoro::shared_task<TextureHandle>
+performWriteAsync(MutableTextureHandle &handle, Callable &&writeOperation, Arguments... args)
+{
+    co_return performWrite(
+        handle, std::forward<Callable>(writeOperation), std::forward<Arguments>(args)...);
+}
+
+// a builder that allows a render pass to declare specific dependencies (inputs and outputs)
 class Builder {
   public:
     Builder(std::string_view passName,
@@ -107,7 +142,9 @@ class Builder {
         , graph_{graph}
         , resources_{resourceManager}
     {
+        CO_CORE_DEBUG("Pass {}: declaration started", passName);
     }
+    ~Builder() { CO_CORE_DEBUG("Pass {}: declaration finished", passName_); }
 
     // declares a dependency to the named resource
     cppcoro::task<TextureHandle> read(TextureHandle &h)
@@ -127,14 +164,6 @@ class Builder {
                               glm::u32vec3 size,
                               PixelFormat format,
                               Layout finalLayout) -> cppcoro::shared_task<Texture> {
-            CO_CORE_INFO("Creating texture {} of {}x{}x{} ({} {})",
-                         name,
-                         size.x,
-                         size.y,
-                         size.z,
-                         format,
-                         finalLayout);
-
             co_return resources.allocate(name, size, format, finalLayout);
         };
 
@@ -151,7 +180,8 @@ class Builder {
     cppcoro::task<MutableTextureHandle> write(TextureHandle handle)
     {
         graph_.recordWrites(passName_, handle);
-
+        // todo versioning - MutableTextureHandle should point to a new resource alias (version in
+        // slotmap?)
         co_return MutableTextureHandle{.name = handle.name,
                                        .size = handle.size,
                                        .format = handle.format,

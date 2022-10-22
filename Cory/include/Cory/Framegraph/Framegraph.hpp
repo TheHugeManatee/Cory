@@ -2,6 +2,7 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/Common.hpp>
 
 #include <cppcoro/shared_task.hpp>
 #include <cppcoro/task.hpp>
@@ -55,6 +56,13 @@ struct MutableTextureHandle {
             .name = name, .size = size, .format = format, .layout = layout, .resource = resource};
     }
 };
+
+struct RenderInput {
+    struct RenderPassResources *resources;
+    struct RenderContext *context;
+};
+
+class Framegraph;
 
 class DependencyGraph {
   public:
@@ -130,80 +138,75 @@ performWriteAsync(MutableTextureHandle &handle, Callable &&writeOperation, Argum
         handle, std::forward<Callable>(writeOperation), std::forward<Arguments>(args)...);
 }
 
+struct RenderPassExecutionAwaiter {
+    RenderPassHandle passHandle;
+    Framegraph &fg;
+    constexpr bool await_ready() const noexcept { return false; }
+    RenderInput await_resume() const noexcept;
+    void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
+};
+
 // a builder that allows a render pass to declare specific dependencies (inputs and outputs)
 class Builder {
   public:
-    Builder(std::string_view passName,
-            DependencyGraph &graph,
-            TextureResourceManager &resourceManager)
+    Builder(Framegraph &framegraph, std::string_view passName)
         : passHandle_{passName}
-        , graph_{graph}
-        , resources_{resourceManager}
+        , framegraph_{framegraph}
     {
         CO_CORE_DEBUG("Pass {}: declaration started", passName);
     }
     ~Builder() { CO_CORE_DEBUG("Pass {}: declaration finished", passHandle_); }
 
     // declares a dependency to the named resource
-    cppcoro::task<TextureHandle> read(TextureHandle &h)
-    {
-        graph_.recordReads(passHandle_, h);
-
-        co_return TextureHandle{
-            .size = h.size, .format = h.format, .layout = h.layout, .resource = h.resource};
-    }
+    cppcoro::task<TextureHandle> read(TextureHandle &h);
 
     cppcoro::task<MutableTextureHandle>
-    create(std::string name, glm::u32vec3 size, PixelFormat format, Layout finalLayout)
-    {
-        // coroutine that will allocate and return the texture
-        auto do_allocate = [](TextureResourceManager &resources,
-                              std::string name,
-                              glm::u32vec3 size,
-                              PixelFormat format,
-                              Layout finalLayout) -> cppcoro::shared_task<Texture> {
-            co_return resources.allocate(name, size, format, finalLayout);
-        };
+    create(std::string name, glm::u32vec3 size, PixelFormat format, Layout finalLayout);
 
-        MutableTextureHandle handle{.name = name,
-                                    .size = size,
-                                    .format = format,
-                                    .layout = finalLayout,
-                                    .resource =
-                                        do_allocate(resources_, name, size, format, finalLayout)};
-        graph_.recordCreates(passHandle_, handle);
-        co_return handle;
-    }
-
-    cppcoro::task<MutableTextureHandle> write(TextureHandle handle)
-    {
-        graph_.recordWrites(passHandle_, handle);
-        // todo versioning - MutableTextureHandle should point to a new resource alias (version in
-        // slotmap?)
-        co_return MutableTextureHandle{.name = handle.name,
-                                       .size = handle.size,
-                                       .format = handle.format,
-                                       .layout = handle.layout,
-                                       .resource = handle.resource};
-    }
+    cppcoro::task<MutableTextureHandle> write(TextureHandle handle);
 
     RenderPassHandle passHandle() const noexcept { return passHandle_; }
 
+    RenderPassExecutionAwaiter finishDeclaration();
+
   private:
     RenderPassHandle passHandle_;
-    DependencyGraph graph_;
-    TextureResourceManager &resources_;
+    Framegraph &framegraph_;
 };
 
-class Framegraph {
+class Framegraph : NoCopy, NoMove {
   public:
-    void execute(){
-        // todo
+    friend Builder;
+    friend RenderPassExecutionAwaiter;
+
+    ~Framegraph()
+    {
+        // destroy all coroutines
+        for (auto &[name, handle] : renderPasses_) {
+            handle.destroy();
+        }
+    }
+
+    void execute()
+    {
+        for (const auto &[name, handle] : renderPasses_) {
+            CO_CORE_INFO("Executing rendering commands for {}", name);
+            if (!handle.done()) { handle.resume(); }
+        }
     };
 
-    Builder declarePass(std::string_view name) { return Builder{name, graph_, resources_}; }
+    Builder declarePass(std::string_view name);
+
+    // to be called from Builder
+    RenderInput renderInput() { return {}; }
 
   private:
+    // to be called from Builder
+    void enqueueRenderPass(RenderPassHandle passHandle, cppcoro::coroutine_handle<> coroHandle)
+    {
+        renderPasses_.insert({std::move(passHandle), coroHandle});
+    }
+
     void compile()
     {
         // TODO
@@ -211,6 +214,8 @@ class Framegraph {
 
     DependencyGraph graph_;
     TextureResourceManager resources_;
+
+    std::unordered_map<RenderPassHandle, cppcoro::coroutine_handle<>> renderPasses_;
 };
 
 } // namespace Cory::Framegraph

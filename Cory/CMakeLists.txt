@@ -55,7 +55,7 @@ set(CORY_SOURCES
         include/Cory/RenderCore/SingleShotCommandBuffer.hpp
         include/Cory/Framegraph/Framegraph.hpp
         src/Framegraph/Framegraph.cpp
-        )
+        include/Cory/Framegraph/RenderPassDeclaration.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

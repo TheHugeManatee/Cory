@@ -20,6 +20,7 @@ enum class PixelFormat { D32, RGBA32 };
 enum class Layout { ColorAttachment, DepthStencilAttachment, TransferSource, PresentSource };
 enum class ResourceState { Clear, DontCare, Keep };
 using SlotMapHandle = uint64_t;
+using RenderPassHandle = std::string;
 
 struct ResourceHandle {
     SlotMapHandle handle;
@@ -57,7 +58,7 @@ struct MutableTextureHandle {
 
 class DependencyGraph {
   public:
-    void recordCreates(std::string pass, TextureHandle resource)
+    void recordCreates(RenderPassHandle pass, TextureHandle resource)
     {
         CO_CORE_DEBUG("Pass {}: Creates '{}' as {}x{}x{} ({} {})",
                       pass,
@@ -69,19 +70,21 @@ class DependencyGraph {
                       resource.layout);
         creates_.emplace_back(pass, resource);
     }
-    void recordReads(std::string pass, TextureHandle resource)
+    void recordReads(RenderPassHandle pass, TextureHandle resource)
     {
         CO_CORE_DEBUG("Pass {}: Reads '{}' with layout {}", pass, resource.name, resource.layout);
         reads_.emplace_back(pass, resource);
     }
-    void recordWrites(std::string pass, TextureHandle resource)
+    void recordWrites(RenderPassHandle pass, TextureHandle resource)
     {
         CO_CORE_DEBUG("Pass {}: Writes '{}' as layout {}", pass, resource.name, resource.layout);
         writes_.emplace_back(pass, resource);
     }
 
+    void summarize() {}
+
   private:
-    using Record = std::tuple<std::string, TextureHandle>;
+    using Record = std::tuple<RenderPassHandle, TextureHandle>;
     std::vector<Record> creates_;
     std::vector<Record> reads_;
     std::vector<Record> writes_;
@@ -91,13 +94,8 @@ class TextureResourceManager {
   public:
     Texture allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout)
     {
-        CO_CORE_DEBUG("Allocating texture '{}' of {}x{}x{} ({} {})",
-                      name,
-                      size.x,
-                      size.y,
-                      size.z,
-                      format,
-                      layout);
+        CO_CORE_DEBUG(
+            "Allocating '{}' of {}x{}x{} ({} {})", name, size.x, size.y, size.z, format, layout);
         auto handle = nextHandle_++;
         resources_.emplace(handle,
                            Texture{.name = std::move(name),
@@ -138,18 +136,18 @@ class Builder {
     Builder(std::string_view passName,
             DependencyGraph &graph,
             TextureResourceManager &resourceManager)
-        : passName_{passName}
+        : passHandle_{passName}
         , graph_{graph}
         , resources_{resourceManager}
     {
         CO_CORE_DEBUG("Pass {}: declaration started", passName);
     }
-    ~Builder() { CO_CORE_DEBUG("Pass {}: declaration finished", passName_); }
+    ~Builder() { CO_CORE_DEBUG("Pass {}: declaration finished", passHandle_); }
 
     // declares a dependency to the named resource
     cppcoro::task<TextureHandle> read(TextureHandle &h)
     {
-        graph_.recordReads(passName_, h);
+        graph_.recordReads(passHandle_, h);
 
         co_return TextureHandle{
             .size = h.size, .format = h.format, .layout = h.layout, .resource = h.resource};
@@ -173,13 +171,13 @@ class Builder {
                                     .layout = finalLayout,
                                     .resource =
                                         do_allocate(resources_, name, size, format, finalLayout)};
-        graph_.recordCreates(passName_, handle);
+        graph_.recordCreates(passHandle_, handle);
         co_return handle;
     }
 
     cppcoro::task<MutableTextureHandle> write(TextureHandle handle)
     {
-        graph_.recordWrites(passName_, handle);
+        graph_.recordWrites(passHandle_, handle);
         // todo versioning - MutableTextureHandle should point to a new resource alias (version in
         // slotmap?)
         co_return MutableTextureHandle{.name = handle.name,
@@ -189,8 +187,10 @@ class Builder {
                                        .resource = handle.resource};
     }
 
+    RenderPassHandle passHandle() const noexcept { return passHandle_; }
+
   private:
-    std::string passName_;
+    RenderPassHandle passHandle_;
     DependencyGraph graph_;
     TextureResourceManager &resources_;
 };

@@ -10,6 +10,7 @@
 using namespace Cory;
 namespace FG = Cory::Framegraph;
 
+
 cppcoro::shared_task<FG::TextureHandle> depthPass(FG::Framegraph &graph, glm::u32vec3 size)
 {
     FG::Builder builder = graph.declarePass("DepthPrepass");

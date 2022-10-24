@@ -2,7 +2,48 @@
 
 namespace Cory::Framegraph {
 
-Builder Framegraph::Framegraph::declarePass(std::string_view name) { return Builder{*this, name}; }
+Builder Framegraph::Framegraph::declarePass(std::string_view name)
+{
+    //
+    return Builder{*this, name};
+}
+
+Framegraph::~Framegraph()
+{
+    // destroy all coroutines
+    for (auto &[name, handle] : renderPasses_) {
+        handle.destroy();
+    }
+}
+
+void Framegraph::execute()
+{
+    compile();
+
+    for (const auto &[name, handle] : renderPasses_) {
+        CO_CORE_INFO("Executing rendering commands for {}", name);
+        if (!handle.done()) { handle.resume(); }
+        CO_CORE_ASSERT(
+            handle.done(),
+            "Render pass definition seems to have more unnecessary synchronization points!");
+    }
+}
+TextureHandle Framegraph::declareInput(std::string_view name)
+{
+    TextureHandle handle{
+        .name = std::string{name},
+        // todo fill these with more parameters?
+        //  also create an external resource in the resource manager?
+    };
+    graph_.recordCreates("[ExternalInput]", handle);
+    return handle;
+}
+
+void Framegraph::declareOutput(TextureHandle handle)
+{
+    graph_.recordReads("[ExternalOut]", handle);
+    // todo
+}
 
 cppcoro::task<TextureHandle> Builder::read(TextureHandle &h)
 {
@@ -59,4 +100,45 @@ void RenderPassExecutionAwaiter::await_suspend(
     fg.enqueueRenderPass(passHandle, coroHandle);
 }
 
+void DependencyGraph::dump()
+{
+    std::string out{"digraph G {\n"};
+
+    std::set<RenderPassHandle> passes;
+    std::set<std::string> textures;
+
+    for (const auto &create : creates_) {
+        fmt::format_to(std::back_inserter(out),
+                       "  \"{}\" -> \"{}\" [style=dashed,color=darkgreen,label=\"create\"]\n",
+                       create.pass,
+                       create.texture.name);
+        passes.insert(create.pass);
+        textures.insert(create.texture.name);
+    }
+    for (const auto &read : reads_) {
+        fmt::format_to(std::back_inserter(out),
+                       "  \"{}\" -> \"{}\" [label=\"read\"]\n",
+                       read.texture.name,
+                       read.pass);
+        passes.insert(read.pass);
+        textures.insert(read.texture.name);
+    }
+    for (const auto &write : writes_) {
+        fmt::format_to(std::back_inserter(out),
+                       "  \"{}\" -> \"{}\" [label=\"write\"]\n",
+                       write.pass,
+                       write.texture.name);
+        passes.insert(write.pass);
+        textures.insert(write.texture.name);
+    }
+    for (const auto &pass : passes) {
+        fmt::format_to(std::back_inserter(out), "  \"{}\" [shape=ellipse]\n", pass);
+    }
+    for (const auto &texture : textures) {
+        fmt::format_to(std::back_inserter(out), "  \"{}\" [shape=rectangle]\n", texture);
+    }
+
+    out += "}\n";
+    CO_CORE_INFO(out);
+}
 } // namespace Cory::Framegraph

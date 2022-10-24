@@ -95,10 +95,14 @@ class DependencyGraph {
         writes_.emplace_back(pass, resource);
     }
 
-    void summarize() {}
+    void dump();
 
   private:
-    using Record = std::tuple<RenderPassHandle, TextureHandle>;
+    struct Record {
+        RenderPassHandle pass;
+        TextureHandle texture;
+    };
+
     std::vector<Record> creates_;
     std::vector<Record> reads_;
     std::vector<Record> writes_;
@@ -125,25 +129,6 @@ class TextureResourceManager {
     std::unordered_map<SlotMapHandle, Texture> resources_;
 };
 
-template <typename Callable, typename... Arguments>
-TextureHandle
-performWrite(MutableTextureHandle &handle, Callable &&writeOperation, Arguments... args)
-{
-    return TextureHandle{.name = handle.name,
-                         .size = handle.size,
-                         .format = handle.format,
-                         .layout = handle.layout,
-                         .resource = writeOperation(handle, std::forward<Arguments>(args)...)};
-}
-
-template <typename Callable, typename... Arguments>
-cppcoro::shared_task<TextureHandle>
-performWriteAsync(MutableTextureHandle &handle, Callable &&writeOperation, Arguments... args)
-{
-    co_return performWrite(
-        handle, std::forward<Callable>(writeOperation), std::forward<Arguments>(args)...);
-}
-
 struct RenderPassExecutionAwaiter {
     RenderPassHandle passHandle;
     Framegraph &fg;
@@ -163,16 +148,28 @@ class Builder {
     }
     ~Builder() { CO_CORE_TRACE("Pass {}: Builder destroyed", passHandle_); }
 
-    // declares a dependency to the named resource
+    /// declares a dependency to the named resource
     cppcoro::task<TextureHandle> read(TextureHandle &h);
 
+    /// declare that a render pass creates a certain texture
     cppcoro::task<MutableTextureHandle>
     create(std::string name, glm::u32vec3 size, PixelFormat format, Layout finalLayout);
 
+    /// declare that a render pass writes to a certain texture
     cppcoro::task<MutableTextureHandle> write(TextureHandle handle);
 
+    /// obtain the handle to the render pass itself
     RenderPassHandle passHandle() const noexcept { return passHandle_; }
 
+    /**
+     * @brief Finish declaration of the render pass.
+     *
+     * co_await'ing on the returned awaiter will suspend exection of the current coroutine
+     * and enqueue it to the frame graph. Execution will resume on the framegraph's execution
+     * context if the framegraph determines that this render pass will need to be resumed
+     * at all (the render pass provides resources that another pass consumes). If the resources
+     * of the render pass are not needed, the coroutine will never be resumed.
+     */
     RenderPassExecutionAwaiter finishDeclaration();
 
   private:
@@ -185,29 +182,19 @@ class Framegraph : NoCopy, NoMove {
     friend Builder;
     friend RenderPassExecutionAwaiter;
 
-    ~Framegraph()
-    {
-        // destroy all coroutines
-        for (auto &[name, handle] : renderPasses_) {
-            handle.destroy();
-        }
-    }
+    ~Framegraph();
 
-    void execute()
-    {
-        for (const auto &[name, handle] : renderPasses_) {
-            CO_CORE_INFO("Executing rendering commands for {}", name);
-            if (!handle.done()) { handle.resume(); }
-            CO_CORE_ASSERT(
-                handle.done(),
-                "Render pass definition seems to have more unnecessary synchronization points!");
-        }
-    };
+    void execute();
 
     Builder declarePass(std::string_view name);
 
     // to be called from Builder
     RenderInput renderInput() { return {}; }
+
+    // declare an external texture as an input
+    TextureHandle declareInput(std::string_view name);
+    // declare that an external resource is to be read afterwards
+    void declareOutput(TextureHandle handle);
 
   private:
     // to be called from Builder
@@ -218,7 +205,9 @@ class Framegraph : NoCopy, NoMove {
 
     void compile()
     {
-        // TODO
+        // TODO this is where we would optimize and figure out the dependencies
+        CO_CORE_INFO("Framegraph optimization not implemented.");
+        graph_.dump();
     }
 
     DependencyGraph graph_;

@@ -23,7 +23,10 @@ template <typename RenderPassOutput> class RenderPassDeclaration {
 
         cppcoro::suspend_never yield_value(RenderPassOutput output)
         {
-            output_ = output;
+            CO_CORE_ASSERT(!outputsProvided_,
+                           "Coroutine cannot yield multiple RenderPassOutput structs!");
+            output_ = std::move(output);
+            outputsProvided_ = true;
             return {};
         }
         void return_void() {}
@@ -48,6 +51,7 @@ template <typename RenderPassOutput> class RenderPassDeclaration {
         //        }
 
         RenderPassOutput output_;
+        bool outputsProvided_{false};
     };
 
     using Handle = cppcoro::coroutine_handle<promise_type>;
@@ -63,14 +67,21 @@ template <typename RenderPassOutput> class RenderPassDeclaration {
     }
     ~RenderPassDeclaration()
     {
-        //if (coroHandle_) { coroHandle_.destroy(); }
+        // todo: if a coroutine never calls builder.finishDeclaration(), its coroutine handle will
+        // leak! :/
+        // if (coroHandle_) { coroHandle_.destroy(); }
     }
 
-    RenderPassOutput output()
+    const RenderPassOutput &output()
     {
-        if (!coroHandle_.done()) { coroHandle_.resume(); }
+        // only resume the coroutine if it did not yet yield an output
+        if (!coroHandle_.promise().outputsProvided_ && !coroHandle_.done()) {
+            coroHandle_.resume();
+        }
+        CO_CORE_ASSERT(coroHandle_.promise().outputsProvided_,
+                       "Render pass coroutine did not yield an outputs struct!");
 
-        return std::move(coroHandle_.promise().output_);
+        return coroHandle_.promise().output_;
     }
 
   private:

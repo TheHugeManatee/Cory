@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Cory/Base/Common.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Base/Common.hpp>
 
 #include <cppcoro/shared_task.hpp>
 #include <cppcoro/task.hpp>
@@ -18,7 +18,13 @@ namespace Cory::Framegraph {
 
 using PlaceholderT = uint64_t;
 enum class PixelFormat { D32, RGBA32 };
-enum class Layout { ColorAttachment, DepthStencilAttachment, TransferSource, PresentSource };
+enum class Layout {
+    Undefined,
+    ColorAttachment,
+    DepthStencilAttachment,
+    TransferSource,
+    PresentSource
+};
 enum class ResourceState { Clear, DontCare, Keep };
 using SlotMapHandle = uint64_t;
 using RenderPassHandle = std::string;
@@ -153,9 +159,9 @@ class Builder {
         : passHandle_{passName}
         , framegraph_{framegraph}
     {
-        CO_CORE_DEBUG("Pass {}: declaration started", passName);
+        CO_CORE_TRACE("Pass {}: declaration started", passName);
     }
-    ~Builder() { CO_CORE_DEBUG("Pass {}: declaration finished", passHandle_); }
+    ~Builder() { CO_CORE_TRACE("Pass {}: Builder destroyed", passHandle_); }
 
     // declares a dependency to the named resource
     cppcoro::task<TextureHandle> read(TextureHandle &h);
@@ -192,6 +198,9 @@ class Framegraph : NoCopy, NoMove {
         for (const auto &[name, handle] : renderPasses_) {
             CO_CORE_INFO("Executing rendering commands for {}", name);
             if (!handle.done()) { handle.resume(); }
+            CO_CORE_ASSERT(
+                handle.done(),
+                "Render pass definition seems to have more unnecessary synchronization points!");
         }
     };
 

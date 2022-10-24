@@ -54,7 +54,8 @@ HelloTriangleApplication::HelloTriangleApplication()
     const auto &limits = ctx_->physicalDevice().properties().properties.limits;
     VkSampleCountFlags counts =
         limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
-    int msaaSamples = counts & VK_SAMPLE_COUNT_8_BIT ? 8 : 1;
+    // 2 samples are guaranteed to be supported, but we'd rather have 8
+    int msaaSamples = counts & VK_SAMPLE_COUNT_8_BIT ? 8 : 2;
     CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
@@ -157,13 +158,13 @@ void HelloTriangleApplication::createFramebuffers()
 void HelloTriangleApplication::createGeometry()
 {
 #pragma pack(push, 1)
-    // note: currently can't use glm types because we use
     struct Vertex {
         glm::vec3 pos;
         glm::vec3 tex;
         glm::vec4 col;
     };
 #pragma pack(pop)
+    // just verifying that the layout is ok
     static_assert(sizeof(Vertex) == 10 * sizeof(float));
 
     uint32_t binding = 0;

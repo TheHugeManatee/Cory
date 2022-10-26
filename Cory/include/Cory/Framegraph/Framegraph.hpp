@@ -3,11 +3,13 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Framegraph/TextureManager.hpp>
 
 #include <cppcoro/shared_task.hpp>
 #include <cppcoro/task.hpp>
 #include <cppcoro/when_all_ready.hpp>
 #include <glm/vec3.hpp>
+
 
 #include <concepts>
 #include <set>
@@ -15,53 +17,6 @@
 #include <unordered_map>
 
 namespace Cory::Framegraph {
-
-using PlaceholderT = uint64_t;
-enum class PixelFormat { D32, RGBA32 };
-enum class Layout {
-    Undefined,
-    ColorAttachment,
-    DepthStencilAttachment,
-    TransferSource,
-    PresentSource
-};
-enum class ResourceState { Clear, DontCare, Keep };
-using SlotMapHandle = uint64_t;
-using RenderPassHandle = std::string;
-
-struct ResourceHandle {
-    SlotMapHandle handle;
-};
-
-struct Texture {
-    std::string name;
-    glm::u32vec3 size;
-    PixelFormat format;
-    Layout currentLayout;
-    PlaceholderT resource; // the Vk::Image
-};
-
-struct TextureHandle {
-    std::string name;
-    glm::u32vec3 size;
-    PixelFormat format;
-    Layout layout;
-    cppcoro::shared_task<Texture> resource;
-};
-
-struct MutableTextureHandle {
-    std::string name;
-    glm::u32vec3 size;
-    PixelFormat format;
-    Layout layout;
-    cppcoro::shared_task<Texture> resource;
-
-    /*implicit*/ operator TextureHandle() const
-    {
-        return {
-            .name = name, .size = size, .format = format, .layout = layout, .resource = resource};
-    }
-};
 
 struct RenderInput {
     struct RenderPassResources *resources;
@@ -97,6 +52,9 @@ class DependencyGraph {
 
     void dump();
 
+    std::vector<RenderPassHandle>
+    resolve(const std::vector<ResourceHandle> &requestedResources) const;
+
   private:
     struct Record {
         RenderPassHandle pass;
@@ -106,27 +64,6 @@ class DependencyGraph {
     std::vector<Record> creates_;
     std::vector<Record> reads_;
     std::vector<Record> writes_;
-};
-
-class TextureResourceManager {
-  public:
-    Texture allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout)
-    {
-        CO_CORE_DEBUG(
-            "Allocating '{}' of {}x{}x{} ({} {})", name, size.x, size.y, size.z, format, layout);
-        auto handle = nextHandle_++;
-        resources_.emplace(handle,
-                           Texture{.name = std::move(name),
-                                   .size = size,
-                                   .format = format,
-                                   .currentLayout = layout,
-                                   .resource = {}});
-        return resources_[handle];
-    }
-
-  private:
-    SlotMapHandle nextHandle_;
-    std::unordered_map<SlotMapHandle, Texture> resources_;
 };
 
 struct RenderPassExecutionAwaiter {
@@ -203,15 +140,11 @@ class Framegraph : NoCopy, NoMove {
         renderPasses_.insert({std::move(passHandle), coroHandle});
     }
 
-    void compile()
-    {
-        // TODO this is where we would optimize and figure out the dependencies
-        CO_CORE_INFO("Framegraph optimization not implemented.");
-        graph_.dump();
-    }
+    std::vector<RenderPassHandle> compile();
 
     DependencyGraph graph_;
     TextureResourceManager resources_;
+    std::vector<ResourceHandle> outputs_;
 
     std::unordered_map<RenderPassHandle, cppcoro::coroutine_handle<>> renderPasses_;
 };

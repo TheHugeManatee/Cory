@@ -1,5 +1,11 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 
+#include <range/v3/algorithm/reverse.hpp>
+#include <range/v3/algorithm/transform.hpp>
+
+#include <deque>
+#include <unordered_map>
+
 namespace Cory::Framegraph {
 
 Builder Framegraph::Framegraph::declarePass(std::string_view name)
@@ -18,13 +24,14 @@ Framegraph::~Framegraph()
 
 void Framegraph::execute()
 {
-    compile();
+    std::vector<RenderPassHandle> passesToExecute = compile();
 
-    for (const auto &[name, handle] : renderPasses_) {
-        CO_CORE_INFO("Executing rendering commands for {}", name);
-        if (!handle.done()) { handle.resume(); }
+    for (const auto &handle : passesToExecute) {
+        auto &coroHandle = renderPasses_[handle];
+        CO_CORE_INFO("Executing rendering commands for {}", handle);
+        if (!coroHandle.done()) { coroHandle.resume(); }
         CO_CORE_ASSERT(
-            handle.done(),
+            coroHandle.done(),
             "Render pass definition seems to have more unnecessary synchronization points!");
     }
 }
@@ -43,6 +50,17 @@ void Framegraph::declareOutput(TextureHandle handle)
 {
     graph_.recordReads("[ExternalOut]", handle);
     // todo
+    outputs_.push_back(handle.rsrcHandle);
+}
+
+std::vector<RenderPassHandle> Framegraph::compile()
+{
+    // TODO this is where we would optimize and figure out the dependencies
+    CO_CORE_INFO("Framegraph optimization not implemented.");
+    graph_.dump();
+
+    auto passes = graph_.resolve(outputs_);
+    return passes;
 }
 
 cppcoro::task<TextureHandle> Builder::read(TextureHandle &h)
@@ -50,27 +68,19 @@ cppcoro::task<TextureHandle> Builder::read(TextureHandle &h)
     framegraph_.graph_.recordReads(passHandle_, h);
 
     co_return TextureHandle{
-        .size = h.size, .format = h.format, .layout = h.layout, .resource = h.resource};
+        .size = h.size, .format = h.format, .layout = h.layout, .rsrcHandle = h.rsrcHandle};
 }
 
 cppcoro::task<MutableTextureHandle>
 Builder::create(std::string name, glm::u32vec3 size, PixelFormat format, Layout finalLayout)
 {
-    // coroutine that will allocate and return the texture
-    auto do_allocate = [](TextureResourceManager &resources,
-                          std::string name,
-                          glm::u32vec3 size,
-                          PixelFormat format,
-                          Layout finalLayout) -> cppcoro::shared_task<Texture> {
-        co_return resources.allocate(name, size, format, finalLayout);
-    };
 
     MutableTextureHandle handle{
         .name = name,
         .size = size,
         .format = format,
         .layout = finalLayout,
-        .resource = do_allocate(framegraph_.resources_, name, size, format, finalLayout)};
+        .rsrcHandle = framegraph_.resources_.createTexture(name, size, format, finalLayout)};
     framegraph_.graph_.recordCreates(passHandle_, handle);
     co_return handle;
 }
@@ -84,7 +94,7 @@ cppcoro::task<MutableTextureHandle> Builder::write(TextureHandle handle)
                                    .size = handle.size,
                                    .format = handle.format,
                                    .layout = handle.layout,
-                                   .resource = handle.resource};
+                                   .rsrcHandle = handle.rsrcHandle};
 }
 
 RenderPassExecutionAwaiter Builder::finishDeclaration()
@@ -108,10 +118,11 @@ void DependencyGraph::dump()
     std::set<std::string> textures;
 
     for (const auto &create : creates_) {
-        fmt::format_to(std::back_inserter(out),
-                       "  \"{}\" -> \"{}\" [style=dashed,color=darkgreen,label=\"create\"]\n",
-                       create.pass,
-                       create.texture.name);
+        fmt::format_to(
+            std::back_inserter(out),
+            "  \"{}\" -> \"{}\" [style=dashed,color=darkgreen,label=\"createTexture\"]\n",
+            create.pass,
+            create.texture.name);
         passes.insert(create.pass);
         textures.insert(create.texture.name);
     }
@@ -140,5 +151,53 @@ void DependencyGraph::dump()
 
     out += "}\n";
     CO_CORE_INFO(out);
+}
+
+std::vector<RenderPassHandle>
+DependencyGraph::resolve(const std::vector<ResourceHandle> &requestedResources) const
+{
+    std::unordered_map<ResourceHandle, RenderPassHandle> resourceToPass;
+    for (const auto &[pass, texture] : creates_) {
+        resourceToPass[texture.rsrcHandle] = pass;
+    }
+    for (const auto &[pass, texture] : writes_) {
+        resourceToPass[texture.rsrcHandle] = pass;
+    }
+    std::unordered_multimap<RenderPassHandle, ResourceHandle> passInputs;
+    for (const auto &[pass, texture] : reads_) {
+        passInputs.insert({pass, texture.rsrcHandle});
+    }
+
+    std::vector<RenderPassHandle> passExecutionOrder;
+
+    std::deque<ResourceHandle> requiredResources{requestedResources.cbegin(),
+                                                 requestedResources.cend()};
+    while (!requiredResources.empty()) {
+        auto nextResource = requiredResources.front();
+        requiredResources.pop_front();
+
+        auto writingPassIt = resourceToPass.find(nextResource);
+        if (writingPassIt == resourceToPass.end()) {
+            CO_CORE_ERROR("Could not resolve frame dependency graph: resource '{}' is not created "
+                          "by any render pass",
+                          nextResource);
+            return {};
+        }
+
+        RenderPassHandle writingPass = writingPassIt->second;
+        CO_CORE_DEBUG(
+            "Resolving resource {}: created/written by render pass {}", nextResource, writingPass);
+        passExecutionOrder.push_back(writingPass);
+
+        auto rng = passInputs.equal_range(writingPass);
+        ranges::transform(
+            rng.first, rng.second, std::back_inserter(requiredResources), [&](const auto &it) {
+                CO_CORE_DEBUG("Requesting input resource for {}: {}", writingPass, it.second);
+                return it.second;
+            });
+    }
+
+    ranges::reverse(passExecutionOrder);
+    return passExecutionOrder;
 }
 } // namespace Cory::Framegraph

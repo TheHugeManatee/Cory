@@ -102,13 +102,14 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
     }
 }
 
-static constexpr int UNINIT = 0;
-static constexpr int ALIVE = 1;
-static constexpr int DEAD = 2;
-
-// test struct that uses an int storage to track its lifetime
+// test struct that uses an external storage to track its lifetime
+enum ObjectState {
+    UNINIT,
+    ALIVE,
+    DEAD,
+};
 struct Foo {
-    Foo(int &bookkeep)
+    Foo(ObjectState &bookkeep)
         : bookkeep_{bookkeep}
     {
         bookkeep_ = ALIVE;
@@ -121,7 +122,7 @@ struct Foo {
         }
         bookkeep_ = DEAD;
     }
-    int &bookkeep_;
+    ObjectState &bookkeep_;
 };
 
 TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
@@ -130,39 +131,39 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
     SECTION("Correct construction and destruction of an object")
     {
         SlotMap<Foo> sm;
-        int book{UNINIT};
-        auto h = sm.emplace(std::ref(book));
-        CHECK(book == ALIVE);
+        ObjectState bookkeeper{UNINIT};
+        auto h = sm.emplace(std::ref(bookkeeper));
+        CHECK(bookkeeper == ALIVE);
         sm.release(h);
-        CHECK(book == DEAD);
+        CHECK(bookkeeper == DEAD);
     }
 
     SECTION("Destruction of stored objects on Slotmap Destruction")
     {
-        int book1{UNINIT};
-        int book2{UNINIT};
+        ObjectState bookkeeper1{UNINIT};
+        ObjectState bookkeeper2{UNINIT};
         {
             SlotMap<Foo> sm;
-            auto h1 = sm.emplace(std::ref(book1));
-            auto h2 = sm.emplace(std::ref(book2));
-            CHECK(book1 == ALIVE);
-            CHECK(book2 == ALIVE);
+            auto h1 = sm.emplace(std::ref(bookkeeper1));
+            auto h2 = sm.emplace(std::ref(bookkeeper2));
+            CHECK(bookkeeper1 == ALIVE);
+            CHECK(bookkeeper2 == ALIVE);
 
             sm.release(h1);
-            CHECK(book1 == DEAD);
-            CHECK(book2 == ALIVE);
+            CHECK(bookkeeper1 == DEAD);
+            CHECK(bookkeeper2 == ALIVE);
         }
 
-        CHECK(book1 == DEAD);
-        CHECK(book2 == DEAD);
+        CHECK(bookkeeper1 == DEAD);
+        CHECK(bookkeeper2 == DEAD);
     }
 
     SECTION("Correct construction and destruction of many stored objects")
     {
         std::srand(std::time(0));
         // poor man's fuzz-testing
-        std::vector<int> bookkeeper1(rand() % 512 + 1, UNINIT);
-        std::vector<int> bookkeeper2(rand() % 512 + 1, UNINIT);
+        std::vector<ObjectState> bookkeeper1(rand() % 512 + 1, UNINIT);
+        std::vector<ObjectState> bookkeeper2(rand() % 512 + 1, UNINIT);
         {
             SlotMap<Foo> sm;
 
@@ -171,16 +172,16 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
                 ranges::views::transform([&](auto &b) { return sm.emplace(std::ref(b)); }) |
                 ranges::to<std::vector<SlotMapHandle>>();
 
-            CHECK(ranges::all_of(bookkeeper1, [](const int &v) { return v == ALIVE; }));
-            CHECK(ranges::all_of(bookkeeper2, [](const int &v) { return v == UNINIT; }));
+            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == UNINIT; }));
 
             auto handles2 =
                 bookkeeper2 |
                 ranges::views::transform([&](auto &b) { return sm.emplace(std::ref(b)); }) |
                 ranges::to<std::vector<SlotMapHandle>>();
 
-            CHECK(ranges::all_of(bookkeeper1, [](const int &v) { return v == ALIVE; }));
-            CHECK(ranges::all_of(bookkeeper2, [](const int &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == ALIVE; }));
 
             // invalidating a bunch of handles
             auto handles3 = handles2 |
@@ -191,8 +192,8 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
                 CHECK_THROWS(sm[h]);
             }
             // all objects are still alive
-            CHECK(ranges::all_of(bookkeeper1, [](const int &v) { return v == ALIVE; }));
-            CHECK(ranges::all_of(bookkeeper2, [](const int &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == ALIVE; }));
 
             // releasing the handles
             ranges::for_each(handles1, [&](auto &h) { sm.release(h); });
@@ -202,19 +203,19 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
                 CHECK_THROWS(sm[h]);
             }
             // only values from set 2 are still alive
-            CHECK(ranges::all_of(bookkeeper1, [](const int &v) { return v == DEAD; }));
-            CHECK(ranges::all_of(bookkeeper2, [](const int &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == DEAD; }));
+            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == ALIVE; }));
         }
 
         // after sm goes out of scope, all objects have been properly destructed
-        CHECK(ranges::all_of(bookkeeper1, [](const int &v) { return v == DEAD; }));
-        CHECK(ranges::all_of(bookkeeper2, [](const int &v) { return v == DEAD; }));
+        CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == DEAD; }));
+        CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == DEAD; }));
     }
 
     SECTION("Iterators and use with ranges")
     {
         std::srand(std::time(0));
-        std::vector<int> bookkeeper(rand() % 512 + 1, UNINIT);
+        std::vector<ObjectState> bookkeeper(rand() % 512 + 1, UNINIT);
 
         SlotMap<Foo> sm;
 
@@ -222,22 +223,60 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
                        ranges::views::transform([&](auto &b) { return sm.emplace(std::ref(b)); }) |
                        ranges::to<std::vector<SlotMapHandle>>();
 
-        for (const Foo &f : sm) {
+        for (auto it = sm.begin(); it != sm.end(); ++it) {
+            const Foo &f = *it;
             CHECK(f.bookkeep_ == ALIVE);
         }
 
-        // CHECK(ranges::all_of(sm, [](const Foo& f) { return f.bookkeep_ == ALIVE; }));
-
-        ranges::for_each(handles | ranges::views::stride(3),
-                         [&](auto handle) { sm.release(handle); });
+        // kill every third element
+        size_t numKilled = 0;
+        ranges::for_each(handles | ranges::views::stride(3), [&](auto handle) {
+            sm.release(handle);
+            ++numKilled;
+        });
         CHECK(
             ranges::all_of(bookkeeper | ranges::views::stride(3), [](int b) { return b == DEAD; }));
+        CHECK(sm.size() == bookkeeper.size() - numKilled);
+
+        // check that we only iterate over alive elements
+        size_t numIterated = {};
+        for (const Foo &f : sm) {
+            CHECK(f.bookkeep_ == ALIVE);
+            ++numIterated;
+        }
+        // verify we iterated over as many elements as we should have
+        CHECK(numIterated == sm.size());
+
+        // iterating over const objects should work also
+        const SlotMap<Foo> &csm{sm};
+        for (const Foo &f : csm) {
+            CHECK(f.bookkeep_ == ALIVE);
+            ++numIterated;
+        }
+
+        // failed attempt to debug why SlotMap is not compatible with ranges - looks like
+        // for some reason it does not implement the indirectly_readable concept but I have
+        // no idea how to proceed..
+//        static_assert(ranges::detail::dereferenceable_<SlotMap<Foo>::iterator&>);
+//
+//        static_assert(ranges::copyable<SlotMap<Foo>::iterator>);
+//        static_assert(ranges::weakly_incrementable<SlotMap<Foo>::iterator>);
+//        static_assert(ranges::input_or_output_iterator<SlotMap<Foo>::iterator>);
+//        static_assert(ranges::indirectly_readable<SlotMap<Foo>::iterator>);
+//        static_assert(ranges::input_iterator<SlotMap<Foo>::iterator>,
+//                      "SlotMap::iterator is not accepted as an iterator");
+//        static_assert(ranges::input_iterator<SlotMap<Foo>::const_iterator>,
+//                      "SlotMap::const_iterator type is not accepted as an iterator");
+//        auto b = ranges::begin(sm);
+//        auto e = ranges::end(sm);
+//
+//        CHECK(ranges::all_of(sm, [](const Foo& f) { return f.bookkeep_ == ALIVE; }));
     }
 
     SECTION("ResolvableHandle<Foo>")
     {
         SlotMap<Foo> sm;
-        int book{UNINIT};
+        ObjectState book{UNINIT};
         auto h = sm.emplace(std::ref(book));
         ResolvableHandle rh{sm, h};
         CHECK(rh->bookkeep_ == ALIVE);

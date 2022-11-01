@@ -10,7 +10,6 @@
 #include <cppcoro/when_all_ready.hpp>
 #include <glm/vec3.hpp>
 
-
 #include <concepts>
 #include <set>
 #include <string_view>
@@ -18,54 +17,39 @@
 
 namespace Cory::Framegraph {
 
+/**
+ * passed to the render pass coroutines when they actually execute.
+ *
+ * A render pass coroutine obtains this object by with a `co_await builder.finishDeclaration()`.
+ * It will be (potentially) resumed inside the Framegraph::execute() function,
+ * after all resources have been resolved and can be queried through the @a resources
+ * member.
+ */
 struct RenderInput {
     struct RenderPassResources *resources;
     struct RenderContext *context;
 };
-
+enum class PassOutputKind {
+    Create,
+    Write,
+};
+struct RenderPassInfo {
+    std::string name;
+    std::vector<TextureHandle> inputs;
+    std::vector<std::pair<TextureHandle, PassOutputKind>> outputs;
+    cppcoro::coroutine_handle<> coroHandle;
+    int32_t executionPriority{-1};
+};
+using RenderPassHandle = SlotMapHandle;
 class Framegraph;
 
-class DependencyGraph {
-  public:
-    void recordCreates(RenderPassHandle pass, TextureHandle resource)
-    {
-        CO_CORE_DEBUG("Pass {}: Creates '{}' as {}x{}x{} ({} {})",
-                      pass,
-                      resource.name,
-                      resource.size.x,
-                      resource.size.y,
-                      resource.size.z,
-                      resource.format,
-                      resource.layout);
-        creates_.emplace_back(pass, resource);
-    }
-    void recordReads(RenderPassHandle pass, TextureHandle resource)
-    {
-        CO_CORE_DEBUG("Pass {}: Reads '{}' with layout {}", pass, resource.name, resource.layout);
-        reads_.emplace_back(pass, resource);
-    }
-    void recordWrites(RenderPassHandle pass, TextureHandle resource)
-    {
-        CO_CORE_DEBUG("Pass {}: Writes '{}' as layout {}", pass, resource.name, resource.layout);
-        writes_.emplace_back(pass, resource);
-    }
-
-    void dump();
-
-    std::vector<RenderPassHandle>
-    resolve(const std::vector<ResourceHandle> &requestedResources) const;
-
-  private:
-    struct Record {
-        RenderPassHandle pass;
-        TextureHandle texture;
-    };
-
-    std::vector<Record> creates_;
-    std::vector<Record> reads_;
-    std::vector<Record> writes_;
-};
-
+/**
+ * an Awaitable that will enqueue the current coroutine for execution on the given framegraph
+ * when the render pass gets scheduled.
+ *
+ * Note that the coroutine may never be resumed if the render pass identified by the @a passHandle
+ * does not get scheduled.
+ */
 struct RenderPassExecutionAwaiter {
     RenderPassHandle passHandle;
     Framegraph &fg;
@@ -74,16 +58,16 @@ struct RenderPassExecutionAwaiter {
     void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
 };
 
-// a builder that allows a render pass to declare specific dependencies (inputs and outputs)
-class Builder {
+/// a builder that allows a render pass to declare specific dependencies (inputs and outputs)
+class Builder : NoCopy, NoMove {
   public:
     Builder(Framegraph &framegraph, std::string_view passName)
-        : passHandle_{passName}
+        : passName_{passName}
         , framegraph_{framegraph}
     {
         CO_CORE_TRACE("Pass {}: declaration started", passName);
     }
-    ~Builder() { CO_CORE_TRACE("Pass {}: Builder destroyed", passHandle_); }
+    ~Builder() { CO_CORE_TRACE("Pass {}: Builder destroyed", passName_); }
 
     /// declares a dependency to the named resource
     cppcoro::task<TextureHandle> read(TextureHandle &h);
@@ -94,9 +78,6 @@ class Builder {
 
     /// declare that a render pass writes to a certain texture
     cppcoro::task<MutableTextureHandle> write(TextureHandle handle);
-
-    /// obtain the handle to the render pass itself
-    RenderPassHandle passHandle() const noexcept { return passHandle_; }
 
     /**
      * @brief Finish declaration of the render pass.
@@ -110,14 +91,16 @@ class Builder {
     RenderPassExecutionAwaiter finishDeclaration();
 
   private:
-    RenderPassHandle passHandle_;
+    std::string passName_;
     Framegraph &framegraph_;
+    std::vector<TextureHandle> inputs;
+    std::vector<std::pair<TextureHandle, PassOutputKind>> outputs;
 };
 
 class Framegraph : NoCopy, NoMove {
   public:
-    friend Builder;
-    friend RenderPassExecutionAwaiter;
+    friend Builder;                    // convenience so it can access the graph_ object directly
+    friend RenderPassExecutionAwaiter; // so it can call enqueueRenderPass
 
     ~Framegraph();
 
@@ -125,28 +108,46 @@ class Framegraph : NoCopy, NoMove {
 
     Builder declarePass(std::string_view name);
 
-    // to be called from Builder
+    /// to be called from Builder
     RenderInput renderInput() { return {}; }
 
-    // declare an external texture as an input
+    /// declare an external texture as an input - TODO arguments
     TextureHandle declareInput(std::string_view name);
-    // declare that an external resource is to be read afterwards
+    /// declare that an external resource is to be read afterwards
     void declareOutput(TextureHandle handle);
 
+    void dump();
+
   private:
-    // to be called from Builder
+    RenderPassHandle finishPassDeclaration(RenderPassInfo &&info)
+    {
+        return renderPasses_.emplace(info);
+    }
+
+    /// to be called from RenderPassExecutionAwaiter - the Framegraph takes ownership of the @a
+    /// coroHandle
     void enqueueRenderPass(RenderPassHandle passHandle, cppcoro::coroutine_handle<> coroHandle)
     {
-        renderPasses_.insert({std::move(passHandle), coroHandle});
+        renderPasses_[passHandle].coroHandle = std::move(coroHandle);
     }
+
+    /**
+     * @brief resolve which render passes need to be executed for requested resources
+     *
+     * Returns the passes that need to be executed in the given order. Updates the internal
+     * information about which render pass is required.
+     */
+    std::vector<RenderPassHandle> resolve(const std::vector<ResourceHandle> &requestedResources);
 
     std::vector<RenderPassHandle> compile();
 
-    DependencyGraph graph_;
     TextureResourceManager resources_;
+    std::vector<ResourceHandle> externalInputs_;
     std::vector<ResourceHandle> outputs_;
 
-    std::unordered_map<RenderPassHandle, cppcoro::coroutine_handle<>> renderPasses_;
+    SlotMap<RenderPassInfo> renderPasses_;
+
+    // std::unordered_map<RenderPassHandle, cppcoro::coroutine_handle<>> renderPasses_;
 };
 
 } // namespace Cory::Framegraph

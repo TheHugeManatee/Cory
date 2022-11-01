@@ -8,8 +8,8 @@
 namespace Cory::Framegraph {
 
 /**
- * An async render pass declaration that shall be used as a return type to declare a render pass
- * from a coroutine.
+ * An async render pass declaration awaitable that shall be used as a return type to declare a
+ * render pass from a coroutine.
  */
 template <typename RenderPassOutput> class RenderPassDeclaration {
   public:
@@ -30,25 +30,6 @@ template <typename RenderPassOutput> class RenderPassDeclaration {
             return {};
         }
         void return_void() {}
-
-        //        // support co_await'ing for a std::string{} as well as a general awaitable
-        //        template <typename T> decltype(auto) await_transform(T &&t)
-        //        {
-        //            if constexpr (std::is_same_v<T, RenderInput>) {
-        //                struct awaiter {
-        //                    promise_type &pt;
-        //                    constexpr bool await_ready() const noexcept { return true; }
-        //                    RenderInput await_resume() const noexcept { return
-        //                    std::move(pt.renderInput); } void
-        //                    await_suspend(cppcoro::coroutine_handle<promise_type>) const noexcept
-        //                    {}
-        //                };
-        //                return awaiter{*this};
-        //            }
-        //            else if constexpr (cppcoro::is_awaitable_v<T>) {
-        //                return t.operator co_await();
-        //            }
-        //        }
 
         RenderPassOutput output_;
         bool outputsProvided_{false};

@@ -120,7 +120,7 @@ void DependencyGraph::dump()
     for (const auto &create : creates_) {
         fmt::format_to(
             std::back_inserter(out),
-            "  \"{}\" -> \"{}\" [style=dashed,color=darkgreen,label=\"createTexture\"]\n",
+            "  \"{}\" -> \"{}\" [style=dashed,color=darkgreen,label=\"create\"]\n",
             create.pass,
             create.texture.name);
         passes.insert(create.pass);
@@ -128,7 +128,7 @@ void DependencyGraph::dump()
     }
     for (const auto &read : reads_) {
         fmt::format_to(std::back_inserter(out),
-                       "  \"{}\" -> \"{}\" [label=\"read\"]\n",
+                       "  \"{}\" -> \"{}\" \n",
                        read.texture.name,
                        read.pass);
         passes.insert(read.pass);

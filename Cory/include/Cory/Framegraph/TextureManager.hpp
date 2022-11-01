@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Cory/Base/SlotMap.hpp>
+
 #include <glm/vec3.hpp>
 
 #include <cstdint>
@@ -18,7 +20,7 @@ enum class Layout {
     PresentSource
 };
 enum class ResourceState { Clear, DontCare, Keep };
-using SlotMapHandle = uint64_t;
+
 using RenderPassHandle = std::string;
 
 using ResourceHandle = SlotMapHandle;
@@ -64,8 +66,8 @@ class TextureResourceManager {
     {
         CO_CORE_DEBUG(
             "Allocating '{}' of {}x{}x{} ({} {})", name, size.x, size.y, size.z, format, layout);
-        auto handle = nextHandle_++;
-        resources_.emplace(handle,
+        auto handle =
+        resources_.emplace(
                            Texture{.name = std::move(name),
                                    .size = size,
                                    .format = format,
@@ -90,8 +92,8 @@ class TextureResourceManager {
     {
         CO_CORE_DEBUG(
             "Allocating '{}' of {}x{}x{} ({} {})", name, size.x, size.y, size.z, format, layout);
-        auto handle = nextHandle_++;
-        resources_.emplace(handle,
+        auto handle =
+        resources_.emplace(
                            Texture{.name = std::move(name),
                                    .size = size,
                                    .format = format,
@@ -101,6 +103,6 @@ class TextureResourceManager {
     }
 
     ResourceHandle nextHandle_{};
-    std::unordered_map<ResourceHandle, Texture> resources_;
+    SlotMap<Texture> resources_;
 };
 } // namespace Cory::Framegraph

@@ -12,17 +12,8 @@ namespace Cory::Framegraph {
 using PlaceholderT = uint64_t;
 
 enum class PixelFormat { D32, RGBA32 };
-enum class Layout {
-    Undefined,
-    ColorAttachment,
-    DepthStencilAttachment,
-    TransferSource,
-    PresentSource
-};
+enum class Layout { Undefined, Color, DepthStencil, TransferSource, PresentSource };
 enum class ResourceState { Clear, DontCare, Keep };
-
-using RenderPassHandle = std::string;
-
 using ResourceHandle = SlotMapHandle;
 
 struct Texture {
@@ -30,6 +21,7 @@ struct Texture {
     glm::u32vec3 size;
     PixelFormat format;
     Layout currentLayout;
+    bool external{false};
     PlaceholderT resource; // the Vk::Image
 };
 
@@ -38,7 +30,8 @@ struct TextureHandle {
     glm::u32vec3 size;
     PixelFormat format;
     Layout layout;
-    ResourceHandle rsrcHandle; // handle to be used to reference the texture
+    bool external{false};
+    SlotMapHandle rsrcHandle; // handle to be used to reference the texture
 };
 
 struct MutableTextureHandle {
@@ -46,7 +39,8 @@ struct MutableTextureHandle {
     glm::u32vec3 size;
     PixelFormat format;
     Layout layout;
-    ResourceHandle rsrcHandle;
+    bool external{false};
+    SlotMapHandle rsrcHandle;
 
     /*implicit*/ operator TextureHandle() const
     {
@@ -54,6 +48,7 @@ struct MutableTextureHandle {
                 .size = size,
                 .format = format,
                 .layout = layout,
+                .external = external,
                 .rsrcHandle = rsrcHandle};
     }
 };
@@ -61,48 +56,31 @@ struct MutableTextureHandle {
 // handles the transient resources created/destroyed during a frame
 class TextureResourceManager {
   public:
-    ResourceHandle
-    createTexture(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout)
+    SlotMapHandle
+    createTexture(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout);
+
+    SlotMapHandle registerExternal(Texture externalTexture)
     {
-        CO_CORE_DEBUG(
-            "Allocating '{}' of {}x{}x{} ({} {})", name, size.x, size.y, size.z, format, layout);
-        auto handle =
-        resources_.emplace(
-                           Texture{.name = std::move(name),
-                                   .size = size,
-                                   .format = format,
-                                   .currentLayout = layout,
-                                   .resource = {/*todo*/}});
-        return handle;
+        externalTexture.external = true;
+        return resources_.emplace(std::move(externalTexture));
     }
 
     // access a texture via its handle
-    const Texture &operator[](TextureHandle textureHandle)
+    const Texture &operator[](TextureHandle textureHandle) const
     {
         return resources_[textureHandle.rsrcHandle];
     }
 
     // allocate backing memory and resolve memory aliasing for all previously created resources
-    void allocateAll() {
+    void allocateAll()
+    {
         // allocate backing memory and assign the .resource member for all resources
     }
 
   private:
-    Texture allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout)
-    {
-        CO_CORE_DEBUG(
-            "Allocating '{}' of {}x{}x{} ({} {})", name, size.x, size.y, size.z, format, layout);
-        auto handle =
-        resources_.emplace(
-                           Texture{.name = std::move(name),
-                                   .size = size,
-                                   .format = format,
-                                   .currentLayout = layout,
-                                   .resource = {}});
-        return resources_[handle];
-    }
+    Texture allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout);
 
-    ResourceHandle nextHandle_{};
     SlotMap<Texture> resources_;
 };
+
 } // namespace Cory::Framegraph

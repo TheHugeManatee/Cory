@@ -56,7 +56,7 @@ set(CORY_SOURCES
         include/Cory/Framegraph/Framegraph.hpp
         src/Framegraph/Framegraph.cpp
         include/Cory/Framegraph/RenderPassDeclaration.hpp
-        include/Cory/Framegraph/TextureManager.hpp)
+        include/Cory/Framegraph/TextureManager.hpp src/Framegraph/TextureManager.cpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 
@@ -99,6 +99,8 @@ target_compile_definitions(${TARGET_NAME}
         GLM_FORCE_RADIANS
         GLM_FORCE_DEPTH_ZERO_TO_ONE
         GLM_ENABLE_EXPERIMENTAL)
+
+target_compile_features(${TARGET_NAME} PUBLIC cxx_std_23)
 
 # for now, we hardcode the resource path until we have a proper resource management in place
 target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")

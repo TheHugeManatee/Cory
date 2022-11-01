@@ -24,7 +24,7 @@ FG::RenderPassDeclaration<DepthPassOutputs> depthPass(FG::Framegraph &graph, glm
 
     DepthPassOutputs outputs{
         .depthTexture = co_await builder.create(
-            "depthTexture", size, FG::PixelFormat::D32, FG::Layout::DepthStencilAttachment)};
+            "depthTexture", size, FG::PixelFormat::D32, FG::Layout::DepthStencil)};
 
     co_yield outputs;
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -42,7 +42,7 @@ FG::RenderPassDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
 
     FG::TextureHandle depth = co_await builder.read(depthInput);
     FG::MutableTextureHandle depthVis = co_await builder.create(
-        "depthDebugVis", depth.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
+        "depthDebugVis", depth.size, FG::PixelFormat::RGBA32, FG::Layout::Color);
 
     co_yield DepthDebugOut{depthVis};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -60,7 +60,7 @@ FG::RenderPassDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
 
     FG::TextureHandle normal = co_await builder.read(normalInput);
     FG::MutableTextureHandle normalVis = co_await builder.create(
-        "normalDebugVis", normalInput.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
+        "normalDebugVis", normalInput.size, FG::PixelFormat::RGBA32, FG::Layout::Color);
 
     co_yield NormalDebugOut{normalVis};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -81,7 +81,7 @@ FG::RenderPassDeclaration<DebugOut> debugGeneral(FG::Framegraph &graph,
     FG::TextureHandle depth = co_await builder.read(textureToDebug);
 
     FG::MutableTextureHandle depthVis = co_await builder.create(
-        "debugVis", textureToDebug.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
+        "debugVis", textureToDebug.size, FG::PixelFormat::RGBA32, FG::Layout::Color);
 
     co_yield DebugOut{depthVis};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -99,9 +99,9 @@ FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHa
 
     FG::TextureHandle depth = co_await builder.read(depthInput);
     FG::MutableTextureHandle colorWritable = co_await builder.create(
-        "colorTexture", depth.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
+        "colorTexture", depth.size, FG::PixelFormat::RGBA32, FG::Layout::Color);
     FG::MutableTextureHandle normalWritable = co_await builder.create(
-        "normalTexture", depth.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
+        "normalTexture", depth.size, FG::PixelFormat::RGBA32, FG::Layout::Color);
 
     co_yield MainOut{colorWritable, normalWritable};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -128,7 +128,7 @@ FG::RenderPassDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
     FG::TextureHandle curColor = co_await builder.read(currentColorInput);
     FG::TextureHandle prevColor = co_await builder.read(previousColorInput);
     FG::MutableTextureHandle colorWritable = co_await builder.create(
-        "postprocessTexture", curColor.size, FG::PixelFormat::RGBA32, FG::Layout::ColorAttachment);
+        "postprocessTexture", curColor.size, FG::PixelFormat::RGBA32, FG::Layout::Color);
 
     co_yield PostProcessOut{colorWritable};
     FG::RenderInput render = co_await builder.finishDeclaration();

@@ -2,13 +2,16 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/Math.hpp>
 
+#include <cppcoro/generator.hpp>
 #include <fmt/core.h>
 
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -16,57 +19,56 @@ namespace Cory {
 /**
  * @brief a handle type that encodes an index and a version.
  *
- * Uses the highest bit of the version field to indicate whether the handle points to a value
+ * Uses a dedicated bit to indicate whether the handle points to a value
  * that is free (this is an optimization, technically the free bit would be a property of the
  * object storage itself, but this seemed like the best place to encode it).
  */
 struct SlotMapHandle {
     static constexpr uint32_t INVALID_INDEX{0xFFFF'FFFF};
-    static constexpr uint32_t FREE_VERSION{0x8000'0000};
-    static constexpr uint64_t FREE_BIT{0x8000'0000'0000'0000};
-
-    uint64_t v;
 
     /// default-constructed handle has invalid version and index
-    inline SlotMapHandle();
+    SlotMapHandle();
     /// construct a handle with given index and version
-    SlotMapHandle(uint32_t index, uint32_t version = 0);
-    [[nodiscard]] uint32_t index() const noexcept { return v & 0xFFFF'FFFF; }
-    [[nodiscard]] uint32_t version() const noexcept { return v >> 32; }
-    [[nodiscard]] bool alive() const noexcept;
+    SlotMapHandle(uint32_t index, uint32_t version = 0, bool free = false);
+    [[nodiscard]] uint32_t index() const noexcept { return index_; }
+    [[nodiscard]] uint32_t version() const noexcept { return version_; }
+    [[nodiscard]] bool alive() const noexcept { return !free_; }
 
     [[nodiscard]] static SlotMapHandle nextVersion(SlotMapHandle old);
     [[nodiscard]] static SlotMapHandle clearFreeBit(SlotMapHandle handle);
     [[nodiscard]] static SlotMapHandle setFreeBit(SlotMapHandle handle);
     auto operator<=>(const SlotMapHandle &rhs) const = default;
+
+  private:
+    uint32_t index_ : 32;
+    uint32_t free_ : 1;
+    uint32_t version_ : 31;
 };
+static_assert(sizeof(SlotMapHandle) == sizeof(uint64_t));
 
 inline SlotMapHandle::SlotMapHandle()
-    : v{uint64_t{FREE_VERSION} << 32 | INVALID_INDEX}
+    : free_{1}
+    , version_{0}
+    , index_{INVALID_INDEX}
 {
 }
-inline SlotMapHandle::SlotMapHandle(uint32_t index, uint32_t version)
-    : v{uint64_t{version} << 32 | index}
+inline SlotMapHandle::SlotMapHandle(uint32_t index, uint32_t version, bool free)
+    : free_{free ? 1u : 0u}
+    , version_{version}
+    , index_{index}
 {
-}
-inline bool SlotMapHandle::alive() const noexcept
-{
-    return index() != INVALID_INDEX && (v & FREE_BIT) == 0;
 }
 inline SlotMapHandle SlotMapHandle::nextVersion(SlotMapHandle old)
 {
-#ifdef _DEBUG
-    CO_CORE_ASSERT((old.index() & 0x7FFF'FFFF) != 0x7FFF'FFFF, "Version rollover detected!");
-#endif
     return {old.index(), old.version() + 1};
 }
 inline SlotMapHandle SlotMapHandle::clearFreeBit(SlotMapHandle handle)
 {
-    return {handle.index(), handle.version() & 0x7FFF'FFFF};
+    return {handle.index(), handle.version(), false};
 }
 inline SlotMapHandle SlotMapHandle::setFreeBit(SlotMapHandle handle)
 {
-    return {handle.index(), handle.version() & 0x7FFF'FFFF | FREE_VERSION};
+    return {handle.index(), handle.version(), true};
 }
 } // namespace Cory
 
@@ -75,7 +77,7 @@ template <> struct fmt::formatter<Cory::SlotMapHandle> {
     template <typename ParseContext> constexpr auto parse(ParseContext &ctx) { return ctx.end(); }
     auto format(Cory::SlotMapHandle h, format_context &ctx)
     {
-        return fmt::format_to(ctx.out(), "{}({})", h.index(), h.version());
+        return fmt::format_to(ctx.out(), "{}({}{})", h.index(), h.version(), h.alive() ? "" : "F");
     }
 };
 
@@ -83,7 +85,7 @@ template <> struct fmt::formatter<Cory::SlotMapHandle> {
 template <> struct std::hash<Cory::SlotMapHandle> {
     std::size_t operator()(const Cory::SlotMapHandle &s) const noexcept
     {
-        return std::hash<uint64_t>{}(s.v);
+        return Cory::hashCompose(0, s.alive(), s.index(), s.version());
     }
 };
 
@@ -186,6 +188,12 @@ template <typename StoredType_> class SlotMap : NoCopy {
     constexpr sentinel end() const noexcept { return {}; }
     constexpr sentinel cend() const noexcept { return {}; }
 
+    /// generator to iterate over all alive handles
+    cppcoro::generator<SlotMapHandle> handles() const;
+    /// generator to iterate over all alive handles together with their values
+    cppcoro::generator<std::pair<SlotMapHandle, StoredType &>> items();
+    cppcoro::generator<std::pair<SlotMapHandle, const StoredType &>> items() const;
+
   private:
     struct StoredInner_ {
         SlotMapHandle id;
@@ -208,34 +216,53 @@ template <typename StoredType_> class SlotMap : NoCopy {
     std::vector<uint32_t> freeList_;
 };
 
-// convenience handle - less memory efficient but more convenient - stores the slotmap in order
-// to resolve the handle when needed
+/**
+ * convenience handle - less memory efficient but more convenient - stores the slotmap in order
+ * to resolve the handle when needed
+ */
 template <typename StoredType> class ResolvableHandle {
   public:
     ResolvableHandle(SlotMap<StoredType> &slotMap, SlotMapHandle handle)
-        : slotMap_{slotMap}
+        : slotMap_{&slotMap}
         , handle_{handle}
     {
     }
+    ResolvableHandle(const ResolvableHandle &) = default;
+    ResolvableHandle(ResolvableHandle &&) = default;
+    ResolvableHandle &operator=(const ResolvableHandle &) = default;
+    ResolvableHandle &operator=(ResolvableHandle &&) = default;
 
-    StoredType &operator*() { return slotMap_[handle_]; }
-    const StoredType &operator*() const { return slotMap_[handle_]; }
+    StoredType &operator*() { return (*slotMap_)[handle_]; }
+    const StoredType &operator*() const { return (*slotMap_)[handle_]; }
 
-    StoredType *operator->() { return &slotMap_[handle_]; }
-    const StoredType *operator->() const { return &slotMap_[handle_]; }
+    StoredType *operator->() { return &(*slotMap_)[handle_]; }
+    const StoredType *operator->() const { return &(*slotMap_)[handle_]; }
 
-    SlotMap<StoredType> &slotMap() { return slotMap_; }
-    const SlotMap<StoredType> &slotMap() const { return slotMap_; }
+    SlotMap<StoredType> &slotMap() { return (*slotMap_); }
+    const SlotMap<StoredType> &slotMap() const { return (*slotMap_); }
     /* implicit */ operator SlotMapHandle() { return handle_; }
     SlotMapHandle handle() const { return handle_; }
 
+    bool valid() const { return slotMap_->isValid(handle_); }
+
+    auto operator<=>(const ResolvableHandle&) const noexcept = default;
   private:
-    SlotMap<StoredType> &slotMap_;
+    SlotMap<StoredType> *slotMap_;
     SlotMapHandle handle_;
 };
+} // namespace Cory
 
-// ====================== Implementation ======================
+/// make ResolvableHandle hashable
+template <typename StoredType> struct std::hash<Cory::ResolvableHandle<StoredType>> {
+    std::size_t operator()(const Cory::ResolvableHandle<StoredType> &s) const noexcept
+    {
+        return Cory::hashCompose(0, s.handle(), &s.slotMap());
+    }
+};
 
+// ======================================== Implementation ========================================
+
+namespace Cory {
 template <typename StoredType_> StoredType_ &SlotMap<StoredType_>::operator[](SlotMapHandle id)
 {
     auto &object = validatedGet(id);
@@ -262,12 +289,12 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
 
         for (uint64_t i = CHUNK_SIZE - 1; i > 0; --i) {
             const auto idx = num_chunks * CHUNK_SIZE + i;
-            // set version to free marker
-            chunk[i].id = SlotMapHandle{static_cast<uint32_t>(idx), SlotMapHandle::FREE_VERSION};
+            // insert handles with the 'free' bit set
+            chunk[i].id = SlotMapHandle{static_cast<uint32_t>(idx), 0, true};
             freeList_.push_back(static_cast<uint32_t>(idx));
         }
         const auto idx = num_chunks * CHUNK_SIZE;
-        chunk[0].id = SlotMapHandle{static_cast<uint32_t>(idx), 0};
+        chunk[0].id = SlotMapHandle{static_cast<uint32_t>(idx), 0, false};
 
         new (&chunk[0].storage) StoredType{std::forward<InitArgs>(args)...};
         return chunk[0].id;
@@ -385,6 +412,42 @@ uint32_t SlotMap<StoredType_>::findNextAliveIndex(uint32_t start) const
         if (object->id.alive()) { return index; }
     }
     return cap;
+}
+
+template <typename StoredType_>
+cppcoro::generator<SlotMapHandle> SlotMap<StoredType_>::handles() const
+{
+    for (auto &chunkPtr : chunkTable_) {
+        for (StoredInner_ &obj : *chunkPtr) {
+            if (obj.id.alive()) { co_yield obj.id; }
+        }
+    }
+}
+
+template <typename StoredType_>
+cppcoro::generator<std::pair<SlotMapHandle, StoredType_ &>> SlotMap<StoredType_>::items()
+{
+    for (auto &chunkPtr : chunkTable_) {
+        for (StoredInner_ &obj : *chunkPtr) {
+            if (obj.id.alive()) {
+                co_yield std::make_pair(obj.id,
+                                        std::ref(*reinterpret_cast<StoredType *>(obj.storage)));
+            }
+        }
+    }
+}
+template <typename StoredType_>
+cppcoro::generator<std::pair<SlotMapHandle, const StoredType_ &>>
+SlotMap<StoredType_>::items() const
+{
+    for (auto &chunkPtr : chunkTable_) {
+        for (StoredInner_ &obj : *chunkPtr) {
+            if (obj.id.alive()) {
+                co_yield std::make_pair(
+                    obj.id, std::ref(*reinterpret_cast<const StoredType *>(obj.storage)));
+            }
+        }
+    }
 }
 
 } // namespace Cory

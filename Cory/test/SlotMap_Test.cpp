@@ -2,6 +2,7 @@
 
 #include <Cory/Base/SlotMap.hpp>
 
+#include <gsl/gsl>
 #include <range/v3/all.hpp>
 #include <range/v3/view.hpp>
 
@@ -11,26 +12,26 @@ TEST_CASE("SlotMapHandle", "[Cory/Base]")
     SlotMapHandle h_invalid{};
 
     CHECK(h_invalid.index() == SlotMapHandle::INVALID_INDEX);
-    CHECK(h_invalid.version() == SlotMapHandle::FREE_VERSION);
+    CHECK(h_invalid.version() == 0);
     CHECK_FALSE(h_invalid.alive());
 
     SlotMapHandle h1{0, 0};
     CHECK(h1.index() == 0);
     CHECK(h1.version() == 0);
     CHECK(h1.alive());
-    CHECK_FALSE(h1.v & SlotMapHandle::FREE_BIT);
+    // CHECK_FALSE(h1.v & SlotMapHandle::FREE_BIT);
 
     auto h1_v2 = SlotMapHandle::nextVersion(h1);
     CHECK(h1_v2.index() == 0);
     CHECK(h1_v2.version() == 1);
     CHECK(h1_v2.alive());
-    CHECK_FALSE(h1_v2.v & SlotMapHandle::FREE_BIT);
+    // CHECK_FALSE(h1_v2.v & SlotMapHandle::FREE_BIT);
 
     auto h1_free = SlotMapHandle::setFreeBit(h1_v2);
     CHECK(h1_free.index() == 0);
-    CHECK(h1_free.version() == (SlotMapHandle::FREE_VERSION | 1));
+    CHECK(h1_free.version() == 1);
     CHECK_FALSE(h1_free.alive());
-    CHECK(h1_free.v & SlotMapHandle::FREE_BIT);
+    // CHECK(h1_free.v & SlotMapHandle::FREE_BIT);
 
     auto h1_unfree = SlotMapHandle::clearFreeBit(h1_free);
     CHECK(h1_unfree == h1_v2);
@@ -257,20 +258,55 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         // failed attempt to debug why SlotMap is not compatible with ranges - looks like
         // for some reason it does not implement the indirectly_readable concept but I have
         // no idea how to proceed..
-//        static_assert(ranges::detail::dereferenceable_<SlotMap<Foo>::iterator&>);
-//
-//        static_assert(ranges::copyable<SlotMap<Foo>::iterator>);
-//        static_assert(ranges::weakly_incrementable<SlotMap<Foo>::iterator>);
-//        static_assert(ranges::input_or_output_iterator<SlotMap<Foo>::iterator>);
-//        static_assert(ranges::indirectly_readable<SlotMap<Foo>::iterator>);
-//        static_assert(ranges::input_iterator<SlotMap<Foo>::iterator>,
-//                      "SlotMap::iterator is not accepted as an iterator");
-//        static_assert(ranges::input_iterator<SlotMap<Foo>::const_iterator>,
-//                      "SlotMap::const_iterator type is not accepted as an iterator");
-//        auto b = ranges::begin(sm);
-//        auto e = ranges::end(sm);
-//
-//        CHECK(ranges::all_of(sm, [](const Foo& f) { return f.bookkeep_ == ALIVE; }));
+        //        static_assert(ranges::detail::dereferenceable_<SlotMap<Foo>::iterator&>);
+        //
+        //        static_assert(ranges::copyable<SlotMap<Foo>::iterator>);
+        //        static_assert(ranges::weakly_incrementable<SlotMap<Foo>::iterator>);
+        //        static_assert(ranges::input_or_output_iterator<SlotMap<Foo>::iterator>);
+        //        static_assert(ranges::indirectly_readable<SlotMap<Foo>::iterator>);
+        //        static_assert(ranges::input_iterator<SlotMap<Foo>::iterator>,
+        //                      "SlotMap::iterator is not accepted as an iterator");
+        //        static_assert(ranges::input_iterator<SlotMap<Foo>::const_iterator>,
+        //                      "SlotMap::const_iterator type is not accepted as an iterator");
+        //        auto b = ranges::begin(sm);
+        //        auto e = ranges::end(sm);
+        //
+        //        CHECK(ranges::all_of(sm, [](const Foo& f) { return f.bookkeep_ == ALIVE; }));
+    }
+
+    SECTION("Iterating over handles and items")
+    {
+        std::vector<ObjectState> bookkeepers{5, UNINIT};
+        SlotMap<Foo> sm;
+        std::vector<SlotMapHandle> handles =
+            bookkeepers |
+            ranges::views::transform([&sm](ObjectState &s) { return sm.emplace(std::ref(s)); }) |
+            ranges::to<std::vector<SlotMapHandle>>;
+
+        sm.release(handles[4]);             // this one should not be iterated over anymore
+        handles[2] = sm.update(handles[2]); // this one should be iterated over with the new version
+
+        // iterating over the handles
+        gsl::index i{};
+        for (SlotMapHandle h : sm.handles()) {
+            REQUIRE(h.alive());
+            CHECK(h == handles[i]);
+            i++;
+        }
+        CHECK(i == 4);
+
+        // iterating over the items (pairs of handle and value)
+        const SlotMap<Foo> &csm = sm;
+        gsl::index j{};
+        for (auto &[h, v] : csm.items()) {
+            REQUIRE(h.alive());
+            CHECK(h == handles[j]);
+            CHECK(&v.bookkeep_ == &bookkeepers[j]);
+            j++;
+        }
+        CHECK(j == 4);
+
+        auto handles2 = sm.handles() | ranges::to<std::vector<SlotMapHandle>>;
     }
 
     SECTION("ResolvableHandle<Foo>")
@@ -283,5 +319,15 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
 
         const ResolvableHandle crh{rh};
         CHECK(crh->bookkeep_ == ALIVE);
+    }
+}
+
+TEST_CASE("bla")
+{
+    std::vector<int> test{1, 2, 3, 4, 2, 5, 6, 1};
+    std::ranges::sort(test, {}, [](int v) { return v % 2; });
+
+    for (const auto &v : test) {
+        CO_APP_INFO("element: {}", v);
     }
 }

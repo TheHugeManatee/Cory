@@ -12,9 +12,8 @@ namespace Cory {
 
 struct SlotMapHandle {
     uint64_t v;
+    auto operator<=>(const SlotMapHandle &rhs) const = default;
 };
-inline bool operator==(const SlotMapHandle &lhs, const SlotMapHandle rhs) { return lhs.v == rhs.v; }
-inline bool operator!=(const SlotMapHandle &lhs, const SlotMapHandle rhs) { return lhs.v != rhs.v; }
 
 // simple generic slot map for associative storage of objects in contiguous memory
 // roughly following
@@ -166,6 +165,7 @@ template <typename StoredType> class SlotMap {
 };
 } // namespace Cory
 
+/// make SlotMapHandle formattable
 template <> struct fmt::formatter<Cory::SlotMapHandle> {
     template <typename ParseContext> constexpr auto parse(ParseContext &ctx) { return ctx.end(); }
     auto format(Cory::SlotMapHandle h, format_context &ctx)
@@ -174,6 +174,7 @@ template <> struct fmt::formatter<Cory::SlotMapHandle> {
     }
 };
 
+/// make SlotMapHandle hashable
 template <> struct std::hash<Cory::SlotMapHandle> {
     std::size_t operator()(const Cory::SlotMapHandle &s) const noexcept
     {

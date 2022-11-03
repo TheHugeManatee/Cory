@@ -47,7 +47,14 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
     shaderSet.addShader(Vk::ShaderStage::Vertex, vertexShader_.module(), "main");
     shaderSet.addShader(Vk::ShaderStage::Fragment, fragmentShader_.module(), "main");
 
-    Vk::PipelineLayout pipelineLayout{ctx_.device(), Vk::PipelineLayoutCreateInfo{}};
+    // use max guaranteed memory of 128 bytes, for all shaders
+    VkPushConstantRange pushConstantRange{
+        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
+    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
+
+    layout_ = std::make_unique<Vk::PipelineLayout>(ctx_.device(), pipelineLayoutCreateInfo);
 
     Vk::PixelFormat colorFormat = window.colorFormat();
     Vk::PixelFormat depthFormat = window.depthFormat();
@@ -90,7 +97,7 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
             }}));
 
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
-        shaderSet, mesh.layout(), pipelineLayout, *mainRenderPass_, 0, 1};
+        shaderSet, mesh.layout(), *layout_, *mainRenderPass_, 0, 1};
 
     // configure dynamic state - one viewport and scissor configured but no dimensions specified
     rasterizationPipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |

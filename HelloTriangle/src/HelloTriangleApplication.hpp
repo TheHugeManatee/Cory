@@ -34,6 +34,9 @@ class HelloTriangleApplication : public Cory::Application {
     // record commands for a new command buffer
     void recordCommands(Cory::FrameContext &frameCtx);
 
+    double now() const;
+    double getElapsedTimeSeconds() const;
+
   private:
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
@@ -41,4 +44,6 @@ class HelloTriangleApplication : public Cory::Application {
     std::vector<Magnum::Vk::Framebuffer> framebuffers_;
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
+
+    double startupTime_;
 };

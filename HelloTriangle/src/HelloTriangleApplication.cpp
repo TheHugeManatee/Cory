@@ -22,28 +22,62 @@
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/FramebufferCreateInfo.h>
 #include <Magnum/Vk/Mesh.h>
+#include <Magnum/Vk/PipelineLayout.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/RenderPass.h>
 #include <Magnum/Vk/VertexFormat.h>
 
 #include <GLFW/glfw3.h>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <imgui.h>
 
+#include <gsl/gsl>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
+#include <array>
+#include <chrono>
 #include <math.h>
 
-#include <array>
-
 namespace Vk = Magnum::Vk;
+
+struct PushConstants {
+    glm::vec4 color{1.0, 0.0, 0.0, 1.0};
+    glm::mat2 transform{1.0f};
+    glm::vec2 offset{0.0};
+};
+
+void animate(PushConstants &d, float t, float i)
+{
+    glm::mat4 m{1.0};
+    // m = glm::translate(m, glm::vec3{0.0f, i - 0.5f, 0.0f});
+    // m = glm::translate(m, glm::vec3{0.5f, 0.5f, 0.0f});
+    m = glm::rotate(m, t + i * t, glm::vec3{0.0, 0.0, 1.0});
+    float ds = t / 100.0f;
+    m = glm::scale(m, glm::vec3{1.5f + ds - i});
+    // m = glm::translate(m, glm::vec3{-0.5f, -0.5f, 0.0f});
+
+    d.transform[0][0] = m[0][0];
+    d.transform[1][0] = m[1][0];
+    d.transform[0][1] = m[0][1];
+    d.transform[1][1] = m[1][1];
+
+    d.offset[0] = m[3][0];
+    d.offset[1] = m[3][1];
+
+    float colorFreq = 1.0f / (4.f + i);
+    d.color = {i, -0.4f * (sin(t * colorFreq) + 1.0f), 0.4f * (cos(t * colorFreq) + 1.0f), 1.0f};
+}
 
 HelloTriangleApplication::HelloTriangleApplication()
     : mesh_{}
     , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
+    , startupTime_{now()}
 {
     Cory::Init();
 
@@ -59,7 +93,7 @@ HelloTriangleApplication::HelloTriangleApplication()
     CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
-    static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 768};
+    static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
     auto recreateSizedResources = [&](glm::i32vec2) { createFramebuffers(); };
@@ -101,11 +135,13 @@ void HelloTriangleApplication::run()
     // wait until last frame is finished rendering
     ctx_->device()->DeviceWaitIdle(ctx_->device());
 }
+
 void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 {
     // do some color swirly thingy
-    float t = (float)frameCtx.frameNumber / 10000.0f;
-    Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
+    auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
+    // Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
+    Magnum::Color4 clearColor{0.0f, 0.0f, 0.0f, 1.0f};
 
     Vk::CommandBuffer &cmdBuffer = *frameCtx.commandBuffer;
 
@@ -129,8 +165,24 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     ctx_->device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
     ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-    // draw our triangle mesh
-    cmdBuffer.draw(*mesh_);
+    PushConstants pushData{};
+
+    static constexpr int num_triangles{100};
+    for (int idx = 0; idx < num_triangles; ++idx) {
+        float i = static_cast<float>(idx) / static_cast<float>(num_triangles - 1);
+
+        animate(pushData, t, i);
+
+        ctx_->device()->CmdPushConstants(cmdBuffer,
+                                         pipeline_->layout(),
+                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
+                                         0,
+                                         sizeof(pushData),
+                                         &pushData);
+
+        // draw our triangle mesh
+        cmdBuffer.draw(*mesh_);
+    }
 
     cmdBuffer.endRenderPass();
 
@@ -178,7 +230,7 @@ void HelloTriangleApplication::createGeometry()
     // set up the fixed mesh - note that the 'data' variable manages
     // the lifetime of the memory mapping
     {
-        const uint64_t numVertices = 3;
+        const uint64_t numVertices = 4;
         Vk::Buffer vertices{
             ctx_->device(),
             Vk::BufferCreateInfo{Vk::BufferUsage::VertexBuffer, numVertices * sizeof(Vertex)},
@@ -188,9 +240,26 @@ void HelloTriangleApplication::createGeometry()
             vertices.dedicatedMemory().map();
 
         auto &view = reinterpret_cast<std::array<Vertex, 3> &>(*data.data());
-        view[0] = Vertex{{0.0f, -0.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
-        view[1] = Vertex{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
-        view[2] = Vertex{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
+        glm::vec2 p0{0, 0.5f};
+        glm::vec2 p1{
+            p0.x * cos(glm::radians(120.0f)) - p0.y * sin(glm::radians(120.0f)),
+            p0.x * sin(glm::radians(120.0f)) + p0.y * cos(glm::radians(120.0f)),
+        };
+        glm::vec2 p2{
+            p0.x * cos(glm::radians(240.0f)) - p0.y * sin(glm::radians(240.0f)),
+            p0.x * sin(glm::radians(240.0f)) + p0.y * cos(glm::radians(240.0f)),
+        };
+        view[0] = Vertex{{p0.x, p0.y, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
+        view[1] = Vertex{{p1.x, p1.y, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
+        view[2] = Vertex{{p2.x, p2.y, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
         mesh_->addVertexBuffer(0, std::move(vertices), 0).setCount(numVertices);
     }
 }
+double HelloTriangleApplication::now() const
+{
+    return std::chrono::duration<double>(
+               std::chrono::high_resolution_clock::now().time_since_epoch())
+        .count();
+}
+
+double HelloTriangleApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }

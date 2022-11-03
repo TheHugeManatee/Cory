@@ -14,6 +14,7 @@
 namespace Magnum::Vk {
 class Pipeline;
 class RenderPass;
+class PipelineLayout;
 } // namespace Magnum::Vk
 
 namespace Cory {
@@ -33,6 +34,7 @@ class TrianglePipeline : Cory::NoCopy {
     // this pipeline only has one renderpass
     Magnum::Vk::RenderPass &mainRenderPass() { return *mainRenderPass_; }
     Magnum::Vk::Pipeline &pipeline() { return *pipeline_; }
+    Magnum::Vk::PipelineLayout &layout() { return *layout_; }
 
   private:
     void createGraphicsPipeline(const Cory::Window &window,
@@ -47,5 +49,6 @@ class TrianglePipeline : Cory::NoCopy {
     Cory::Shader fragmentShader_;
 
     std::unique_ptr<Magnum::Vk::Pipeline> pipeline_;
+    std::unique_ptr<Magnum::Vk::PipelineLayout> layout_;
     std::unique_ptr<Magnum::Vk::RenderPass> mainRenderPass_;
 };

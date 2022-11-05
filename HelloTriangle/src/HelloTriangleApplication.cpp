@@ -51,19 +51,19 @@ struct PushConstants {
 };
 
 static struct AnimationData {
-    int num_tris{100};
+    int num_tris{30};
 
     float r0{0.0f};
-    float rt{1.0f};
+    float rt{-0.1f};
     float ri{0.0f};
-    float rti{1.0f};
-    float s0{1.5f};
-    float st{0.01f};
-    float si{-1.0f};
+    float rti{0.68f};
+    float s0{2.0f};
+    float st{0.003f};
+    float si{-2.0f};
 
-    float c0{0.4f};
-    float cf0{4.0f};
-    float cfi{1.0f};
+    float c0{-0.75f};
+    float cf0{2.0f};
+    float cfi{-0.5f};
 } ad;
 
 void animate(PushConstants &d, float t, float i)
@@ -85,7 +85,13 @@ void animate(PushConstants &d, float t, float i)
     d.offset[1] = m[3][1];
 
     float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
-    d.color = {i, -ad.c0 * (sin(t * colorFreq) + 1.0f), ad.c0 * (cos(t * colorFreq) + 1.0f), 1.0f};
+    float brightness = i + 0.2*abs(sin(t + i));
+    float r = ad.c0 * t * colorFreq;
+    glm::vec4 start{0.8f, 0.2f, 0.2f, 1.0f};
+    glm::mat4 cm = glm::rotate(
+        glm::scale(glm::mat4{1.0f}, glm::vec3{brightness}), r, glm::vec3{1.0f, 1.0f, 1.0f});
+
+    d.color = start * cm;
 }
 
 HelloTriangleApplication::HelloTriangleApplication()
@@ -291,7 +297,7 @@ void HelloTriangleApplication::drawImguiControls()
         ImGui::SliderFloat("st", &ad.st, -0.1f, 0.1f);
         ImGui::SliderFloat("si", &ad.si, -2.0f, 2.0f);
         ImGui::SliderFloat("c0", &ad.c0, -2.0f, 2.0f);
-        ImGui::SliderFloat("cf0", &ad.cf0, -2.0f, 2.0f);
+        ImGui::SliderFloat("cf0", &ad.cf0, -10.0f, 10.0f);
         ImGui::SliderFloat("cfi", &ad.cfi, -2.0f, 2.0f);
     }
     ImGui::End();

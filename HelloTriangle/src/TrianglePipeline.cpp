@@ -88,12 +88,15 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
                             .setDepthStencilAttachment({Vk::AttachmentReference{
                                 1, Vk::ImageLayout::DepthStencilAttachment}}))
             .setDependencies({Vk::SubpassDependency{
-                Vk::SubpassDependency::External,          // srcSubpass
-                0,                                        // dstSubpass
-                Vk::PipelineStage::ColorAttachmentOutput, // srcStages
-                Vk::PipelineStage::ColorAttachmentOutput, // dstStages
-                Vk::Access{},                             // srcAccess
-                Vk::Access::ColorAttachmentWrite,         // dstAccess
+                Vk::SubpassDependency::External, // srcSubpass
+                0,                               // dstSubpass
+                Vk::PipelineStage::ColorAttachmentOutput |
+                    Vk::PipelineStage::EarlyFragmentTests, // srcStages
+                Vk::PipelineStage::ColorAttachmentOutput |
+                    Vk::PipelineStage::EarlyFragmentTests, // dstStages
+                Vk::Access{},                              // srcAccess
+                Vk::Access::ColorAttachmentWrite |
+                    Vk::Access::DepthStencilAttachmentWrite, // dstAccess
             }}));
 
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{

@@ -46,4 +46,5 @@ class HelloTriangleApplication : public Cory::Application {
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 
     double startupTime_;
+    void drawImguiControls();
 };

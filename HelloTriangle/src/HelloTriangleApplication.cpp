@@ -28,7 +28,6 @@
 #include <Magnum/Vk/VertexFormat.h>
 
 #include <GLFW/glfw3.h>
-#include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
@@ -42,7 +41,6 @@
 
 #include <array>
 #include <chrono>
-#include <math.h>
 
 namespace Vk = Magnum::Vk;
 
@@ -52,14 +50,30 @@ struct PushConstants {
     glm::vec2 offset{0.0};
 };
 
+static struct AnimationData {
+    int num_tris{100};
+
+    float r0{0.0f};
+    float rt{1.0f};
+    float ri{0.0f};
+    float rti{1.0f};
+    float s0{1.5f};
+    float st{0.01f};
+    float si{-1.0f};
+
+    float c0{0.4f};
+    float cf0{4.0f};
+    float cfi{1.0f};
+} ad;
+
 void animate(PushConstants &d, float t, float i)
 {
     glm::mat4 m{1.0};
     // m = glm::translate(m, glm::vec3{0.0f, i - 0.5f, 0.0f});
     // m = glm::translate(m, glm::vec3{0.5f, 0.5f, 0.0f});
-    m = glm::rotate(m, t + i * t, glm::vec3{0.0, 0.0, 1.0});
-    float ds = t / 100.0f;
-    m = glm::scale(m, glm::vec3{1.5f + ds - i});
+    m = glm::rotate(m, ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t, glm::vec3{0.0, 0.0, 1.0});
+
+    m = glm::scale(m, glm::vec3{ad.s0 + ad.st * t + ad.si * i});
     // m = glm::translate(m, glm::vec3{-0.5f, -0.5f, 0.0f});
 
     d.transform[0][0] = m[0][0];
@@ -70,8 +84,8 @@ void animate(PushConstants &d, float t, float i)
     d.offset[0] = m[3][0];
     d.offset[1] = m[3][1];
 
-    float colorFreq = 1.0f / (4.f + i);
-    d.color = {i, -0.4f * (sin(t * colorFreq) + 1.0f), 0.4f * (cos(t * colorFreq) + 1.0f), 1.0f};
+    float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
+    d.color = {i, -ad.c0 * (sin(t * colorFreq) + 1.0f), ad.c0 * (cos(t * colorFreq) + 1.0f), 1.0f};
 }
 
 HelloTriangleApplication::HelloTriangleApplication()
@@ -123,9 +137,11 @@ void HelloTriangleApplication::run()
         glfwPollEvents();
         imguiLayer_->newFrame(*ctx_);
         // TODO process events?
-        auto frameCtx = window_->nextSwapchainImage();
+        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
         ImGui::ShowDemoWindow();
+
+        drawImguiControls();
 
         recordCommands(frameCtx);
 
@@ -167,9 +183,8 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     PushConstants pushData{};
 
-    static constexpr int num_triangles{100};
-    for (int idx = 0; idx < num_triangles; ++idx) {
-        float i = static_cast<float>(idx) / static_cast<float>(num_triangles - 1);
+    for (int idx = 0; idx < ad.num_tris; ++idx) {
+        float i = static_cast<float>(idx) / static_cast<float>(ad.num_tris - 1);
 
         animate(pushData, t, i);
 
@@ -263,3 +278,21 @@ double HelloTriangleApplication::now() const
 }
 
 double HelloTriangleApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }
+void HelloTriangleApplication::drawImguiControls()
+{
+    if (ImGui::Begin("Animation Params")) {
+        ImGui::InputInt("Triangles", &ad.num_tris, 1, 10000);
+
+        ImGui::SliderFloat("r0", &ad.r0, -2.0f, 2.0f);
+        ImGui::SliderFloat("rt", &ad.rt, -2.0f, 2.0f);
+        ImGui::SliderFloat("ri", &ad.ri, -2.0f, 2.0f);
+        ImGui::SliderFloat("rti", &ad.rti, -2.0f, 2.0f);
+        ImGui::SliderFloat("s0", &ad.s0, -2.0f, 2.0f);
+        ImGui::SliderFloat("st", &ad.st, -0.1f, 0.1f);
+        ImGui::SliderFloat("si", &ad.si, -2.0f, 2.0f);
+        ImGui::SliderFloat("c0", &ad.c0, -2.0f, 2.0f);
+        ImGui::SliderFloat("cf0", &ad.cf0, -2.0f, 2.0f);
+        ImGui::SliderFloat("cfi", &ad.cfi, -2.0f, 2.0f);
+    }
+    ImGui::End();
+}

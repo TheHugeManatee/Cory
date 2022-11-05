@@ -100,8 +100,6 @@ target_compile_definitions(${TARGET_NAME}
         GLM_FORCE_DEPTH_ZERO_TO_ONE
         GLM_ENABLE_EXPERIMENTAL)
 
-target_compile_features(${TARGET_NAME} PUBLIC cxx_std_23)
-
 # for now, we hardcode the resource path until we have a proper resource management in place
 target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
 

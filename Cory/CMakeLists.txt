@@ -63,6 +63,8 @@ set(CORY_SOURCES
         src/Renderer/SingleShotCommandBuffer.cpp
         src/Renderer/Swapchain.cpp
         src/Renderer/VulkanUtils.cpp
+        src/Application/DynamicGeometry.cpp
+        include/Cory/Application/DynamicGeometry.hpp
         )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
@@ -105,6 +107,7 @@ target_compile_definitions(${TARGET_NAME}
         # set up some GLM defaults that match our project better
         GLM_FORCE_RADIANS
         GLM_FORCE_DEPTH_ZERO_TO_ONE
+        GLM_FORCE_XYZW_ONLY
         GLM_ENABLE_EXPERIMENTAL)
 
 # for now, we hardcode the resource path until we have a proper resource management in place

@@ -22,18 +22,28 @@ set(CORY_SOURCES
         include/Cory/Application/ImGuiLayer.hpp
         include/Cory/Application/Window.hpp
         include/Cory/Base/BitField.hpp
+        include/Cory/Base/Callback.hpp
         include/Cory/Base/Common.hpp
         include/Cory/Base/FmtUtils.hpp
         include/Cory/Base/Log.hpp
         include/Cory/Base/Math.hpp
+        include/Cory/Base/Profiling.hpp
+        include/Cory/Base/ResourceLocator.hpp
         include/Cory/Base/SlotMap.hpp
+        include/Cory/Base/SlotMapHandle.hpp
         include/Cory/Base/Utils.hpp
         include/Cory/Cory.hpp
+        include/Cory/Framegraph/Framegraph.hpp
+        include/Cory/Framegraph/RenderPassDeclaration.hpp
+        include/Cory/Framegraph/TextureManager.hpp
         include/Cory/RenderCore/APIConversion.hpp
         include/Cory/RenderCore/Context.hpp
         include/Cory/RenderCore/CpuBuffer.hpp
-        include/Cory/Base/ResourceLocator.hpp
+        include/Cory/RenderCore/RenderCommon.hpp
+        include/Cory/RenderCore/ResourceManager.cpp
+        include/Cory/RenderCore/ResourceManager.hpp
         include/Cory/RenderCore/Semaphore.hpp
+        include/Cory/RenderCore/SingleShotCommandBuffer.hpp
         include/Cory/RenderCore/VulkanUtils.hpp
         include/Cory/Renderer/Shader.hpp
         include/Cory/Renderer/Swapchain.hpp
@@ -41,22 +51,18 @@ set(CORY_SOURCES
         src/Application/ImGuiLayer.cpp
         src/Application/Window.cpp
         src/Base/Log.cpp
+        src/Base/Profiling.cpp
+        src/Base/ResourceLocator.cpp
         src/Base/Utils.cpp
         src/Cory.cpp
+        src/Framegraph/Framegraph.cpp
+        src/Framegraph/TextureManager.cpp
         src/RenderCore/Context.cpp
-        src/Base/ResourceLocator.cpp
+        src/RenderCore/SingleShotCommandBuffer.cpp
         src/RenderCore/VulkanUtils.cpp
         src/Renderer/Shader.cpp
         src/Renderer/Swapchain.cpp
-        include/Cory/Base/Callback.hpp
-        src/Base/Profiling.cpp
-        include/Cory/Base/Profiling.hpp
-        src/RenderCore/SingleShotCommandBuffer.cpp
-        include/Cory/RenderCore/SingleShotCommandBuffer.hpp
-        include/Cory/Framegraph/Framegraph.hpp
-        src/Framegraph/Framegraph.cpp
-        include/Cory/Framegraph/RenderPassDeclaration.hpp
-        include/Cory/Framegraph/TextureManager.hpp src/Framegraph/TextureManager.cpp)
+        )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

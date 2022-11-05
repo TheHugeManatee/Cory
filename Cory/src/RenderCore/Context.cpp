@@ -3,6 +3,7 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/RenderCore/ResourceManager.hpp>
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/StringStlView.h>
@@ -51,6 +52,8 @@ struct ContextPrivate {
     uint32_t computeQueueFamily{};
 
     Vk::CommandPool commandPool{Corrade::NoCreate};
+
+    ResourceManager resources;
 };
 
 Context::Context()
@@ -197,5 +200,7 @@ Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
 uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }
 Magnum::Vk::Queue &Context::computeQueue() { return data_->computeQueue; }
 uint32_t Context::computeQueueFamily() const { return data_->computeQueueFamily; }
+ResourceManager &Context::resources() { return data_->resources; }
+const ResourceManager &Context::resources() const { return data_->resources; }
 
 } // namespace Cory

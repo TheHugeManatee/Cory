@@ -2,6 +2,7 @@
 
 
 #include <Cory/Base/Common.hpp>
+#include <Cory/RenderCore/RenderCommon.hpp>
 #include <Cory/RenderCore/Semaphore.hpp>
 #include <Cory/RenderCore/VulkanUtils.hpp>
 
@@ -11,36 +12,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-
-namespace Magnum::Vk {
-class Device;
-class Instance;
-class CommandPool;
-} // namespace Magnum::Vk
-
-// Vulkan forward definitions
-struct VkDebugUtilsMessengerCallbackDataEXT;
-using VkInstance = struct VkInstance_T *;
-
-namespace Cory {
-
-enum class DebugMessageSeverity {
-    Verbose = 0x00000001,
-    Info = 0x00000010,
-    Warning = 0x00000100,
-    Error = 0x00001000,
-};
-
-enum class DebugMessageType {
-    General = 0x00000001,
-    Validation = 0x00000002,
-    Performance = 0x00000004,
-    DeviceAddressBinding = 0x00000008, ///< Provided by VK_EXT_device_address_binding_report
-};
-enum class FenceCreateMode { Unsignaled, Signaled };
-
-} // namespace Cory
-DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
 
 namespace Cory {
 
@@ -75,6 +46,9 @@ class Context : NoCopy, NoMove {
     uint32_t graphicsQueueFamily() const;
     Magnum::Vk::Queue &computeQueue();
     uint32_t computeQueueFamily() const;
+
+    ResourceManager& resources();
+    const ResourceManager& resources() const;
 
   private:
     std::unique_ptr<struct ContextPrivate> data_;

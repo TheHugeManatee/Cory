@@ -11,7 +11,7 @@
 
 namespace Cory {
 
-template <int64_t RECORD_HISTORY_SIZE = 64> class ProfilerRecord {
+template <int64_t RECORD_HISTORY_SIZE> class ProfilerRecord {
   public:
     ProfilerRecord() { m_data.fill(0); }
 

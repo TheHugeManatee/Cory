@@ -3,10 +3,7 @@ cmake_minimum_required(VERSION 3.15...3.23)
 project(CmakeConfigPackageTests LANGUAGES CXX)
 
 # ---- Test as standalone project the exported config package ----
-message("Cory Tests enabled.")
 if (PROJECT_IS_TOP_LEVEL OR TEST_INSTALLED_VERSION)
-    enable_testing()
-
     find_package(Cory CONFIG REQUIRED) # for intro, project_options, ...
 
     if (NOT TARGET Cory::project_options)
@@ -24,7 +21,7 @@ include(Catch)
 add_library(${TARGET_NAME}_TestLib OBJECT
         Cory_Test.cpp
         Utils_Test.cpp
-        SlotMap_Test.cpp 
+        SlotMap_Test.cpp
         BitField_Test.cpp
         Callback_Test.cpp FrameGraph_Test.cpp CoroutinePlayground.cpp)
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)

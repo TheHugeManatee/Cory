@@ -78,8 +78,10 @@ cmake_dependent_option(CORY_BUILD_TESTS
         "Enable tests targets" ON # By default we want tests if CTest is enabled
         "BUILD_TESTING" ON # Stay coherent with CTest variables
         )
-
-#include(CTest)
+if(CORY_BUILD_TESTS)
+    #include(CTest)
+    enable_testing()
+endif()
 
 
 # currently, we just map a hardcoded path for our resources - no fancy

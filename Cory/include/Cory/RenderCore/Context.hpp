@@ -2,7 +2,7 @@
 
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/RenderCore/RenderCommon.hpp>
+#include <Cory/RenderCore/Common.hpp>
 #include <Cory/RenderCore/Semaphore.hpp>
 #include <Cory/RenderCore/VulkanUtils.hpp>
 

@@ -10,8 +10,8 @@ namespace Cory {
 class Context;
 class CpuBuffer;
 class RenderManager;
-class SingleShotCommandBuffer;
 class Shader;
+class SingleShotCommandBuffer;
 class Swapchain;
 
 // enums
@@ -36,17 +36,22 @@ enum class DebugMessageType {
 };
 enum class FenceCreateMode { Unsignaled, Signaled };
 
-
-// generic handle type to wrap slot map handles in a type-safe way
+/// generic handle type to wrap slot map handles in a type-safe way
 template <typename T> class ResourceHandle {
-    friend class ResourceManager;
+  public:
+    /**
+     * default constructor constructs an invalid handle! valid handles can
+     * only be obtained from the ResourceManager!
+     */
+    ResourceHandle() = default;
 
   private:
+    friend class ResourceManager;
     /* implicit */ ResourceHandle(SlotMapHandle handle)
         : handle_{handle}
     {
     }
-    SlotMapHandle handle_;
+    SlotMapHandle handle_{};
 };
 using ShaderHandle = ResourceHandle<Shader>;
 
@@ -56,12 +61,15 @@ DECLARE_ENUM_BITFIELD(Cory::ShaderType);
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
 
 namespace Magnum::Vk {
+class CommandPool;
 class Device;
 class Instance;
-class CommandPool;
+class Mesh;
+class Pipeline;
+class PipelineLayout;
+class RenderPass;
 } // namespace Magnum::Vk
 
 // Vulkan forward definitions
 struct VkDebugUtilsMessengerCallbackDataEXT;
 using VkInstance = struct VkInstance_T *;
-

@@ -39,7 +39,7 @@ set(CORY_SOURCES
         include/Cory/RenderCore/APIConversion.hpp
         include/Cory/RenderCore/Context.hpp
         include/Cory/RenderCore/CpuBuffer.hpp
-        include/Cory/RenderCore/RenderCommon.hpp
+        include/Cory/RenderCore/Common.hpp
         include/Cory/RenderCore/ResourceManager.cpp
         include/Cory/RenderCore/ResourceManager.hpp
         include/Cory/RenderCore/Semaphore.hpp
@@ -62,7 +62,7 @@ set(CORY_SOURCES
         src/RenderCore/VulkanUtils.cpp
         src/Renderer/Shader.cpp
         src/Renderer/Swapchain.cpp
-        )
+        include/Cory/Application/Common.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

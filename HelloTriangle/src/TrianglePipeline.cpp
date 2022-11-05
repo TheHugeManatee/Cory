@@ -4,6 +4,8 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/RenderCore/Context.hpp>
+#include <Cory/RenderCore/ResourceManager.hpp>
+#include <Cory/Renderer/Shader.hpp>
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>
@@ -36,16 +38,16 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
+    Cory::ResourceManager &resources = ctx_.resources();
     CO_APP_TRACE("Starting shader compilation");
-    vertexShader_ = Cory::Shader(ctx_, Cory::ShaderSource{Cory::ResourceLocator::locate(vertFile)});
-    CO_APP_TRACE("Vertex shader code size: {}", vertexShader_.size());
-    fragmentShader_ =
-        Cory::Shader(ctx_, Cory::ShaderSource{Cory::ResourceLocator::locate(fragFile)});
-    CO_APP_TRACE("Fragment shader code size: {}", fragmentShader_.size());
+    vertexShader_ = resources.createShader(Cory::ResourceLocator::locate(vertFile));
+    CO_APP_TRACE("Vertex shader code size: {}", resources[vertexShader_].size());
+    fragmentShader_ = ctx_.resources().createShader(Cory::ResourceLocator::locate(fragFile));
+    CO_APP_TRACE("Fragment shader code size: {}", resources[fragmentShader_].size());
 
     Vk::ShaderSet shaderSet{};
-    shaderSet.addShader(Vk::ShaderStage::Vertex, vertexShader_.module(), "main");
-    shaderSet.addShader(Vk::ShaderStage::Fragment, fragmentShader_.module(), "main");
+    shaderSet.addShader(Vk::ShaderStage::Vertex, resources[vertexShader_].module(), "main");
+    shaderSet.addShader(Vk::ShaderStage::Fragment, resources[fragmentShader_].module(), "main");
 
     // use max guaranteed memory of 128 bytes, for all shaders
     VkPushConstantRange pushConstantRange{

@@ -4,23 +4,13 @@
 
 #pragma once
 
+#include <Cory/Application/Common.hpp>
 #include <Cory/Base/Common.hpp>
-#include <Cory/Renderer/Shader.hpp>
+#include <Cory/RenderCore/Common.hpp>
 
 #include <glm/vec2.hpp>
 
 #include <filesystem>
-
-namespace Magnum::Vk {
-class Pipeline;
-class RenderPass;
-class PipelineLayout;
-} // namespace Magnum::Vk
-
-namespace Cory {
-class Context;
-class Window;
-} // namespace Cory
 
 class TrianglePipeline : Cory::NoCopy {
   public:
@@ -45,8 +35,8 @@ class TrianglePipeline : Cory::NoCopy {
   private:
     Cory::Context &ctx_;
 
-    Cory::Shader vertexShader_;
-    Cory::Shader fragmentShader_;
+    Cory::ShaderHandle vertexShader_;
+    Cory::ShaderHandle fragmentShader_;
 
     std::unique_ptr<Magnum::Vk::Pipeline> pipeline_;
     std::unique_ptr<Magnum::Vk::PipelineLayout> layout_;

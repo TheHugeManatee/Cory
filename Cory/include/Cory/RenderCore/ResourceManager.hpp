@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Cory/Base/SlotMap.hpp>
-#include <Cory/RenderCore/RenderCommon.hpp>
+#include <Cory/RenderCore/Common.hpp>
 
 #include <filesystem>
 #include <memory>
@@ -30,7 +30,8 @@ class ResourceManager : NoCopy {
     void setContext(Context &ctx);
 
     /// @see ShaderSource::ShaderSource(std::filesystem::path, ShaderType)
-    [[nodiscard]] ShaderHandle createShader(std::filesystem::path filePath, ShaderType type);
+    [[nodiscard]] ShaderHandle createShader(std::filesystem::path filePath,
+                                            ShaderType type = ShaderType::eUnknown);
     /// @see ShaderSource::ShaderSource(std::string, ShaderType, std::filesystem::path)
     [[nodiscard]] ShaderHandle
     createShader(std::string source, ShaderType type, std::filesystem::path filePath = "Unknown");

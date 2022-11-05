@@ -2,8 +2,8 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
 #include <Cory/RenderCore/ResourceManager.hpp>
+#include <Cory/RenderCore/VulkanUtils.hpp>
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/StringStlView.h>
@@ -81,8 +81,7 @@ Context::Context()
     // supports both graphics and compute, which is probably not universal
     data_->graphicsQueueFamily = data_->physicalDevice.pickQueueFamily(
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
-    info.addQueues(
-        data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
+    info.addQueues(data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
 
     data_->device.create(data_->instance, std::move(info));
     data_->device.populateGlobalFunctionPointers();
@@ -90,12 +89,15 @@ Context::Context()
     nameVulkanObject(data_->device, data_->device, fmt::format("[{}] Logical Device", data_->name));
     nameVulkanObject(
         data_->device, data_->graphicsQueue, fmt::format("[{}] Graphics", data_->name));
-    //nameVulkanObject(data_->device, data_->computeQueue, fmt::format("[{}] Compute", data_->name));
+    // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("[{}] Compute",
+    // data_->name));
 
     setupDebugMessenger();
 
     data_->commandPool =
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
+
+    data_->resources.setContext(*this);
 }
 
 void Context::setupDebugMessenger()

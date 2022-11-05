@@ -85,7 +85,7 @@ void animate(PushConstants &d, float t, float i)
     d.offset[1] = m[3][1];
 
     float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
-    float brightness = i + 0.2*abs(sin(t + i));
+    float brightness = i + 0.2f * abs(sin(t + i));
     float r = ad.c0 * t * colorFreq;
     glm::vec4 start{0.8f, 0.2f, 0.2f, 1.0f};
     glm::mat4 cm = glm::rotate(

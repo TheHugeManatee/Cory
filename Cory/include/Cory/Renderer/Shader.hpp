@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/RenderCore/Common.hpp>
+#include <Cory/Renderer/Common.hpp>
 
 #include <Magnum/Vk/Shader.h>
 #include <Magnum/Vk/Vulkan.h>

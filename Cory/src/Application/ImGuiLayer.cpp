@@ -3,9 +3,9 @@
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/Context.hpp>
-#include <Cory/RenderCore/SingleShotCommandBuffer.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/SingleShotCommandBuffer.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <imgui.h>

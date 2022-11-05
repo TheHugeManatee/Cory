@@ -1,7 +1,7 @@
-#include <Cory/RenderCore/ResourceManager.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
 
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
 namespace Cory {

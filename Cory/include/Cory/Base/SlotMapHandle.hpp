@@ -37,6 +37,7 @@ class SlotMapHandle {
     uint32_t version_ : 31;
 };
 static_assert(sizeof(SlotMapHandle) == sizeof(uint64_t));
+static_assert(std::copyable<SlotMapHandle> && std::movable<SlotMapHandle>);
 
 inline SlotMapHandle::SlotMapHandle()
     : free_{1}

@@ -1,7 +1,7 @@
 #include <catch2/catch.hpp>
 
+#include "Cory/Base/CpuBuffer.hpp"
 #include <Cory/Base/Utils.hpp>
-#include <Cory/RenderCore/CpuBuffer.hpp>
 
 TEST_CASE("formatBytes", "[Cory/Utils]")
 {

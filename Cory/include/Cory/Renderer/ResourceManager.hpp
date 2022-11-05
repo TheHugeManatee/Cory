@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Cory/Base/SlotMap.hpp>
-#include <Cory/RenderCore/Common.hpp>
+#include <Cory/Renderer/Common.hpp>
 
 #include <filesystem>
 #include <memory>
@@ -26,6 +26,9 @@ class ResourceManager : NoCopy {
     ResourceManager();
     ~ResourceManager();
 
+    ResourceManager(ResourceManager &&) = default;
+    ResourceManager &operator=(ResourceManager &&) = default;
+
     // set up the context to be used - must be called exactly once, before any resources are created
     void setContext(Context &ctx);
 
@@ -41,5 +44,7 @@ class ResourceManager : NoCopy {
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;
 };
+static_assert(std::movable<ResourceManager>);
+
 
 } // namespace Cory

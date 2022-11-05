@@ -1,8 +1,8 @@
 #include <Cory/Application/Window.hpp>
 
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/APIConversion.hpp>
-#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/APIConversion.hpp>
+#include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <Magnum/Vk/Device.h>

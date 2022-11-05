@@ -5,6 +5,8 @@
 #include <gsl/gsl>
 #include <magic_enum.hpp>
 
+#include <concepts>
+
 namespace Cory {
 template <typename T> using Span = gsl::span<T>;
 
@@ -25,6 +27,7 @@ struct NoCopy {
     NoCopy(NoCopy &&) = default;
     NoCopy &operator=(NoCopy &&) = default;
 };
+static_assert(!std::copyable<NoCopy>);
 
 // a base class type to prevent moves
 struct NoMove {
@@ -34,6 +37,7 @@ struct NoMove {
     NoMove(NoMove &&) = delete;
     NoMove &operator=(NoMove &&) = delete;
 };
+static_assert(!std::movable<NoMove>);
 
 } // namespace Cory
 

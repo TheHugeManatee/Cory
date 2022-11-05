@@ -19,11 +19,13 @@ find_package(spdlog REQUIRED)
 
 set(CORY_SOURCES
         include/Cory/Application/Application.hpp
+        include/Cory/Application/Common.hpp
         include/Cory/Application/ImGuiLayer.hpp
         include/Cory/Application/Window.hpp
         include/Cory/Base/BitField.hpp
         include/Cory/Base/Callback.hpp
         include/Cory/Base/Common.hpp
+        include/Cory/Base/CpuBuffer.hpp
         include/Cory/Base/FmtUtils.hpp
         include/Cory/Base/Log.hpp
         include/Cory/Base/Math.hpp
@@ -36,17 +38,15 @@ set(CORY_SOURCES
         include/Cory/Framegraph/Framegraph.hpp
         include/Cory/Framegraph/RenderPassDeclaration.hpp
         include/Cory/Framegraph/TextureManager.hpp
-        include/Cory/RenderCore/APIConversion.hpp
-        include/Cory/RenderCore/Context.hpp
-        include/Cory/RenderCore/CpuBuffer.hpp
-        include/Cory/RenderCore/Common.hpp
-        include/Cory/RenderCore/ResourceManager.cpp
-        include/Cory/RenderCore/ResourceManager.hpp
-        include/Cory/RenderCore/Semaphore.hpp
-        include/Cory/RenderCore/SingleShotCommandBuffer.hpp
-        include/Cory/RenderCore/VulkanUtils.hpp
+        include/Cory/Renderer/APIConversion.hpp
+        include/Cory/Renderer/Common.hpp
+        include/Cory/Renderer/Context.hpp
+        include/Cory/Renderer/ResourceManager.hpp
+        include/Cory/Renderer/Semaphore.hpp
         include/Cory/Renderer/Shader.hpp
+        include/Cory/Renderer/SingleShotCommandBuffer.hpp
         include/Cory/Renderer/Swapchain.hpp
+        include/Cory/Renderer/VulkanUtils.hpp
         src/Application/Application.cpp
         src/Application/ImGuiLayer.cpp
         src/Application/Window.cpp
@@ -57,12 +57,13 @@ set(CORY_SOURCES
         src/Cory.cpp
         src/Framegraph/Framegraph.cpp
         src/Framegraph/TextureManager.cpp
-        src/RenderCore/Context.cpp
-        src/RenderCore/SingleShotCommandBuffer.cpp
-        src/RenderCore/VulkanUtils.cpp
+        src/Renderer/Context.cpp
+        src/Renderer/ResourceManager.cpp
         src/Renderer/Shader.cpp
+        src/Renderer/SingleShotCommandBuffer.cpp
         src/Renderer/Swapchain.cpp
-        include/Cory/Application/Common.hpp)
+        src/Renderer/VulkanUtils.cpp
+        )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

@@ -6,19 +6,14 @@
 
 #pragma once
 
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 
 #include <memory>
 
-namespace Magnum::Vk {
-class CommandBuffer;
-}
-
 namespace Cory {
-
-class Context;
 
 /**
  * A command buffer that is immediately submitted to the graphics queue on destruction.
@@ -26,10 +21,14 @@ class Context;
  * intended to perform per-frame operations but rather to perform operations like resource
  * creation/initialization etc. in the app initialization phase.
  */
-class SingleShotCommandBuffer {
+class SingleShotCommandBuffer : NoCopy {
   public:
     SingleShotCommandBuffer(Context &ctx);
     ~SingleShotCommandBuffer();
+
+    // movable
+    SingleShotCommandBuffer(SingleShotCommandBuffer&&) = default;
+    SingleShotCommandBuffer& operator=(SingleShotCommandBuffer&&) = default;
 
     operator VkCommandBuffer() { return buffer(); }
 
@@ -38,8 +37,9 @@ class SingleShotCommandBuffer {
     Magnum::Vk::CommandBuffer *operator->() { return &commandBuffer_; };
 
   private:
-    Context &ctx_;
+    Context *ctx_;
     Magnum::Vk::CommandBuffer commandBuffer_;
 };
+static_assert(std::movable<SingleShotCommandBuffer>);
 
 } // namespace Cory

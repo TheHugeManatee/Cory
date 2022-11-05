@@ -1,7 +1,7 @@
 #include <Cory/Cory.hpp>
 
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/Context.hpp>
 
 #include <Corrade/Containers/StringView.h>
 #include <Magnum/Vk/DeviceProperties.h>

@@ -2,9 +2,9 @@
 
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/RenderCore/Common.hpp>
-#include <Cory/RenderCore/Semaphore.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/Semaphore.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Magnum/Vk/Fence.h>
 

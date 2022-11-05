@@ -8,7 +8,7 @@
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
-#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <Corrade/Containers/Array.h>
@@ -33,6 +33,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <imgui.h>
+#include <CLI/App.hpp>
+#include <CLI/CLI.hpp>
 
 #include <gsl/gsl>
 #include <range/v3/range/conversion.hpp>
@@ -94,12 +96,16 @@ void animate(PushConstants &d, float t, float i)
     d.color = start * cm;
 }
 
-HelloTriangleApplication::HelloTriangleApplication()
+HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     : mesh_{}
     , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
     , startupTime_{now()}
 {
     Cory::Init();
+
+    CLI::App app{"HelloTriangle"};
+    app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
+    app.parse(argc, argv);
 
     Cory::ResourceLocator::addSearchPath(TRIANGLE_RESOURCE_DIR);
 
@@ -152,6 +158,9 @@ void HelloTriangleApplication::run()
         recordCommands(frameCtx);
 
         window_->submitAndPresent(std::move(frameCtx));
+
+        // break if number of frames to render are reached
+        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
     }
 
     // wait until last frame is finished rendering

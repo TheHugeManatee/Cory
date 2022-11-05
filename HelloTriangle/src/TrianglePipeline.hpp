@@ -6,7 +6,7 @@
 
 #include <Cory/Application/Common.hpp>
 #include <Cory/Base/Common.hpp>
-#include <Cory/RenderCore/Common.hpp>
+#include <Cory/Renderer/Common.hpp>
 
 #include <glm/vec2.hpp>
 

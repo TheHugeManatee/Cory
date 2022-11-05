@@ -31,11 +31,19 @@ template <typename StoredType_> class SlotMap : NoCopy {
     using StoredType = StoredType_;
     static constexpr size_t CHUNK_SIZE{64};
 
+    SlotMap() = default;
     ~SlotMap();
 
+    // movable
+    SlotMap(SlotMap &&) = default;
+    SlotMap &operator=(SlotMap &&) = default;
+
+    /// access to an element via its handle - throws if handle is not valid
     [[nodiscard]] StoredType &operator[](SlotMapHandle id);
+    /// const access to an element via its handle - throws if handle is not valid
     [[nodiscard]] const StoredType &operator[](SlotMapHandle id) const;
 
+    /// create a new element in-place
     template <typename... InitArgs> SlotMapHandle emplace(InitArgs... args);
 
     /// insert a default-constructed element
@@ -45,22 +53,27 @@ template <typename StoredType_> class SlotMap : NoCopy {
     /// insert a copy of an element
     SlotMapHandle insert(const StoredType &value) { return emplace(value); }
 
-    // release the object, invalidating previous handles and reclaiming the memory for future use
+    /// release the object, invalidating previous handles and reclaiming the memory for future use
     void release(SlotMapHandle id);
 
-    // update by assigning a new value, will invalidate old handles to the entry
+    /// update by assigning a new value, will invalidate old handles to the entry
     template <typename ArgumentType> SlotMapHandle update(SlotMapHandle id, ArgumentType &&value);
 
-    // invalidate the old handle, internally increasing the version of the object
-    // use to reflect a semantic change in the value
+    /**
+     * invalidate the old handles, internally increasing the version of the object.
+     * use to reflect a semantic change in the value
+     */
     SlotMapHandle update(SlotMapHandle id);
 
+    /// get number of alive elements in the slot map
     [[nodiscard]] size_t size() const noexcept
     {
         return chunkTable_.size() * CHUNK_SIZE - freeList_.size();
     }
+    /// get number of currently allocated slots
     [[nodiscard]] size_t capacity() const noexcept { return chunkTable_.size() * CHUNK_SIZE; }
 
+    /// check if a given handle is valid to dereference
     [[nodiscard]] bool isValid(SlotMapHandle id) const;
 
     struct sentinel {}; // sentinel type for end()
@@ -92,12 +105,7 @@ template <typename StoredType_> class SlotMap : NoCopy {
         {
             auto *object = sm_->objectAt(index_);
             CO_CORE_ASSERT(object != nullptr, "Object index was invalid!");
-            if constexpr (IsConst) {
-                return reinterpret_cast<const StoredType &>(*object->storage);
-            }
-            else {
-                return reinterpret_cast<StoredType &>(*object->storage);
-            }
+            return reinterpret_cast<DereferencedType>(*object->storage);
         }
 
       private:
@@ -176,6 +184,7 @@ template <typename StoredType> class ResolvableHandle {
     SlotMap<StoredType> *slotMap_;
     SlotMapHandle handle_;
 };
+
 } // namespace Cory
 
 /// make ResolvableHandle hashable

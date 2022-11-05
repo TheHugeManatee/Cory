@@ -3,8 +3,8 @@
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
-#include <Cory/RenderCore/Context.hpp>
-#include <Cory/RenderCore/ResourceManager.hpp>
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
 #include <Corrade/Containers/StringStlView.h>

@@ -6,6 +6,8 @@
 #include <range/v3/all.hpp>
 #include <range/v3/view.hpp>
 
+static_assert(std::movable<Cory::SlotMap<int>> && !std::copyable<Cory::SlotMap<int>>);
+
 TEST_CASE("SlotMapHandle", "[Cory/Base]")
 {
     using namespace Cory;
@@ -125,6 +127,8 @@ struct Foo {
     }
     ObjectState &bookkeep_;
 };
+
+static_assert(std::movable<Cory::SlotMap<Foo>> && !std::copyable<Cory::SlotMap<Foo>>);
 
 TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
 {

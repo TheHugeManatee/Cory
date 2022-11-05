@@ -3,7 +3,7 @@
 #include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Profiling.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <Magnum/Vk/Image.h>

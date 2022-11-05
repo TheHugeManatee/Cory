@@ -3,6 +3,7 @@ set(TARGET_NAME "HelloTriangle")
 find_package(Vulkan REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(range-v3 REQUIRED)
+find_package(CLI11 REQUIRED)
 
 # Always list the files explicitly
 add_executable(${TARGET_NAME}
@@ -27,8 +28,13 @@ target_link_libraries(${TARGET_NAME}
         Vulkan::Vulkan
         GLEW::GLEW
         range-v3::range-v3
+        CLI11::CLI11
         )
 
+if(CORY_BUILD_TESTS)
+    enable_testing()
+    add_test(NAME HelloTriangle.Smoketest COMMAND ${TARGET_NAME} --frames=100)
+endif()
 
 # Install in the desired folder
 install(TARGETS ${TARGET_NAME}

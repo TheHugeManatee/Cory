@@ -2,9 +2,9 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/APIConversion.hpp>
-#include <Cory/RenderCore/Context.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/APIConversion.hpp>
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/CommandPool.h>

@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/RenderCore/Semaphore.hpp>
+#include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/Semaphore.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Fence.h>
@@ -15,8 +16,6 @@
 #include <vector>
 
 namespace Cory {
-
-class Context;
 
 struct SwapchainSupportDetails {
     static SwapchainSupportDetails query(Context &ctx, VkSurfaceKHR surface);

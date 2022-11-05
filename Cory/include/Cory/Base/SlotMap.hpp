@@ -2,10 +2,9 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Base/Math.hpp>
+#include <Cory/Base/SlotMapHandle.hpp>
 
 #include <cppcoro/generator.hpp>
-#include <fmt/core.h>
 
 #include <array>
 #include <cstdint>
@@ -14,80 +13,6 @@
 #include <tuple>
 #include <type_traits>
 #include <vector>
-
-namespace Cory {
-/**
- * @brief a handle type that encodes an index and a version.
- *
- * Uses a dedicated bit to indicate whether the handle points to a value
- * that is free (this is an optimization, technically the free bit would be a property of the
- * object storage itself, but this seemed like the best place to encode it).
- */
-struct SlotMapHandle {
-    static constexpr uint32_t INVALID_INDEX{0xFFFF'FFFF};
-
-    /// default-constructed handle has invalid version and index
-    SlotMapHandle();
-    /// construct a handle with given index and version
-    SlotMapHandle(uint32_t index, uint32_t version = 0, bool free = false);
-    [[nodiscard]] uint32_t index() const noexcept { return index_; }
-    [[nodiscard]] uint32_t version() const noexcept { return version_; }
-    [[nodiscard]] bool alive() const noexcept { return !free_; }
-
-    [[nodiscard]] static SlotMapHandle nextVersion(SlotMapHandle old);
-    [[nodiscard]] static SlotMapHandle clearFreeBit(SlotMapHandle handle);
-    [[nodiscard]] static SlotMapHandle setFreeBit(SlotMapHandle handle);
-    auto operator<=>(const SlotMapHandle &rhs) const = default;
-
-  private:
-    uint32_t index_ : 32;
-    uint32_t free_ : 1;
-    uint32_t version_ : 31;
-};
-static_assert(sizeof(SlotMapHandle) == sizeof(uint64_t));
-
-inline SlotMapHandle::SlotMapHandle()
-    : free_{1}
-    , version_{0}
-    , index_{INVALID_INDEX}
-{
-}
-inline SlotMapHandle::SlotMapHandle(uint32_t index, uint32_t version, bool free)
-    : free_{free ? 1u : 0u}
-    , version_{version}
-    , index_{index}
-{
-}
-inline SlotMapHandle SlotMapHandle::nextVersion(SlotMapHandle old)
-{
-    return {old.index(), old.version() + 1};
-}
-inline SlotMapHandle SlotMapHandle::clearFreeBit(SlotMapHandle handle)
-{
-    return {handle.index(), handle.version(), false};
-}
-inline SlotMapHandle SlotMapHandle::setFreeBit(SlotMapHandle handle)
-{
-    return {handle.index(), handle.version(), true};
-}
-} // namespace Cory
-
-/// make SlotMapHandle formattable
-template <> struct fmt::formatter<Cory::SlotMapHandle> {
-    template <typename ParseContext> constexpr auto parse(ParseContext &ctx) { return ctx.end(); }
-    auto format(Cory::SlotMapHandle h, format_context &ctx)
-    {
-        return fmt::format_to(ctx.out(), "{}({}{})", h.index(), h.version(), h.alive() ? "" : "F");
-    }
-};
-
-/// make SlotMapHandle hashable
-template <> struct std::hash<Cory::SlotMapHandle> {
-    std::size_t operator()(const Cory::SlotMapHandle &s) const noexcept
-    {
-        return Cory::hashCompose(0, s.alive(), s.index(), s.version());
-    }
-};
 
 namespace Cory {
 /**
@@ -106,11 +31,19 @@ template <typename StoredType_> class SlotMap : NoCopy {
     using StoredType = StoredType_;
     static constexpr size_t CHUNK_SIZE{64};
 
+    SlotMap() = default;
     ~SlotMap();
 
+    // movable
+    SlotMap(SlotMap &&) = default;
+    SlotMap &operator=(SlotMap &&) = default;
+
+    /// access to an element via its handle - throws if handle is not valid
     [[nodiscard]] StoredType &operator[](SlotMapHandle id);
+    /// const access to an element via its handle - throws if handle is not valid
     [[nodiscard]] const StoredType &operator[](SlotMapHandle id) const;
 
+    /// create a new element in-place
     template <typename... InitArgs> SlotMapHandle emplace(InitArgs... args);
 
     /// insert a default-constructed element
@@ -120,22 +53,27 @@ template <typename StoredType_> class SlotMap : NoCopy {
     /// insert a copy of an element
     SlotMapHandle insert(const StoredType &value) { return emplace(value); }
 
-    // release the object, invalidating previous handles and reclaiming the memory for future use
+    /// release the object, invalidating previous handles and reclaiming the memory for future use
     void release(SlotMapHandle id);
 
-    // update by assigning a new value, will invalidate old handles to the entry
+    /// update by assigning a new value, will invalidate old handles to the entry
     template <typename ArgumentType> SlotMapHandle update(SlotMapHandle id, ArgumentType &&value);
 
-    // invalidate the old handle, internally increasing the version of the object
-    // use to reflect a semantic change in the value
+    /**
+     * invalidate the old handles, internally increasing the version of the object.
+     * use to reflect a semantic change in the value
+     */
     SlotMapHandle update(SlotMapHandle id);
 
+    /// get number of alive elements in the slot map
     [[nodiscard]] size_t size() const noexcept
     {
         return chunkTable_.size() * CHUNK_SIZE - freeList_.size();
     }
+    /// get number of currently allocated slots
     [[nodiscard]] size_t capacity() const noexcept { return chunkTable_.size() * CHUNK_SIZE; }
 
+    /// check if a given handle is valid to dereference
     [[nodiscard]] bool isValid(SlotMapHandle id) const;
 
     struct sentinel {}; // sentinel type for end()
@@ -167,12 +105,7 @@ template <typename StoredType_> class SlotMap : NoCopy {
         {
             auto *object = sm_->objectAt(index_);
             CO_CORE_ASSERT(object != nullptr, "Object index was invalid!");
-            if constexpr (IsConst) {
-                return reinterpret_cast<const StoredType &>(*object->storage);
-            }
-            else {
-                return reinterpret_cast<StoredType &>(*object->storage);
-            }
+            return reinterpret_cast<DereferencedType>(*object->storage);
         }
 
       private:
@@ -245,11 +178,13 @@ template <typename StoredType> class ResolvableHandle {
 
     bool valid() const { return slotMap_->isValid(handle_); }
 
-    auto operator<=>(const ResolvableHandle&) const noexcept = default;
+    auto operator<=>(const ResolvableHandle &) const noexcept = default;
+
   private:
     SlotMap<StoredType> *slotMap_;
     SlotMapHandle handle_;
 };
+
 } // namespace Cory
 
 /// make ResolvableHandle hashable

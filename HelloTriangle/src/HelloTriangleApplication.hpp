@@ -21,7 +21,7 @@ class Mesh;
 
 class HelloTriangleApplication : public Cory::Application {
   public:
-    HelloTriangleApplication();
+    HelloTriangleApplication(int argc, char** argv);
     ~HelloTriangleApplication();
 
     void run() override;
@@ -38,6 +38,7 @@ class HelloTriangleApplication : public Cory::Application {
     double getElapsedTimeSeconds() const;
 
   private:
+    uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;

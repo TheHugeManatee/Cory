@@ -1,8 +1,9 @@
-#include <Cory/RenderCore/Context.hpp>
+#include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/StringStlView.h>
@@ -51,6 +52,8 @@ struct ContextPrivate {
     uint32_t computeQueueFamily{};
 
     Vk::CommandPool commandPool{Corrade::NoCreate};
+
+    ResourceManager resources;
 };
 
 Context::Context()
@@ -78,8 +81,7 @@ Context::Context()
     // supports both graphics and compute, which is probably not universal
     data_->graphicsQueueFamily = data_->physicalDevice.pickQueueFamily(
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
-    info.addQueues(
-        data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
+    info.addQueues(data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
 
     data_->device.create(data_->instance, std::move(info));
     data_->device.populateGlobalFunctionPointers();
@@ -87,12 +89,15 @@ Context::Context()
     nameVulkanObject(data_->device, data_->device, fmt::format("[{}] Logical Device", data_->name));
     nameVulkanObject(
         data_->device, data_->graphicsQueue, fmt::format("[{}] Graphics", data_->name));
-    //nameVulkanObject(data_->device, data_->computeQueue, fmt::format("[{}] Compute", data_->name));
+    // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("[{}] Compute",
+    // data_->name));
 
     setupDebugMessenger();
 
     data_->commandPool =
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
+
+    data_->resources.setContext(*this);
 }
 
 void Context::setupDebugMessenger()
@@ -197,5 +202,7 @@ Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
 uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }
 Magnum::Vk::Queue &Context::computeQueue() { return data_->computeQueue; }
 uint32_t Context::computeQueueFamily() const { return data_->computeQueueFamily; }
+ResourceManager &Context::resources() { return data_->resources; }
+const ResourceManager &Context::resources() const { return data_->resources; }
 
 } // namespace Cory

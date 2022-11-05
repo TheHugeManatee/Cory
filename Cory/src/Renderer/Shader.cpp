@@ -3,8 +3,8 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
-#include <Cory/RenderCore/Context.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Corrade/Containers/ArrayViewStl.h>
 #include <Magnum/Vk/ShaderCreateInfo.h>
@@ -74,21 +74,21 @@ shaderc_shader_kind ShaderTypeToShaderKind(ShaderType type)
 }
 
 ShaderSource::ShaderSource(std::string source, ShaderType type, std::filesystem::path filePath)
-    : m_filename{filePath}
-    , source_{source}
+    : filename_{filePath}
+    , source_{std::move(source)}
     , type_{type}
 {
 }
 
 ShaderSource::ShaderSource(std::filesystem::path filePath, ShaderType type)
     : type_{type}
-    , m_filename{filePath}
+    , filename_{std::move(filePath)}
 {
-    auto fileBytes = readFile(filePath);
+    auto fileBytes = readFile(filename_);
     source_ = std::string{fileBytes.begin(), fileBytes.end()};
 
     if (type_ == ShaderType::eUnknown) {
-        auto ext = filePath.extension();
+        auto ext = filename_.extension();
         if (ext == ".vert")
             type_ = ShaderType::eVertex;
         else if (ext == ".geom")

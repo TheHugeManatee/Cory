@@ -1,29 +1,16 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
+#include <Cory/Renderer/Common.hpp>
 
 #include <Magnum/Vk/Shader.h>
-#include <MagnumExternal/Vulkan/flextVk.h>
+#include <Magnum/Vk/Vulkan.h>
 
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <string_view>
 #include <vector>
-
-namespace Cory {
-
-class Context;
-
-enum class ShaderType {
-    eUnknown = 0,
-    eVertex = VK_SHADER_STAGE_VERTEX_BIT,
-    eGeometry = VK_SHADER_STAGE_GEOMETRY_BIT,
-    eFragment = VK_SHADER_STAGE_FRAGMENT_BIT,
-    eCompute = VK_SHADER_STAGE_COMPUTE_BIT,
-};
-} // namespace Cory
-DECLARE_ENUM_BITFIELD(Cory::ShaderType);
 
 namespace Cory {
 
@@ -50,20 +37,20 @@ class ShaderSource {
 
     void setDefinition(std::string defName, std::string defValue = "")
     {
-        m_macroDefinitions[defName] = defValue;
+        macroDefinitions_[defName] = defValue;
     }
-    void removeDefinition(std::string defName) { m_macroDefinitions.erase(defName); }
+    void removeDefinition(std::string defName) { macroDefinitions_.erase(defName); }
 
     const auto &source() const { return source_; }
     auto type() const { return type_; }
-    const auto &defines() const { return m_macroDefinitions; }
-    const auto &filePath() const { return m_filename; }
+    const auto &defines() const { return macroDefinitions_; }
+    const auto &filePath() const { return filename_; }
 
   private:
-    std::filesystem::path m_filename{"Unknown"};
+    std::filesystem::path filename_{"Unknown"};
     std::string source_;
     ShaderType type_;
-    std::map<std::string, std::string> m_macroDefinitions;
+    std::map<std::string, std::string> macroDefinitions_;
 };
 
 class Shader {

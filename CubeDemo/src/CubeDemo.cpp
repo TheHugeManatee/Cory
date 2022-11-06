@@ -275,22 +275,51 @@ double CubeDemoApplication::now() const
 double CubeDemoApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }
 void CubeDemoApplication::drawImguiControls()
 {
+    namespace CoImGui = Cory::ImGui;
     if (ImGui::Begin("Animation Params")) {
-        ImGui::InputInt("Cubes", &ad.num_cubes, 1, 10000);
-        ImGui::SliderFloat("blend", &ad.blend, 0.0f, 1.0f);
-        ImGui::SliderFloat3("translation", &ad.translation.x, -1.0f, 1.0f);
-        ImGui::SliderFloat3("rotation", &ad.rotation.x, -glm::pi<float>(), glm::pi<float>());
+        if(ImGui::Button("Restart")) {
+            startupTime_ = now();
+        }
 
-        ImGui::SliderFloat("r0", &ad.r0, -2.0f, 2.0f);
-        ImGui::SliderFloat("rt", &ad.rt, -2.0f, 2.0f);
-        ImGui::SliderFloat("ri", &ad.ri, -2.0f, 2.0f);
-        ImGui::SliderFloat("rti", &ad.rti, -2.0f, 2.0f);
-        ImGui::SliderFloat("s0", &ad.s0, -2.0f, 2.0f);
-        ImGui::SliderFloat("st", &ad.st, -0.1f, 0.1f);
-        ImGui::SliderFloat("si", &ad.si, 0.0f, 2.0f);
-        ImGui::SliderFloat("c0", &ad.c0, -2.0f, 2.0f);
-        ImGui::SliderFloat("cf0", &ad.cf0, -10.0f, 10.0f);
-        ImGui::SliderFloat("cfi", &ad.cfi, -2.0f, 2.0f);
+        CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);
+        CoImGui::Slider("blend", ad.blend, 0.0f, 1.0f);
+        CoImGui::Slider("translation", ad.translation, -3.0f, 3.0f);
+        CoImGui::Slider("rotation", ad.rotation, -glm::pi<float>(), glm::pi<float>());
+
+        CoImGui::Slider("ti", ad.ti, 0.0f, 10.0f);
+        CoImGui::Slider("tsi", ad.tsi, 0.0f, 10.0f);
+        CoImGui::Slider("tsf", ad.tsf, 0.0f, 250.0f);
+
+        CoImGui::Slider("r0", ad.r0, -2.0f, 2.0f);
+        CoImGui::Slider("rt", ad.rt, -2.0f, 2.0f);
+        CoImGui::Slider("ri", ad.ri, -2.0f, 2.0f);
+        CoImGui::Slider("rti", ad.rti, -2.0f, 2.0f);
+        CoImGui::Slider("s0", ad.s0, 0.0f, 2.0f);
+        CoImGui::Slider("st", ad.st, -0.1f, 0.1f);
+        CoImGui::Slider("si", ad.si, 0.0f, 2.0f);
+        CoImGui::Slider("c0", ad.c0, -2.0f, 2.0f);
+        CoImGui::Slider("cf0", ad.cf0, -10.0f, 10.0f);
+        CoImGui::Slider("cfi", ad.cfi, -2.0f, 2.0f);
+    }
+    ImGui::End();
+    if (ImGui::Begin("Camera")) {
+        glm::vec3 position = camera_.getCameraPosition();
+        glm::vec3 center = camera_.getCenterPosition();
+        glm::vec3 up = camera_.getUpVector();
+        glm::mat4 mat = glm::transpose(camera_.getViewMatrix());
+
+        bool changed = CoImGui::Input("position", position, "%.3f");
+        changed = CoImGui::Input("center", center, "%.3f") || changed;
+        changed = CoImGui::Input("up", up, "%.3f") || changed;
+
+        if (changed) { camera_.setLookat(position, center, up); }
+
+        if (ImGui::CollapsingHeader("View Matrix")) {
+            CoImGui::Input("r0", mat[0], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("r1", mat[1], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("r2", mat[2], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("r3", mat[3], "%.3f", ImGuiInputTextFlags_ReadOnly);
+        }
     }
     ImGui::End();
 }

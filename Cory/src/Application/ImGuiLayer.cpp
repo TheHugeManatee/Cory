@@ -220,7 +220,7 @@ void ImGuiLayer::init(Window &window, Context &ctx)
 
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
-    setupCustomColors();
+    //setupCustomColors();
 }
 
 void ImGuiLayer::deinit(Context &ctx)

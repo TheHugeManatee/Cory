@@ -3,8 +3,8 @@
 #include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Profiling.hpp>
-#include <Cory/Renderer/VulkanUtils.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Magnum/Vk/Image.h>
 #include <Magnum/Vk/ImageView.h>
@@ -65,11 +65,41 @@ class Window : NoCopy, NoMove {
      */
     KDBindings::Signal<glm::i32vec2> onSwapchainResized;
 
+    /// emitted when the mouse has moved over the window
+    KDBindings::Signal<glm::vec2> onMouseMoved;
+
+    struct MouseButtonData {
+        glm::vec2 position;
+        int button; // todo: wrap these more nicely into enums
+        int action;
+        int modifiers;
+    };
+    /// emitted when a mouse button is pressed or released
+    KDBindings::Signal<MouseButtonData> onMouseButton;
+
+    struct ScrollData {
+        glm::vec2 position;
+        glm::vec2 scrollDelta;
+    };
+    /// emitted when the mouse is scrolling, providing
+    KDBindings::Signal<ScrollData> onMouseScrolled;
+
+    struct KeyData {
+        int key;
+        int scanCode;
+        int action;
+        int modifiers;
+    };
+    struct KDBindings::Signal<KeyData> onKeyCallback;
+
   private:
     [[nodiscard]] BasicVkObjectWrapper<VkSurfaceKHR> createSurface();
     [[nodiscard]] std::unique_ptr<Swapchain> createSwapchain();
     // create the (multisampled) color images
     void createColorAndDepthResources();
+    void createGlfwWindow();
+
+  private:
 
     Context &ctx_;
     std::string windowName_;

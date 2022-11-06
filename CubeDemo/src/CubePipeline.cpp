@@ -1,0 +1,138 @@
+#include "CubePipeline.hpp"
+
+#include <Cory/Application/Window.hpp>
+#include <Cory/Base/Log.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
+#include <Cory/Renderer/Shader.hpp>
+
+#include <Corrade/Containers/StringStlView.h>
+#include <Magnum/Math/Range.h>
+#include <Magnum/Vk/Image.h> // for Vk::ImageLayout
+#include <Magnum/Vk/Mesh.h>
+#include <Magnum/Vk/MeshLayout.h>
+#include <Magnum/Vk/Pipeline.h>
+#include <Magnum/Vk/PipelineLayoutCreateInfo.h>
+#include <Magnum/Vk/PixelFormat.h>
+#include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
+#include <Magnum/Vk/RenderPassCreateInfo.h>
+#include <Magnum/Vk/ShaderSet.h>
+
+namespace Vk = Magnum::Vk;
+
+CubePipeline::CubePipeline(Cory::Context &context,
+                           const Cory::Window &window,
+                           const Magnum::Vk::Mesh &mesh,
+                           std::filesystem::path vertFile,
+                           std::filesystem::path fragFile)
+    : ctx_{context}
+{
+    createGraphicsPipeline(window, mesh, std::move(vertFile), std::move(fragFile));
+}
+
+CubePipeline::~CubePipeline() = default;
+
+void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
+                                          const Magnum::Vk::Mesh &mesh,
+                                          std::filesystem::path vertFile,
+                                          std::filesystem::path fragFile)
+{
+    Cory::ResourceManager &resources = ctx_.resources();
+    CO_APP_TRACE("Starting shader compilation");
+    vertexShader_ = resources.createShader(Cory::ResourceLocator::locate(vertFile));
+    CO_APP_TRACE("Vertex shader code size: {}", resources[vertexShader_].size());
+    fragmentShader_ = ctx_.resources().createShader(Cory::ResourceLocator::locate(fragFile));
+    CO_APP_TRACE("Fragment shader code size: {}", resources[fragmentShader_].size());
+
+    Vk::ShaderSet shaderSet{};
+    shaderSet.addShader(Vk::ShaderStage::Vertex, resources[vertexShader_].module(), "main");
+    shaderSet.addShader(Vk::ShaderStage::Fragment, resources[fragmentShader_].module(), "main");
+
+    // use max guaranteed memory of 128 bytes, for all shaders
+    VkPushConstantRange pushConstantRange{
+        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
+    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
+
+    layout_ = std::make_unique<Vk::PipelineLayout>(ctx_.device(), pipelineLayoutCreateInfo);
+
+    Vk::PixelFormat colorFormat = window.colorFormat();
+    Vk::PixelFormat depthFormat = window.depthFormat();
+
+    int32_t sampleCount = window.sampleCount();
+
+    mainRenderPass_ = std::make_unique<Vk::RenderPass>(
+        ctx_.device(),
+        Vk::RenderPassCreateInfo{}
+            .setAttachments(
+                {// offscreen color
+                 Vk::AttachmentDescription{
+                     colorFormat,
+                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
+                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
+                     Vk::ImageLayout::Undefined,
+                     Vk::ImageLayout::ColorAttachment,
+                     sampleCount},
+                 // offscreen depth
+                 Vk::AttachmentDescription{
+                     depthFormat,
+                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
+                     {Vk::AttachmentStoreOperation::Store,
+                      Vk::AttachmentStoreOperation::Store},
+                     Vk::ImageLayout::Undefined,
+                     Vk::ImageLayout::DepthStencilAttachment,
+                     sampleCount}})
+            .addSubpass(Vk::SubpassDescription{}
+                            .setColorAttachments(
+                                {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}})
+                            .setDepthStencilAttachment({Vk::AttachmentReference{
+                                1, Vk::ImageLayout::DepthStencilAttachment}}))
+            .setDependencies({Vk::SubpassDependency{
+                Vk::SubpassDependency::External, // srcSubpass
+                0,                               // dstSubpass
+                Vk::PipelineStage::ColorAttachmentOutput |
+                    Vk::PipelineStage::EarlyFragmentTests, // srcStages
+                Vk::PipelineStage::ColorAttachmentOutput |
+                    Vk::PipelineStage::EarlyFragmentTests, // dstStages
+                Vk::Access{},                              // srcAccess
+                Vk::Access::ColorAttachmentWrite |
+                    Vk::Access::DepthStencilAttachmentWrite, // dstAccess
+            }}));
+
+    Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
+        shaderSet, mesh.layout(), *layout_, *mainRenderPass_, 0, 1};
+
+    // configure dynamic state - one viewport and scissor configured but no dimensions specified
+    rasterizationPipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
+                                                     Vk::DynamicRasterizationState::Scissor |
+                                                     Vk::DynamicRasterizationState::CullMode);
+    VkPipelineViewportStateCreateInfo viewportState{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+        .viewportCount = 1,
+        .scissorCount = 1,
+    };
+    rasterizationPipelineCreateInfo->pViewportState = &viewportState;
+
+    // multisampling setup
+    VkPipelineMultisampleStateCreateInfo multisampling{};
+    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = (VkSampleCountFlagBits)window.sampleCount();
+
+    VkPipelineDepthStencilStateCreateInfo depthStencilState {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VkCompareOp::VK_COMPARE_OP_LESS,
+        .minDepthBounds = 0.0f,
+        .maxDepthBounds = 1.0f,
+    };
+
+    rasterizationPipelineCreateInfo->pMultisampleState = &multisampling;
+    rasterizationPipelineCreateInfo->pDepthStencilState = &depthStencilState;
+
+    pipeline_ =
+        std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));
+}

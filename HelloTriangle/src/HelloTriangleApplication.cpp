@@ -2,6 +2,7 @@
 
 #include "TrianglePipeline.hpp"
 
+#include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
@@ -27,14 +28,14 @@
 #include <Magnum/Vk/RenderPass.h>
 #include <Magnum/Vk/VertexFormat.h>
 
+#include <CLI/App.hpp>
+#include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <imgui.h>
-#include <CLI/App.hpp>
-#include <CLI/CLI.hpp>
 
 #include <gsl/gsl>
 #include <range/v3/range/conversion.hpp>
@@ -53,7 +54,7 @@ struct PushConstants {
 };
 
 static struct AnimationData {
-    int num_tris{30};
+    int num_cubes{30};
 
     float r0{0.0f};
     float rt{-0.1f};
@@ -198,8 +199,8 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     PushConstants pushData{};
 
-    for (int idx = 0; idx < ad.num_tris; ++idx) {
-        float i = static_cast<float>(idx) / static_cast<float>(ad.num_tris - 1);
+    for (int idx = 0; idx < ad.num_cubes; ++idx) {
+        float i = static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
 
         animate(pushData, t, i);
 
@@ -239,51 +240,7 @@ void HelloTriangleApplication::createFramebuffers()
 
 void HelloTriangleApplication::createGeometry()
 {
-#pragma pack(push, 1)
-    struct Vertex {
-        glm::vec3 pos;
-        glm::vec3 tex;
-        glm::vec4 col;
-    };
-#pragma pack(pop)
-    // just verifying that the layout is ok
-    static_assert(sizeof(Vertex) == 10 * sizeof(float));
-
-    uint32_t binding = 0;
-    mesh_ = std::make_unique<Vk::Mesh>(
-        Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
-            .addBinding(binding, sizeof(Vertex))
-            .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
-            .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
-            .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float)));
-
-    // set up the fixed mesh - note that the 'data' variable manages
-    // the lifetime of the memory mapping
-    {
-        const uint64_t numVertices = 4;
-        Vk::Buffer vertices{
-            ctx_->device(),
-            Vk::BufferCreateInfo{Vk::BufferUsage::VertexBuffer, numVertices * sizeof(Vertex)},
-            Magnum::Vk::MemoryFlag::HostCoherent | Magnum::Vk::MemoryFlag::HostVisible};
-
-        Corrade::Containers::Array<char, Vk::MemoryMapDeleter> data =
-            vertices.dedicatedMemory().map();
-
-        auto &view = reinterpret_cast<std::array<Vertex, 3> &>(*data.data());
-        glm::vec2 p0{0, 0.5f};
-        glm::vec2 p1{
-            p0.x * cos(glm::radians(120.0f)) - p0.y * sin(glm::radians(120.0f)),
-            p0.x * sin(glm::radians(120.0f)) + p0.y * cos(glm::radians(120.0f)),
-        };
-        glm::vec2 p2{
-            p0.x * cos(glm::radians(240.0f)) - p0.y * sin(glm::radians(240.0f)),
-            p0.x * sin(glm::radians(240.0f)) + p0.y * cos(glm::radians(240.0f)),
-        };
-        view[0] = Vertex{{p0.x, p0.y, 0.0f}, {0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
-        view[1] = Vertex{{p1.x, p1.y, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
-        view[2] = Vertex{{p2.x, p2.y, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
-        mesh_->addVertexBuffer(0, std::move(vertices), 0).setCount(numVertices);
-    }
+    mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createTriangle(*ctx_));
 }
 double HelloTriangleApplication::now() const
 {
@@ -296,7 +253,7 @@ double HelloTriangleApplication::getElapsedTimeSeconds() const { return now() - 
 void HelloTriangleApplication::drawImguiControls()
 {
     if (ImGui::Begin("Animation Params")) {
-        ImGui::InputInt("Triangles", &ad.num_tris, 1, 10000);
+        ImGui::InputInt("Triangles", &ad.num_cubes, 1, 10000);
 
         ImGui::SliderFloat("r0", &ad.r0, -2.0f, 2.0f);
         ImGui::SliderFloat("rt", &ad.rt, -2.0f, 2.0f);

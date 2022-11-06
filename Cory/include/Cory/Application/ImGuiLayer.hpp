@@ -31,6 +31,7 @@ class ImGuiLayer {
   private:
     struct Private;
     std::unique_ptr<Private> data_;
+    void setupCustomColors();
 };
 
 } // namespace Cory

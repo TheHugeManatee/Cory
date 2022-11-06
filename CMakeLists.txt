@@ -97,10 +97,11 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 add_subdirectory(Cory)
 add_subdirectory(HelloTriangle)
+add_subdirectory(CubeDemo)
 
 
 # Setup our project as the startup project for Visual so that people don't need to do it manually
-#set_directory_properties(PROPERTIES VS_STARTUP_PROJECT HelloCory)
+set_directory_properties(PROPERTIES VS_STARTUP_PROJECT CubeDemo)
 
 
 #===========#

@@ -4,15 +4,6 @@
 
 #include <concepts>
 
-// temp?
-#include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
-
-#include <Magnum/Vk/Buffer.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/Vulkan.h>
-
 namespace Cory {
 
 /// lower-level UBO wrapper - not to be used directly, use UniformBufferObject<...> instead!
@@ -39,7 +30,7 @@ class UniformBufferObjectBase : NoCopy {
     BufferHandle buffer_;
     std::byte *mappedMemory_{nullptr};
     size_t instanceSize_{};
-    size_t instanceAlignment_{};
+    size_t alignedInstanceSize_{};
     size_t instances_{};
 };
 

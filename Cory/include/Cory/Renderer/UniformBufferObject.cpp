@@ -1,13 +1,28 @@
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
+#include <numeric>
+
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
+
+#include <Magnum/Vk/Buffer.h>
+#include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/DeviceProperties.h>
+#include <Magnum/Vk/Vulkan.h>
+
 namespace Cory {
 
 namespace {
 size_t computeInstanceAlignment(Context &ctx, size_t instanceSize)
 {
-    auto uboAlignment =
+    const auto minOffsetAlignment =
         ctx.device().properties().properties().properties.limits.minUniformBufferOffsetAlignment;
-    if (uboAlignment > 0) { return (instanceSize + uboAlignment - 1) & ~(uboAlignment - 1); }
+    const auto atomSize =
+        ctx.device().properties().properties().properties.limits.nonCoherentAtomSize;
+
+    const auto alignment = std::lcm(minOffsetAlignment, atomSize);
+
+    if (alignment > 0) { return (instanceSize + alignment - 1) & ~(alignment - 1); }
     return instanceSize;
 }
 } // namespace
@@ -17,10 +32,10 @@ UniformBufferObjectBase::UniformBufferObjectBase(Context &ctx,
                                                  size_t instanceSize)
     : ctx_{&ctx}
     , instanceSize_{instanceSize}
-    , instanceAlignment_{computeInstanceAlignment(ctx, instanceSize)}
+    , alignedInstanceSize_{computeInstanceAlignment(ctx, instanceSize)}
     , instances_{instances}
 {
-    size_t size = instances_ * instanceAlignment_;
+    size_t size = instances_ * alignedInstanceSize_;
     buffer_ = ctx_->resources().createBuffer(
         size, BufferUsageBits::UniformBuffer, MemoryFlagBits::HostVisible);
 
@@ -40,12 +55,15 @@ UniformBufferObjectBase::~UniformBufferObjectBase()
     ctx_->resources().release(buffer_);
 }
 
-void UniformBufferObjectBase::flushInternal() { flushInternal(0, instances_ * instanceAlignment_); }
+void UniformBufferObjectBase::flushInternal()
+{
+    flushInternal(0, instances_ * alignedInstanceSize_);
+}
 
 void UniformBufferObjectBase::flushInternal(gsl::index instance)
 {
     CO_CORE_ASSERT(instance < instances_, "Instance index out of range");
-    flushInternal(instanceAlignment_ * instance, instanceAlignment_);
+    flushInternal(alignedInstanceSize_ * instance, alignedInstanceSize_);
 }
 
 void UniformBufferObjectBase::flushInternal(VkDeviceSize offset, VkDeviceSize size)
@@ -62,7 +80,7 @@ void UniformBufferObjectBase::flushInternal(VkDeviceSize offset, VkDeviceSize si
 std::byte *UniformBufferObjectBase::instanceAt(gsl::index instance)
 {
     CO_CORE_ASSERT(instance < instances_, "Instance index out of range");
-    return mappedMemory_ + instance * instanceAlignment_;
+    return mappedMemory_ + instance * alignedInstanceSize_;
 }
 
 } // namespace Cory

@@ -4,6 +4,7 @@
 #include <Cory/Application/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
+#include <Cory/Application/CameraManipulator.hpp>
 
 #include <Magnum/Vk/Framebuffer.h>
 
@@ -29,6 +30,10 @@ class CubeDemoApplication : public Cory::Application {
     double now() const;
     double getElapsedTimeSeconds() const;
 
+    void drawImguiControls();
+
+    void setupCameraCallbacks();
+
   private:
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Context> ctx_;
@@ -39,5 +44,6 @@ class CubeDemoApplication : public Cory::Application {
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 
     double startupTime_;
-    void drawImguiControls();
+
+    Cory::CameraManipulator camera_;
 };

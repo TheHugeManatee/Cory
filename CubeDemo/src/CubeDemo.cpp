@@ -47,38 +47,6 @@
 
 namespace Vk = Magnum::Vk;
 
-// Matrix corresponds to Translate * Ry * Rx * Rz * Scale
-// Rotations correspond to Tait-bryan angles of Y(1), X(2), Z(3)
-// https://en.wikipedia.org/wiki/Euler_angles#Rotation_matrix
-glm::mat4 makeTransform(glm::vec3 translation, glm::vec3 rotation, glm::vec3 scale)
-{
-    const float c3 = glm::cos(rotation.z);
-    const float s3 = glm::sin(rotation.z);
-    const float c2 = glm::cos(rotation.x);
-    const float s2 = glm::sin(rotation.x);
-    const float c1 = glm::cos(rotation.y);
-    const float s1 = glm::sin(rotation.y);
-    return glm::mat4{{
-                         scale.x * (c1 * c3 + s1 * s2 * s3),
-                         scale.x * (c2 * s3),
-                         scale.x * (c1 * s2 * s3 - c3 * s1),
-                         0.0f,
-                     },
-                     {
-                         scale.y * (c3 * s1 * s2 - c1 * s3),
-                         scale.y * (c2 * c3),
-                         scale.y * (c1 * c3 * s2 + s1 * s3),
-                         0.0f,
-                     },
-                     {
-                         scale.z * (c2 * s1),
-                         scale.z * (-s2),
-                         scale.z * (c1 * c2),
-                         0.0f,
-                     },
-                     {translation.x, translation.y, translation.z, 1.0f}};
-}
-
 struct PushConstants {
     glm::mat4 transform{1.0f};
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
@@ -86,40 +54,42 @@ struct PushConstants {
 };
 
 static struct AnimationData {
-    int num_cubes{1};
-    float blend{0.5f};
+    int num_cubes{200};
+    float blend{0.8f};
+
+    float ti{1.5f};
+    float tsi{2.0f};
+    float tsf{100.0f};
 
     float r0{0.0f};
     float rt{-0.1f};
-    float ri{0.0f};
-    float rti{0.68f};
-    float s0{0.5f};
+    float ri{1.3f};
+    float rti{0.05f};
+
+    float s0{0.05f};
     float st{0.0f};
-    float si{0.0f};
+    float si{0.4f};
 
     float c0{-0.75f};
     float cf0{2.0f};
     float cfi{-0.5f};
 
-    glm::vec3 translation{0.0};
-    glm::vec3 rotation{0.0};
+    glm::vec3 translation{0.0, 0.0f, 2.5f};
+    glm::vec3 rotation{0.0f};
 } ad;
 
 void animate(PushConstants &d, float t, float i)
 {
-    glm::mat4 m{1.0};
-    // m = glm::translate(m, glm::vec3{0.0f, i - 0.5f, 0.0f});
-    // m = glm::translate(m, glm::vec3{0.5f, 0.5f, 0.0f});
-    m = glm::translate(m, ad.translation);
-    glm::vec3 axis = glm::normalize(glm::vec3{0.0, 0.3, 1.0});
+
     float angle = ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t;
-    m = glm::rotate(m, angle, axis);
-
     float scale = ad.s0 + ad.st * t + ad.si * i;
-    m = glm::scale(m, glm::vec3{scale});
-    // m = glm::translate(m, glm::vec3{-0.5f, -0.5f, 0.0f});
 
-    d.transform = makeTransform(ad.translation, ad.rotation, glm::vec3{scale});
+    float tsf = ad.tsf / 2.0f + ad.tsf * sin(t / 10.0f);
+    glm::vec3 translation{sin(i * tsf) * i * ad.tsi, cos(i * tsf) * i * ad.tsi, i * ad.ti};
+
+    d.transform = Cory::makeTransform(ad.translation + translation,
+                                      ad.rotation + glm::vec3{0.0f, angle, angle / 2.0f},
+                                      glm::vec3{scale});
 
     float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
     float brightness = i + 0.2f * abs(sin(t + i));
@@ -171,6 +141,11 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     window_->onSwapchainResized.connect(recreateSizedResources);
 
     imguiLayer_->init(*window_, *ctx_);
+
+    camera_.setMode(Cory::CameraManipulator::Mode::Fly);
+    camera_.setWindowSize(window_->dimensions());
+    camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
+    setupCameraCallbacks();
 }
 
 CubeDemoApplication::~CubeDemoApplication()
@@ -187,7 +162,6 @@ void CubeDemoApplication::run()
         // TODO process events?
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
-        ImGui::DockSpaceOverViewport();
         ImGui::ShowDemoWindow();
 
         drawImguiControls();
@@ -198,8 +172,6 @@ void CubeDemoApplication::run()
 
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
-
-
     }
 
     // wait until last frame is finished rendering
@@ -239,12 +211,19 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     PushConstants pushData{};
 
+    float fovy = glm::radians(70.0f);
+    glm::vec2 wndSize = window_->dimensions();
+    float aspect = wndSize.x / wndSize.y;
+    glm::mat4 viewProjection =
+        Cory::makePerspective(fovy, aspect, 0.1f, 10.0f) * camera_.getViewMatrix();
+
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
                       ? 1.0f
                       : static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
 
         animate(pushData, t, i);
+        pushData.transform = viewProjection * pushData.transform;
 
         ctx_->device()->CmdPushConstants(cmdBuffer,
                                          pipeline_->layout(),
@@ -312,4 +291,43 @@ void CubeDemoApplication::drawImguiControls()
         ImGui::SliderFloat("cfi", &ad.cfi, -2.0f, 2.0f);
     }
     ImGui::End();
+}
+void CubeDemoApplication::setupCameraCallbacks()
+{
+    window_->onSwapchainResized.connect([this](glm::i32vec2 size) { camera_.setWindowSize(size); });
+
+    window_->onMouseMoved.connect([this](glm::vec2 pos) {
+        if (ImGui::GetIO().WantCaptureMouse) { return; }
+        auto wnd = window_->handle();
+        Cory::CameraManipulator::MouseButton mouseButton =
+            (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
+                ? Cory::CameraManipulator::MouseButton::Left
+            : (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+                ? Cory::CameraManipulator::MouseButton::Middle
+            : (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+                ? Cory::CameraManipulator::MouseButton::Right
+                : Cory::CameraManipulator::MouseButton::None;
+        if (mouseButton != Cory::CameraManipulator::MouseButton::None) {
+            Cory::CameraManipulator::ModifierFlags modifiers;
+            if (glfwGetKey(wnd, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
+                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Alt);
+            }
+            if (glfwGetKey(wnd, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Ctrl);
+            }
+            if (glfwGetKey(wnd, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Shift);
+            }
+
+            camera_.mouseMove(glm::ivec2(pos), mouseButton, modifiers);
+        }
+    });
+    window_->onMouseButton.connect([this](Cory::Window::MouseButtonData data) {
+        if (ImGui::GetIO().WantCaptureMouse) { return; }
+        camera_.setMousePosition(data.position);
+    });
+    window_->onMouseScrolled.connect([this](Cory::Window::ScrollData data) {
+        if (ImGui::GetIO().WantCaptureMouse) { return; }
+        camera_.wheel(static_cast<int32_t>(data.scrollDelta.y));
+    });
 }

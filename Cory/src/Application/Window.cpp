@@ -45,16 +45,7 @@ Window::Window(Context &context,
     // prevent OpenGL usage - vulkan all the way baybeee
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    { // create the glfw window
-        auto windowHandle =
-            glfwCreateWindow(dimensions_.x, dimensions_.y, windowName_.c_str(), nullptr, nullptr);
-        window_ = std::shared_ptr<GLFWwindow>(windowHandle, [=](auto *ptr) {
-            CO_CORE_TRACE("Destroying GLFW context");
-            glfwDestroyWindow(ptr);
-            glfwTerminate();
-        });
-        glfwSetWindowUserPointer(window_.get(), this);
-    }
+    createGlfwWindow();
 
     surface_ = createSurface();
     swapchain_ = createSwapchain();
@@ -229,6 +220,48 @@ void Window::createColorAndDepthResources()
             return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
         }) |
         ranges::to<std::vector<Vk::ImageView>>;
+}
+
+void Window::createGlfwWindow()
+{
+    auto windowHandle =
+        glfwCreateWindow(dimensions_.x, dimensions_.y, windowName_.c_str(), nullptr, nullptr);
+    window_ = std::shared_ptr<GLFWwindow>(windowHandle, [=](auto *ptr) {
+        CO_CORE_TRACE("Destroying GLFW context");
+        glfwDestroyWindow(ptr);
+        glfwTerminate();
+    });
+    glfwSetWindowUserPointer(window_.get(), this);
+
+    glfwSetCursorPosCallback(window_.get(), [](GLFWwindow *window, double mouseX, double mouseY) {
+        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+        self.onMouseMoved.emit({mouseX, mouseY});
+    });
+
+    glfwSetMouseButtonCallback(
+        window_.get(), [](GLFWwindow *window, int button, int action, int mods) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+            double mouseX, mouseY;
+            glfwGetCursorPos(window, &mouseX, &mouseY);
+            self.onMouseButton.emit(MouseButtonData{.position = glm::vec2{mouseX, mouseY},
+                                                    .button = button,
+                                                    .action = action,
+                                                    .modifiers = mods});
+        });
+
+    glfwSetScrollCallback(window_.get(), [](GLFWwindow *window, double xOffset, double yOffset) {
+        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+        double mouseX, mouseY;
+        glfwGetCursorPos(window, &mouseX, &mouseY);
+        self.onMouseScrolled.emit({glm::vec2{mouseX, mouseY}, glm::vec2{xOffset, yOffset}});
+    });
+
+    glfwSetKeyCallback(
+        window_.get(), [](GLFWwindow *window, int key, int scancode, int action, int mods) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+            self.onKeyCallback.emit(
+                KeyData{.key = key, .scanCode = scancode, .action = action, .modifiers = mods});
+        });
 }
 
 } // namespace Cory

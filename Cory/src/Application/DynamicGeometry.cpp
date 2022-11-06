@@ -13,6 +13,8 @@
 #include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/VertexFormat.h>
 
+#include <gsl/gsl_narrow>
+
 namespace Cory {
 namespace Vk = Magnum::Vk;
 
@@ -126,14 +128,14 @@ Vk::Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t bi
 
     Corrade::Containers::Array<char, Vk::MemoryMapDeleter> data = vBuffer.dedicatedMemory().map();
 
-    auto view = reinterpret_cast<Vertex*>(data.data());
+    auto view = reinterpret_cast<Vertex *>(data.data());
     for (gsl::index i = 0; i < vertices.size(); ++i) {
         view[i] = Vertex{.pos = vertices[i].pos + offset,
                          .tex = vertices[i].pos + glm::vec3{0.5f, 0.5f, 0.5f},
                          .col = glm::vec4{vertices[i].col, 1.0f}};
     }
 
-    mesh.addVertexBuffer(0, std::move(vBuffer), 0).setCount(vertices.size());
+    mesh.addVertexBuffer(0, std::move(vBuffer), 0).setCount(gsl::narrow<uint32_t>(vertices.size()));
 
     return mesh;
 }

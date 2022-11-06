@@ -33,6 +33,9 @@ class SingleShotCommandBuffer;
 struct SwapchainSupportDetails;
 struct FrameContext;
 class Swapchain;
+template <typename BufferStruct>
+    requires std::is_trivial_v<BufferStruct>
+class UniformBufferObject;
 
 // enums
 enum class ShaderType : uint32_t {

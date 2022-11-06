@@ -40,9 +40,11 @@ class ResourceManager : NoCopy {
     createShader(std::string source, ShaderType type, std::filesystem::path filePath = "Unknown");
     /// dereference a shader handle to access the shader. may throw!
     Shader &operator[](ShaderHandle shaderHandle);
+    void release(ShaderHandle shaderHandle);
 
     BufferHandle createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags);
     Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
+    void release(BufferHandle bufferHandle);
 
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;

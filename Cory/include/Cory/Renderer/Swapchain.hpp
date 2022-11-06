@@ -33,9 +33,9 @@ struct SwapchainSupportDetails {
 };
 
 struct FrameContext {
-    uint32_t index{};
-    uint64_t frameNumber{};
-    bool shouldRecreateSwapchain{false};
+    uint32_t index{};                    ///< the current swapchain image index
+    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
+    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
     Magnum::Vk::ImageView *swapchainImage{};
     Magnum::Vk::ImageView *colorView{};
     Magnum::Vk::ImageView *depthView{};

@@ -41,10 +41,12 @@ class ResourceManager : NoCopy {
     /// dereference a shader handle to access the shader. may throw!
     Shader &operator[](ShaderHandle shaderHandle);
 
+    BufferHandle createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags);
+    Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
+
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;
 };
 static_assert(std::movable<ResourceManager>);
-
 
 } // namespace Cory

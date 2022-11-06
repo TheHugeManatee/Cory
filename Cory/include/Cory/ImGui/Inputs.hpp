@@ -13,10 +13,6 @@ namespace Cory::ImGui {
 
 namespace detail {
 static constexpr float LABEL_WIDTH{150.0f};
-void throwUnmatchedArgument()
-{
-    throw std::domain_error{"Wrapper for the passed argument type is not implemencted!"};
-}
 
 float availableWidth() { return ::ImGui::GetContentRegionAvail().x; }
 
@@ -36,7 +32,6 @@ auto Slider(std::string_view label, ValueType &value, Arguments... args)
     if constexpr (std::same_as<ValueType, int32_t>) {
         return ::ImGui::SliderInt(internalLabel.c_str(), &value, args...);
     }
-    detail::throwUnmatchedArgument();
 }
 
 // template for glm::vec<L, T>
@@ -70,7 +65,6 @@ auto Slider(std::string_view label, glm::vec<L, T> &value, Arguments... args)
             return ::ImGui::SliderInt4(internalLabel.c_str(), &value.x, args...);
         }
     }
-    detail::throwUnmatchedArgument();
 }
 
 // template for double, float, int
@@ -91,7 +85,6 @@ auto Input(std::string_view label, ValueType &value, Arguments... args)
     if constexpr (std::same_as<ValueType, int32_t>) {
         return ::ImGui::InputInt(internalLabel.c_str(), &value, args...);
     }
-    detail::throwUnmatchedArgument();
 }
 
 // template for glm::vec<L, T>
@@ -125,7 +118,6 @@ auto Input(std::string_view label, glm::vec<L, T> &value, Arguments... args)
             return ::ImGui::InputInt4(internalLabel.c_str(), &value.x, args...);
         }
     }
-    detail::throwUnmatchedArgument();
 }
 
 } // namespace Cory::ImGui

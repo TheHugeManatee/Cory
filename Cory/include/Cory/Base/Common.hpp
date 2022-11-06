@@ -1,6 +1,8 @@
 #pragma once
 
+#include <Cory/Base/BitField.hpp>
 #include <Cory/Base/SlotMapHandle.hpp>
+
 #include <fmt/core.h>
 #include <gsl/gsl>
 #include <magic_enum.hpp>
@@ -11,7 +13,6 @@ namespace Cory {
 template <typename T> using Span = gsl::span<T>;
 
 // forward declarations
-template <typename UnderlyingEnum> class BitField;
 template <typename StoredType> class SlotMap;
 template <int64_t RECORD_HISTORY_SIZE = 64> class ProfilerRecord;
 class Profiler;

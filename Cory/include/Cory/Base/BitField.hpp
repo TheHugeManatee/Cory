@@ -3,6 +3,8 @@
 #include <fmt/format.h>
 #include <magic_enum.hpp>
 
+#include <vector>
+
 namespace Cory {
 
 template <class T>

@@ -79,8 +79,8 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
                  Vk::AttachmentDescription{
                      depthFormat,
                      {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::DontCare,
-                      Vk::AttachmentStoreOperation::DontCare},
+                     {Vk::AttachmentStoreOperation::Store,
+                      Vk::AttachmentStoreOperation::Store},
                      Vk::ImageLayout::Undefined,
                      Vk::ImageLayout::DepthStencilAttachment,
                      sampleCount}})
@@ -105,10 +105,9 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
         shaderSet, mesh.layout(), *layout_, *mainRenderPass_, 0, 1};
 
     // configure dynamic state - one viewport and scissor configured but no dimensions specified
-    rasterizationPipelineCreateInfo.setDynamicStates(
-        Vk::DynamicRasterizationState::Viewport | Vk::DynamicRasterizationState::Scissor
-        //| Vk::DynamicRasterizationState::CullMode
-    );
+    rasterizationPipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
+                                                     Vk::DynamicRasterizationState::Scissor |
+                                                     Vk::DynamicRasterizationState::CullMode);
     VkPipelineViewportStateCreateInfo viewportState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
         .viewportCount = 1,
@@ -122,7 +121,17 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = (VkSampleCountFlagBits)window.sampleCount();
 
+    VkPipelineDepthStencilStateCreateInfo depthStencilState {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VkCompareOp::VK_COMPARE_OP_LESS,
+        .minDepthBounds = 0.0f,
+        .maxDepthBounds = 1.0f,
+    };
+
     rasterizationPipelineCreateInfo->pMultisampleState = &multisampling;
+    rasterizationPipelineCreateInfo->pDepthStencilState = &depthStencilState;
 
     pipeline_ =
         std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));

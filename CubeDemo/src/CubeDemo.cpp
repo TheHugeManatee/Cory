@@ -6,9 +6,11 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/Math.hpp>
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
+#include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
@@ -207,7 +209,7 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
     ctx_->device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
     ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-    // ctx_->device()->CmdSetCullMode(cmdBuffer, VkCullModeFlagBits::VK_CULL_MODE_NONE);
+    ctx_->device()->CmdSetCullMode(cmdBuffer, VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT);
 
     PushConstants pushData{};
 

@@ -66,11 +66,11 @@ Vk::Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t bi
     std::vector<VertexTemp> vertices{
         // left face (white)
         {{-.5f, -.5f, -.5f}, {.9f, .9f, .9f}},
-        {{-.5f, .5f, .5f}, {.9f, .9f, .9f}},
         {{-.5f, -.5f, .5f}, {.9f, .9f, .9f}},
-        {{-.5f, -.5f, -.5f}, {.9f, .9f, .9f}},
-        {{-.5f, .5f, -.5f}, {.9f, .9f, .9f}},
         {{-.5f, .5f, .5f}, {.9f, .9f, .9f}},
+        {{-.5f, -.5f, -.5f}, {.9f, .9f, .9f}},
+        {{-.5f, .5f, .5f}, {.9f, .9f, .9f}},
+        {{-.5f, .5f, -.5f}, {.9f, .9f, .9f}},
 
         // right face (yellow)
         {{.5f, -.5f, -.5f}, {.8f, .8f, .1f}},
@@ -90,11 +90,11 @@ Vk::Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t bi
 
         // bottom face (red)
         {{-.5f, .5f, -.5f}, {.8f, .1f, .1f}},
-        {{.5f, .5f, .5f}, {.8f, .1f, .1f}},
         {{-.5f, .5f, .5f}, {.8f, .1f, .1f}},
-        {{-.5f, .5f, -.5f}, {.8f, .1f, .1f}},
-        {{.5f, .5f, -.5f}, {.8f, .1f, .1f}},
         {{.5f, .5f, .5f}, {.8f, .1f, .1f}},
+        {{-.5f, .5f, -.5f}, {.8f, .1f, .1f}},
+        {{.5f, .5f, .5f}, {.8f, .1f, .1f}},
+        {{.5f, .5f, -.5f}, {.8f, .1f, .1f}},
 
         // nose face (blue)
         {{-.5f, -.5f, 0.5f}, {.1f, .1f, .8f}},
@@ -106,11 +106,11 @@ Vk::Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t bi
 
         // tail face (green)
         {{-.5f, -.5f, -0.5f}, {.1f, .8f, .1f}},
-        {{.5f, .5f, -0.5f}, {.1f, .8f, .1f}},
         {{-.5f, .5f, -0.5f}, {.1f, .8f, .1f}},
-        {{-.5f, -.5f, -0.5f}, {.1f, .8f, .1f}},
-        {{.5f, -.5f, -0.5f}, {.1f, .8f, .1f}},
         {{.5f, .5f, -0.5f}, {.1f, .8f, .1f}},
+        {{-.5f, -.5f, -0.5f}, {.1f, .8f, .1f}},
+        {{.5f, .5f, -0.5f}, {.1f, .8f, .1f}},
+        {{.5f, -.5f, -0.5f}, {.1f, .8f, .1f}},
 
     };
     for (auto &v : vertices) {

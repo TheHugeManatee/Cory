@@ -9,6 +9,10 @@
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>
+#include <Magnum/Vk/DescriptorPool.h>
+#include <Magnum/Vk/DescriptorSet.h>
+#include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
+#include <Magnum/Vk/DescriptorType.h>
 #include <Magnum/Vk/Image.h> // for Vk::ImageLayout
 #include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/MeshLayout.h>
@@ -39,6 +43,8 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
                                           std::filesystem::path fragFile)
 {
     Cory::ResourceManager &resources = ctx_.resources();
+
+    // set up the shaders
     CO_APP_TRACE("Starting shader compilation");
     vertexShader_ = resources.createShader(Cory::ResourceLocator::locate(vertFile));
     CO_APP_TRACE("Vertex shader code size: {}", resources[vertexShader_].size());
@@ -49,13 +55,23 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     shaderSet.addShader(Vk::ShaderStage::Vertex, resources[vertexShader_].module(), "main");
     shaderSet.addShader(Vk::ShaderStage::Fragment, resources[fragmentShader_].module(), "main");
 
+    // set up the descriptor set layouts
+    descriptorLayout_ =
+        std::make_unique<Vk::DescriptorSetLayout>(ctx_.device(),
+                                                  Vk::DescriptorSetLayoutCreateInfo{
+                                                      {{0, Vk::DescriptorType::UniformBuffer}},
+                                                      //{{0, Vk::DescriptorType::UniformBuffer}},
+                                                  });
+
+    // set up push constants
     // use max guaranteed memory of 128 bytes, for all shaders
     VkPushConstantRange pushConstantRange{
         .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
-    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+
+    // create pipeline layout
+    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{*descriptorLayout_};
     pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
     pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
-
     layout_ = std::make_unique<Vk::PipelineLayout>(ctx_.device(), pipelineLayoutCreateInfo);
 
     Vk::PixelFormat colorFormat = window.colorFormat();
@@ -79,8 +95,7 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
                  Vk::AttachmentDescription{
                      depthFormat,
                      {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::Store,
-                      Vk::AttachmentStoreOperation::Store},
+                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::Store},
                      Vk::ImageLayout::Undefined,
                      Vk::ImageLayout::DepthStencilAttachment,
                      sampleCount}})
@@ -121,7 +136,7 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     multisampling.sampleShadingEnable = VK_FALSE;
     multisampling.rasterizationSamples = (VkSampleCountFlagBits)window.sampleCount();
 
-    VkPipelineDepthStencilStateCreateInfo depthStencilState {
+    VkPipelineDepthStencilStateCreateInfo depthStencilState{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable = VK_TRUE,
         .depthWriteEnable = VK_TRUE,
@@ -135,4 +150,9 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
 
     pipeline_ =
         std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));
+}
+
+Magnum::Vk::DescriptorSet CubePipeline::allocateDescriptorSet()
+{
+    return ctx_.descriptorPool().allocate(*descriptorLayout_);
 }

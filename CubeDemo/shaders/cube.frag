@@ -5,7 +5,7 @@ layout(location = 0) in vec4 inColor;
 layout(location = 0) out vec4 outColor;
 
 layout(push_constant) uniform PushConstants {
-    mat4 transform;
+    mat4 modelTransform;
     vec4 color;
     float blend;
 } pushConstants;

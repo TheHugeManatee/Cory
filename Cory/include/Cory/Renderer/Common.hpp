@@ -8,18 +8,7 @@
 
 #include <cstdint>
 
-// magnum forward-declares so we don't have to do those all the time
-namespace Magnum::Vk {
-class Buffer;
-class CommandPool;
-class CommandBuffer;
-class Device;
-class Instance;
-class Mesh;
-class Pipeline;
-class PipelineLayout;
-class RenderPass;
-} // namespace Magnum::Vk
+#include <Cory/Renderer/MagnumFwd.hpp>
 
 namespace Cory {
 // forward declared classes/structs

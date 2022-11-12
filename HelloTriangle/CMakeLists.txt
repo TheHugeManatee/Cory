@@ -33,7 +33,7 @@ target_link_libraries(${TARGET_NAME}
 
 if(CORY_BUILD_TESTS)
     enable_testing()
-    add_test(NAME HelloTriangle.Smoketest COMMAND ${TARGET_NAME} --frames=100)
+    add_test(NAME Smoketests.HelloTriangle COMMAND ${TARGET_NAME} --frames=100)
 endif()
 
 # Install in the desired folder

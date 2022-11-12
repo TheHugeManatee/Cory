@@ -11,17 +11,17 @@ layout (push_constant) uniform PushConstants {
     mat4 modelTransform;
     vec4 color;
     float blend;
-} pushConstants;
+} push;
 
 layout (set = 0, binding = 0) uniform CubeUBO {
     mat4 projection;
     mat4 view;
     mat4 viewProjection;
     vec3 lightPosition;
-} globalUniforms;
+} globals;
 
 void main() {
-    vec4 pos = globalUniforms.viewProjection * pushConstants.modelTransform * vec4(inPosition, 1.0);
+    vec4 pos = globals.viewProjection * push.modelTransform * vec4(inPosition, 1.0);
     gl_Position = pos / pos.w;
     outColor = inColor;
 }

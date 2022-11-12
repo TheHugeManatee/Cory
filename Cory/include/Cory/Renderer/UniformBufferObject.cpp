@@ -82,5 +82,11 @@ std::byte *UniformBufferObjectBase::instanceAt(gsl::index instance)
     CO_CORE_ASSERT(instance < instances_, "Instance index out of range");
     return mappedMemory_ + instance * alignedInstanceSize_;
 }
+VkDescriptorBufferInfo UniformBufferObjectBase::descriptorInfo(gsl::index instance)
+{
+    return VkDescriptorBufferInfo{.buffer = ctx_->resources()[buffer_].handle(),
+                                  .offset = instance * alignedInstanceSize_,
+                                  .range = alignedInstanceSize_};
+}
 
 } // namespace Cory

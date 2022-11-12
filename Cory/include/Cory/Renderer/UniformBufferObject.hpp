@@ -8,6 +8,11 @@ namespace Cory {
 
 /// lower-level UBO wrapper - not to be used directly, use UniformBufferObject<...> instead!
 class UniformBufferObjectBase : NoCopy {
+  public:
+    BufferHandle handle() const noexcept { return buffer_; }
+    size_t instances() const noexcept { return instances_; }
+    VkDescriptorBufferInfo descriptorInfo(gsl::index instance);
+
   protected:
     UniformBufferObjectBase(Context &ctx, size_t instances, size_t instanceSize);
     ~UniformBufferObjectBase();
@@ -64,9 +69,7 @@ class UniformBufferObject : public UniformBufferObjectBase {
     }
 
     /// flush a specific instance to make it available on the GPU
-    void flush(gsl::index instance) {
-        UniformBufferObjectBase::flushInternal(instance);
-    }
+    void flush(gsl::index instance) { UniformBufferObjectBase::flushInternal(instance); }
 
     /// update the cpu data and flush it to the GPU
     void writeAndFlush(gsl::index instance, const BufferStruct &data)

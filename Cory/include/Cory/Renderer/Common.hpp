@@ -4,6 +4,11 @@
  */
 
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
+#include <Magnum/Vk/Vulkan.h>
+
+#include <cstdint>
+
+#include <Cory/Renderer/MagnumFwd.hpp>
 
 namespace Cory {
 // forward declared classes/structs
@@ -17,28 +22,54 @@ class SingleShotCommandBuffer;
 struct SwapchainSupportDetails;
 struct FrameContext;
 class Swapchain;
+template <typename BufferStruct>
+    requires std::is_trivial_v<BufferStruct>
+class UniformBufferObject;
 
 // enums
-enum class ShaderType {
+enum class ShaderType : uint32_t {
     eUnknown = 0,
-    eVertex = 1 << 0,   // VK_SHADER_STAGE_VERTEX_BIT
-    eGeometry = 1 << 3, // VK_SHADER_STAGE_GEOMETRY_BIT
-    eFragment = 1 << 4, // VK_SHADER_STAGE_FRAGMENT_BIT
-    eCompute = 1 << 5,  // VK_SHADER_STAGE_COMPUTE_BIT
+    eVertex = VK_SHADER_STAGE_VERTEX_BIT,
+    eGeometry = VK_SHADER_STAGE_GEOMETRY_BIT,
+    eFragment = VK_SHADER_STAGE_FRAGMENT_BIT,
+    eCompute = VK_SHADER_STAGE_COMPUTE_BIT,
 };
-enum class DebugMessageSeverity {
-    Verbose = 0x00000001,
-    Info = 0x00000010,
-    Warning = 0x00000100,
-    Error = 0x00001000,
+enum class DebugMessageSeverity : uint32_t {
+    Verbose = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT,
+    Info = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+    Warning = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+    Error = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
 };
-enum class DebugMessageType {
-    General = 0x00000001,
-    Validation = 0x00000002,
-    Performance = 0x00000004,
-    DeviceAddressBinding = 0x00000008, ///< Provided by VK_EXT_device_address_binding_report
+enum class DebugMessageType : uint32_t {
+    General = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
+    Validation = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+    Performance = VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
 };
 enum class FenceCreateMode { Unsignaled, Signaled };
+enum class BufferUsageBits : uint32_t {
+    TransferSource = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    TransferDestination = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    UniformTexelBuffer = VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT,
+    StorageTexelBuffer = VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT,
+    UniformBuffer = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    StorageBuffer = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+    IndexBuffer = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+    VertexBuffer = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    IndirectBuffer = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+    ShaderBindingTable = VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR,
+    AccelerationStructureBuildInputReadOnly =
+        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+    AccelerationStructureStorage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+};
+using BufferUsage = BitField<BufferUsageBits>;
+enum class MemoryFlagBits : uint32_t {
+    DeviceLocal = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    HostVisible = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+    HostCoherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    HostCached = VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+    LazilyAllocated = VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT,
+};
+using MemoryFlags = BitField<MemoryFlagBits>;
 
 /// generic handle type to wrap slot map handles in a type-safe way
 template <typename T> class ResourceHandle {
@@ -58,26 +89,15 @@ template <typename T> class ResourceHandle {
     SlotMapHandle handle_{};
 };
 
+/// handle to a shader. can be resolved to the actual resource via the ResourceManager
 using ShaderHandle = ResourceHandle<Shader>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
+/// handle to a buffer. can be resolved to the actual resource via the ResourceManager
+using BufferHandle = ResourceHandle<Magnum::Vk::Buffer>;
 
 } // namespace Cory
 
 DECLARE_ENUM_BITFIELD(Cory::ShaderType);
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
-
-// magnum forward-declares so we don't have to do those all the time
-namespace Magnum::Vk {
-class CommandPool;
-class CommandBuffer;
-class Device;
-class Instance;
-class Mesh;
-class Pipeline;
-class PipelineLayout;
-class RenderPass;
-} // namespace Magnum::Vk
-
-// Vulkan forward definitions for the times we want to avoid the full Vulkan.h include
-struct VkDebugUtilsMessengerCallbackDataEXT;
-using VkInstance = struct VkInstance_T *;
+DECLARE_ENUM_BITFIELD(Cory::BufferUsageBits);
+DECLARE_ENUM_BITFIELD(Cory::MemoryFlagBits);

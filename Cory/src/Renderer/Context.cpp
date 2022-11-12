@@ -9,6 +9,8 @@
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/CommandPoolCreateInfo.h>
+#include <Magnum/Vk/DescriptorPoolCreateInfo.h>
+#include <Magnum/Vk/DescriptorType.h>
 #include <Magnum/Vk/DeviceCreateInfo.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/ExtensionProperties.h>
@@ -51,6 +53,7 @@ struct ContextPrivate {
     Vk::Queue computeQueue{Corrade::NoCreate};
     uint32_t computeQueueFamily{};
 
+    Vk::DescriptorPool descriptorPool{Corrade::NoCreate};
     Vk::CommandPool commandPool{Corrade::NoCreate};
 
     ResourceManager resources;
@@ -94,6 +97,13 @@ Context::Context()
 
     setupDebugMessenger();
 
+    data_->descriptorPool = Vk::DescriptorPool{
+        data_->device,
+        Vk::DescriptorPoolCreateInfo{8, // max descriptor sets
+                                     {
+                                         {Vk::DescriptorType::UniformBuffer, 24},       //
+                                         {Vk::DescriptorType::CombinedImageSampler, 16} //
+                                     }}};
     data_->commandPool =
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
 
@@ -197,6 +207,7 @@ bool Context::isHeadless() const { return data_->isHeadless; }
 Vk::Instance &Context::instance() { return data_->instance; }
 Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data_->physicalDevice; }
 Vk::Device &Context::device() { return data_->device; }
+Magnum::Vk::DescriptorPool &Context::descriptorPool() { return data_->descriptorPool; }
 Vk::CommandPool &Context::commandPool() { return data_->commandPool; }
 Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
 uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }

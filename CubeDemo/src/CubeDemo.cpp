@@ -34,7 +34,6 @@
 #include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <imgui.h>
@@ -44,13 +43,12 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
-#include <array>
 #include <chrono>
 
 namespace Vk = Magnum::Vk;
 
 struct PushConstants {
-    glm::mat4 transform{1.0f};
+    glm::mat4 modelTransform{1.0f};
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
     float blend;
 };
@@ -89,9 +87,9 @@ void animate(PushConstants &d, float t, float i)
     float tsf = ad.tsf / 2.0f + ad.tsf * sin(t / 10.0f);
     glm::vec3 translation{sin(i * tsf) * i * ad.tsi, cos(i * tsf) * i * ad.tsi, i * ad.ti};
 
-    d.transform = Cory::makeTransform(ad.translation + translation,
-                                      ad.rotation + glm::vec3{0.0f, angle, angle / 2.0f},
-                                      glm::vec3{scale});
+    d.modelTransform = Cory::makeTransform(ad.translation + translation,
+                                           ad.rotation + glm::vec3{0.0f, angle, angle / 2.0f},
+                                           glm::vec3{scale});
 
     float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
     float brightness = i + 0.2f * abs(sin(t + i));
@@ -148,6 +146,26 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     camera_.setWindowSize(window_->dimensions());
     camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
     setupCameraCallbacks();
+
+    // create and initialize descriptor sets for each frame in flight
+    globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
+        *ctx_, window_->swapchain().maxFramesInFlight());
+    for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
+        auto set = pipeline_->allocateDescriptorSet();
+
+        auto bufferInfo = globalUbo_->descriptorInfo(i);
+        VkWriteDescriptorSet write{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set,
+            .dstBinding = 0, // TODO?
+            .descriptorCount = 1,
+            .descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &bufferInfo,
+        };
+        ctx_->device()->UpdateDescriptorSets(ctx_->device(), 1, &write, 0, nullptr);
+
+        descriptorSets_.push_back(std::move(set));
+    }
 }
 
 CubeDemoApplication::~CubeDemoApplication()
@@ -210,14 +228,31 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
     ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
     ctx_->device()->CmdSetCullMode(cmdBuffer, VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT);
-
     PushConstants pushData{};
 
     float fovy = glm::radians(70.0f);
     glm::vec2 wndSize = window_->dimensions();
     float aspect = wndSize.x / wndSize.y;
-    glm::mat4 viewProjection =
-        Cory::makePerspective(fovy, aspect, 0.1f, 10.0f) * camera_.getViewMatrix();
+    glm::mat4 viewMatrix = camera_.getViewMatrix();
+    glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 0.1f, 10.0f);
+    glm::mat4 viewProjection = projectionMatrix * viewMatrix;
+
+    CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
+    ubo.view = viewMatrix;
+    ubo.projection = projectionMatrix;
+    ubo.viewProjection = viewProjection;
+    // need explicit flush otherwise the mapped memory is not synced to the GPU
+    globalUbo_->flush(frameCtx.index);
+
+    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
+    ctx_->device()->CmdBindDescriptorSets(cmdBuffer,
+                                          VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                          pipeline_->layout(),
+                                          0,
+                                          gsl::narrow<uint32_t>(sets.size()),
+                                          sets.data(),
+                                          0,
+                                          nullptr);
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
@@ -225,7 +260,6 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
                       : static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
 
         animate(pushData, t, i);
-        pushData.transform = viewProjection * pushData.transform;
 
         ctx_->device()->CmdPushConstants(cmdBuffer,
                                          pipeline_->layout(),
@@ -277,9 +311,7 @@ void CubeDemoApplication::drawImguiControls()
 {
     namespace CoImGui = Cory::ImGui;
     if (ImGui::Begin("Animation Params")) {
-        if(ImGui::Button("Restart")) {
-            startupTime_ = now();
-        }
+        if (ImGui::Button("Restart")) { startupTime_ = now(); }
 
         CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);
         CoImGui::Slider("blend", ad.blend, 0.0f, 1.0f);

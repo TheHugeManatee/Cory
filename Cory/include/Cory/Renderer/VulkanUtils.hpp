@@ -2,6 +2,8 @@
 
 #include <Cory/Base/Common.hpp>
 
+#include <fmt/format.h>
+
 #include <memory>
 #include <string_view>
 

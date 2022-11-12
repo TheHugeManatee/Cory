@@ -22,6 +22,8 @@ class CubePipeline : Cory::NoCopy {
     Magnum::Vk::Pipeline &pipeline() { return *pipeline_; }
     Magnum::Vk::PipelineLayout &layout() { return *layout_; }
 
+    Magnum::Vk::DescriptorSet allocateDescriptorSet();
+
   private:
     void createGraphicsPipeline(const Cory::Window &window,
                                 const Magnum::Vk::Mesh &mesh,
@@ -35,6 +37,7 @@ class CubePipeline : Cory::NoCopy {
     Cory::ShaderHandle fragmentShader_;
 
     std::unique_ptr<Magnum::Vk::Pipeline> pipeline_;
+    std::unique_ptr<Magnum::Vk::DescriptorSetLayout> descriptorLayout_;
     std::unique_ptr<Magnum::Vk::PipelineLayout> layout_;
     std::unique_ptr<Magnum::Vk::RenderPass> mainRenderPass_;
 };

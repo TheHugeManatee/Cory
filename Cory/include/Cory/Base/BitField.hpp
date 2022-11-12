@@ -15,7 +15,9 @@ auto to_underlying(Enum auto value)
     return static_cast<std::underlying_type_t<decltype(value)>>(value);
 }
 
-template <typename UnderlyingEnum> class BitField {
+template <typename UnderlyingEnum>
+    requires Enum<UnderlyingEnum>
+class BitField {
   public:
     using UnderlyingType = std::underlying_type_t<UnderlyingEnum>;
     static constexpr int NUM_BITS = std::numeric_limits<UnderlyingType>::digits;
@@ -34,9 +36,9 @@ template <typename UnderlyingEnum> class BitField {
     }
 
     /// access to the raw enum
-    UnderlyingEnum bits() const { return UnderlyingEnum{bits_}; }
+    [[nodiscard]] UnderlyingEnum bits() const { return UnderlyingEnum{bits_}; }
     /// access to the underlying bits
-    UnderlyingType underlying_bits() const { return bits_; }
+    [[nodiscard]] UnderlyingType underlying_bits() const { return bits_; }
 
     /// set a bit
     BitField &set(UnderlyingEnum bit)
@@ -60,13 +62,13 @@ template <typename UnderlyingEnum> class BitField {
     }
 
     /// query bit
-    bool is_set(UnderlyingEnum bit) const
+    [[nodiscard]] bool is_set(UnderlyingEnum bit) const
     {
         return (bits_ & to_underlying(bit)) == to_underlying(bit);
     }
 
     /// returns a vector of single bits that are set
-    std::vector<UnderlyingEnum> set_bits() const
+    [[nodiscard]] std::vector<UnderlyingEnum> set_bits() const
     {
         std::vector<UnderlyingEnum> setBits;
 

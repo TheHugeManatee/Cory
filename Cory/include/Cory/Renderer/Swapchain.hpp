@@ -33,9 +33,9 @@ struct SwapchainSupportDetails {
 };
 
 struct FrameContext {
-    uint32_t index{};
-    uint64_t frameNumber{};
-    bool shouldRecreateSwapchain{false};
+    uint32_t index{};                    ///< the current swapchain image index
+    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
+    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
     Magnum::Vk::ImageView *swapchainImage{};
     Magnum::Vk::ImageView *colorView{};
     Magnum::Vk::ImageView *depthView{};
@@ -58,6 +58,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
     [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
     [[nodiscard]] size_t size() const noexcept { return images_.size(); }
+    [[nodiscard]] size_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying

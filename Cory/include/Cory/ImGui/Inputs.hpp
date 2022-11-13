@@ -7,6 +7,8 @@
 #include <imgui.h>
 
 #include <concepts>
+#include <fmt/format.h>
+#include <string>
 #include <string_view>
 
 namespace Cory::ImGui {
@@ -18,13 +20,19 @@ float availableWidth() { return ::ImGui::GetContentRegionAvail().x; }
 
 } // namespace detail
 
+template <typename... Args> void Text(fmt::format_string<Args...> fmtString, Args... args)
+{
+    std::string formatted = fmt::format(fmtString, std::forward<Args>(args)...);
+    ::ImGui::Text("%s", formatted.c_str());
+}
+
 // template for float, int
 template <typename ValueType, typename... Arguments>
     requires std::same_as<ValueType, float> || std::same_as<ValueType, int32_t>
 auto Slider(std::string_view label, ValueType &value, Arguments... args)
 {
     ::ImGui::Text(label.data());
-    ::ImGui::SameLine(detail::availableWidth()/3.0f);
+    ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (std::same_as<ValueType, float>) {
         return ::ImGui::SliderFloat(internalLabel.c_str(), &value, args...);
@@ -39,7 +47,7 @@ template <glm::length_t L, typename T, typename... Arguments>
 auto Slider(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 {
     ::ImGui::Text(label.data());
-    ::ImGui::SameLine(detail::availableWidth()/3.0f);
+    ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (L == 2) {
         if constexpr (std::same_as<T, float>) {
@@ -74,7 +82,7 @@ template <typename ValueType, typename... Arguments>
 auto Input(std::string_view label, ValueType &value, Arguments... args)
 {
     ::ImGui::Text(label.data());
-    ::ImGui::SameLine(detail::availableWidth()/3.0f);
+    ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (std::same_as<ValueType, double>) {
         return ::ImGui::InputDouble(internalLabel.c_str(), &value, args...);
@@ -92,7 +100,7 @@ template <glm::length_t L, typename T, typename... Arguments>
 auto Input(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 {
     ::ImGui::Text(label.data());
-    ::ImGui::SameLine(detail::availableWidth()/3.0f);
+    ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (L == 2) {
         if constexpr (std::same_as<T, float>) {

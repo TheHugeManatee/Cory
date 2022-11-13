@@ -44,6 +44,7 @@
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
+#include <algorithm>
 #include <chrono>
 
 namespace Vk = Magnum::Vk;
@@ -132,11 +133,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     auto recreateSizedResources = [&](glm::i32vec2) { createFramebuffers(); };
 
     createGeometry();
-    pipeline_ = std::make_unique<CubePipeline>(*ctx_,
-                                               *window_,
-                                               *mesh_,
-                                               std::filesystem::path{"cube.vert"},
-                                               std::filesystem::path{"cube.frag"});
+    createPipeline();
     createFramebuffers();
     recreateSizedResources(window_->dimensions());
     window_->onSwapchainResized.connect(recreateSizedResources);
@@ -147,8 +144,23 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     camera_.setWindowSize(window_->dimensions());
     camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
     setupCameraCallbacks();
+    createUBO();
+}
 
+void CubeDemoApplication::createPipeline()
+{
+    Cory::ScopeTimer st{"Init/Pipeline"};
+    pipeline_ = std::make_unique<CubePipeline>(*ctx_,
+                                               *window_,
+                                               *mesh_,
+                                               std::filesystem::path{"cube.vert"},
+                                               std::filesystem::path{"cube.frag"});
+}
+
+void CubeDemoApplication::createUBO()
+{
     // create and initialize descriptor sets for each frame in flight
+    Cory::ScopeTimer st{"Init/UBO"};
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
         *ctx_, window_->swapchain().maxFramesInFlight());
     for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
@@ -160,7 +172,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
             .dstSet = set,
             .dstBinding = 0, // TODO?
             .descriptorCount = 1,
-            .descriptorType = VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &bufferInfo,
         };
         ctx_->device()->UpdateDescriptorSets(ctx_->device(), 1, &write, 0, nullptr);
@@ -201,6 +213,8 @@ void CubeDemoApplication::run()
 
 void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
 {
+    Cory::ScopeTimer s{"Frame/Record"};
+
     // do some color swirly thingy
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
     // Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
@@ -282,6 +296,7 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
 
 void CubeDemoApplication::createFramebuffers()
 {
+    Cory::ScopeTimer st{"Init/Framebuffers"};
     auto swapchainExtent = window_->swapchain().extent();
     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
 
@@ -298,6 +313,7 @@ void CubeDemoApplication::createFramebuffers()
 
 void CubeDemoApplication::createGeometry()
 {
+    Cory::ScopeTimer st{"Init/Geometry"};
     mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(*ctx_));
 }
 double CubeDemoApplication::now() const
@@ -311,6 +327,8 @@ double CubeDemoApplication::getElapsedTimeSeconds() const { return now() - start
 void CubeDemoApplication::drawImguiControls()
 {
     namespace CoImGui = Cory::ImGui;
+    Cory::ScopeTimer st{"Frame/ImGui"};
+
     if (ImGui::Begin("Animation Params")) {
         if (ImGui::Button("Restart")) { startupTime_ = now(); }
 
@@ -352,6 +370,43 @@ void CubeDemoApplication::drawImguiControls()
             CoImGui::Input("r1", mat[1], "%.3f", ImGuiInputTextFlags_ReadOnly);
             CoImGui::Input("r2", mat[2], "%.3f", ImGuiInputTextFlags_ReadOnly);
             CoImGui::Input("r3", mat[3], "%.3f", ImGuiInputTextFlags_ReadOnly);
+        }
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Profiling")) {
+        auto records = Cory::Profiler::GetRecords();
+
+        auto to_ms = [](uint64_t ns) { return double(ns) / 1'000'000.0; };
+
+        if (ImGui::BeginTable("Profiling", 5)) {
+
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableSetupColumn("min [ms]", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("max [ms]", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("avg [ms]", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("graph", ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+
+            for (auto [name, record] : records) {
+                auto stats = record.stats();
+                auto hist = record.history();
+                ImGui::TableNextRow();
+                ImGui::TableNextColumn();
+                ImGui::Text("%s", name.c_str());
+                ImGui::TableNextColumn();
+                CoImGui::Text("{:3.2f}", to_ms(stats.min));
+                ImGui::TableNextColumn();
+                CoImGui::Text("{:3.2f}", to_ms(stats.max));
+                ImGui::TableNextColumn();
+                CoImGui::Text("{:3.2f}", to_ms(stats.avg));
+                ImGui::TableNextColumn();
+
+                auto h = hist | ranges::views::transform([](auto v) { return float(v); }) |
+                         ranges::to<std::vector>;
+                ImGui::PlotLines("", h.data(), gsl::narrow<int>(h.size()));
+            }
+            ImGui::EndTable();
         }
     }
     ImGui::End();

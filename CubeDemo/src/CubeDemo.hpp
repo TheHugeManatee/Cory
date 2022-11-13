@@ -35,6 +35,8 @@ class CubeDemoApplication : public Cory::Application {
     void createFramebuffers();
     // create the mesh to be rendered
     void createGeometry();
+    void createUBO();
+    void createPipeline();
     // record commands for a new command buffer
     void recordCommands(Cory::FrameContext &frameCtx);
 

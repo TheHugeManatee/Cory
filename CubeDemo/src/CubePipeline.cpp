@@ -6,6 +6,7 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
+#include <Cory/Base/Profiling.hpp>
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>

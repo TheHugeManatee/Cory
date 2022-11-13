@@ -12,7 +12,7 @@ class DynamicGeometry {
 #pragma pack(push, 1)
     struct Vertex {
         glm::vec3 pos;
-        glm::vec3 tex;
+        glm::vec3 normal;
         glm::vec4 col;
     };
 #pragma pack(pop)

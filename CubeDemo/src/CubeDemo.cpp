@@ -39,6 +39,7 @@
 #include <imgui.h>
 
 #include <gsl/gsl>
+#include <gsl/narrow>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>

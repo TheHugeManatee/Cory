@@ -228,6 +228,8 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     cmdBuffer.begin(Vk::CommandBufferBeginInfo{});
 
+    // currently, we do this barrier every frame even though it is technically only needed when FB
+    // changes
     const VkImageMemoryBarrier imageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -270,27 +272,21 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
         .imageView = *frameCtx.depthImageView,
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE, // or maybe dontcare?
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .clearValue = clearDepth,
     };
 
-    const VkRenderingInfo beginRenderingInfo{
-        /*VkStructureType                    */ .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-        /*const void*                        */ .pNext = nullptr,
-        /*VkRenderingFlagsKHR                */ .flags = {},
-        /*VkRect2D                           */ .renderArea = renderArea,
-        /*uint32_t                           */ .layerCount = 1,
-        /*uint32_t                           */ .viewMask = {},
-        /*uint32_t                           */ .colorAttachmentCount = 1,
-        /*const VkRenderingAttachmentInfoKHR**/ .pColorAttachments = &colorAttachmentInfo,
-        /*const VkRenderingAttachmentInfoKHR**/ .pDepthAttachment = &depthStencilAttachmentInfo,
-        /*const VkRenderingAttachmentInfoKHR**/ .pStencilAttachment = nullptr};
+    const VkRenderingInfo beginRenderingInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                                             .pNext = nullptr,
+                                             .flags = {},
+                                             .renderArea = renderArea,
+                                             .layerCount = 1,
+                                             .viewMask = {},
+                                             .colorAttachmentCount = 1,
+                                             .pColorAttachments = &colorAttachmentInfo,
+                                             .pDepthAttachment = &depthStencilAttachmentInfo,
+                                             .pStencilAttachment = nullptr};
     ctx_->device()->CmdBeginRendering(cmdBuffer, &beginRenderingInfo);
-
-    //    cmdBuffer.beginRenderPass(
-    //        Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), framebuffers_[frameCtx.index]}
-    //            .clearColor(0, clearColor)
-    //            .clearDepthStencil(1, 1.0, 0));
 
     // set up viewport and culling via dynamic states
     glm::u32vec2 wndSize = window_->dimensions();
@@ -351,69 +347,11 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
         cmdBuffer.draw(*mesh_);
     }
 
-    // cmdBuffer.endRenderPass();
     ctx_->device()->CmdEndRendering(cmdBuffer);
+
+    // note - currently, we're letting imgui handle the final resolve!
     imguiLayer_->recordFrameCommands(*ctx_, frameCtx);
 
-    //    // explicit resolve since we don't have a resolve subpass anymore
-    //    VkImageResolve2 region{
-    //        .sType = VK_STRUCTURE_TYPE_IMAGE_RESOLVE_2,
-    //        .pNext = nullptr,
-    //        .srcSubresource =
-    //            VkImageSubresourceLayers{
-    //                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-    //                .mipLevel = 0,
-    //                .baseArrayLayer = 0,
-    //                .layerCount = 1,
-    //            },
-    //        .srcOffset = VkOffset3D{0, 0, 0},
-    //        .dstSubresource =
-    //            VkImageSubresourceLayers{
-    //                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-    //                .mipLevel = 0,
-    //                .baseArrayLayer = 0,
-    //                .layerCount = 1,
-    //            },
-    //
-    //        .dstOffset = VkOffset3D{0, 0, 0},
-    //        .extent = VkExtent3D{wndSize.x, wndSize.y, 1},
-    //    };
-    //    VkResolveImageInfo2 resolve{
-    //        /*VkStructureType           */ .sType = VK_STRUCTURE_TYPE_RESOLVE_IMAGE_INFO_2,
-    //        /*const void*               */ .pNext = nullptr,
-    //        /*VkImage                   */ .srcImage = *frameCtx.colorImage,
-    //        /*VkImageLayout             */ .srcImageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-    //        /*VkImage                   */ .dstImage = *frameCtx.swapchainImage,
-    //        /*VkImageLayout             */ .dstImageLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    //        /*uint32_t                  */ .regionCount = 1,
-    //        /*const VkImageResolve2*    */ .pRegions = &region,
-    //    };
-    //
-    //    ctx_->device()->CmdResolveImage2(cmdBuffer, &resolve);
-//    VkImageBlit blit{.srcSubresource =
-//                         VkImageSubresourceLayers{
-//                             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//                             .mipLevel = 0,
-//                             .baseArrayLayer = 0,
-//                             .layerCount = 1,
-//                         },
-//                     .srcOffsets = {{0, 0, 0}, {0, 0, 0}},
-//                     .dstSubresource =
-//                         VkImageSubresourceLayers{
-//                             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//                             .mipLevel = 0,
-//                             .baseArrayLayer = 0,
-//                             .layerCount = 1,
-//                         },
-//                     .dstOffsets = {{0, 0, 0}, {0, 0, 0}}};
-//    ctx_->device()->CmdBlitImage(cmdBuffer,
-//                                 *frameCtx.colorImage,
-//                                 VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-//                                 *frameCtx.swapchainImage,
-//                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-//                                 1,
-//                                 &blit,
-//                                 VK_FILTER_LINEAR);
     cmdBuffer.end();
 }
 

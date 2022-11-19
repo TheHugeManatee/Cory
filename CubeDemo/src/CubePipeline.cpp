@@ -14,9 +14,7 @@
 #include <Magnum/Vk/DescriptorSet.h>
 #include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
 #include <Magnum/Vk/DescriptorType.h>
-#include <Magnum/Vk/Image.h> // for Vk::ImageLayout
 #include <Magnum/Vk/Mesh.h>
-#include <Magnum/Vk/MeshLayout.h>
 #include <Magnum/Vk/Pipeline.h>
 #include <Magnum/Vk/PipelineLayoutCreateInfo.h>
 #include <Magnum/Vk/PixelFormat.h>
@@ -75,53 +73,8 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
     layout_ = std::make_unique<Vk::PipelineLayout>(ctx_.device(), pipelineLayoutCreateInfo);
 
-    auto colorFormat = static_cast<VkFormat>(window.colorFormat());
-    auto depthFormat = static_cast<VkFormat>(window.depthFormat());
-
-    int32_t sampleCount = window.sampleCount();
-
-    //    mainRenderPass_ = std::make_unique<Vk::RenderPass>(
-    //        ctx_.device(),
-    //        Vk::RenderPassCreateInfo{}
-    //            .setAttachments(
-    //                {// offscreen color
-    //                 Vk::AttachmentDescription{
-    //                     colorFormat,
-    //                     {Vk::AttachmentLoadOperation::Clear,
-    //                     Vk::AttachmentLoadOperation::DontCare},
-    //                     {Vk::AttachmentStoreOperation::Store,
-    //                     Vk::AttachmentStoreOperation::DontCare}, Vk::ImageLayout::Undefined,
-    //                     Vk::ImageLayout::ColorAttachment,
-    //                     sampleCount},
-    //                 // offscreen depth
-    //                 Vk::AttachmentDescription{
-    //                     depthFormat,
-    //                     {Vk::AttachmentLoadOperation::Clear,
-    //                     Vk::AttachmentLoadOperation::DontCare},
-    //                     {Vk::AttachmentStoreOperation::Store,
-    //                     Vk::AttachmentStoreOperation::Store}, Vk::ImageLayout::Undefined,
-    //                     Vk::ImageLayout::DepthStencilAttachment,
-    //                     sampleCount}})
-    //            .addSubpass(Vk::SubpassDescription{}
-    //                            .setColorAttachments(
-    //                                {Vk::AttachmentReference{0,
-    //                                Vk::ImageLayout::ColorAttachment}})
-    //                            .setDepthStencilAttachment({Vk::AttachmentReference{
-    //                                1, Vk::ImageLayout::DepthStencilAttachment}}))
-    //            .setDependencies({Vk::SubpassDependency{
-    //                Vk::SubpassDependency::External, // srcSubpass
-    //                0,                               // dstSubpass
-    //                Vk::PipelineStage::ColorAttachmentOutput |
-    //                    Vk::PipelineStage::EarlyFragmentTests, // srcStages
-    //                Vk::PipelineStage::ColorAttachmentOutput |
-    //                    Vk::PipelineStage::EarlyFragmentTests, // dstStages
-    //                Vk::Access{},                              // srcAccess
-    //                Vk::Access::ColorAttachmentWrite |
-    //                    Vk::Access::DepthStencilAttachmentWrite, // dstAccess
-    //            }}));
-
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
-        shaderSet, mesh.layout(), *layout_, VK_NULL_HANDLE /**mainRenderPass_*/, 0, 1};
+        shaderSet, mesh.layout(), *layout_, VK_NULL_HANDLE, 0, 1};
 
     // configure dynamic state - one viewport and scissor configured but no dimensions specified
     rasterizationPipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
@@ -152,7 +105,10 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     rasterizationPipelineCreateInfo->pMultisampleState = &multisampling;
     rasterizationPipelineCreateInfo->pDepthStencilState = &depthStencilState;
 
-    // fill the dynamic rendering struct
+    // set up dynamic rendering with VK_KHR_dynamic_rendering
+    auto colorFormat = static_cast<VkFormat>(window.colorFormat());
+    auto depthFormat = static_cast<VkFormat>(window.depthFormat());
+    int32_t sampleCount = window.sampleCount();
     const VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount = 1,

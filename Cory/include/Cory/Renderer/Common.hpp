@@ -71,31 +71,11 @@ enum class MemoryFlagBits : uint32_t {
 };
 using MemoryFlags = BitField<MemoryFlagBits>;
 
-/// generic handle type to wrap slot map handles in a type-safe way
-template <typename T> class ResourceHandle {
-  public:
-    /**
-     * default constructor constructs an invalid handle! valid handles can
-     * only be obtained from the ResourceManager!
-     */
-    ResourceHandle() = default;
-    auto operator<=>(const ResourceHandle &rhs) const = default;
-
-  private:
-    friend class ResourceManager;
-    /* implicit */ ResourceHandle(SlotMapHandle handle)
-        : handle_{handle}
-    {
-    }
-    operator SlotMapHandle() const noexcept { return handle_;}
-    SlotMapHandle handle_{};
-};
-
 /// handle to a shader. can be resolved to the actual resource via the ResourceManager
-using ShaderHandle = ResourceHandle<Shader>;
+using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
 /// handle to a buffer. can be resolved to the actual resource via the ResourceManager
-using BufferHandle = ResourceHandle<Magnum::Vk::Buffer>;
+using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
 
 } // namespace Cory
 

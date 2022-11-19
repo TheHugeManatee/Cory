@@ -65,7 +65,7 @@ set(CORY_SOURCES
         src/Renderer/VulkanUtils.cpp
         src/Application/DynamicGeometry.cpp
         include/Cory/Application/DynamicGeometry.hpp
-        include/Cory/Application/CameraManipulator.cpp include/Cory/Application/CameraManipulator.hpp include/Cory/ImGui/Inputs.hpp include/Cory/Renderer/UniformBufferObject.cpp include/Cory/Renderer/UniformBufferObject.hpp include/Cory/Renderer/MagnumFwd.hpp include/Cory/Framegraph/Common.hpp)
+        include/Cory/Application/CameraManipulator.cpp include/Cory/Application/CameraManipulator.hpp include/Cory/ImGui/Inputs.hpp include/Cory/Renderer/UniformBufferObject.cpp include/Cory/Renderer/UniformBufferObject.hpp include/Cory/Renderer/MagnumFwd.hpp include/Cory/Framegraph/Common.hpp src/Framegraph/Builder.cpp include/Cory/Framegraph/Builder.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

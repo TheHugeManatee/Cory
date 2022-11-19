@@ -5,6 +5,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/Builder.hpp>
 
 #include <cppcoro/shared_task.hpp>
 #include <cppcoro/task.hpp>
@@ -54,48 +55,14 @@ struct RenderPassExecutionAwaiter {
     void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
 };
 
-/// a builder that allows a render pass to declare specific dependencies (inputs and outputs)
-class Builder : NoCopy, NoMove {
-  public:
-    Builder(Framegraph &framegraph, std::string_view passName)
-        : passName_{passName}
-        , framegraph_{framegraph}
-    {
-        CO_CORE_TRACE("Pass {}: declaration started", passName);
-    }
-    ~Builder() { CO_CORE_TRACE("Pass {}: Builder destroyed", passName_); }
-
-    /// declares a dependency to the named resource
-    cppcoro::task<TextureHandle> read(TextureHandle &h);
-
-    /// declare that a render pass creates a certain texture
-    cppcoro::task<MutableTextureHandle>
-    create(std::string name, glm::u32vec3 size, PixelFormat format, Layout finalLayout);
-
-    /// declare that a render pass writes to a certain texture
-    cppcoro::task<MutableTextureHandle> write(TextureHandle handle);
-
-    /**
-     * @brief Finish declaration of the render pass.
-     *
-     * co_await'ing on the returned awaiter will suspend exection of the current coroutine
-     * and enqueue it to the frame graph. Execution will resume on the framegraph's execution
-     * context if the framegraph determines that this render pass will need to be resumed
-     * at all (the render pass provides resources that another pass consumes). If the resources
-     * of the render pass are not needed, the coroutine will never be resumed.
-     */
-    RenderPassExecutionAwaiter finishDeclaration();
-
-  private:
-    std::string passName_;
-    Framegraph &framegraph_;
-    std::vector<TextureHandle> inputs;
-    std::vector<std::pair<TextureHandle, PassOutputKind>> outputs;
-};
-
+/**
+ * The framegraph.
+ *
+ * Is meant to be filled with Cory::Framegraph::Builder
+ */
 class Framegraph : NoCopy, NoMove {
   public:
-    friend Builder;                    // convenience so it can access the graph_ object directly
+    friend Builder;                    // convenience so it can call finishPassDeclaration
     friend RenderPassExecutionAwaiter; // so it can call enqueueRenderPass
 
     ~Framegraph();

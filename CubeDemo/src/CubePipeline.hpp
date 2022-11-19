@@ -19,7 +19,7 @@ class CubePipeline : Cory::NoCopy {
 
     // this pipeline only has one renderpass
     Magnum::Vk::RenderPass &mainRenderPass() { return *mainRenderPass_; }
-    Magnum::Vk::Pipeline &pipeline() { return *pipeline_; }
+    Magnum::Vk::Pipeline &pipeline();
     Magnum::Vk::PipelineLayout &layout() { return *layout_; }
 
     Magnum::Vk::DescriptorSet allocateDescriptorSet();
@@ -36,7 +36,7 @@ class CubePipeline : Cory::NoCopy {
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
 
-    std::unique_ptr<Magnum::Vk::Pipeline> pipeline_;
+    Cory::PipelineHandle pipeline_;
     std::unique_ptr<Magnum::Vk::DescriptorSetLayout> descriptorLayout_;
     std::unique_ptr<Magnum::Vk::PipelineLayout> layout_;
     std::unique_ptr<Magnum::Vk::RenderPass> mainRenderPass_;

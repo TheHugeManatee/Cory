@@ -48,6 +48,10 @@ class ResourceManager : NoCopy {
     [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
     void release(BufferHandle bufferHandle);
 
+    PipelineHandle createPipeline(const Magnum::Vk::RasterizationPipelineCreateInfo& createInfo);
+    Magnum::Vk::Pipeline &operator[](PipelineHandle pipelineHandle);
+    void release(PipelineHandle pipelineHandle);
+
     std::unordered_map<ResourceType, size_t> resourcesInUse() const;
 
   private:

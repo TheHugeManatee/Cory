@@ -71,14 +71,12 @@ enum class MemoryFlagBits : uint32_t {
 };
 using MemoryFlags = BitField<MemoryFlagBits>;
 
-/// handle to a shader. can be resolved to the actual resource via the ResourceManager
 using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
-/// handle to a buffer. can be resolved to the actual resource via the ResourceManager
 using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
+using PipelineHandle = PrivateTypedHandle<Magnum::Vk::Pipeline, ResourceManager>;
 
 } // namespace Cory
-
 
 DECLARE_ENUM_BITFIELD(Cory::ShaderType);
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);

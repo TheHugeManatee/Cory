@@ -36,6 +36,8 @@ CubePipeline::CubePipeline(Cory::Context &context,
 
 CubePipeline::~CubePipeline() = default;
 
+Magnum::Vk::Pipeline &CubePipeline::pipeline() { return ctx_.resources()[pipeline_]; }
+
 void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
                                           const Magnum::Vk::Mesh &mesh,
                                           std::filesystem::path vertFile,
@@ -118,8 +120,7 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     };
     rasterizationPipelineCreateInfo->pNext = &pipelineRenderingCreateInfo;
 
-    pipeline_ =
-        std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));
+    pipeline_ = ctx_.resources().createPipeline(rasterizationPipelineCreateInfo);
 }
 
 Magnum::Vk::DescriptorSet CubePipeline::allocateDescriptorSet()

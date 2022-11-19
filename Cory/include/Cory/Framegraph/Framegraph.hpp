@@ -3,6 +3,7 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
 
 #include <cppcoro/shared_task.hpp>
@@ -29,10 +30,7 @@ struct RenderInput {
     struct RenderPassResources *resources;
     struct RenderContext *context;
 };
-enum class PassOutputKind {
-    Create,
-    Write,
-};
+
 struct RenderPassInfo {
     std::string name;
     std::vector<TextureHandle> inputs;
@@ -40,8 +38,6 @@ struct RenderPassInfo {
     cppcoro::coroutine_handle<> coroHandle;
     int32_t executionPriority{-1};
 };
-using RenderPassHandle = SlotMapHandle;
-class Framegraph;
 
 /**
  * an Awaitable that will enqueue the current coroutine for execution on the given framegraph
@@ -137,17 +133,16 @@ class Framegraph : NoCopy, NoMove {
      * Returns the passes that need to be executed in the given order. Updates the internal
      * information about which render pass is required.
      */
-    std::vector<RenderPassHandle> resolve(const std::vector<ResourceHandle> &requestedResources);
+    std::vector<RenderPassHandle>
+    resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
     std::vector<RenderPassHandle> compile();
 
     TextureResourceManager resources_;
-    std::vector<ResourceHandle> externalInputs_;
-    std::vector<ResourceHandle> outputs_;
+    std::vector<TransientTextureHandle> externalInputs_;
+    std::vector<TransientTextureHandle> outputs_;
 
     SlotMap<RenderPassInfo> renderPasses_;
-
-    // std::unordered_map<RenderPassHandle, cppcoro::coroutine_handle<>> renderPasses_;
 };
 
 } // namespace Cory::Framegraph

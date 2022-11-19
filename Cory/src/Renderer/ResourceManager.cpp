@@ -45,13 +45,10 @@ ResourceManager::createShader(std::string source, ShaderType type, std::filesyst
 Shader &ResourceManager::operator[](ShaderHandle shaderHandle)
 {
     CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
-    return data_->shaders[shaderHandle.handle_];
+    return data_->shaders[shaderHandle];
 }
 
-void ResourceManager::release(ShaderHandle shaderHandle)
-{
-    data_->shaders.release(shaderHandle.handle_);
-}
+void ResourceManager::release(ShaderHandle shaderHandle) { data_->shaders.release(shaderHandle); }
 
 BufferHandle
 ResourceManager::createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags)
@@ -66,7 +63,7 @@ ResourceManager::createBuffer(size_t bufferSizeInBytes, BufferUsage usage, Memor
 Magnum::Vk::Buffer &ResourceManager::operator[](BufferHandle bufferHandle)
 {
     CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
-    return data_->buffers[bufferHandle.handle_];
+    return data_->buffers[bufferHandle];
 }
 
 void ResourceManager::release(BufferHandle bufferHandle)

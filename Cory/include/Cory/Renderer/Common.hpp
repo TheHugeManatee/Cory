@@ -79,6 +79,7 @@ template <typename T> class ResourceHandle {
      * only be obtained from the ResourceManager!
      */
     ResourceHandle() = default;
+    auto operator<=>(const ResourceHandle &rhs) const = default;
 
   private:
     friend class ResourceManager;
@@ -86,6 +87,7 @@ template <typename T> class ResourceHandle {
         : handle_{handle}
     {
     }
+    operator SlotMapHandle() const noexcept { return handle_;}
     SlotMapHandle handle_{};
 };
 
@@ -96,6 +98,7 @@ static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
 using BufferHandle = ResourceHandle<Magnum::Vk::Buffer>;
 
 } // namespace Cory
+
 
 DECLARE_ENUM_BITFIELD(Cory::ShaderType);
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);

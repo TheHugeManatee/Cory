@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Base/SlotMap.hpp>
+#include <Cory/Framegraph/Common.hpp>
 
 #include <glm/vec3.hpp>
 
@@ -10,11 +11,6 @@
 namespace Cory::Framegraph {
 
 using PlaceholderT = uint64_t;
-
-enum class PixelFormat { D32, RGBA32 };
-enum class Layout { Undefined, Color, DepthStencil, TransferSource, PresentSource };
-enum class ResourceState { Clear, DontCare, Keep };
-using ResourceHandle = SlotMapHandle;
 
 struct Texture {
     std::string name;
@@ -31,7 +27,7 @@ struct TextureHandle {
     PixelFormat format;
     Layout layout;
     bool external{false};
-    SlotMapHandle rsrcHandle; // handle to be used to reference the texture
+    TransientTextureHandle rsrcHandle; // handle to be used to reference the texture
 };
 
 struct MutableTextureHandle {
@@ -40,7 +36,7 @@ struct MutableTextureHandle {
     PixelFormat format;
     Layout layout;
     bool external{false};
-    SlotMapHandle rsrcHandle;
+    TransientTextureHandle rsrcHandle;
 
     /*implicit*/ operator TextureHandle() const
     {
@@ -56,10 +52,10 @@ struct MutableTextureHandle {
 // handles the transient resources created/destroyed during a frame
 class TextureResourceManager {
   public:
-    SlotMapHandle
+    TransientTextureHandle
     createTexture(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout);
 
-    SlotMapHandle registerExternal(Texture externalTexture)
+    TransientTextureHandle registerExternal(Texture externalTexture)
     {
         externalTexture.external = true;
         return resources_.emplace(std::move(externalTexture));
@@ -78,7 +74,8 @@ class TextureResourceManager {
     }
 
   private:
-    Texture allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout);
+    TransientTextureHandle
+    allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout);
 
     SlotMap<Texture> resources_;
 };

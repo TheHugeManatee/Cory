@@ -13,7 +13,7 @@
 #include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/VertexFormat.h>
 
-#include <gsl/gsl_narrow>
+#include <gsl/narrow>
 
 namespace Cory {
 namespace Vk = Magnum::Vk;

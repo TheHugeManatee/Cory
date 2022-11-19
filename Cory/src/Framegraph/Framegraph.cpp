@@ -111,7 +111,7 @@ cppcoro::task<MutableTextureHandle> Builder::write(TextureHandle handle)
 
 RenderPassExecutionAwaiter Builder::finishDeclaration()
 {
-    auto passHandle =
+    RenderPassHandle passHandle =
         framegraph_.finishPassDeclaration(RenderPassInfo{.name = passName_,
                                                          .inputs = std::move(inputs),
                                                          .outputs = std::move(outputs),
@@ -132,10 +132,11 @@ void Framegraph::dump()
 {
     std::string out{"digraph G {\nrankdir=LR;\nnode [fontsize=12,fontname=\"Courier New\"]\n"};
 
-    std::unordered_map<ResourceHandle, TextureHandle> textures;
-    std::set<ResourceHandle> realizedTextures{externalInputs_.cbegin(), externalInputs_.cend()};
+    std::unordered_map<TransientTextureHandle, TextureHandle> textures;
+    std::set<TransientTextureHandle> realizedTextures{externalInputs_.cbegin(),
+                                                      externalInputs_.cend()};
 
-    for (const ResourceHandle &externalResource : externalInputs_) {
+    for (const TransientTextureHandle &externalResource : externalInputs_) {
         realizedTextures.insert(externalResource);
     }
 
@@ -200,7 +201,7 @@ void Framegraph::dump()
 }
 
 std::vector<RenderPassHandle>
-Framegraph::resolve(const std::vector<ResourceHandle> &requestedResources)
+Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResources)
 {
     // counter to assign render passes an increasing execution priority - passes
     // with higher priority should be executed earlier
@@ -208,9 +209,9 @@ Framegraph::resolve(const std::vector<ResourceHandle> &requestedResources)
 
     // first, reorder the information into a more convenient graph representation
     // essentially, in- and out-edges
-    std::unordered_map<ResourceHandle, RenderPassHandle> resourceToPass;
-    std::unordered_multimap<RenderPassHandle, ResourceHandle> passInputs;
-    std::unordered_map<ResourceHandle, TextureHandle> textures;
+    std::unordered_map<TransientTextureHandle, RenderPassHandle> resourceToPass;
+    std::unordered_multimap<RenderPassHandle, TransientTextureHandle> passInputs;
+    std::unordered_map<TransientTextureHandle, TextureHandle> textures;
     for (const auto &[passHandle, passInfo] : renderPasses_.items()) {
         for (const auto &inputHandle : passInfo.inputs) {
             passInputs.insert({passHandle, inputHandle.rsrcHandle});
@@ -223,8 +224,8 @@ Framegraph::resolve(const std::vector<ResourceHandle> &requestedResources)
     }
 
     // flood-fill the graph starting at the resources requested from the outside
-    std::deque<ResourceHandle> requiredResources{requestedResources.cbegin(),
-                                                 requestedResources.cend()};
+    std::deque<TransientTextureHandle> requiredResources{requestedResources.cbegin(),
+                                                         requestedResources.cend()};
     while (!requiredResources.empty()) {
         auto nextResource = requiredResources.front();
         requiredResources.pop_front();
@@ -258,11 +259,12 @@ Framegraph::resolve(const std::vector<ResourceHandle> &requestedResources)
     }
 
     auto items = renderPasses_.items();
-    auto passesToExecute = items | ranges::views::transform([](const auto &it) {
-                               return std::make_pair(it.first, it.second.executionPriority);
-                           }) |
-                           ranges::views::filter([](const auto &it) { return it.second >= 0; }) |
-                           ranges::to<std::vector>;
+    auto passesToExecute =
+        items | ranges::views::transform([](const auto &it) {
+            return std::make_pair(RenderPassHandle{it.first}, it.second.executionPriority);
+        }) |
+        ranges::views::filter([](const auto &it) { return it.second >= 0; }) |
+        ranges::to<std::vector>;
 
     std::ranges::sort(passesToExecute, {}, [](const auto &it) { return it.second; });
 
@@ -272,7 +274,7 @@ Framegraph::resolve(const std::vector<ResourceHandle> &requestedResources)
     }
 
     return passesToExecute | ranges::views::transform([](const auto &it) { return it.first; }) |
-           ranges::to<std::vector>;
+           ranges::to<std::vector<RenderPassHandle>>;
 }
 
 } // namespace Cory::Framegraph

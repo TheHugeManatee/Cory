@@ -4,7 +4,7 @@
 #include <Cory/Base/FmtUtils.hpp>
 
 namespace Cory::Framegraph {
-SlotMapHandle TextureResourceManager::createTexture(std::string name,
+TransientTextureHandle TextureResourceManager::createTexture(std::string name,
                                                     glm::u32vec3 size,
                                                     PixelFormat format,
                                                     Layout layout)
@@ -20,7 +20,8 @@ SlotMapHandle TextureResourceManager::createTexture(std::string name,
                     .resource = {}});
     return handle;
 }
-Texture TextureResourceManager::allocate(std::string name,
+
+TransientTextureHandle TextureResourceManager::allocate(std::string name,
                                          glm::u32vec3 size,
                                          PixelFormat format,
                                          Layout layout)
@@ -34,6 +35,6 @@ Texture TextureResourceManager::allocate(std::string name,
                 .format = format,
                 .currentLayout = layout,
                 .resource = {/*todo*/}});
-    return resources_[handle];
+    return handle;
 }
 }

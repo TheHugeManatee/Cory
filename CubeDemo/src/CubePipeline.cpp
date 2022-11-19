@@ -2,11 +2,11 @@
 
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
-#include <Cory/Base/Profiling.hpp>
 
 #include <Corrade/Containers/StringStlView.h>
 #include <Magnum/Math/Range.h>
@@ -75,50 +75,53 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
     layout_ = std::make_unique<Vk::PipelineLayout>(ctx_.device(), pipelineLayoutCreateInfo);
 
-    Vk::PixelFormat colorFormat = window.colorFormat();
-    Vk::PixelFormat depthFormat = window.depthFormat();
+    auto colorFormat = static_cast<VkFormat>(window.colorFormat());
+    auto depthFormat = static_cast<VkFormat>(window.depthFormat());
 
     int32_t sampleCount = window.sampleCount();
 
-    mainRenderPass_ = std::make_unique<Vk::RenderPass>(
-        ctx_.device(),
-        Vk::RenderPassCreateInfo{}
-            .setAttachments(
-                {// offscreen color
-                 Vk::AttachmentDescription{
-                     colorFormat,
-                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
-                     Vk::ImageLayout::Undefined,
-                     Vk::ImageLayout::ColorAttachment,
-                     sampleCount},
-                 // offscreen depth
-                 Vk::AttachmentDescription{
-                     depthFormat,
-                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::Store},
-                     Vk::ImageLayout::Undefined,
-                     Vk::ImageLayout::DepthStencilAttachment,
-                     sampleCount}})
-            .addSubpass(Vk::SubpassDescription{}
-                            .setColorAttachments(
-                                {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}})
-                            .setDepthStencilAttachment({Vk::AttachmentReference{
-                                1, Vk::ImageLayout::DepthStencilAttachment}}))
-            .setDependencies({Vk::SubpassDependency{
-                Vk::SubpassDependency::External, // srcSubpass
-                0,                               // dstSubpass
-                Vk::PipelineStage::ColorAttachmentOutput |
-                    Vk::PipelineStage::EarlyFragmentTests, // srcStages
-                Vk::PipelineStage::ColorAttachmentOutput |
-                    Vk::PipelineStage::EarlyFragmentTests, // dstStages
-                Vk::Access{},                              // srcAccess
-                Vk::Access::ColorAttachmentWrite |
-                    Vk::Access::DepthStencilAttachmentWrite, // dstAccess
-            }}));
+    //    mainRenderPass_ = std::make_unique<Vk::RenderPass>(
+    //        ctx_.device(),
+    //        Vk::RenderPassCreateInfo{}
+    //            .setAttachments(
+    //                {// offscreen color
+    //                 Vk::AttachmentDescription{
+    //                     colorFormat,
+    //                     {Vk::AttachmentLoadOperation::Clear,
+    //                     Vk::AttachmentLoadOperation::DontCare},
+    //                     {Vk::AttachmentStoreOperation::Store,
+    //                     Vk::AttachmentStoreOperation::DontCare}, Vk::ImageLayout::Undefined,
+    //                     Vk::ImageLayout::ColorAttachment,
+    //                     sampleCount},
+    //                 // offscreen depth
+    //                 Vk::AttachmentDescription{
+    //                     depthFormat,
+    //                     {Vk::AttachmentLoadOperation::Clear,
+    //                     Vk::AttachmentLoadOperation::DontCare},
+    //                     {Vk::AttachmentStoreOperation::Store,
+    //                     Vk::AttachmentStoreOperation::Store}, Vk::ImageLayout::Undefined,
+    //                     Vk::ImageLayout::DepthStencilAttachment,
+    //                     sampleCount}})
+    //            .addSubpass(Vk::SubpassDescription{}
+    //                            .setColorAttachments(
+    //                                {Vk::AttachmentReference{0,
+    //                                Vk::ImageLayout::ColorAttachment}})
+    //                            .setDepthStencilAttachment({Vk::AttachmentReference{
+    //                                1, Vk::ImageLayout::DepthStencilAttachment}}))
+    //            .setDependencies({Vk::SubpassDependency{
+    //                Vk::SubpassDependency::External, // srcSubpass
+    //                0,                               // dstSubpass
+    //                Vk::PipelineStage::ColorAttachmentOutput |
+    //                    Vk::PipelineStage::EarlyFragmentTests, // srcStages
+    //                Vk::PipelineStage::ColorAttachmentOutput |
+    //                    Vk::PipelineStage::EarlyFragmentTests, // dstStages
+    //                Vk::Access{},                              // srcAccess
+    //                Vk::Access::ColorAttachmentWrite |
+    //                    Vk::Access::DepthStencilAttachmentWrite, // dstAccess
+    //            }}));
 
     Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
-        shaderSet, mesh.layout(), *layout_, *mainRenderPass_, 0, 1};
+        shaderSet, mesh.layout(), *layout_, VK_NULL_HANDLE /**mainRenderPass_*/, 0, 1};
 
     // configure dynamic state - one viewport and scissor configured but no dimensions specified
     rasterizationPipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
@@ -148,6 +151,16 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
 
     rasterizationPipelineCreateInfo->pMultisampleState = &multisampling;
     rasterizationPipelineCreateInfo->pDepthStencilState = &depthStencilState;
+
+    // fill the dynamic rendering struct
+    const VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &colorFormat,
+        .depthAttachmentFormat = depthFormat,
+        .stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+    };
+    rasterizationPipelineCreateInfo->pNext = &pipelineRenderingCreateInfo;
 
     pipeline_ =
         std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));

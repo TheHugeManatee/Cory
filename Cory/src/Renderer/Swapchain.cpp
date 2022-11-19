@@ -191,13 +191,14 @@ FrameContext Swapchain::nextImage()
     fc.rendered = &imageRendered_[nextFrameIndex];
 
     // get the swapchain image view
-    fc.swapchainImage = &imageViews_[nextFrameIndex];
+    fc.swapchainImage = &images_[nextFrameIndex];
+    fc.swapchainImageView = &imageViews_[nextFrameIndex];
 
     // create a command buffer
     // TODO evaluate if it is more optimal to reuse command buffers?!
     commandBuffers_[nextFrameIndex] = ctx_->commandPool().allocate();
     fc.commandBuffer = &commandBuffers_[nextFrameIndex];
-    nameVulkanObject(ctx_->device(), *fc.commandBuffer, fmt::format("Frame #{}", fc.frameNumber));
+    nameVulkanObject(ctx_->device(), *fc.commandBuffer, fmt::format("CmdBuf Frame #{}", fc.frameNumber));
 
     return fc;
 }

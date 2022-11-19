@@ -18,7 +18,9 @@
 #include <Magnum/Vk/FenceCreateInfo.h>
 #include <Magnum/Vk/InstanceCreateInfo.h>
 #include <Magnum/Vk/Queue.h>
+#include <Magnum/Vk/Result.h>
 #include <Magnum/Vk/Version.h>
+#include <Magnum/Vk/Vulkan.h>
 
 namespace Vk = Magnum::Vk;
 
@@ -66,11 +68,19 @@ Context::Context()
 
     const auto app_name{"Cory-based Vulkan Application"};
 
-    data_->instance.create(Vk::InstanceCreateInfo{}
-                               .setApplicationInfo(app_name, Vk::version(1, 0, 0))
-                               .addEnabledLayers({"VK_LAYER_KHRONOS_validation"})
-                               .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
-                               .addEnabledExtensions({"VK_KHR_surface", "VK_KHR_win32_surface"}));
+    // for dynamic rendering, we need:
+    //  - KHR_get_physical_device_properties2 instance extension
+    //  - KHR_dynamic_rendering device extension
+    //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
+
+    data_->instance.create(
+        Vk::InstanceCreateInfo{}
+            .setApplicationInfo(app_name, Vk::version(1, 0, 0))
+            .addEnabledLayers({"VK_LAYER_KHRONOS_validation"})
+            .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
+            .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,
+                                   "VK_KHR_win32_surface",
+                                   VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME}));
     data_->instance.populateGlobalFunctionPointers();
 
     data_->physicalDevice = Vk::pickDevice(data_->instance);
@@ -78,7 +88,7 @@ Context::Context()
 
     Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
     Vk::DeviceCreateInfo info{data_->physicalDevice, &extensions};
-    info.addEnabledExtensions({"VK_KHR_swapchain"});
+    info.addEnabledExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_dynamic_rendering"});
 
     // configure a Graphics and a Compute queue - assumes that there is a family that
     // supports both graphics and compute, which is probably not universal
@@ -86,7 +96,17 @@ Context::Context()
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
     info.addQueues(data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
 
-    data_->device.create(data_->instance, std::move(info));
+    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+        .dynamicRendering = VK_TRUE,
+    };
+    info->pNext = &dynamicRenderingFeatures;
+
+    Vk::Result deviceCreateResult = data_->device.tryCreate(data_->instance, std::move(info));
+    if (deviceCreateResult != Vk::Result::Success) {
+        throw std::runtime_error{
+            fmt::format("Could not create logical device! result = {}", deviceCreateResult)};
+    }
     data_->device.populateGlobalFunctionPointers();
     // set a debug name for the logical device and queues
     nameVulkanObject(data_->device, data_->device, fmt::format("[{}] Logical Device", data_->name));

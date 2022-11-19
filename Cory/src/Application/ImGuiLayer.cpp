@@ -5,8 +5,8 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/SingleShotCommandBuffer.hpp>
-#include <Cory/Renderer/VulkanUtils.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -140,7 +140,9 @@ ImGuiLayer::ImGuiLayer()
 
 ImGuiLayer::~ImGuiLayer()
 {
-    CO_CORE_ASSERT(!data_, "ImGuiLayer::deinit() needs to be called before destruction of the layer!");
+    if (data_ != nullptr) {
+        CO_CORE_WARN("ImGuiLayer::deinit() should be called before destruction of the layer!");
+    }
 }
 
 void ImGuiLayer::init(Window &window, Context &ctx)
@@ -160,9 +162,9 @@ void ImGuiLayer::init(Window &window, Context &ctx)
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
 
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    //io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
 
     // Setup Dear ImGui style
@@ -220,7 +222,7 @@ void ImGuiLayer::init(Window &window, Context &ctx)
 
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 
-    //setupCustomColors();
+    // setupCustomColors();
 }
 
 void ImGuiLayer::deinit(Context &ctx)
@@ -267,8 +269,10 @@ void ImGuiLayer::recordFrameCommands(Context &ctx, FrameContext &frameCtx)
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *frameCtx.commandBuffer);
     frameCtx.commandBuffer->endRenderPass();
 }
-void ImGuiLayer::setupCustomColors() {
-    ImVec4* colors = ImGui::GetStyle().Colors;
+void ImGuiLayer::setupCustomColors()
+{
+    ImVec4 *colors = ImGui::GetStyle().Colors;
+    // clang-format off
     colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
     colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
     colors[ImGuiCol_WindowBg]               = ImVec4(0.06f, 0.06f, 0.06f, 0.00f); // <
@@ -324,6 +328,7 @@ void ImGuiLayer::setupCustomColors() {
     colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
     colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
+    // clang-format on
 }
 
 } // namespace Cory

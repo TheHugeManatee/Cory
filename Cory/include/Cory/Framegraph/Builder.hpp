@@ -2,11 +2,30 @@
 
 #include <Cory/Framegraph/Common.hpp>
 
-#include <string_view>
 #include <cppcoro/task.hpp>
+#include <string_view>
 
 namespace Cory::Framegraph {
-/// a builder that allows a render pass to declare specific dependencies (inputs and outputs)
+
+struct RenderPassInfo {
+    std::string name;
+    std::vector<TextureHandle> inputs; // todo: needs to include clear value, load/store, layout
+    std::vector<std::pair<TextureHandle, PassOutputKind>> outputs;
+
+    DynamicStates states{};
+
+    // framegraph internal stuff
+    cppcoro::coroutine_handle<> coroHandle;
+    int32_t executionPriority{-1}; ///< assigned when the render graph is resolved
+};
+
+/**
+ * a builder that allows a render pass to declare specific dependencies (inputs and outputs).
+ *
+ * For defaults, see default values in RenderPassInfo.
+ *
+ * Meant to be used only locally, hence not copy- or movable.
+ */
 class Builder : NoCopy, NoMove {
   public:
     Builder(Framegraph &framegraph, std::string_view passName);
@@ -33,11 +52,13 @@ class Builder : NoCopy, NoMove {
      */
     RenderPassExecutionAwaiter finishDeclaration();
 
+    Builder &set(DepthTest depthTest) { info_.states.depthTest = depthTest; }
+    Builder &set(DepthWrite depthWrite) { info_.states.depthWrite = depthWrite; }
+    Builder &set(CullMode cullMode) { info_.states.cullMode = cullMode; }
+
   private:
-    std::string passName_;
+    RenderPassInfo info_;
     Framegraph &framegraph_;
-    std::vector<TextureHandle> inputs;
-    std::vector<std::pair<TextureHandle, PassOutputKind>> outputs;
 };
 
-}
+} // namespace Cory::Framegraph

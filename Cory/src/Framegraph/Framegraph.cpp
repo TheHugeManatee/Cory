@@ -1,5 +1,9 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 
+#include <Cory/Framegraph/Commands.hpp>
+
+#include <Magnum/Vk/CommandBuffer.h>
+
 #include <range/v3/action/unique.hpp>
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/reverse.hpp>
@@ -12,12 +16,19 @@
 #include <deque>
 #include <unordered_map>
 
+namespace Vk = Magnum::Vk;
+
 namespace Cory::Framegraph {
 
 Builder Framegraph::Framegraph::declarePass(std::string_view name)
 {
     //
     return Builder{*this, name};
+}
+
+Framegraph::Framegraph(Context &ctx)
+    : ctx_{&ctx}
+{
 }
 
 Framegraph::~Framegraph()
@@ -28,19 +39,42 @@ Framegraph::~Framegraph()
     }
 }
 
-void Framegraph::execute()
+void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
 {
     std::vector<RenderPassHandle> passesToExecute = compile();
+    Commands cmd{*ctx_, cmdBuffer};
 
     for (const auto &handle : passesToExecute) {
-        const RenderPassInfo &rpInfo = renderPasses_[handle];
-        auto &coroHandle = rpInfo.coroHandle;
-        CO_CORE_INFO("Executing rendering commands for {}", rpInfo.name);
-        if (!coroHandle.done()) { coroHandle.resume(); }
-        CO_CORE_ASSERT(
-            coroHandle.done(),
-            "Render pass definition seems to have more unnecessary synchronization points!");
+        executePass(cmd, handle);
     }
+}
+void Framegraph::executePass(Commands &cmd, RenderPassHandle handle)
+{
+    const RenderPassInfo &rpInfo = renderPasses_[handle];
+
+    CO_CORE_INFO("Setting up Render pass {}", rpInfo.name);
+    // ## handle resource transitions
+    // todo
+    // ## set up attachment infos
+    // ## call BeginRendering
+
+    //    ctx_->device()->CmdBeginRendering(cmdBuffer, &beginRenderingInfo);
+
+    // ## set up dynamic states
+    //    ctx_->device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
+    //    ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
+    //    ctx_->device()->CmdSetCullMode(cmdBuffer, VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT);
+
+    // ## update push constant data?
+
+    CO_CORE_INFO("Executing rendering commands for {}", rpInfo.name);
+    auto &coroHandle = rpInfo.coroHandle;
+    if (!coroHandle.done()) { coroHandle.resume(); }
+    CO_CORE_ASSERT(coroHandle.done(),
+                   "Render pass definition seems to have more unnecessary synchronization points!");
+
+    // ## finish render pass
+    //    ctx_->device()->CmdEndRendering(cmdBuffer);
 }
 TextureHandle Framegraph::declareInput(std::string_view name)
 {
@@ -73,7 +107,10 @@ std::vector<RenderPassHandle> Framegraph::compile()
     return passes;
 }
 
-RenderInput RenderPassExecutionAwaiter::await_resume() const noexcept { return fg.renderInput(); }
+RenderInput RenderPassExecutionAwaiter::await_resume() const noexcept
+{
+    return fg.renderInput(passHandle);
+}
 
 void RenderPassExecutionAwaiter::await_suspend(
     cppcoro::coroutine_handle<> coroHandle) const noexcept
@@ -228,6 +265,12 @@ Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResource
 
     return passesToExecute | ranges::views::transform([](const auto &it) { return it.first; }) |
            ranges::to<std::vector<RenderPassHandle>>;
+}
+
+RenderInput Framegraph::renderInput(RenderPassHandle passHandle)
+{
+    // TODO
+    return {};
 }
 
 } // namespace Cory::Framegraph

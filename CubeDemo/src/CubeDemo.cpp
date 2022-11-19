@@ -316,6 +316,7 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
     glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 0.1f, 10.0f);
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
 
+    // update the uniform buffer
     CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
     ubo.view = viewMatrix;
     ubo.projection = projectionMatrix;

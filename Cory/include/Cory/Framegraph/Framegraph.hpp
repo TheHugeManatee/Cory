@@ -3,9 +3,9 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Framegraph/Builder.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
-#include <Cory/Framegraph/Builder.hpp>
 
 #include <cppcoro/shared_task.hpp>
 #include <cppcoro/task.hpp>
@@ -30,14 +30,6 @@ namespace Cory::Framegraph {
 struct RenderInput {
     struct RenderPassResources *resources;
     struct RenderContext *context;
-};
-
-struct RenderPassInfo {
-    std::string name;
-    std::vector<TextureHandle> inputs;
-    std::vector<std::pair<TextureHandle, PassOutputKind>> outputs;
-    cppcoro::coroutine_handle<> coroHandle;
-    int32_t executionPriority{-1};
 };
 
 /**
@@ -65,14 +57,15 @@ class Framegraph : NoCopy, NoMove {
     friend Builder;                    // convenience so it can call finishPassDeclaration
     friend RenderPassExecutionAwaiter; // so it can call enqueueRenderPass
 
+    Framegraph(Context &ctx);
     ~Framegraph();
 
-    void execute();
+    void execute(Magnum::Vk::CommandBuffer &cmdBuffer);
 
     Builder declarePass(std::string_view name);
 
     /// to be called from Builder
-    RenderInput renderInput() { return {}; }
+    RenderInput renderInput(RenderPassHandle passHandle);
 
     /// declare an external texture as an input - TODO arguments
     TextureHandle declareInput(std::string_view name);
@@ -81,7 +74,7 @@ class Framegraph : NoCopy, NoMove {
 
     void dump();
 
-  private:
+  private: /* member functions */
     RenderPassHandle finishPassDeclaration(RenderPassInfo &&info)
     {
         return renderPasses_.emplace(info);
@@ -104,7 +97,10 @@ class Framegraph : NoCopy, NoMove {
     resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
     std::vector<RenderPassHandle> compile();
+    void executePass(Commands &cmd, RenderPassHandle handle);
 
+  private: /* members */
+    Context *ctx_;
     TextureResourceManager resources_;
     std::vector<TransientTextureHandle> externalInputs_;
     std::vector<TransientTextureHandle> outputs_;

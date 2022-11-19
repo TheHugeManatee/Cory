@@ -1,8 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "TestUtils.hpp"
+
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/Framegraph/RenderPassDeclaration.hpp>
+
+#include <Magnum/Vk/CommandBuffer.h>
+#include <Magnum/Vk/CommandPool.h>
 
 #include <cppcoro/fmap.hpp>
 #include <cppcoro/sync_wait.hpp>
@@ -28,7 +33,7 @@ FG::RenderPassDeclaration<DepthPassOutputs> depthPass(FG::Framegraph &graph, glm
 
     co_yield outputs;
     FG::RenderInput render = co_await builder.finishDeclaration();
-
+    
     CO_APP_INFO("[DepthPrepass] render commands executing");
 }
 
@@ -139,7 +144,9 @@ FG::RenderPassDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
 
 TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 {
-    FG::Framegraph fg;
+    testing::VulkanTester t;
+
+    FG::Framegraph fg(t.ctx());
     FG::TextureHandle prevFrameColor = fg.declareInput("previousFrameColor");
 
     auto depthPass = passes::depthPass(fg, {800, 600, 1});
@@ -166,6 +173,7 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
                 postprocessOut.color.size.y,
                 postprocessOut.color.size.z);
 
+    Magnum::Vk::CommandBuffer buffer = t.ctx().commandPool().allocate();
 
-    fg.execute();
+    fg.execute(buffer);
 }

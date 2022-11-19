@@ -31,8 +31,6 @@ class CubeDemoApplication : public Cory::Application {
     void run() override;
 
   private:
-    // create a framebuffer for each of the swap chain images
-    void createFramebuffers();
     // create the mesh to be rendered
     void createGeometry();
     void createUBO();
@@ -52,7 +50,6 @@ class CubeDemoApplication : public Cory::Application {
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<CubePipeline> pipeline_;
-    std::vector<Magnum::Vk::Framebuffer> framebuffers_;
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 

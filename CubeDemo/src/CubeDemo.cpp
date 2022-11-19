@@ -130,11 +130,10 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "CubeDemo", msaaSamples);
 
-    auto recreateSizedResources = [&](glm::i32vec2) { createFramebuffers(); };
+    auto recreateSizedResources = [&](glm::i32vec2) { /* nothing? */ };
 
     createGeometry();
     createPipeline();
-    createFramebuffers();
     recreateSizedResources(window_->dimensions());
     window_->onSwapchainResized.connect(recreateSizedResources);
 
@@ -218,36 +217,97 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
     // do some color swirly thingy
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
     // Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
-    Magnum::Color4 clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    VkClearValue clearColor{.color = {0.0f, 0.0f, 0.0f, 1.0f}};
+    VkClearValue clearDepth{.depthStencil = {.depth = 1.0f, .stencil = 0}};
+
+    VkRect2D renderArea{.offset = {0, 0},
+                        .extent = VkExtent2D{static_cast<uint32_t>(window_->dimensions().x),
+                                             static_cast<uint32_t>(window_->dimensions().y)}};
 
     Vk::CommandBuffer &cmdBuffer = *frameCtx.commandBuffer;
 
     cmdBuffer.begin(Vk::CommandBufferBeginInfo{});
-    cmdBuffer.bindPipeline(pipeline_->pipeline());
-    cmdBuffer.beginRenderPass(
-        Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), framebuffers_[frameCtx.index]}
-            .clearColor(0, clearColor)
-            .clearDepthStencil(1, 1.0, 0));
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(window_->dimensions().x);
-    viewport.height = static_cast<float>(window_->dimensions().y);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    VkRect2D scissor{{0, 0},
-                     {static_cast<uint32_t>(window_->dimensions().x),
-                      static_cast<uint32_t>(window_->dimensions().y)}};
+    // currently, we do this barrier every frame even though it is technically only needed when FB
+    // changes
+    const VkImageMemoryBarrier imageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .image = *frameCtx.colorImage,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        }};
+
+    ctx_->device()->CmdPipelineBarrier(
+        cmdBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,             // srcStageMask
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // dstStageMask
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        1,                  // imageMemoryBarrierCount
+        &imageMemoryBarrier // pImageMemoryBarriers
+    );
+
+    cmdBuffer.bindPipeline(pipeline_->pipeline());
+
+    const VkRenderingAttachmentInfo colorAttachmentInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = *frameCtx.colorImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = clearColor,
+    };
+    const VkRenderingAttachmentInfo depthStencilAttachmentInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = *frameCtx.depthImageView,
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = clearDepth,
+    };
+
+    const VkRenderingInfo beginRenderingInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+                                             .pNext = nullptr,
+                                             .flags = {},
+                                             .renderArea = renderArea,
+                                             .layerCount = 1,
+                                             .viewMask = {},
+                                             .colorAttachmentCount = 1,
+                                             .pColorAttachments = &colorAttachmentInfo,
+                                             .pDepthAttachment = &depthStencilAttachmentInfo,
+                                             .pStencilAttachment = nullptr};
+    ctx_->device()->CmdBeginRendering(cmdBuffer, &beginRenderingInfo);
+
+    // set up viewport and culling via dynamic states
+    glm::u32vec2 wndSize = window_->dimensions();
+    glm::vec2 wndSizef = wndSize;
+    VkViewport viewport{
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = wndSizef.x,
+        .height = wndSizef.y,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    VkRect2D scissor{{0, 0}, {wndSize.x, wndSize.y}};
     ctx_->device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
     ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
-
     ctx_->device()->CmdSetCullMode(cmdBuffer, VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT);
+
     PushConstants pushData{};
 
     float fovy = glm::radians(70.0f);
-    glm::vec2 wndSize = window_->dimensions();
-    float aspect = wndSize.x / wndSize.y;
+    float aspect = wndSizef.x / wndSizef.y;
     glm::mat4 viewMatrix = camera_.getViewMatrix();
     glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 0.1f, 10.0f);
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
@@ -287,28 +347,12 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
         cmdBuffer.draw(*mesh_);
     }
 
-    cmdBuffer.endRenderPass();
+    ctx_->device()->CmdEndRendering(cmdBuffer);
 
+    // note - currently, we're letting imgui handle the final resolve!
     imguiLayer_->recordFrameCommands(*ctx_, frameCtx);
 
     cmdBuffer.end();
-}
-
-void CubeDemoApplication::createFramebuffers()
-{
-    Cory::ScopeTimer st{"Init/Framebuffers"};
-    auto swapchainExtent = window_->swapchain().extent();
-    Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
-
-    framebuffers_ = window_->depthViews() | ranges::views::transform([&](auto &depth) {
-                        auto &color = window_->colorView();
-
-                        return Vk::Framebuffer(
-                            ctx_->device(),
-                            Vk::FramebufferCreateInfo{
-                                pipeline_->mainRenderPass(), {color, depth}, framebufferSize});
-                    }) |
-                    ranges::to<std::vector<Vk::Framebuffer>>;
 }
 
 void CubeDemoApplication::createGeometry()

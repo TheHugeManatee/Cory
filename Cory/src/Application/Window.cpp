@@ -156,8 +156,10 @@ FrameContext Window::nextSwapchainImage()
         return nextSwapchainImage();
     }
 
-    frameCtx.colorView = &colorImageView_;
-    frameCtx.depthView = &depthImageViews_[frameCtx.index];
+    frameCtx.colorImage = &colorImage_;
+    frameCtx.colorImageView = &colorImageView_;
+    frameCtx.depthImage = &depthImages_[frameCtx.index];
+    frameCtx.depthImageView = &depthImageViews_[frameCtx.index];
 
     return frameCtx;
 }
@@ -197,11 +199,15 @@ void Window::createColorAndDepthResources()
     const int levels = 1;
 
     // color image
-    colorImage_ =
-        Vk::Image{ctx_.device(),
-                  Vk::ImageCreateInfo2D{
-                      Vk::ImageUsage::ColorAttachment, colorFormat_, size, levels, sampleCount_},
-                  Vk::MemoryFlag::DeviceLocal};
+    colorImage_ = Vk::Image{
+        ctx_.device(),
+        // TransferSource is needed to be able to resolve from the image
+        Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::TransferSource,
+                              colorFormat_,
+                              size,
+                              levels,
+                              sampleCount_},
+        Vk::MemoryFlag::DeviceLocal};
 
     colorImageView_ = Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage_}};
 

@@ -26,22 +26,6 @@ namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
-namespace detail {
-
-VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                                     void *pUserData)
-{
-    Context *context = static_cast<Context *>(pUserData);
-    // CO_APP_ERROR("Vulkan error: {}", pCallbackData->pMessage);
-    context->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
-                                      static_cast<DebugMessageType>(messageType),
-                                      pCallbackData);
-    return VK_TRUE;
-}
-} // namespace detail
-
 struct ContextPrivate {
     std::string name;
     bool isHeadless{false};
@@ -59,7 +43,25 @@ struct ContextPrivate {
     Vk::CommandPool commandPool{Corrade::NoCreate};
 
     ResourceManager resources;
+
+    Callback<const DebugMessageInfo &> onVulkanDebugMessageReceived;
+
+    void receiveDebugUtilsMessage(DebugMessageSeverity severity,
+                                  DebugMessageType messageType,
+                                  const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 };
+
+VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                                     void *pUserData)
+{
+    ContextPrivate *contextData = static_cast<ContextPrivate *>(pUserData);
+    contextData->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
+                                          static_cast<DebugMessageType>(messageType),
+                                          pCallbackData);
+    return VK_TRUE;
+}
 
 Context::Context()
     : data_{std::make_unique<ContextPrivate>()}
@@ -130,6 +132,21 @@ Context::Context()
     data_->resources.setContext(*this);
 }
 
+Context::Context(Context &&rhs) { std::swap(rhs.data_, data_); }
+Context &Context::operator=(Context &&rhs)
+{
+    if (this != &rhs) { std::swap(rhs.data_, data_); }
+    return *this;
+}
+
+Context::~Context()
+{
+    if (data_) {
+        instance()->DestroyDebugUtilsMessengerEXT(data_->instance, data_->debugMessenger, nullptr);
+        CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
+    }
+}
+
 void Context::setupDebugMessenger()
 {
     VkDebugUtilsMessengerCreateInfoEXT dbgMessengerCreateInfo{
@@ -143,8 +160,8 @@ void Context::setupDebugMessenger()
         .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-        .pfnUserCallback = detail::debugUtilsMessengerCallback,
-        .pUserData = nullptr};
+        .pfnUserCallback = debugUtilsMessengerCallback,
+        .pUserData = data_.get()};
 
     instance()->CreateDebugUtilsMessengerEXT(
         data_->instance, &dbgMessengerCreateInfo, nullptr, &data_->debugMessenger);
@@ -164,37 +181,7 @@ void Context::setupDebugMessenger()
     //    data->device.handle(), debugMessenger, fmt::format("{} Debug Messenger", data->name));
 }
 
-Context::~Context()
-{
-    instance()->DestroyDebugUtilsMessengerEXT(data_->instance, data_->debugMessenger, nullptr);
-    CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
-}
-
-std::string Context::getName() const { return data_->name; }
-
-void Context::receiveDebugUtilsMessage(DebugMessageSeverity severity,
-                                       DebugMessageType messageType,
-                                       const VkDebugUtilsMessengerCallbackDataEXT *callbackData)
-{
-    auto level = [&]() {
-        switch (severity) {
-        case DebugMessageSeverity::Verbose:
-            return spdlog::level::trace;
-        case DebugMessageSeverity::Info:
-            return spdlog::level::info;
-        case DebugMessageSeverity::Warning:
-            return spdlog::level::warn;
-        case DebugMessageSeverity::Error:
-            return spdlog::level::err;
-        }
-        return spdlog::level::debug;
-    }();
-
-    Log::GetCoreLogger()->log(level, "[VulkanDebugMsg:{}] {}", messageType, callbackData->pMessage);
-#if _MSC_VER && _DEBUG
-    if (severity == DebugMessageSeverity::Error) { __debugbreak(); }
-#endif
-}
+std::string Context::name() const { return data_->name; }
 
 Semaphore Context::createSemaphore(std::string_view name)
 {
@@ -235,5 +222,37 @@ Magnum::Vk::Queue &Context::computeQueue() { return data_->computeQueue; }
 uint32_t Context::computeQueueFamily() const { return data_->computeQueueFamily; }
 ResourceManager &Context::resources() { return data_->resources; }
 const ResourceManager &Context::resources() const { return data_->resources; }
+
+void Context::onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo &)> callback)
+{
+    data_->onVulkanDebugMessageReceived(std::move(callback));
+}
+
+void ContextPrivate::receiveDebugUtilsMessage(
+    DebugMessageSeverity severity,
+    DebugMessageType messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT *callbackData)
+{
+    auto level = [&]() {
+        switch (severity) {
+        case DebugMessageSeverity::Verbose:
+            return spdlog::level::trace;
+        case DebugMessageSeverity::Info:
+            return spdlog::level::info;
+        case DebugMessageSeverity::Warning:
+            return spdlog::level::warn;
+        case DebugMessageSeverity::Error:
+            return spdlog::level::err;
+        }
+        return spdlog::level::debug;
+    }();
+
+    onVulkanDebugMessageReceived.invoke(
+        {.severity = severity, .messageType = messageType, .message = callbackData->pMessage});
+    Log::GetCoreLogger()->log(level, "[VulkanDebugMsg:{}] {}", messageType, callbackData->pMessage);
+#if _MSC_VER && _DEBUG
+    if (severity == DebugMessageSeverity::Error) { __debugbreak(); }
+#endif
+}
 
 } // namespace Cory

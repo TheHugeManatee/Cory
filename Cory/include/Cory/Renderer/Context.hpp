@@ -18,6 +18,7 @@ namespace Cory {
 struct DebugMessageInfo {
     DebugMessageSeverity severity;
     DebugMessageType messageType;
+    int32_t messageIdNumber;
     std::string message;
 };
 

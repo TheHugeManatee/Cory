@@ -166,16 +166,6 @@ void Context::setupDebugMessenger()
     instance()->CreateDebugUtilsMessengerEXT(
         data_->instance, &dbgMessengerCreateInfo, nullptr, &data_->debugMessenger);
 
-    VkDebugUtilsMessengerCallbackDataEXT messageCallbackData{
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CALLBACK_DATA_EXT};
-    auto message =
-        fmt::format("Cory context '{}' initialized and debug messenger attached.", data_->name);
-    messageCallbackData.pMessage = message.c_str();
-    instance()->SubmitDebugUtilsMessageEXT(data_->instance,
-                                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
-                                           VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
-                                           &messageCallbackData);
-
     // this seems to crash - not sure if driver or implementation bug...
     // nameRawVulkanObject(
     //    data->device.handle(), debugMessenger, fmt::format("{} Debug Messenger", data->name));
@@ -247,12 +237,11 @@ void ContextPrivate::receiveDebugUtilsMessage(
         return spdlog::level::debug;
     }();
 
-    onVulkanDebugMessageReceived.invoke(
-        {.severity = severity, .messageType = messageType, .message = callbackData->pMessage});
+    onVulkanDebugMessageReceived.invoke({.severity = severity,
+                                         .messageType = messageType,
+                                         .messageIdNumber = callbackData->messageIdNumber,
+                                         .message = callbackData->pMessage});
     Log::GetCoreLogger()->log(level, "[VulkanDebugMsg:{}] {}", messageType, callbackData->pMessage);
-#if _MSC_VER && _DEBUG
-    if (severity == DebugMessageSeverity::Error) { __debugbreak(); }
-#endif
 }
 
 } // namespace Cory

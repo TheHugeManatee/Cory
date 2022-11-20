@@ -13,7 +13,12 @@ class VulkanTester {
     VulkanTester();
     ~VulkanTester();
 
-    Context& ctx();
+    Context &ctx();
+
+    const std::vector<DebugMessageInfo> &errors();
+
+    // indicate that a test expects a specific vulkan message id
+    void expectMessageId(int32_t messageIdNumber);
 
   private:
     std::unique_ptr<struct VulkanTestContextPrivate> data_;

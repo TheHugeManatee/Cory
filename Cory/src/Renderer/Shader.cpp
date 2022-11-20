@@ -102,6 +102,7 @@ ShaderSource::ShaderSource(std::filesystem::path filePath, ShaderType type)
 
 std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool optimize)
 {
+    // static for now, we should really move this to a global static instance
     static shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetIncluder(std::make_unique<FileIncludeHandler>());
@@ -138,7 +139,10 @@ Shader::Shader(Context &ctx, ShaderSource source)
     , source_{source}
     , type_{source_.type()}
 {
-    std::vector<uint32_t> spirvBinary = CompileToSpv(source);
+    std::vector<uint32_t> spirvBinary = CompileToSpv(source, false);
+    if (spirvBinary.empty()) {
+        throw std::runtime_error{"Could not compile shader source to SPIR-V"};
+    }
 
     Magnum::Vk::ShaderCreateInfo info{Corrade::Containers::ArrayView<uint32_t>{spirvBinary}};
 

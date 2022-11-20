@@ -231,7 +231,16 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
         const auto idx = num_chunks * CHUNK_SIZE;
         chunk[0].id = SlotMapHandle{static_cast<uint32_t>(idx), 0, false};
 
-        new (&chunk[0].storage) StoredType{std::forward<InitArgs>(args)...};
+        try {
+            new (&chunk[0].storage) StoredType{std::forward<InitArgs>(args)...};
+        }
+        catch (...) {
+            // if construction throws, put slot back into free list
+            chunk[0].id = SlotMapHandle::setFreeBit(chunk[0].id);
+            freeList_.push_back(chunk[0].id.index());
+            throw;
+        }
+
         return chunk[0].id;
     }
 
@@ -241,9 +250,18 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
 
     auto &object = *objectAt(free);
     CO_CORE_ASSERT(!object.id.alive(), "We got a live object from the free list!");
+
+    try {
+        // try to construct the object in the storage
+        new (&object.storage) StoredType{std::forward<InitArgs>(args)...};
+    }
+    catch (...) {
+        // if construction throws, put slot back into free list
+        freeList_.push_back(object.id.index());
+        throw;
+    }
     object.id = SlotMapHandle::clearFreeBit(object.id);
-    // construct the object in the storage
-    new (&object.storage) StoredType{std::forward<InitArgs>(args)...};
+
     return object.id;
 }
 

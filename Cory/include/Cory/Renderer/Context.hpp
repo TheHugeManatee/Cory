@@ -1,6 +1,6 @@
 #pragma once
 
-
+#include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Semaphore.hpp>
@@ -15,21 +15,26 @@
 
 namespace Cory {
 
+struct DebugMessageInfo {
+    DebugMessageSeverity severity;
+    DebugMessageType messageType;
+    int32_t messageIdNumber;
+    std::string message;
+};
+
 /**
- * The main context for cory
+ * The main context for cory (collects pretty much everything).
  */
-class Context : NoCopy, NoMove {
+class Context : NoCopy {
   public:
     Context();
     ~Context();
 
-    std::string getName() const;
+    // movable
+    Context(Context &&rhs);
+    Context &operator=(Context &&rhs);
 
-    // receive and process a message from the vulkan debug utils - should not be called directly,
-    // only exposed for REASONS
-    void receiveDebugUtilsMessage(DebugMessageSeverity severity,
-                                  DebugMessageType messageType,
-                                  const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
+    std::string name() const;
 
     [[nodiscard]] Semaphore createSemaphore(std::string_view name = "");
     [[nodiscard]] Magnum::Vk::Fence createFence(std::string_view name = "",
@@ -40,7 +45,7 @@ class Context : NoCopy, NoMove {
     Magnum::Vk::Instance &instance();
     Magnum::Vk::DeviceProperties &physicalDevice();
     Magnum::Vk::Device &device();
-    Magnum::Vk::DescriptorPool& descriptorPool();
+    Magnum::Vk::DescriptorPool &descriptorPool();
     Magnum::Vk::CommandPool &commandPool();
 
     Magnum::Vk::Queue &graphicsQueue();
@@ -48,12 +53,15 @@ class Context : NoCopy, NoMove {
     Magnum::Vk::Queue &computeQueue();
     uint32_t computeQueueFamily() const;
 
-    ResourceManager& resources();
-    const ResourceManager& resources() const;
+    ResourceManager &resources();
+    const ResourceManager &resources() const;
+
+    void onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo&)> callback);
 
   private:
     std::unique_ptr<struct ContextPrivate> data_;
     void setupDebugMessenger();
 };
+// static_assert(std::movable<Context>, "Context must be movable");
 
 } // namespace Cory

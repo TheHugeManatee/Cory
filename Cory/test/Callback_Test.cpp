@@ -6,6 +6,7 @@ using namespace Cory;
 
 TEST_CASE("Callbacks with no arguments", "[Cory/Base/Callback]")
 {
+    static_assert(std::movable<Callback<void>>);
     GIVEN("A callback")
     {
         Callback<void> onCallbackCalled;
@@ -36,6 +37,7 @@ TEST_CASE("Callbacks with no arguments", "[Cory/Base/Callback]")
 
 TEST_CASE("Callbacks with multiple arguments", "[Cory/Base/Callback]")
 {
+    static_assert(std::movable<Callback<int>>);
     GIVEN("A callback")
     {
         Callback<int> onCallbackCalled;

@@ -15,6 +15,22 @@ concept CompatibleCallable = requires(Callable cb) {
 
 template <typename... Args> class Callback {
   public:
+    Callback() = default;
+    Callback(Callback &&rhs) noexcept { rhs.swap(*this); }
+    Callback &operator=(Callback &&rhs) noexcept
+    {
+        if (this != &rhs) { rhs.swap(*this); }
+        return *this;
+    }
+
+    void swap(Callback &rhs) noexcept
+    {
+        std::lock(mtx_, rhs.mtx_);
+        std::swap(rhs.cb_, cb_);
+        mtx_.unlock();
+        rhs.mtx_.unlock();
+    }
+
     /// invoke the callback function, if one is registered
     void invoke(Args... args) const
     {
@@ -36,7 +52,8 @@ template <typename... Args> class Callback {
     }
 
     /// reset the callback function, removing any previously registered callback function
-    void reset() {
+    void reset()
+    {
         std::lock_guard lk_{mtx_};
         cb_ = {};
     }
@@ -49,6 +66,21 @@ template <typename... Args> class Callback {
 template <> class Callback<void> {
   public:
     using ReturnType = void;
+
+    Callback() = default;
+    Callback(Callback &&rhs) noexcept { rhs.swap(*this); }
+    Callback &operator=(Callback &&rhs) noexcept
+    {
+        if (this != &rhs) { rhs.swap(*this); }
+        return *this;
+    }
+    void swap(Callback &rhs) noexcept
+    {
+        std::lock(mtx_, rhs.mtx_);
+        std::swap(rhs.cb_, cb_);
+        mtx_.unlock();
+        rhs.mtx_.unlock();
+    }
 
     /// invoke the callback function, if one is registered
     void invoke() const
@@ -65,7 +97,8 @@ template <> class Callback<void> {
     void operator()(auto &&callable) { cb_ = std::move(callable); }
 
     /// reset the callback function, removing any previously registered callback function
-    void reset() {
+    void reset()
+    {
         std::unique_lock lk_{mtx_};
         cb_ = {};
     }

@@ -73,5 +73,10 @@ void ResourceManager::release(BufferHandle bufferHandle)
 {
     data_->buffers.release(bufferHandle.handle_);
 }
+std::unordered_map<ResourceType, size_t> ResourceManager::resourcesInUse() const
+{
+    return {{ResourceType::Buffer, data_->buffers.size()},
+            {ResourceType::Shader, data_->shaders.size()}};
+}
 
 } // namespace Cory

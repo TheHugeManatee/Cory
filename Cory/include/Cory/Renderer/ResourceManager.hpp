@@ -8,6 +8,8 @@
 
 namespace Cory {
 
+enum class ResourceType { Buffer, Shader };
+
 /**
  * Central resource manager that manages all vulkan-related resources.
  *
@@ -39,12 +41,14 @@ class ResourceManager : NoCopy {
     [[nodiscard]] ShaderHandle
     createShader(std::string source, ShaderType type, std::filesystem::path filePath = "Unknown");
     /// dereference a shader handle to access the shader. may throw!
-    Shader &operator[](ShaderHandle shaderHandle);
+    [[nodiscard]] Shader &operator[](ShaderHandle shaderHandle);
     void release(ShaderHandle shaderHandle);
 
     BufferHandle createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags);
-    Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
+    [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
     void release(BufferHandle bufferHandle);
+
+    std::unordered_map<ResourceType, size_t> resourcesInUse() const;
 
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;

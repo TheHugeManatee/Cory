@@ -23,7 +23,10 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         Utils_Test.cpp
         SlotMap_Test.cpp
         BitField_Test.cpp
-        Callback_Test.cpp FrameGraph_Test.cpp CoroutinePlayground.cpp)
+        Callback_Test.cpp
+        FrameGraph_Test.cpp
+        CoroutinePlayground.cpp
+        ResourceManager_Test.cpp TestUtils.cpp TestUtils.hpp)
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(${TARGET_NAME}_TestLib PRIVATE Cory::project_options)
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Cory::${TARGET_NAME})

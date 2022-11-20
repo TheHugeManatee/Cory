@@ -48,8 +48,6 @@ catch_discover_tests(
         ${TARGET_NAME}_Tests
         TEST_PREFIX
         "unittests."
-        REPORTER
-        xml
         OUTPUT_DIR
         .
         OUTPUT_PREFIX

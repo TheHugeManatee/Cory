@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>

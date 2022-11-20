@@ -106,15 +106,14 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
 }
 
 // test struct that uses an external storage to track its lifetime
-enum ObjectState {
-    UNINIT,
-    ALIVE,
-    DEAD,
-};
+enum ObjectState { UNINIT, ALIVE, DEAD, THROW_ON_CONSTRUCTION };
 struct Foo {
     Foo(ObjectState &bookkeep)
         : bookkeep_{bookkeep}
     {
+        if (bookkeep_ == THROW_ON_CONSTRUCTION) {
+            throw std::runtime_error{"Object threw on construction"};
+        }
         bookkeep_ = ALIVE;
     }
     ~Foo()
@@ -141,6 +140,14 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         CHECK(bookkeeper == ALIVE);
         sm.release(h);
         CHECK(bookkeeper == DEAD);
+    }
+
+    SECTION("Object constructor throws")
+    {
+        SlotMap<Foo> sm;
+        ObjectState bookkeeper{THROW_ON_CONSTRUCTION};
+        CHECK_THROWS(sm.emplace(std::ref(bookkeeper)));
+        CHECK(sm.size() == 0);
     }
 
     SECTION("Destruction of stored objects on Slotmap Destruction")

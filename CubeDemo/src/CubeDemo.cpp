@@ -230,11 +230,16 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     // currently, we do this barrier every frame even though it is technically only needed when FB
     // changes
-    const VkImageMemoryBarrier imageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    const VkImageMemoryBarrier2 imageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        .srcAccessMask = VK_ACCESS_NONE,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex = ctx_->graphicsQueueFamily(),
+        .dstQueueFamilyIndex = ctx_->computeQueueFamily(),
         .image = *frameCtx.colorImage,
         .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -243,19 +248,18 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
             .baseArrayLayer = 0,
             .layerCount = 1,
         }};
-
-    ctx_->device()->CmdPipelineBarrier(
-        cmdBuffer,
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,             // srcStageMask
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // dstStageMask
-        0,
-        0,
-        nullptr,
-        0,
-        nullptr,
-        1,                  // imageMemoryBarrierCount
-        &imageMemoryBarrier // pImageMemoryBarriers
-    );
+    const VkDependencyInfo dependencyInfo{
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext = nullptr,
+        .dependencyFlags = {},// ?
+        .memoryBarrierCount = 0,
+        .pMemoryBarriers = nullptr,
+        .bufferMemoryBarrierCount = 0,
+        .pBufferMemoryBarriers = nullptr,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &imageMemoryBarrier
+    };
+    ctx_->device()->CmdPipelineBarrier2(cmdBuffer, &dependencyInfo);
 
     cmdBuffer.bindPipeline(pipeline_->pipeline());
 

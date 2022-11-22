@@ -98,8 +98,13 @@ Context::Context()
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
     info.addQueues(data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
 
+    VkPhysicalDeviceSynchronization2Features synchronization2Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+        .synchronization2 = VK_TRUE
+    };
     VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+        .pNext = &synchronization2Features,
         .dynamicRendering = VK_TRUE,
     };
     info->pNext = &dynamicRenderingFeatures;

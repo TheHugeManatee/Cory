@@ -239,7 +239,7 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
         .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = ctx_->graphicsQueueFamily(),
-        .dstQueueFamilyIndex = ctx_->computeQueueFamily(),
+        .dstQueueFamilyIndex = ctx_->graphicsQueueFamily(),
         .image = *frameCtx.colorImage,
         .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,

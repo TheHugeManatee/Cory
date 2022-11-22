@@ -36,8 +36,8 @@ CubePipeline::CubePipeline(Cory::Context &context,
 
 CubePipeline::~CubePipeline() = default;
 
-Magnum::Vk::Pipeline &CubePipeline::pipeline() { return ctx_.resources()[pipeline_]; }
 
+Magnum::Vk::Pipeline &CubePipeline::pipeline() { return ctx_.resources()[pipeline_]; }
 void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
                                           const Magnum::Vk::Mesh &mesh,
                                           std::filesystem::path vertFile,

@@ -30,7 +30,7 @@ As such, it uses features that are only supported in rather modern compilers.
     - [x] basic coroutine-based API and render pass resolution via graph search
     - [ ] automatically create render passes and layouts
     - [ ] actually execute render pass code
-    - [ ] refactor `Commands` and `RenderPassInfo` to move into Renderer  
+    - [ ] refactor `CommandList` and `RenderTaskInfo` to move into Renderer  
 - Window and event system
     - [x] basic mouse and kb event forwarding
     - [ ] better abstraction/encapsulation

@@ -6,12 +6,12 @@
 
 namespace Cory::Framegraph {
 
-struct RenderPassInfo;
-struct RenderPassExecutionAwaiter;
+struct RenderTaskInfo;
+struct RenderTaskExecutionAwaiter;
 class Framegraph;
 class Builder;
 class TextureResourceManager;
-class Commands;
+class CommandList;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
 enum class DepthTest {
@@ -34,18 +34,39 @@ struct DynamicStates {
     DepthWrite depthWrite{DepthWrite::Enabled};
 };
 
-enum class PassOutputKind {
-    Create,
-    Write,
-};
+enum class PassOutputKind { Create, Write };
 enum class PixelFormat { D32, RGBA32 };
 enum class Layout { Undefined, Color, DepthStencil, TransferSource, PresentSource };
-enum class ResourceState { Clear, DontCare, Keep };
-struct Texture;
-struct TextureHandle;
-struct MutableTextureHandle;
+using PipelineStages = BitField<VkPipelineStageFlagBits>;
+using ImageAspects = BitField<VkImageAspectFlagBits>;
+using AccessFlags = BitField<VkAccessFlagBits>;
 
-using RenderPassHandle = PrivateTypedHandle<RenderPassInfo, Framegraph>;
-using TransientTextureHandle = PrivateTypedHandle<Texture, TextureResourceManager>;
+using RenderTaskHandle = PrivateTypedHandle<RenderTaskInfo, Framegraph>;
+using TransientTextureHandle = PrivateTypedHandle<Magnum::Vk::Image, TextureResourceManager>;
 
+enum class TextureMemoryStatus { Virtual, Allocated, External };
+
+struct TextureInfo {
+    std::string name;
+    glm::u32vec3 size;
+    PixelFormat format;
+};
+
+struct TextureState {
+    Layout layout{Layout::Undefined};
+    AccessFlags lastWriteAccess{VK_ACCESS_NONE};
+    PipelineStages lastWriteStage{VK_PIPELINE_STAGE_NONE};
+    TextureMemoryStatus status{TextureMemoryStatus::Virtual};
+};
+
+/// describes information about the intended access (read or write) for a texture resource
+struct TextureAccessInfo {
+    Layout layout;
+    AccessFlags access;
+    PipelineStages stage;
+    ImageAspects imageAspect;
+};
+
+using TextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
+using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
 } // namespace Cory::Framegraph

@@ -3,6 +3,7 @@
 #include "TestUtils.hpp"
 
 #include <Cory/Base/FmtUtils.hpp>
+#include <Cory/Framegraph/Commands.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/Framegraph/RenderPassDeclaration.hpp>
 
@@ -25,6 +26,8 @@ struct DepthPassOutputs {
 };
 FG::RenderPassDeclaration<DepthPassOutputs> depthPass(FG::Framegraph &graph, glm::u32vec3 size)
 {
+    PipelineHandle depthPipeline = {/*TODO*/};
+
     FG::Builder builder = graph.declarePass("DepthPrepass");
 
     DepthPassOutputs outputs{
@@ -33,8 +36,19 @@ FG::RenderPassDeclaration<DepthPassOutputs> depthPass(FG::Framegraph &graph, glm
 
     co_yield outputs;
     FG::RenderInput render = co_await builder.finishDeclaration();
-    
+
+    render.cmd->bind(depthPipeline);
+
+    render.cmd->setupRenderPass()
+        .attachDepth(outputs.depthTexture,
+                     VK_ATTACHMENT_LOAD_OP_CLEAR,
+                     VK_ATTACHMENT_STORE_OP_STORE,
+                     {.depth = 1.0f, .stencil = 0})
+        .begin();
+
     CO_APP_INFO("[DepthPrepass] render commands executing");
+
+    render.cmd->endPass();
 }
 
 struct DepthDebugOut {

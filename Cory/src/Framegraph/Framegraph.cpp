@@ -34,36 +34,36 @@ Framegraph::Framegraph(Context &ctx)
 Framegraph::~Framegraph()
 {
     // destroy all coroutines
-    for (RenderPassInfo &info : renderPasses_) {
+    for (RenderTaskInfo &info : renderPasses_) {
         info.coroHandle.destroy();
     }
 }
 
 void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
 {
-    std::vector<RenderPassHandle> passesToExecute = compile();
-    Commands cmd{*ctx_, cmdBuffer};
+    std::vector<RenderTaskHandle> passesToExecute = compile();
+
+    CommandList cmd{*ctx_, cmdBuffer};
 
     for (const auto &handle : passesToExecute) {
         executePass(cmd, handle);
     }
 }
-void Framegraph::executePass(Commands &cmd, RenderPassHandle handle)
+void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 {
-    const RenderPassInfo &rpInfo = renderPasses_[handle];
+    const RenderTaskInfo &rpInfo = renderPasses_[handle];
 
     CO_CORE_INFO("Setting up Render pass {}", rpInfo.name);
     // ## handle resource transitions
     // todo
     // ## set up attachment infos
+
     // ## call BeginRendering
 
-    //    ctx_->device()->CmdBeginRendering(cmdBuffer, &beginRenderingInfo);
+
 
     // ## set up dynamic states
-    //    ctx_->device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
-    //    ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
-    //    ctx_->device()->CmdSetCullMode(cmdBuffer, VkCullModeFlagBits::VK_CULL_MODE_BACK_BIT);
+
 
     // ## update push constant data?
 
@@ -97,43 +97,42 @@ void Framegraph::declareOutput(TextureHandle handle)
     outputs_.push_back(handle.rsrcHandle);
 }
 
-std::vector<RenderPassHandle> Framegraph::compile()
+std::vector<RenderTaskHandle> Framegraph::compile()
 {
     // TODO this is where we would optimize and figure out the dependencies
     CO_CORE_INFO("Framegraph optimization not implemented.");
 
-    auto passes = resolve(outputs_);
-    dump();
+    auto [passes, requiredResources] = resolve(outputs_);
+    resources_.allocate(requiredResources);
+    dump(passes, requiredResources);
     return passes;
 }
 
-RenderInput RenderPassExecutionAwaiter::await_resume() const noexcept
+RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
 {
     return fg.renderInput(passHandle);
 }
 
-void RenderPassExecutionAwaiter::await_suspend(
+void RenderTaskExecutionAwaiter::await_suspend(
     cppcoro::coroutine_handle<> coroHandle) const noexcept
 {
     fg.enqueueRenderPass(passHandle, coroHandle);
 }
 
-void Framegraph::dump()
+void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
+                      const std::vector<TransientTextureHandle> &realizedTextures)
 {
-    std::string out{"digraph G {\nrankdir=LR;\nnode [fontsize=12,fontname=\"Courier New\"]\n"};
+    std::string out{"digraph G {\n"
+                    "rankdir=LR;\n"
+                    "node [fontsize=12,fontname=\"Courier New\"]\n"};
 
     std::unordered_map<TransientTextureHandle, TextureHandle> textures;
-    std::set<TransientTextureHandle> realizedTextures{externalInputs_.cbegin(),
-                                                      externalInputs_.cend()};
 
-    for (const TransientTextureHandle &externalResource : externalInputs_) {
-        realizedTextures.insert(externalResource);
-    }
-
-    for (const auto &passInfo : renderPasses_) {
-        const std::string passCol = (!passInfo.coroHandle)            ? "red"
-                                    : passInfo.executionPriority >= 0 ? "black"
-                                                                      : "gray";
+    for (const auto &[passHandle, passInfo] : renderPasses_.items()) {
+        const std::string passCol = (!passInfo.coroHandle) ? "red"
+                                    : ranges::contains(passes, RenderTaskHandle{passHandle})
+                                        ? "black"
+                                        : "gray";
         fmt::format_to(std::back_inserter(out),
                        "  \"{0}\" [shape=ellipse,color={1},fontcolor={1}]\n",
                        passInfo.name,
@@ -155,9 +154,6 @@ void Framegraph::dump()
                            color,
                            label);
             textures[outputHandle.rsrcHandle] = outputHandle;
-            if (passInfo.executionPriority >= 0) {
-                realizedTextures.insert(outputHandle.rsrcHandle);
-            }
         }
     }
 
@@ -190,7 +186,7 @@ void Framegraph::dump()
     CO_CORE_INFO(out);
 }
 
-std::vector<RenderPassHandle>
+std::pair<std::vector<RenderTaskHandle>, std::vector<TransientTextureHandle>>
 Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResources)
 {
     // counter to assign render passes an increasing execution priority - passes
@@ -199,8 +195,8 @@ Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResource
 
     // first, reorder the information into a more convenient graph representation
     // essentially, in- and out-edges
-    std::unordered_map<TransientTextureHandle, RenderPassHandle> resourceToPass;
-    std::unordered_multimap<RenderPassHandle, TransientTextureHandle> passInputs;
+    std::unordered_map<TransientTextureHandle, RenderTaskHandle> resourceToPass;
+    std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> passInputs;
     std::unordered_map<TransientTextureHandle, TextureHandle> textures;
     for (const auto &[passHandle, passInfo] : renderPasses_.items()) {
         for (const auto &inputHandle : passInfo.inputs) {
@@ -213,12 +209,15 @@ Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResource
         }
     }
 
+    std::vector<TransientTextureHandle> requiredResources;
+
     // flood-fill the graph starting at the resources requested from the outside
-    std::deque<TransientTextureHandle> requiredResources{requestedResources.cbegin(),
-                                                         requestedResources.cend()};
-    while (!requiredResources.empty()) {
-        auto nextResource = requiredResources.front();
-        requiredResources.pop_front();
+    std::deque<TransientTextureHandle> nextResourcesToResolve{requestedResources.cbegin(),
+                                                              requestedResources.cend()};
+    while (!nextResourcesToResolve.empty()) {
+        auto nextResource = nextResourcesToResolve.front();
+        nextResourcesToResolve.pop_front();
+        requiredResources.push_back(nextResource);
 
         // if resource is external, we don't have to resolve it
         if (ranges::contains(externalInputs_, nextResource)) { continue; }
@@ -234,7 +233,7 @@ Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResource
             return {};
         }
 
-        RenderPassHandle writingPass = writingPassIt->second;
+        RenderTaskHandle writingPass = writingPassIt->second;
         CO_CORE_DEBUG(
             "Resolving resource {}: created/written by render pass {}", nextResource, writingPass);
         renderPasses_[writingPass].executionPriority = ++executionPrio;
@@ -242,7 +241,7 @@ Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResource
         // enqueue the inputs of the pass for resolve
         auto rng = passInputs.equal_range(writingPass);
         ranges::transform(
-            rng.first, rng.second, std::back_inserter(requiredResources), [&](const auto &it) {
+            rng.first, rng.second, std::back_inserter(nextResourcesToResolve), [&](const auto &it) {
                 CO_CORE_DEBUG("Requesting input resource for {}: {}", writingPass, it.second);
                 return it.second;
             });
@@ -251,7 +250,7 @@ Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResource
     auto items = renderPasses_.items();
     auto passesToExecute =
         items | ranges::views::transform([](const auto &it) {
-            return std::make_pair(RenderPassHandle{it.first}, it.second.executionPriority);
+            return std::make_pair(RenderTaskHandle{it.first}, it.second.executionPriority);
         }) |
         ranges::views::filter([](const auto &it) { return it.second >= 0; }) |
         ranges::to<std::vector>;
@@ -263,11 +262,14 @@ Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResource
         CO_APP_DEBUG("  [{}] {}", prio, renderPasses_[handle].name);
     }
 
-    return passesToExecute | ranges::views::transform([](const auto &it) { return it.first; }) |
-           ranges::to<std::vector<RenderPassHandle>>;
+    auto passes = passesToExecute |
+                  ranges::views::transform([](const auto &it) { return it.first; }) |
+                  ranges::to<std::vector<RenderTaskHandle>>;
+
+    return {std::move(passes), std::move(requiredResources)};
 }
 
-RenderInput Framegraph::renderInput(RenderPassHandle passHandle)
+RenderInput Framegraph::renderInput(RenderTaskHandle passHandle)
 {
     // TODO
     return {};

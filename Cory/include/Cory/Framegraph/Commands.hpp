@@ -4,19 +4,56 @@
 
 namespace Cory::Framegraph {
 
-class Commands : NoCopy {
+class BeginRenderingBuilder : NoCopy, NoMove {
   public:
-    Commands(Context &ctx, Magnum::Vk::CommandBuffer&cmdBuffer);
+    BeginRenderingBuilder(Context &ctx, Magnum::Vk::CommandBuffer &cmdBuffer);
 
-    Commands &bind(PipelineHandle pipeline);
+    ~BeginRenderingBuilder();
 
-    Commands &setupDynamicStates(const DynamicStates &dynamicStates);
+    BeginRenderingBuilder &attach(TextureHandle &handle,
+                                  VkAttachmentLoadOp loadOp,
+                                  VkAttachmentStoreOp storeOp,
+                                  VkClearColorValue clearValue);
+    BeginRenderingBuilder &attachDepth(TextureHandle &handle,
+                                       VkAttachmentLoadOp loadOp,
+                                       VkAttachmentStoreOp storeOp,
+                                       VkClearDepthStencilValue clearValue);
+    BeginRenderingBuilder &attachStencil(TextureHandle &handle,
+                                         VkAttachmentLoadOp loadOp,
+                                         VkAttachmentStoreOp storeOp,
+                                         VkClearDepthStencilValue clearValue);
 
-    Commands &endPass();
+    void begin();
+
+  private:
+    VkRenderingAttachmentInfo makeAttachmentInfo(TextureHandle &handle,
+                                                 VkAttachmentLoadOp loadOp,
+                                                 VkAttachmentStoreOp storeOp,
+                                                 VkClearValue clearValue);
+    Context &ctx_;
+    Magnum::Vk::CommandBuffer &cmdBuffer_;
+    VkRect2D renderArea_;
+    std::vector<VkRenderingAttachmentInfo> colorAttachments_;
+    std::optional<VkRenderingAttachmentInfo> depthAttachment_;
+    std::optional<VkRenderingAttachmentInfo> stencilAttachment_;
+    bool hasBegun_{false}; ///< only needed for diagnostics
+};
+
+class CommandList : NoCopy {
+  public:
+    CommandList(Context &ctx, Magnum::Vk::CommandBuffer &cmdBuffer);
+
+    CommandList &bind(PipelineHandle pipeline);
+
+    CommandList &setupDynamicStates(const DynamicStates &dynamicStates);
+
 
     Magnum::Vk::CommandBuffer &handle() { return *cmdBuffer_; };
 
     Magnum::Vk::CommandBuffer *operator->() { return cmdBuffer_; };
+
+    BeginRenderingBuilder setupRenderPass() { return BeginRenderingBuilder{*ctx_, *cmdBuffer_}; }
+    CommandList &endPass();
 
   private:
     Context *ctx_;

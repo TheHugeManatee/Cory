@@ -10,74 +10,49 @@
 
 namespace Cory::Framegraph {
 
-using PlaceholderT = uint64_t;
-
-struct Texture {
-    std::string name;
-    glm::u32vec3 size;
-    PixelFormat format;
-    Layout currentLayout;
-    bool external{false};
-    PlaceholderT resource; // the Vk::Image
-};
-
-struct TextureHandle {
-    std::string name;
-    glm::u32vec3 size;
-    PixelFormat format;
-    Layout layout;
-    bool external{false};
-    TransientTextureHandle rsrcHandle; // handle to be used to reference the texture
-};
-
-struct MutableTextureHandle {
-    std::string name;
-    glm::u32vec3 size;
-    PixelFormat format;
-    Layout layout;
-    bool external{false};
-    TransientTextureHandle rsrcHandle;
-
-    /*implicit*/ operator TextureHandle() const
-    {
-        return {.name = name,
-                .size = size,
-                .format = format,
-                .layout = layout,
-                .external = external,
-                .rsrcHandle = rsrcHandle};
-    }
-};
-
 // handles the transient resources created/destroyed during a frame
 class TextureResourceManager {
   public:
-    TransientTextureHandle
-    createTexture(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout);
+    TextureResourceManager(Context &ctx);
 
-    TransientTextureHandle registerExternal(Texture externalTexture)
+    TextureHandle declareTexture(TextureInfo info, Layout initialLayout);
+
+    TextureHandle registerExternal(TextureInfo info,
+                                   Layout layout,
+                                   AccessFlags lastWriteAccess,
+                                   AccessFlags lastWriteStage,
+                                   Magnum::Vk::Image &resource);
+
+    void allocate(const std::vector<TextureHandle> &handles)
     {
-        externalTexture.external = true;
-        return resources_.emplace(std::move(externalTexture));
+        for (const auto &handle : handles) {
+            auto &r = textureResources_[handle];
+            // don't allocate external resources or resources that are already allocated
+            if (r.state.status != TextureMemoryStatus::Virtual) { continue; }
+
+            allocate(handle);
+        }
     }
 
-    // access a texture via its handle
-    const Texture &operator[](TextureHandle textureHandle) const
-    {
-        return resources_[textureHandle.rsrcHandle];
-    }
+    // emit a synchronization to sync subsequent reads with the last write access
+    void readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
+                     TextureHandle handle,
+                     TextureAccessInfo readAccessInfo);
+    // emit a synchronization to sync a subsequent read/write with the last write, as well as with
+    // future reads
+    void writeBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
+                      TextureHandle handle,
+                      TextureAccessInfo writeAccessInfo);
 
-    // allocate backing memory and resolve memory aliasing for all previously created resources
-    void allocateAll()
-    {
-        // allocate backing memory and assign the .resource member for all resources
-    }
+    const TextureInfo &info(TextureHandle handle);
+    Magnum::Vk::Image &image(TextureHandle handle);
+    Magnum::Vk::ImageView &imageView(TextureHandle handle);
+
+    void clear();
 
   private:
-    TransientTextureHandle
-    allocate(std::string name, glm::u32vec3 size, PixelFormat format, Layout layout);
-
-    SlotMap<Texture> resources_;
+    void allocate(TextureHandle handle);
+    std::unique_ptr<struct TextureManagerPrivate> data_;
 };
 
 } // namespace Cory::Framegraph

@@ -26,14 +26,14 @@ cppcoro::task<TextureHandle> Builder::read(TextureHandle &handle)
 }
 
 cppcoro::task<MutableTextureHandle>
-Builder::create(std::string name, glm::u32vec3 size, PixelFormat format, Layout finalLayout)
+Builder::create(std::string name, glm::u32vec3 size, PixelFormat format, Layout initialLayout)
 {
     MutableTextureHandle handle{
         .name = name,
         .size = size,
         .format = format,
-        .layout = finalLayout,
-        .rsrcHandle = framegraph_.resources_.createTexture(name, size, format, finalLayout)};
+        .layout = initialLayout,
+        .rsrcHandle = framegraph_.resources_.createTexture(name, size, format, initialLayout)};
     info_.outputs.push_back({handle, PassOutputKind::Create});
     co_return handle;
 }
@@ -51,10 +51,10 @@ cppcoro::task<MutableTextureHandle> Builder::write(TextureHandle handle)
                                    .rsrcHandle = handle.rsrcHandle};
 }
 
-RenderPassExecutionAwaiter Builder::finishDeclaration()
+RenderTaskExecutionAwaiter Builder::finishDeclaration()
 {
-    RenderPassHandle passHandle = framegraph_.finishPassDeclaration(std::move(info_));
-    return RenderPassExecutionAwaiter{passHandle, framegraph_};
+    RenderTaskHandle passHandle = framegraph_.finishPassDeclaration(std::move(info_));
+    return RenderTaskExecutionAwaiter{passHandle, framegraph_};
 }
 
 } // namespace Cory::Framegraph

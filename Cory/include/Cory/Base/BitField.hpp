@@ -26,11 +26,11 @@ class BitField {
         : bits_{}
     {
     }
-    constexpr BitField(UnderlyingEnum bits)
+    constexpr /*implicit*/ BitField(UnderlyingEnum bits)
         : bits_{to_underlying(bits)}
     {
     }
-    constexpr BitField(UnderlyingType bits)
+    constexpr /*implicit*/ BitField(UnderlyingType bits)
         : bits_{bits}
     {
     }

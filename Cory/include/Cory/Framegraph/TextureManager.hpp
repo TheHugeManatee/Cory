@@ -10,43 +10,41 @@
 
 namespace Cory::Framegraph {
 
-// handles the transient resources created/destroyed during a frame
+// handles the transient resources created/destroyed during a frame - tightly coupled with the
+// Framegraph and Builder classes, not intended to be used directly
 class TextureResourceManager {
   public:
     TextureResourceManager(Context &ctx);
+    ~TextureResourceManager();
 
-    TextureHandle declareTexture(TextureInfo info, Layout initialLayout);
+    TextureHandle declareTexture(TextureInfo info);
 
     TextureHandle registerExternal(TextureInfo info,
                                    Layout layout,
                                    AccessFlags lastWriteAccess,
-                                   AccessFlags lastWriteStage,
+                                   PipelineStages lastWriteStage,
                                    Magnum::Vk::Image &resource);
 
-    void allocate(const std::vector<TextureHandle> &handles)
-    {
-        for (const auto &handle : handles) {
-            auto &r = textureResources_[handle];
-            // don't allocate external resources or resources that are already allocated
-            if (r.state.status != TextureMemoryStatus::Virtual) { continue; }
-
-            allocate(handle);
-        }
-    }
+    void allocate(const std::vector<TextureHandle> &handles);
 
     // emit a synchronization to sync subsequent reads with the last write access
     void readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
                      TextureHandle handle,
                      TextureAccessInfo readAccessInfo);
-    // emit a synchronization to sync a subsequent read/write with the last write, as well as with
-    // future reads
-    void writeBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
-                      TextureHandle handle,
-                      TextureAccessInfo writeAccessInfo);
+    // record a write access to synchronize subsequent read accesses
+    void recordWrite(Magnum::Vk::CommandBuffer &cmdBuffer,
+                     TextureHandle handle,
+                     TextureAccessInfo writeAccessInfo);
+
+    void readWriteBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
+                          TextureHandle handle,
+                          TextureAccessInfo readAccessInfo,
+                          TextureAccessInfo writeAccessInfo);
 
     const TextureInfo &info(TextureHandle handle);
     Magnum::Vk::Image &image(TextureHandle handle);
     Magnum::Vk::ImageView &imageView(TextureHandle handle);
+    TextureState state(TextureHandle handle) const;
 
     void clear();
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/flextVkExt.h>
 
 #include <functional>
 
@@ -36,13 +37,12 @@ struct DynamicStates {
 
 enum class PassOutputKind { Create, Write };
 enum class PixelFormat { D32, RGBA32 };
-enum class Layout { Undefined, Color, DepthStencil, TransferSource, PresentSource };
-using PipelineStages = BitField<VkPipelineStageFlagBits>;
+enum class Layout { Undefined, Color, DepthStencil, TransferSource, TransferDest, PresentSource };
+using PipelineStages = BitField<VkPipelineStageFlagBits2>;
 using ImageAspects = BitField<VkImageAspectFlagBits>;
-using AccessFlags = BitField<VkAccessFlagBits>;
+using AccessFlags = BitField<VkAccessFlagBits2>;
 
 using RenderTaskHandle = PrivateTypedHandle<RenderTaskInfo, Framegraph>;
-using TransientTextureHandle = PrivateTypedHandle<Magnum::Vk::Image, TextureResourceManager>;
 
 enum class TextureMemoryStatus { Virtual, Allocated, External };
 
@@ -67,6 +67,26 @@ struct TextureAccessInfo {
     ImageAspects imageAspect;
 };
 
-using TextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
+using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureResourceManager>;
 using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
+
+constexpr VkImageLayout toVkImageLayout(Layout layout)
+{
+    switch (layout) {
+    case Layout::Color:
+        return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    case Layout::DepthStencil:
+        return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    case Layout::PresentSource:
+        return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    case Layout::Undefined:
+        return VK_IMAGE_LAYOUT_UNDEFINED;
+    case Layout::TransferSource:
+        return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    case Layout::TransferDest:
+        return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    }
+    throw std::runtime_error{"Unknown Layout"};
+}
+
 } // namespace Cory::Framegraph

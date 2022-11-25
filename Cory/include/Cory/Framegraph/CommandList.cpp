@@ -1,4 +1,4 @@
-#include <Cory/Framegraph/Commands.hpp>
+#include <Cory/Framegraph/CommandList.hpp>
 
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -23,6 +23,7 @@ VkCullModeFlags getVkCullMode(CullMode cullMode)
     case CullMode::FrontAndBack:
         return VK_CULL_MODE_FRONT_AND_BACK;
     }
+    throw std::invalid_argument{"Unknown cull mode value!"};
 }
 VkCompareOp getVkCompareOp(DepthTest test)
 {
@@ -39,9 +40,10 @@ VkCompareOp getVkCompareOp(DepthTest test)
         return VK_COMPARE_OP_ALWAYS;
     case DepthTest::Never:
         return VK_COMPARE_OP_NEVER;
-    default:
-        throw std::invalid_argument{"Invalid depth test value"};
+    case DepthTest::Disabled:
+        return VK_COMPARE_OP_ALWAYS;
     }
+    throw std::invalid_argument{"Invalid depth test value"};
 }
 
 } // namespace
@@ -133,6 +135,7 @@ CommandList::CommandList(Context &ctx, Magnum::Vk::CommandBuffer &cmdBuffer)
 CommandList &CommandList::bind(PipelineHandle pipeline)
 {
     cmdBuffer_->bindPipeline(ctx_->resources()[pipeline]);
+    return *this;
 }
 
 CommandList &CommandList::setupDynamicStates(const DynamicStates &dynamicStates)
@@ -168,12 +171,14 @@ CommandList &CommandList::setupDynamicStates(const DynamicStates &dynamicStates)
     }
     ctx_->device()->CmdSetDepthWriteEnable(
         *cmdBuffer_, dynamicStates.depthWrite == DepthWrite::Enabled ? VK_TRUE : VK_FALSE);
+    return *this;
 }
 
 CommandList &CommandList::endPass()
 {
     // todo sanity checks?
     ctx_->device()->CmdEndRendering(*cmdBuffer_);
+    return *this;
 }
 
 } // namespace Cory::Framegraph

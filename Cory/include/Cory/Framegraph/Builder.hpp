@@ -7,13 +7,19 @@
 
 namespace Cory::Framegraph {
 
-
 struct RenderTaskInfo {
+    struct InputDesc {
+        TextureHandle handle;
+        TextureAccessInfo accessInfo;
+    };
+    struct OutputDesc {
+        TextureHandle handle;
+        PassOutputKind kind;
+        TextureAccessInfo accessInfo;
+    };
     std::string name;
-    std::vector<TextureHandle> inputs; // todo: needs to include clear value, load/store, layout
-    std::vector<std::pair<TextureHandle, PassOutputKind>> outputs;
-
-    DynamicStates states{};
+    std::vector<InputDesc> inputs; // todo: needs to include clear value, load/store, layout
+    std::vector<OutputDesc> outputs;
 
     // framegraph internal stuff
     cppcoro::coroutine_handle<> coroHandle;
@@ -33,17 +39,23 @@ class Builder : NoCopy, NoMove {
     ~Builder();
 
     /// declare that a render pass creates a certain texture
-    cppcoro::task<MutableTextureHandle> create(std::string name,
-                                               glm::u32vec3 size,
-                                               PixelFormat format,
-                                               Layout initialLayout,
-                                               PipelineStages writeStage);
+    TextureHandle create(std::string name,
+                         glm::u32vec3 size,
+                         PixelFormat format,
+                         Layout initialLayout,
+                         PipelineStages writeStage,
+                         AccessFlags writeAccess);
 
     /// declares a dependency to the named resource
-    cppcoro::task<TextureHandle> read(TextureHandle &h, TextureAccessInfo readAccess);
+    TextureInfo read(TextureHandle &h, TextureAccessInfo readAccess);
 
-    /// declare that a render pass writes to a certain texture
-    cppcoro::task<MutableTextureHandle> write(TextureHandle handle, TextureAccessInfo writeAccess);
+    /// declare that a render task writes to a certain texture
+    std::pair<TextureHandle, TextureInfo> write(TextureHandle handle,
+                                                TextureAccessInfo writeAccess);
+
+    /// declare that a render task reads from and writes to a certain texture
+    std::pair<TextureHandle, TextureInfo>
+    readWrite(TextureHandle handle, TextureAccessInfo readAccess, TextureAccessInfo writeAccess);
 
     /**
      * @brief Finish declaration of the render task.
@@ -55,10 +67,6 @@ class Builder : NoCopy, NoMove {
      * of the render pass are not needed, the coroutine will never be resumed.
      */
     RenderTaskExecutionAwaiter finishDeclaration();
-
-    Builder &set(DepthTest depthTest) { info_.states.depthTest = depthTest; }
-    Builder &set(DepthWrite depthWrite) { info_.states.depthWrite = depthWrite; }
-    Builder &set(CullMode cullMode) { info_.states.cullMode = cullMode; }
 
   private:
     RenderTaskInfo info_;

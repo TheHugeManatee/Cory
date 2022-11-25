@@ -31,7 +31,7 @@ struct RenderInput {
     struct RenderPassResources *resources;
 
     struct RenderContext *context;
-    CommandList * cmd;
+    CommandList *cmd;
 };
 
 /**
@@ -66,13 +66,22 @@ class Framegraph : NoCopy, NoMove {
     /// to be called from Builder
     RenderInput renderInput(RenderTaskHandle passHandle);
 
-    /// declare an external texture as an input - TODO arguments
-    TextureHandle declareInput(std::string_view name);
-    /// declare that an external resource is to be read afterwards
-    void declareOutput(TextureHandle handle);
+    /// declare an external texture as an input
+    TextureHandle declareInput(TextureInfo info,
+                               Layout layout,
+                               AccessFlags lastWriteAccess,
+                               PipelineStages lastWriteStage,
+                               Magnum::Vk::Image &image);
 
-    void dump(const std::vector<RenderTaskHandle>& passes,
-              const std::vector<TransientTextureHandle> &realizedTextures);
+    /**
+     * declare that a resource is to be read afterwards. returns general
+     * information and synchronization state of the last write to the
+     * texture so external code can synchronize with it
+     */
+    std::pair<TextureInfo, TextureState> declareOutput(TextureHandle handle);
+
+    void dump(const std::vector<RenderTaskHandle> &passes,
+              const std::vector<TextureHandle> &realizedTextures);
 
   private: /* member functions */
     RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info)
@@ -94,23 +103,22 @@ class Framegraph : NoCopy, NoMove {
      * are required to execute said resources.
      * Updates the internal information about which render pass is required.
      */
-    std::pair<std::vector<RenderTaskHandle>, std::vector<TransientTextureHandle>>
-    resolve(const std::vector<TransientTextureHandle> &requestedResources);
+    std::pair<std::vector<RenderTaskHandle>, std::vector<TextureHandle>>
+    resolve(const std::vector<TextureHandle> &requestedResources);
 
     std::vector<RenderTaskHandle> compile();
     void executePass(CommandList &cmd, RenderTaskHandle handle);
 
-  private: /* members */
+  private:                             /* members */
     friend Builder;                    // convenience so it can call finishPassDeclaration
     friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
 
     Context *ctx_;
     TextureResourceManager resources_;
-    std::vector<TransientTextureHandle> externalInputs_;
-    std::vector<TransientTextureHandle> outputs_;
+    std::vector<TextureHandle> externalInputs_;
+    std::vector<TextureHandle> outputs_;
 
     SlotMap<RenderTaskInfo> renderPasses_;
-
 };
 
 } // namespace Cory::Framegraph

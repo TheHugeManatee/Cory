@@ -73,7 +73,7 @@ class BitField {
         std::vector<UnderlyingEnum> setBits;
 
         for (unsigned int digit = NUM_BITS; digit > 0; --digit) {
-            UnderlyingEnum bit{UnderlyingType(1u << (digit - 1))};
+            UnderlyingEnum bit{UnderlyingType(1) << (digit - 1)};
             if (is_set(bit)) { setBits.push_back(bit); }
         }
         return setBits;

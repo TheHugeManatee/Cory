@@ -52,8 +52,16 @@ static_assert(std::copyable<SlotMapHandle> && std::movable<SlotMapHandle>);
  */
 template <typename T, typename Friend> class PrivateTypedHandle {
   public:
+    /// default initialization creates an invalid handle
     PrivateTypedHandle() = default;
     auto operator<=>(const PrivateTypedHandle &rhs) const = default;
+
+    /**
+     * check a handle for validity. Note: a valid handle does NOT imply that it
+     * actually references an alive object in the slot map, use SlotMap::valid() for that!
+     */
+    bool valid() const { return handle_.index() != SlotMapHandle::INVALID_INDEX; }
+    operator bool() const { return valid(); }
 
   private:
     friend Friend;
@@ -127,4 +135,4 @@ template <typename T, typename F> struct hash<Cory::PrivateTypedHandle<T, F>> {
         return std::hash<Cory::SlotMapHandle>{}(s);
     }
 };
-}
+} // namespace std

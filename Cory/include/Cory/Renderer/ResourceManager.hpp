@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <string_view>
 
 namespace Cory {
 
@@ -44,11 +45,14 @@ class ResourceManager : NoCopy {
     [[nodiscard]] Shader &operator[](ShaderHandle shaderHandle);
     void release(ShaderHandle shaderHandle);
 
+    // buffers
     BufferHandle createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags);
     [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
     void release(BufferHandle bufferHandle);
 
-    PipelineHandle createPipeline(const Magnum::Vk::RasterizationPipelineCreateInfo& createInfo);
+    // pipelines
+    PipelineHandle createPipeline(std::string_view name,
+                                  const Magnum::Vk::RasterizationPipelineCreateInfo &createInfo);
     Magnum::Vk::Pipeline &operator[](PipelineHandle pipelineHandle);
     void release(PipelineHandle pipelineHandle);
 

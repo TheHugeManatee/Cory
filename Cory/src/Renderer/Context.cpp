@@ -10,6 +10,7 @@
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/CommandPoolCreateInfo.h>
 #include <Magnum/Vk/DescriptorPoolCreateInfo.h>
+#include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
 #include <Magnum/Vk/DescriptorType.h>
 #include <Magnum/Vk/DeviceCreateInfo.h>
 #include <Magnum/Vk/DeviceProperties.h>
@@ -17,10 +18,12 @@
 #include <Magnum/Vk/Extensions.h>
 #include <Magnum/Vk/FenceCreateInfo.h>
 #include <Magnum/Vk/InstanceCreateInfo.h>
+#include <Magnum/Vk/MeshLayout.h>
+#include <Magnum/Vk/PipelineLayoutCreateInfo.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/Result.h>
 #include <Magnum/Vk/Version.h>
-#include <Magnum/Vk/Vulkan.h>
+#include <Magnum/Vk/VertexFormat.h>
 
 namespace Vk = Magnum::Vk;
 
@@ -46,6 +49,10 @@ struct ContextPrivate {
 
     Callback<const DebugMessageInfo &> onVulkanDebugMessageReceived;
 
+    Magnum::Vk::DescriptorSetLayout defaultDescriptorLayout{Corrade::NoCreate};
+    Magnum::Vk::PipelineLayout defaultPipelineLayout{Corrade::NoCreate};
+    Magnum::Vk::MeshLayout defaultMeshLayout{Corrade::NoInit};
+
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
                                   DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
@@ -61,6 +68,40 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
                                           static_cast<DebugMessageType>(messageType),
                                           pCallbackData);
     return VK_TRUE;
+}
+
+Magnum::Vk::DescriptorSetLayout createDefaultDescriptorSetLayout(Context &ctx)
+{
+    // default layout currently only has a single uniform buffer
+    return Vk::DescriptorSetLayout(ctx.device(),
+                                   Vk::DescriptorSetLayoutCreateInfo{
+                                       {{0, Vk::DescriptorType::UniformBuffer}},
+                                       //{{0, Vk::DescriptorType::UniformBuffer}},
+                                   });
+}
+
+Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
+                                                       Vk::DescriptorSetLayout &descriptorSetLayout)
+{
+    // use max guaranteed memory of 128 bytes, for all shaders
+    VkPushConstantRange pushConstantRange{
+        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
+
+    // create pipeline layout
+    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{descriptorSetLayout};
+    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
+    return Vk::PipelineLayout(ctx.device(), pipelineLayoutCreateInfo);
+}
+
+Magnum::Vk::MeshLayout createDefaultMeshLayout()
+{
+    static constexpr uint32_t binding{0};
+    return Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
+        .addBinding(binding, 10 * sizeof(float))
+        .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
+        .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
+        .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float));
 }
 
 Context::Context()
@@ -100,8 +141,7 @@ Context::Context()
 
     VkPhysicalDeviceSynchronization2Features synchronization2Features{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .synchronization2 = VK_TRUE
-    };
+        .synchronization2 = VK_TRUE};
     VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
         .pNext = &synchronization2Features,
@@ -135,6 +175,11 @@ Context::Context()
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
 
     data_->resources.setContext(*this);
+
+    data_->defaultMeshLayout = createDefaultMeshLayout();
+    data_->defaultDescriptorLayout = createDefaultDescriptorSetLayout(*this);
+    data_->defaultPipelineLayout =
+        createDefaultPipelineLayout(*this, data_->defaultDescriptorLayout);
 }
 
 Context::Context(Context &&rhs) { std::swap(rhs.data_, data_); }
@@ -221,6 +266,21 @@ const ResourceManager &Context::resources() const { return data_->resources; }
 void Context::onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo &)> callback)
 {
     data_->onVulkanDebugMessageReceived(std::move(callback));
+}
+
+const Magnum::Vk::MeshLayout &Context::defaultMeshLayout() const
+{
+    return data_->defaultMeshLayout;
+}
+
+Magnum::Vk::PipelineLayout &Context::defaultPipelineLayout()
+{
+    return data_->defaultPipelineLayout;
+}
+
+Magnum::Vk::DescriptorSetLayout &Context::defaultDescriptorSetLayout()
+{
+    return data_->defaultDescriptorLayout;
 }
 
 void ContextPrivate::receiveDebugUtilsMessage(

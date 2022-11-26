@@ -26,6 +26,7 @@ enum class DepthTest {
 };
 enum class DepthWrite { Enabled, Disabled };
 
+class TransientRenderPass;
 /// for this value value, framegraph will automatically fit the render area to the frame buffer
 static constexpr VkRect2D RENDER_AREA_AUTO{{0, 0}, {0, 0}};
 struct DynamicStates {
@@ -36,7 +37,7 @@ struct DynamicStates {
 };
 
 enum class PassOutputKind { Create, Write };
-enum class PixelFormat { D32, RGBA32 };
+enum class PixelFormat { D32, BGRA32 };
 enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
 using PipelineStages = BitField<VkPipelineStageFlagBits2>;
 using ImageAspects = BitField<VkImageAspectFlagBits>;
@@ -50,6 +51,7 @@ struct TextureInfo {
     std::string name;
     glm::u32vec3 size;
     PixelFormat format;
+    int32_t sampleCount{1};
 };
 
 struct TextureState {
@@ -87,6 +89,17 @@ constexpr VkImageLayout toVkImageLayout(Layout layout)
         return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
     throw std::runtime_error{"Unknown Layout"};
+}
+
+constexpr VkFormat toVkFormat(PixelFormat format)
+{
+    switch (format) {
+    case PixelFormat::D32:
+        return VK_FORMAT_D32_SFLOAT;
+    case PixelFormat::BGRA32:
+        return VK_FORMAT_B8G8R8A8_SRGB;
+    }
+    throw std::runtime_error{"Unknown format"};
 }
 
 } // namespace Cory::Framegraph

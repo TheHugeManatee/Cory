@@ -8,6 +8,7 @@ find_package(GLEW)
 find_package(Magnum REQUIRED Vk)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
+find_package(cppcoro REQUIRED)
 find_package(glfw3)
 find_package(glm REQUIRED)
 find_package(imgui REQUIRED)
@@ -18,34 +19,53 @@ find_package(spdlog REQUIRED)
 
 set(CORY_SOURCES
         include/Cory/Application/Application.hpp
+        include/Cory/Application/Common.hpp
+        include/Cory/Application/ImGuiLayer.hpp
         include/Cory/Application/Window.hpp
         include/Cory/Base/BitField.hpp
+        include/Cory/Base/Callback.hpp
         include/Cory/Base/Common.hpp
+        include/Cory/Base/CpuBuffer.hpp
         include/Cory/Base/FmtUtils.hpp
         include/Cory/Base/Log.hpp
         include/Cory/Base/Math.hpp
+        include/Cory/Base/Profiling.hpp
+        include/Cory/Base/ResourceLocator.hpp
         include/Cory/Base/SlotMap.hpp
+        include/Cory/Base/SlotMapHandle.hpp
         include/Cory/Base/Utils.hpp
         include/Cory/Cory.hpp
-        include/Cory/RenderCore/APIConversion.hpp
-        include/Cory/RenderCore/Context.hpp
-        include/Cory/RenderCore/CpuBuffer.hpp
-        include/Cory/Base/ResourceLocator.hpp
-        include/Cory/RenderCore/Semaphore.hpp
-        include/Cory/RenderCore/VulkanUtils.hpp
+        include/Cory/Framegraph/Framegraph.hpp
+        include/Cory/Framegraph/RenderPassDeclaration.hpp
+        include/Cory/Framegraph/TextureManager.hpp
+        include/Cory/Renderer/APIConversion.hpp
+        include/Cory/Renderer/Common.hpp
+        include/Cory/Renderer/Context.hpp
+        include/Cory/Renderer/ResourceManager.hpp
+        include/Cory/Renderer/Semaphore.hpp
         include/Cory/Renderer/Shader.hpp
+        include/Cory/Renderer/SingleShotCommandBuffer.hpp
         include/Cory/Renderer/Swapchain.hpp
+        include/Cory/Renderer/VulkanUtils.hpp
         src/Application/Application.cpp
+        src/Application/ImGuiLayer.cpp
         src/Application/Window.cpp
         src/Base/Log.cpp
+        src/Base/Profiling.cpp
+        src/Base/ResourceLocator.cpp
         src/Base/Utils.cpp
         src/Cory.cpp
-        src/RenderCore/Context.cpp
-        src/Base/ResourceLocator.cpp
-        src/RenderCore/VulkanUtils.cpp
+        src/Framegraph/Framegraph.cpp
+        src/Framegraph/TextureManager.cpp
+        src/Renderer/Context.cpp
+        src/Renderer/ResourceManager.cpp
         src/Renderer/Shader.cpp
+        src/Renderer/SingleShotCommandBuffer.cpp
         src/Renderer/Swapchain.cpp
-        )
+        src/Renderer/VulkanUtils.cpp
+        src/Application/DynamicGeometry.cpp
+        include/Cory/Application/DynamicGeometry.hpp
+        include/Cory/Application/CameraManipulator.cpp include/Cory/Application/CameraManipulator.hpp include/Cory/ImGui/Inputs.hpp include/Cory/Renderer/UniformBufferObject.cpp include/Cory/Renderer/UniformBufferObject.hpp include/Cory/Framegraph/Common.hpp src/Framegraph/Builder.cpp include/Cory/Framegraph/Builder.hpp src/Framegraph/CommandList.cpp include/Cory/Framegraph/CommandList.hpp include/Cory/Renderer/flextVkExt.h src/Framegraph/TransientRenderPass.cpp include/Cory/Framegraph/TransientRenderPass.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 
@@ -71,6 +91,7 @@ target_link_libraries(${TARGET_NAME}
         imgui::imgui
         magic_enum::magic_enum
         range-v3::range-v3
+        cppcoro::cppcoro
         shaderc::shaderc
         spdlog::spdlog
 
@@ -79,13 +100,14 @@ target_link_libraries(${TARGET_NAME}
         Cory::project_options
         )
 
-# Define a macro that allows consumers of this lib to know when they link against it
 target_compile_definitions(${TARGET_NAME}
         PUBLIC
+        # Define a macro that allows consumers of this lib to know when they link against it
         HAVE_CORY
+        # set up some GLM defaults that match our project better
         GLM_FORCE_RADIANS
-        GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
         GLM_FORCE_DEPTH_ZERO_TO_ONE
+        GLM_FORCE_XYZW_ONLY
         GLM_ENABLE_EXPERIMENTAL)
 
 # for now, we hardcode the resource path until we have a proper resource management in place

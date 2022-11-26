@@ -1,6 +1,6 @@
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
-#include <Cory/RenderCore/Semaphore.hpp>
+#include <Cory/Renderer/Semaphore.hpp>
 
 #include <Magnum/Vk/Buffer.h>
 #include <Magnum/Vk/CommandBuffer.h>
@@ -10,6 +10,7 @@
 #include <Magnum/Vk/ImageView.h>
 #include <Magnum/Vk/Instance.h>
 #include <Magnum/Vk/Queue.h>
+#include <Magnum/Vk/Shader.h>
 
 #include <type_traits>
 
@@ -62,6 +63,9 @@ void nameRawVulkanObject(DeviceHandle &device, VulkanObjectHandle handle, std::s
     if constexpr (std::is_same_v<VulkanObjectHandle, VkImageView>) {
         objectNameInfo.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
     }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkShaderModule>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
+    }
 
     device->SetDebugUtilsObjectNameEXT(device, &objectNameInfo);
 }
@@ -94,5 +98,6 @@ INSTANTIATE_WRAPPED(Magnum::Vk::CommandBuffer);
 INSTANTIATE(VkImage);
 INSTANTIATE_WRAPPED(Magnum::Vk::Image);
 INSTANTIATE_WRAPPED(Magnum::Vk::ImageView);
+INSTANTIATE_WRAPPED(Magnum::Vk::Shader);
 
 } // namespace Cory

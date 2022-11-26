@@ -5,10 +5,10 @@
 
 #include <spdlog/spdlog.h>
 
-int main()
+int main(int argc, char** argv)
 {
     try {
-        HelloTriangleApplication app{};
+        HelloTriangleApplication app{argc, argv};
 
         app.run();
     }

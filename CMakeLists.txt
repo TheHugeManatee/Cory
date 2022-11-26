@@ -78,8 +78,10 @@ cmake_dependent_option(CORY_BUILD_TESTS
         "Enable tests targets" ON # By default we want tests if CTest is enabled
         "BUILD_TESTING" ON # Stay coherent with CTest variables
         )
-
-#include(CTest)
+if(CORY_BUILD_TESTS)
+    #include(CTest)
+    enable_testing()
+endif()
 
 
 # currently, we just map a hardcoded path for our resources - no fancy
@@ -95,10 +97,11 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 add_subdirectory(Cory)
 add_subdirectory(HelloTriangle)
+add_subdirectory(CubeDemo)
 
 
 # Setup our project as the startup project for Visual so that people don't need to do it manually
-#set_directory_properties(PROPERTIES VS_STARTUP_PROJECT HelloCory)
+set_directory_properties(PROPERTIES VS_STARTUP_PROJECT CubeDemo)
 
 
 #===========#

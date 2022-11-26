@@ -1,4 +1,4 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <Cory/Base/BitField.hpp>
 #include <Cory/Base/FmtUtils.hpp>
@@ -17,7 +17,7 @@ template <> struct magic_enum::customize::enum_range<BitValues> {
     static constexpr bool is_flags = true;
 };
 
-TEST_CASE("BitField", "[Cory/Utils]")
+TEST_CASE("BitField", "[Cory/Base]")
 {
     SECTION("Default-initialized state")
     {
@@ -29,6 +29,16 @@ TEST_CASE("BitField", "[Cory/Utils]")
         CHECK_FALSE(bitfield.is_set(BitValues::Third));
         CHECK_FALSE(bitfield.is_set(BitValues::Highest));
         CHECK(bitfield.set_bits() == std::vector<BitValues>{});
+    }
+
+    SECTION("Constexpr usage")
+    {
+        constexpr auto bitfield = Cory::BitField<BitValues>{}.set(BitValues::Third);
+
+        static_assert(!bitfield.is_set(BitValues::First));
+        static_assert(!bitfield.is_set(BitValues::Second));
+        static_assert(bitfield.is_set(BitValues::Third));
+        static_assert(!bitfield.is_set(BitValues::Highest));
     }
 
     SECTION("Setting and clearing bits")

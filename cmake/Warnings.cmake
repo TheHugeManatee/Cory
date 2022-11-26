@@ -47,6 +47,8 @@ function(target_set_warnings)
             # Not all the warnings, but WAll is unusable when using libraries
             # Unless you'd like to support MSVC in the code with pragmas, this is probably the best option
             list(APPEND WarningFlags "/W4")
+            # silence "warning STL4036: <ciso646> is removed in C++20."
+            list(APPEND WarningFlags "/D_SILENCE_CXX20_CISO646_REMOVED_WARNING")
         else ()
             if (WGCC)
                 list(APPEND WarningFlags "-Wall" "-Wextra" "-Wpedantic")
@@ -104,7 +106,8 @@ function(target_set_warnings)
             list(APPEND WarningFlags "/wd4324") # structure was padded due to alignment specifier
             list(APPEND WarningFlags "/wd4103") # alignment changed after including header, may be due to missing #pragma(pop) - this one seems to be a problem specific to MSVC at the moment
             #list(APPEND WarningFlags "/wd4514" "/wd4710" "/wd4711")
-            #list(APPEND WarningFlags "/wd4365") #signed/unsigned mismatch
+            #list(APPEND WarningFlags "/wd4365") # conversion from A to B, signed/unsigned mismatch
+            list(APPEND WarningFlags "/wd4018") # '>=': signed/unsigned mismatch
             #list(APPEND WarningFlags "/wd4668") # is not defined as a preprocessor macro, replacing with '0' for
 
         elseif (WGCC OR WCLANG)
@@ -153,5 +156,5 @@ target_set_warnings(project_warnings ENABLE ALL DISABLE Annoying)
 add_library(Cory::project_warnings ALIAS project_warnings)
 
 add_library(project_options INTERFACE)
-target_compile_features(project_options INTERFACE cxx_std_20)
+target_compile_features(project_options INTERFACE cxx_std_23)
 add_library(Cory::project_options ALIAS project_options)

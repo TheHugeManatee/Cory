@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 using VkSemaphore = struct VkSemaphore_T *;
 

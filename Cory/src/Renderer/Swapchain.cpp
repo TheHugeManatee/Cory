@@ -2,9 +2,9 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/RenderCore/APIConversion.hpp>
-#include <Cory/RenderCore/Context.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/APIConversion.hpp>
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/CommandPool.h>
@@ -66,7 +66,7 @@ SwapchainSupportDetails SwapchainSupportDetails::query(Context &ctx, VkSurfaceKH
 VkSurfaceFormatKHR SwapchainSupportDetails::chooseSwapSurfaceFormat() const
 {
     for (const auto &availableFormat : formats) {
-        if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM &&
+        if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
             availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
             return availableFormat;
         }
@@ -78,9 +78,7 @@ VkSurfaceFormatKHR SwapchainSupportDetails::chooseSwapSurfaceFormat() const
 VkPresentModeKHR SwapchainSupportDetails::chooseSwapPresentMode() const
 {
     for (const auto &availablePresentMode : presentModes) {
-        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-            return availablePresentMode;
-        }
+        if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) { return availablePresentMode; }
     }
 
     return VK_PRESENT_MODE_FIFO_KHR;
@@ -113,10 +111,14 @@ uint32_t SwapchainSupportDetails::chooseImageCount() const
     return imageCount;
 }
 
-Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo)
+Swapchain::Swapchain(Context &ctx,
+                     VkSurfaceKHR surface,
+                     VkSwapchainCreateInfoKHR createInfo,
+                     int32_t sampleCount)
     : maxFramesInFlight_{createInfo.minImageCount}
     , ctx_{&ctx}
     , imageFormat_{toMagnum(createInfo.imageFormat)}
+    , sampleCount_{sampleCount}
     , extent_{createInfo.imageExtent.width, createInfo.imageExtent.height}
 {
     VkSwapchainKHR vkSwapchain;
@@ -131,11 +133,14 @@ Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     nameRawVulkanObject(
         ctx_->device(), vkSwapchain, fmt::format("Main Swapchain {}x{}", extent_.x, extent_.y));
 
-    depthFormat_ = Magnum::Vk::PixelFormat::Depth32F; // TODO implement dynamic selection instead
-                                                      //      of hardcoded format
     createImageViews();
-    createDepthResources();
     createSyncObjects();
+
+    // initialize command buffers
+    commandBuffers_ = images_ | ranges::views::transform([&](Vk::Image &img) mutable {
+                          return Vk::CommandBuffer{Corrade::NoCreate};
+                      }) |
+                      ranges::to<std::vector<Vk::CommandBuffer>>;
 
     CO_CORE_DEBUG("Swapchain configuration:");
     CO_CORE_DEBUG("    Surface Format:    {}, {}", imageFormat_, createInfo.imageColorSpace);
@@ -144,13 +149,13 @@ Swapchain::Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKH
     CO_CORE_DEBUG("    Images:            {}", images_.size());
 }
 
+Swapchain::~Swapchain() { CO_CORE_TRACE("Destroying Cory::Swapchain."); }
+
 FrameContext Swapchain::nextImage()
 {
-    // advance the image index
-    ++nextFrameNumber_;
-    uint32_t nextFrameIndex = static_cast<uint32_t>(nextFrameNumber_ % maxFramesInFlight_);
+    uint32_t nextFrameIndex = static_cast<uint32_t>((nextFrameNumber_ + 1) % maxFramesInFlight_);
 
-    FrameContext fc{.index = nextFrameIndex, .frameNumber = nextFrameNumber_};
+    FrameContext fc{.index = nextFrameIndex};
 
     // TODO evaluate if this design is suboptimal - we essentially block here until
     //      we can acquire the next image, however the client could *potentially* already
@@ -159,7 +164,7 @@ FrameContext Swapchain::nextImage()
     VkResult result = ctx_->device()->AcquireNextImageKHR(
         ctx_->device(), *this, UINT64_MAX, imageAcquired_[nextFrameIndex], nullptr, &fc.index);
 
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         fc.shouldRecreateSwapchain = true;
         return fc;
     }
@@ -167,6 +172,9 @@ FrameContext Swapchain::nextImage()
                    "failed to acquire swap chain image: {}",
                    result);
 
+    // advance the image index
+    ++nextFrameNumber_;
+    fc.frameNumber = nextFrameNumber_;
     fc.shouldRecreateSwapchain = false;
 
     // wait for the fence of the previous frame operating on that image
@@ -182,14 +190,15 @@ FrameContext Swapchain::nextImage()
     fc.acquired = &imageAcquired_[nextFrameIndex];
     fc.rendered = &imageRendered_[nextFrameIndex];
 
-    // get the image views
-    fc.colorView = &imageViews_[nextFrameIndex];
-    fc.depthView = &depthImageViews_[nextFrameIndex];
+    // get the swapchain image view
+    fc.swapchainImage = &images_[nextFrameIndex];
+    fc.swapchainImageView = &imageViews_[nextFrameIndex];
 
     // create a command buffer
     // TODO evaluate if it is more optimal to reuse command buffers?!
-    fc.commandBuffer = ctx_->commandPool().allocate();
-    nameVulkanObject(ctx_->device(), fc.commandBuffer, fmt::format("Frame #{}", fc.index));
+    commandBuffers_[nextFrameIndex] = ctx_->commandPool().allocate();
+    fc.commandBuffer = &commandBuffers_[nextFrameIndex];
+    nameVulkanObject(ctx_->device(), *fc.commandBuffer, fmt::format("CmdBuf Frame #{}", fc.frameNumber));
 
     return fc;
 }
@@ -210,28 +219,6 @@ void Swapchain::present(FrameContext &fc)
     presentInfo.pImageIndices = &fc.index;
 
     ctx_->device()->QueuePresentKHR(ctx_->graphicsQueue(), &presentInfo);
-}
-
-void Swapchain::createDepthResources()
-{
-    Magnum::Vector2i size(extent_.x, extent_.y);
-    int32_t samples = 1;
-    int32_t levels = 1;
-
-    depthImages_ =
-        images_ | ranges::views::transform([&](const Vk::Image &colorImage) {
-            auto usage = Vk::ImageUsage::DepthStencilAttachment;
-            return Vk::Image{ctx_->device(),
-                             Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, samples},
-                             Vk::MemoryFlag::DeviceLocal};
-        }) |
-        ranges::to<std::vector<Vk::Image>>;
-
-    depthImageViews_ =
-        depthImages_ | ranges::views::transform([&](Vk::Image &depthImage) {
-            return Vk::ImageView{ctx_->device(), Vk::ImageViewCreateInfo2D{depthImage}};
-        }) |
-        ranges::to<std::vector<Vk::ImageView>>;
 }
 
 void Swapchain::createImageViews()
@@ -257,8 +244,11 @@ void Swapchain::createImageViews()
 
     // name all objects
     for (uint32_t i = 0; i < num_images; ++i) {
-        nameVulkanObject(device, images_[i], fmt::format("Swapchain Image {}", i));
-        nameVulkanObject(device, imageViews_[i], fmt::format("Swapchain ImageView {}", i));
+        nameVulkanObject(
+            device, images_[i], fmt::format("Swapchain {}x{} Image {}", extent_.x, extent_.y, i));
+        nameVulkanObject(device,
+                         imageViews_[i],
+                         fmt::format("Swapchain {}x{} ImageView {}", extent_.x, extent_.y, i));
     }
 }
 

@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/RenderCore/Semaphore.hpp>
+#include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/Semaphore.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Fence.h>
@@ -15,8 +16,6 @@
 #include <vector>
 
 namespace Cory {
-
-class Context;
 
 struct SwapchainSupportDetails {
     static SwapchainSupportDetails query(Context &ctx, VkSurfaceKHR surface);
@@ -34,29 +33,35 @@ struct SwapchainSupportDetails {
 };
 
 struct FrameContext {
-    uint32_t index{};
-    uint64_t frameNumber{};
-    bool shouldRecreateSwapchain{false};
-    Magnum::Vk::ImageView *colorView{};
-    Magnum::Vk::ImageView *depthView{};
+    uint32_t index{};                    ///< the current swapchain image index
+    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
+    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
+    Magnum::Vk::Image *swapchainImage{};
+    Magnum::Vk::ImageView *swapchainImageView{};
+    Magnum::Vk::Image *colorImage{};
+    Magnum::Vk::ImageView *colorImageView{};
+    Magnum::Vk::Image *depthImage{};
+    Magnum::Vk::ImageView *depthImageView{};
     Magnum::Vk::Fence *inFlight{};
     Semaphore *acquired{};
     Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer commandBuffer{Magnum::NoCreate};
+    Magnum::Vk::CommandBuffer *commandBuffer{};
 };
 
 class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
-    Swapchain(Context &ctx, VkSurfaceKHR surface, VkSwapchainCreateInfoKHR createInfo);
+    Swapchain(Context &ctx,
+              VkSurfaceKHR surface,
+              VkSwapchainCreateInfoKHR createInfo,
+              int32_t sampleCount);
+    ~Swapchain();
 
     [[nodiscard]] auto &images() const noexcept { return images_; }
-    [[nodiscard]] auto colorFormat() const noexcept { return imageFormat_; }
+    [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return imageFormat_; }
     [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
-    [[nodiscard]] auto &depthImages() const noexcept { return depthImages_; }
-    [[nodiscard]] auto depthFormat() const noexcept { return depthFormat_; }
-    [[nodiscard]] auto &depthViews() noexcept { return depthImageViews_; }
-    [[nodiscard]] auto extent() const noexcept { return extent_; }
-    [[nodiscard]] auto size() const noexcept { return images_.size(); }
+    [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
+    [[nodiscard]] size_t size() const noexcept { return images_.size(); }
+    [[nodiscard]] size_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying
@@ -82,7 +87,6 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     void present(FrameContext &fc);
 
   private:
-    void createDepthResources();
     void createImageViews();
     void createSyncObjects();
 
@@ -91,7 +95,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
 
     // general information about the swapchain setup
     Magnum::Vk::PixelFormat imageFormat_{};
-    Magnum::Vk::PixelFormat depthFormat_{};
+    int32_t sampleCount_{1};
     glm::u32vec2 extent_{};
     const uint32_t maxFramesInFlight_{};
     uint64_t nextFrameNumber_{};
@@ -99,15 +103,13 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     // these are images with memory owned by the swapchain
     std::vector<Magnum::Vk::Image> images_{};
     std::vector<Magnum::Vk::ImageView> imageViews_{};
-    // these are created separately through createDepthResources()
-    std::vector<Magnum::Vk::Image> depthImages_{};
-    std::vector<Magnum::Vk::ImageView> depthImageViews_{};
 
     // for each frame in flight, we also keep a set of additional resources
     std::vector<Magnum::Vk::Fence> inFlightFences_{};
     std::vector<Magnum::Vk::Fence *> imageFences_{};
     std::vector<Semaphore> imageAcquired_{};
     std::vector<Semaphore> imageRendered_{};
+    std::vector<Magnum::Vk::CommandBuffer> commandBuffers_{};
 };
 
 } // namespace Cory

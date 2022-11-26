@@ -1,10 +1,10 @@
 #include <Cory/Renderer/Shader.hpp>
 
-#include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
-#include <Cory/RenderCore/Context.hpp>
-#include <Cory/RenderCore/VulkanUtils.hpp>
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <Corrade/Containers/ArrayViewStl.h>
 #include <Magnum/Vk/ShaderCreateInfo.h>
@@ -28,7 +28,7 @@ class FileIncludeHandler : public shaderc::CompileOptions::IncluderInterface {
                                        const char *requesting_source,
                                        size_t include_depth) override
     {
-        CO_CORE_INFO("Include file {} from {}", requested_source, requesting_source);
+        CO_CORE_DEBUG("Include file {} from {}", requested_source, requesting_source);
 
         auto resolvedLocation = ResourceLocator::locate(requested_source);
 
@@ -74,21 +74,21 @@ shaderc_shader_kind ShaderTypeToShaderKind(ShaderType type)
 }
 
 ShaderSource::ShaderSource(std::string source, ShaderType type, std::filesystem::path filePath)
-    : m_filename{filePath}
-    , source_{source}
+    : filename_{filePath}
+    , source_{std::move(source)}
     , type_{type}
 {
 }
 
 ShaderSource::ShaderSource(std::filesystem::path filePath, ShaderType type)
     : type_{type}
-    , m_filename{filePath}
+    , filename_{std::move(filePath)}
 {
-    auto fileBytes = readFile(filePath);
+    auto fileBytes = readFile(filename_);
     source_ = std::string{fileBytes.begin(), fileBytes.end()};
 
     if (type_ == ShaderType::eUnknown) {
-        auto ext = filePath.extension();
+        auto ext = filename_.extension();
         if (ext == ".vert")
             type_ = ShaderType::eVertex;
         else if (ext == ".geom")
@@ -102,7 +102,8 @@ ShaderSource::ShaderSource(std::filesystem::path filePath, ShaderType type)
 
 std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool optimize)
 {
-    shaderc::Compiler compiler;
+    // static for now, we should really move this to a global static instance
+    static shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetIncluder(std::make_unique<FileIncludeHandler>());
 
@@ -119,7 +120,8 @@ std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool opti
         compiler.CompileGlslToSpv(source.source(), kind, source_name.c_str(), options);
 
     if (spvModule.GetCompilationStatus() != shaderc_compilation_status_success) {
-        CO_CORE_ERROR(spvModule.GetErrorMessage());
+        CO_CORE_ERROR(
+            "Failed to compile {}: {}", source.filePath().string(), spvModule.GetErrorMessage());
         return std::vector<uint32_t>();
     }
 
@@ -137,12 +139,16 @@ Shader::Shader(Context &ctx, ShaderSource source)
     , source_{source}
     , type_{source_.type()}
 {
-    std::vector<uint32_t> spirvBinary = CompileToSpv(source);
+    std::vector<uint32_t> spirvBinary = CompileToSpv(source, false);
+    if (spirvBinary.empty()) {
+        throw std::runtime_error{"Could not compile shader source to SPIR-V"};
+    }
 
     Magnum::Vk::ShaderCreateInfo info{Corrade::Containers::ArrayView<uint32_t>{spirvBinary}};
 
     module_ = std::make_shared<Magnum::Vk::Shader>(ctx.device(), info);
     size_ = spirvBinary.size() * sizeof(uint32_t);
+    nameVulkanObject(ctx_->device(), *module_, source.filePath().filename().string());
 }
 
 // vk::PipelineShaderStageCreateInfo Shader::stageCreateInfo()

@@ -8,6 +8,7 @@
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/ImageCreateInfo.h>
 #include <Magnum/Vk/ImageViewCreateInfo.h>
+#include <gsl/narrow>
 
 namespace Vk = Magnum::Vk;
 
@@ -57,7 +58,8 @@ TextureHandle TextureResourceManager::registerExternal(TextureInfo info,
                                                        Layout layout,
                                                        AccessFlags lastWriteAccess,
                                                        PipelineStages lastWriteStage,
-                                                       Magnum::Vk::Image &resource)
+                                                       Magnum::Vk::Image &resource,
+                                                       Magnum::Vk::ImageView &resourceView)
 {
     auto handle = data_->textureResources_.emplace(
         TextureResource{info,
@@ -66,7 +68,7 @@ TextureHandle TextureResourceManager::registerExternal(TextureInfo info,
                                      .lastWriteStage = lastWriteStage,
                                      .status = TextureMemoryStatus::External},
                         Vk::Image::wrap(data_->ctx_->device(), resource, resource.format()),
-                        Vk::ImageView{Corrade::NoCreate}});
+                        Vk::ImageView::wrap(data_->ctx_->device(), resourceView)});
 
     // data_->textureResources_[handle].image.;
     return handle;
@@ -82,8 +84,31 @@ void TextureResourceManager::allocate(TextureHandle handle)
                   r.info.size.z,
                   r.info.format);
     // TODO allocate from a big buffer instead of individual allocations
-    // r.image = Vk::Image{data_->ctx_->device(), Vk::ImageCreateInfo{/*...*/}};
-    // r.view = Vk::ImageView{data_->ctx_->device(), Vk::ImageCreateInfo{/*...*/}};
+
+    {
+        const auto size = Magnum::Vector2i{gsl::narrow<int32_t>(r.info.size.x),
+                                           gsl::narrow<int32_t>(r.info.size.y)};
+        static const int32_t levels = 1;
+        static const Magnum::Vk::ImageLayout initialLayout{Magnum::Vk::ImageLayout::Undefined};
+
+        auto usage = isDepthFormat(r.info.format) ? Vk::ImageUsage::DepthStencilAttachment
+                                                  : Vk::ImageUsage::ColorAttachment;
+
+        Vk::ImageCreateInfo2D createInfo{usage,
+                                         toMagnumPixelFormat(r.info.format),
+                                         size,
+                                         levels,
+                                         r.info.sampleCount,
+                                         initialLayout};
+
+        // todo eventually want to externalize these memory flags
+        r.image = Vk::Image{data_->ctx_->device(), createInfo, Vk::MemoryFlag::DeviceLocal};
+    }
+
+    {
+        Vk::ImageViewCreateInfo2D createInfo{r.image};
+        r.view = Vk::ImageView{data_->ctx_->device(), createInfo};
+    }
     r.state.status = TextureMemoryStatus::Allocated;
 }
 
@@ -102,7 +127,14 @@ void TextureResourceManager::readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
                                          TextureHandle handle,
                                          TextureAccessInfo readAccessInfo)
 {
+    auto &info = data_->textureResources_[handle].info;
     auto &state = data_->textureResources_[handle].state;
+    CO_CORE_DEBUG("BARRIER synchronizing data written to '{}' in {}|{} to be read from {}|{}",
+                  info.name,
+                  state.lastWriteStage,
+                  state.lastWriteAccess,
+                  readAccessInfo.stage,
+                  readAccessInfo.access);
 
     const VkImageAspectFlags aspectMask = readAccessInfo.imageAspect.bits();
     const VkImageMemoryBarrier2 imageMemoryBarrier{
@@ -110,7 +142,7 @@ void TextureResourceManager::readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
         .srcStageMask = state.lastWriteStage.bits(),
         .srcAccessMask = state.lastWriteAccess.bits(),
         .dstStageMask = readAccessInfo.stage.bits(),
-        .dstAccessMask = readAccessInfo.stage.bits(),
+        .dstAccessMask = readAccessInfo.access.bits(),
         .oldLayout = toVkImageLayout(state.layout),
         .newLayout = toVkImageLayout(readAccessInfo.layout),
         // todo: we should get family somewhere else and not from the context

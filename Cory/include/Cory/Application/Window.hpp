@@ -100,7 +100,6 @@ class Window : NoCopy, NoMove {
     void createGlfwWindow();
 
   private:
-
     Context &ctx_;
     std::string windowName_;
     int32_t sampleCount_;

@@ -3,6 +3,8 @@
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/flextVkExt.h>
 
+#include <Cory/Renderer/APIConversion.hpp>
+
 #include <functional>
 
 namespace Cory::Framegraph {
@@ -37,7 +39,7 @@ struct DynamicStates {
 };
 
 enum class PassOutputKind { Create, Write };
-enum class PixelFormat { D32, BGRA32 };
+enum class PixelFormat { D32, RGBA32, RGBA8 };
 enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
 using PipelineStages = BitField<VkPipelineStageFlagBits2>;
 using ImageAspects = BitField<VkImageAspectFlagBits>;
@@ -64,8 +66,8 @@ struct TextureState {
 /// describes information about the intended access (read or write) for a texture resource
 struct TextureAccessInfo {
     Layout layout;
-    AccessFlags access;
     PipelineStages stage;
+    AccessFlags access;
     ImageAspects imageAspect;
 };
 
@@ -96,10 +98,55 @@ constexpr VkFormat toVkFormat(PixelFormat format)
     switch (format) {
     case PixelFormat::D32:
         return VK_FORMAT_D32_SFLOAT;
-    case PixelFormat::BGRA32:
-        return VK_FORMAT_B8G8R8A8_SRGB;
+    case PixelFormat::RGBA32:
+        return VK_FORMAT_R8G8B8A8_SRGB;
     }
     throw std::runtime_error{"Unknown format"};
 }
 
+constexpr Magnum::Vk::PixelFormat toMagnumPixelFormat(PixelFormat format)
+{
+    switch (format) {
+    case PixelFormat::D32:
+        return Magnum::Vk::PixelFormat::Depth32F;
+    case PixelFormat::RGBA32:
+        return Magnum::Vk::PixelFormat::RGBA8Srgb;
+    }
+    throw std::runtime_error{"Unknown format"};
+}
+
+constexpr bool isColorFormat(PixelFormat format)
+{
+    switch (format) {
+    case PixelFormat::D32:
+        return false;
+    case PixelFormat::RGBA32:
+    case PixelFormat::RGBA8:
+        return true;
+    }
+    throw std::runtime_error("Unknown format");
+}
+
+constexpr bool isDepthFormat(PixelFormat format)
+{
+    switch (format) {
+    case PixelFormat::D32:
+        return true;
+    case PixelFormat::RGBA32:
+    case PixelFormat::RGBA8:
+        return false;
+    }
+    throw std::runtime_error("Unknown format");
+}
+
+constexpr bool isStencilFormat(PixelFormat format)
+{
+    switch (format) {
+    case PixelFormat::D32:
+    case PixelFormat::RGBA32:
+    case PixelFormat::RGBA8:
+        return false;
+    }
+    throw std::runtime_error("Unknown format");
+}
 } // namespace Cory::Framegraph

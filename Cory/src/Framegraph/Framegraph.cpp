@@ -56,11 +56,18 @@ void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 
     CO_CORE_INFO("Setting up Render pass {}", rpInfo.name);
     // ## handle resource transitions
-    // TODO
+    for (auto input : rpInfo.inputs) {
+        resources_.readBarrier(cmd.handle(), input.handle, input.accessInfo);
+    }
 
     CO_CORE_INFO("Executing rendering commands for {}", rpInfo.name);
     auto &coroHandle = rpInfo.coroHandle;
     if (!coroHandle.done()) { coroHandle.resume(); }
+
+    // record writes to output resources of this render pass
+    for (auto output : rpInfo.outputs) {
+        resources_.recordWrite(cmd.handle(), output.handle, output.accessInfo);
+    }
 
     CO_CORE_ASSERT(coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
@@ -72,9 +79,11 @@ TextureHandle Framegraph::declareInput(TextureInfo info,
                                        Layout layout,
                                        AccessFlags lastWriteAccess,
                                        PipelineStages lastWriteStage,
-                                       Vk::Image &image)
+                                       Vk::Image &image,
+                                       Vk::ImageView &imageView)
 {
-    auto handle = resources_.registerExternal(info, layout, lastWriteAccess, lastWriteStage, image);
+    auto handle = resources_.registerExternal(
+        info, layout, lastWriteAccess, lastWriteStage, image, imageView);
     externalInputs_.push_back(handle);
     return handle;
 }

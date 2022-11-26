@@ -31,8 +31,8 @@ TextureHandle Builder::create(std::string name,
 {
     TextureInfo info{.name = std::move(name), .size = size, .format = format};
     TextureAccessInfo accessInfo{.layout = initialLayout,
-                                 .access = writeAccess,
                                  .stage = writeStage,
+                                 .access = writeAccess,
                                  .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT};
 
     auto handle = framegraph_.resources_.declareTexture(info);

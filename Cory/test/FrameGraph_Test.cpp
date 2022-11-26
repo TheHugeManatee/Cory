@@ -11,6 +11,8 @@
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/CommandPool.h>
 #include <Magnum/Vk/Image.h>
+#include <Magnum/Vk/ImageCreateInfo.h>
+#include <Magnum/Vk/ImageViewCreateInfo.h>
 
 #include <cppcoro/fmap.hpp>
 #include <cppcoro/sync_wait.hpp>
@@ -34,7 +36,7 @@ depthPass(Context &ctx, FG::Builder builder, glm::u32vec3 size)
                                 FG::PixelFormat::D32,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                VK_ACCESS_2_SHADER_WRITE_BIT);
+                                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
     DepthPassOutputs outputs{depth};
 
     static ShaderHandle vertexShader = ctx.resources().createShader(
@@ -83,16 +85,16 @@ FG::RenderPassDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
 
     auto depthInfo = builder.read(depthInput,
                                   {.layout = FG::Layout::Attachment,
-                                   .access = VK_ACCESS_2_SHADER_READ_BIT,
                                    .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                   .access = VK_ACCESS_2_NONE,
                                    .imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT});
 
     auto depthVis = builder.create("depthDebugVis",
                                    depthInfo.size,
-                                   FG::PixelFormat::BGRA32,
+                                   FG::PixelFormat::RGBA32,
                                    FG::Layout::Attachment,
                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+                                   VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
     co_yield DepthDebugOut{depthVis};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -110,16 +112,16 @@ FG::RenderPassDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
 
     auto normalInfo = builder.read(normalInput,
                                    {.layout = FG::Layout::Attachment,
-                                    .access = VK_ACCESS_2_SHADER_READ_BIT,
                                     .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                    .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
                                     .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
 
     auto normalVis = builder.create("normalDebugVis",
                                     normalInfo.size,
-                                    FG::PixelFormat::BGRA32,
+                                    FG::PixelFormat::RGBA32,
                                     FG::Layout::Attachment,
                                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                    VK_ACCESS_2_SHADER_WRITE_BIT);
+                                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
     co_yield NormalDebugOut{normalVis};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -139,16 +141,16 @@ FG::RenderPassDeclaration<DebugOut> debugGeneral(FG::Framegraph &graph,
     auto &textureToDebug = debugTextures[debugViewIndex];
     auto dbgInfo = builder.read(textureToDebug,
                                 {.layout = FG::Layout::Attachment,
-                                 .access = VK_ACCESS_2_SHADER_READ_BIT,
                                  .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
                                  .imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT});
 
     auto depthVis = builder.create("debugVis",
                                    dbgInfo.size,
-                                   FG::PixelFormat::BGRA32,
+                                   FG::PixelFormat::RGBA32,
                                    FG::Layout::Attachment,
                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                   VK_ACCESS_2_SHADER_WRITE_BIT);
+                                   VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
     co_yield DebugOut{depthVis};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -166,22 +168,22 @@ FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHa
 
     auto depthInfo = builder.read(depthInput,
                                   {.layout = FG::Layout::Attachment,
-                                   .access = VK_ACCESS_2_SHADER_READ_BIT,
-                                   .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                   .stage = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+                                   .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
                                    .imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT});
 
     auto color = builder.create("colorTexture",
                                 depthInfo.size,
-                                FG::PixelFormat::BGRA32,
+                                FG::PixelFormat::RGBA32,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                VK_ACCESS_2_SHADER_WRITE_BIT);
+                                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
     auto normal = builder.create("normalTexture",
                                  depthInfo.size,
-                                 FG::PixelFormat::BGRA32,
+                                 FG::PixelFormat::RGBA32,
                                  FG::Layout::Attachment,
                                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                 VK_ACCESS_2_SHADER_WRITE_BIT);
+                                 VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
 
     co_yield MainOut{color, normal};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -207,21 +209,21 @@ FG::RenderPassDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
 
     auto curColorInfo = builder.read(currentColorInput,
                                      {.layout = FG::Layout::Attachment,
-                                      .access = VK_ACCESS_2_SHADER_READ_BIT,
                                       .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                      .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
                                       .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
     auto prevColorInfo = builder.read(previousColorInput,
                                       {.layout = FG::Layout::Attachment,
-                                       .access = VK_ACCESS_2_SHADER_READ_BIT,
                                        .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                       .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
                                        .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
 
     auto color = builder.create("postprocessTexture",
                                 curColorInfo.size,
-                                FG::PixelFormat::BGRA32,
+                                FG::PixelFormat::RGBA32,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                VK_ACCESS_2_SHADER_WRITE_BIT);
+                                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
 
     co_yield PostProcessOut{color};
     FG::RenderInput render = co_await builder.finishDeclaration();
@@ -234,14 +236,23 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 {
     testing::VulkanTester t;
 
+    namespace Vk = Magnum::Vk;
+
     FG::Framegraph fg(t.ctx());
-    Magnum::Vk::Image prevFrame{Corrade::NoCreate};
+    Vk::Image prevFrame{t.ctx().device(),
+                        Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment,
+                                              Vk::PixelFormat::RGBA8Srgb,
+                                              Magnum::Vector2i{1024, 768},
+                                              1},
+                        Vk::MemoryFlag::DeviceLocal};
+    Vk::ImageView prevFrameView{t.ctx().device(), Vk::ImageViewCreateInfo2D{prevFrame}};
+
     FG::TextureHandle prevFrameColor =
-        fg.declareInput({"previousFrameColor", glm::u32vec3{1024, 768, 1}, FG::PixelFormat::BGRA32},
+        fg.declareInput({"previousFrameColor", glm::u32vec3{1024, 768, 1}, FG::PixelFormat::RGBA32},
                         FG::Layout::Attachment,
-                        VK_ACCESS_2_SHADER_WRITE_BIT,
+                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        prevFrame);
+                        prevFrame, prevFrameView);
 
     auto depthPass = passes::depthPass(t.ctx(), fg.declarePass("depthPrepass"), {800, 600, 1});
     auto mainPass = passes::mainPass(fg, depthPass.output().depthTexture);

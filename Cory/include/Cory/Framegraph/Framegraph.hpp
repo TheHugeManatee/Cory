@@ -70,7 +70,7 @@ class Framegraph : NoCopy, NoMove {
                                Layout layout,
                                AccessFlags lastWriteAccess,
                                PipelineStages lastWriteStage,
-                               Magnum::Vk::Image &image);
+                               Magnum::Vk::Image &image, Magnum::Vk::ImageView& imageView);
 
     /**
      * declare that a resource is to be read afterwards. returns general

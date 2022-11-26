@@ -56,7 +56,14 @@ class Context : NoCopy {
     ResourceManager &resources();
     const ResourceManager &resources() const;
 
-    void onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo&)> callback);
+    /// register a callback that gets called on vulkan validation messages etc.
+    void onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo &)> callback);
+
+    const Magnum::Vk::MeshLayout &defaultMeshLayout() const;
+    // non-const only to allow casting to VkPipelineLayout
+    Magnum::Vk::PipelineLayout &defaultPipelineLayout();
+    // non-const only to allow casting to VkDescriptorSetLayotu
+    Magnum::Vk::DescriptorSetLayout &defaultDescriptorSetLayout();
 
   private:
     std::unique_ptr<struct ContextPrivate> data_;

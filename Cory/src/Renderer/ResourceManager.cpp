@@ -6,13 +6,17 @@
 
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
 
 namespace Cory {
+
+namespace Vk = Magnum::Vk;
 
 struct ResourceManagerPrivate {
     Context *ctx;
     SlotMap<Shader> shaders;
-    SlotMap<Magnum::Vk::Buffer> buffers;
+    SlotMap<Vk::Buffer> buffers;
+    SlotMap<Vk::Pipeline> pipelines;
 };
 
 ResourceManager::ResourceManager()
@@ -45,38 +49,56 @@ ResourceManager::createShader(std::string source, ShaderType type, std::filesyst
 Shader &ResourceManager::operator[](ShaderHandle shaderHandle)
 {
     CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
-    return data_->shaders[shaderHandle.handle_];
+    return data_->shaders[shaderHandle];
 }
 
-void ResourceManager::release(ShaderHandle shaderHandle)
-{
-    data_->shaders.release(shaderHandle.handle_);
-}
+void ResourceManager::release(ShaderHandle shaderHandle) { data_->shaders.release(shaderHandle); }
 
 BufferHandle
 ResourceManager::createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags)
 {
-    namespace Vk = Magnum::Vk;
     return data_->buffers.emplace(
         std::ref(data_->ctx->device()),
         Vk::BufferCreateInfo{Vk::BufferUsage{usage.underlying_bits()}, bufferSizeInBytes},
         Vk::MemoryFlag{flags.underlying_bits()});
 }
 
-Magnum::Vk::Buffer &ResourceManager::operator[](BufferHandle bufferHandle)
+Vk::Buffer &ResourceManager::operator[](BufferHandle bufferHandle)
 {
     CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
-    return data_->buffers[bufferHandle.handle_];
+    return data_->buffers[bufferHandle];
 }
 
 void ResourceManager::release(BufferHandle bufferHandle)
 {
     data_->buffers.release(bufferHandle.handle_);
 }
+
+PipelineHandle
+ResourceManager::createPipeline(std::string_view name,
+                                const Vk::RasterizationPipelineCreateInfo &createInfo)
+{
+    auto handle = data_->pipelines.emplace(std::ref(data_->ctx->device()), std::ref(createInfo));
+
+    // TODO: nameVulkanObject()
+
+    return handle;
+}
+
+Vk::Pipeline &ResourceManager::operator[](PipelineHandle pipelineHandle)
+{
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    return data_->pipelines[pipelineHandle];
+}
+
+void ResourceManager::release(PipelineHandle pipelineHandle)
+{
+    data_->pipelines.release(pipelineHandle);
+}
+
 std::unordered_map<ResourceType, size_t> ResourceManager::resourcesInUse() const
 {
     return {{ResourceType::Buffer, data_->buffers.size()},
             {ResourceType::Shader, data_->shaders.size()}};
 }
-
 } // namespace Cory

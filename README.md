@@ -28,8 +28,9 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] define a global descriptor set 0 that is managed by cory itself
 - Render Graphs/Frame Graphs
     - [x] basic coroutine-based API and render pass resolution via graph search
-    - [ ] automatically create render passes and layouts
-    - [ ] actually execute render pass code
+    - [x] automatically create render passes and layouts
+    - [ ] perform automatic resource transitions
+    - [ ] actually execute render pass code that renders stuff
 - Window and event system
     - [x] basic mouse and kb event forwarding
     - [ ] better abstraction/encapsulation
@@ -120,6 +121,22 @@ cmake --build .
 
 ### Cory?
 
-According to [this very trustworthy-looking web source](http://www.talesbeyondbelief.com/roman-gods/vulcan.htm), 
+According to [this very trustworthy-looking web source](http://www.talesbeyondbelief.com/roman-gods/vulcan.htm),
 *Corynetes* was the son of the roman god Vulcan.
 Also, something something coroutines.
+
+### Extensions Used or planned to use
+
+- [x] KHR_dynamic_rendering: used for implementing the framegraph
+- [x] [EXT_debug_utils](https://registry.khronos.org/vulkan/specs/1.2-extensions/man/html/VK_EXT_debug_utils.html):
+  validation stuff!
+- [x] [KHR_synchronization2](https://registry.khronos.org/vulkan/specs/1.2-extensions/man/html/VK_KHR_synchronization2.html):
+  better barriers
+- [ ] [EXT_device_memory_report](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_device_memory_report.html):
+  would be nice to get some insights on memory usage
+- [ ] [KHR_timeline_semaphore](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_timeline_semaphore.html):
+  semaphores with monotonically increasing counters, useful for e.g. parallel subsystems like gpu-physics running
+  asynchronously to rendering
+- [ ] [EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_mesh_shader.html): mesh
+  shaders are the new hot thing, I should try at some point
+- [ ] [EXT_full_screen_exclusive](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_full_screen_exclusive.html): full screen stuff. maybe better handled through GLFW?

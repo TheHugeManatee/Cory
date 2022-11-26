@@ -36,6 +36,7 @@ CubePipeline::CubePipeline(Cory::Context &context,
 
 CubePipeline::~CubePipeline() = default;
 
+Magnum::Vk::Pipeline &CubePipeline::pipeline() { return ctx_.resources()[pipeline_]; }
 void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
                                           const Magnum::Vk::Mesh &mesh,
                                           std::filesystem::path vertFile,
@@ -47,7 +48,7 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     CO_APP_TRACE("Starting shader compilation");
     vertexShader_ = resources.createShader(Cory::ResourceLocator::locate(vertFile));
     CO_APP_TRACE("Vertex shader code size: {}", resources[vertexShader_].size());
-    fragmentShader_ = ctx_.resources().createShader(Cory::ResourceLocator::locate(fragFile));
+    fragmentShader_ = resources.createShader(Cory::ResourceLocator::locate(fragFile));
     CO_APP_TRACE("Fragment shader code size: {}", resources[fragmentShader_].size());
 
     Vk::ShaderSet shaderSet{};
@@ -108,7 +109,7 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     // set up dynamic rendering with VK_KHR_dynamic_rendering
     auto colorFormat = static_cast<VkFormat>(window.colorFormat());
     auto depthFormat = static_cast<VkFormat>(window.depthFormat());
-    int32_t sampleCount = window.sampleCount();
+
     const VkPipelineRenderingCreateInfo pipelineRenderingCreateInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount = 1,
@@ -118,8 +119,7 @@ void CubePipeline::createGraphicsPipeline(const Cory::Window &window,
     };
     rasterizationPipelineCreateInfo->pNext = &pipelineRenderingCreateInfo;
 
-    pipeline_ =
-        std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));
+    pipeline_ = ctx_.resources().createPipeline("Cube Pipeline", rasterizationPipelineCreateInfo);
 }
 
 Magnum::Vk::DescriptorSet CubePipeline::allocateDescriptorSet()

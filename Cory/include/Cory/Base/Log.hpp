@@ -70,7 +70,7 @@ class Log {
 #define CO_APP_INFO(...)  ::Cory::Log::GetAppLogger()->info(__VA_ARGS__)
 
 #define CO_CORE_ASSERT(condition, message, ...)                                                    \
-    if (auto val = (condition); !(val)) {                                                          \
+    if (auto val = bool(condition); !(val)) {                                                          \
         auto formatted_message = fmt::format(message, __VA_ARGS__);                                \
         auto assertion_string =                                                                    \
             fmt::format("Assertion failed: {}\n{} == {}.\n", formatted_message, #condition, val);  \

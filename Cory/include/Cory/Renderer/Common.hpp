@@ -4,11 +4,12 @@
  */
 
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
+
+#include <Corrade/Containers/StringStlView.h>
+#include <Magnum/Vk/Vk.h> // forward declaration header
 #include <Magnum/Vk/Vulkan.h>
 
 #include <cstdint>
-
-#include <Cory/Renderer/MagnumFwd.hpp>
 
 namespace Cory {
 // forward declared classes/structs
@@ -71,29 +72,10 @@ enum class MemoryFlagBits : uint32_t {
 };
 using MemoryFlags = BitField<MemoryFlagBits>;
 
-/// generic handle type to wrap slot map handles in a type-safe way
-template <typename T> class ResourceHandle {
-  public:
-    /**
-     * default constructor constructs an invalid handle! valid handles can
-     * only be obtained from the ResourceManager!
-     */
-    ResourceHandle() = default;
-
-  private:
-    friend class ResourceManager;
-    /* implicit */ ResourceHandle(SlotMapHandle handle)
-        : handle_{handle}
-    {
-    }
-    SlotMapHandle handle_{};
-};
-
-/// handle to a shader. can be resolved to the actual resource via the ResourceManager
-using ShaderHandle = ResourceHandle<Shader>;
+using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
-/// handle to a buffer. can be resolved to the actual resource via the ResourceManager
-using BufferHandle = ResourceHandle<Magnum::Vk::Buffer>;
+using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
+using PipelineHandle = PrivateTypedHandle<Magnum::Vk::Pipeline, ResourceManager>;
 
 } // namespace Cory
 

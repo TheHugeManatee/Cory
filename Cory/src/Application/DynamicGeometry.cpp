@@ -13,25 +13,14 @@
 #include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/VertexFormat.h>
 
-#include <gsl/gsl_narrow>
+#include <gsl/narrow>
 
 namespace Cory {
 namespace Vk = Magnum::Vk;
 
-namespace {
-Vk::MeshLayout defaultMeshLayout(uint32_t binding)
-{
-    return Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
-        .addBinding(binding, sizeof(DynamicGeometry::Vertex))
-        .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
-        .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
-        .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float));
-}
-} // namespace
-
 Vk::Mesh DynamicGeometry::createTriangle(Context &ctx, uint32_t binding)
 {
-    Vk::Mesh mesh(defaultMeshLayout(binding));
+    Vk::Mesh mesh(ctx.defaultMeshLayout());
 
     const uint64_t numVertices = 4;
     Vk::Buffer vBuffer{
@@ -120,7 +109,7 @@ Vk::Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t bi
         v.pos += offset;
     }
 
-    Vk::Mesh mesh(defaultMeshLayout(binding));
+    Vk::Mesh mesh(ctx.defaultMeshLayout());
 
     Vk::Buffer vBuffer{
         ctx.device(),

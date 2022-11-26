@@ -39,6 +39,42 @@ class SlotMapHandle {
 static_assert(sizeof(SlotMapHandle) == sizeof(uint64_t));
 static_assert(std::copyable<SlotMapHandle> && std::movable<SlotMapHandle>);
 
+/**
+ * A typed version of the handle to ensure type safety
+ * @tparam T        the type that the handle accesses - purely used for type safety
+ * @tparam Friend   a friend class that is able to "dereference" the handle
+ *
+ * This version is intended to be used to hide the slot map and provide type safety.
+ * A class can internally use a SlotMap to store objects, and hand out typed handles
+ * to the outside. Users can then store and use the handle to be passed around, but are
+ * not able to directly access the SlotMapHandle itself, preventing misuse by for example
+ * passing a texture handle to an operation that expects a buffer handle.
+ */
+template <typename T, typename Friend> class PrivateTypedHandle {
+  public:
+    /// default initialization creates an invalid handle
+    PrivateTypedHandle() = default;
+    auto operator<=>(const PrivateTypedHandle &rhs) const = default;
+
+    /**
+     * check a handle for validity. Note: a valid handle does NOT imply that it
+     * actually references an alive object in the slot map, use SlotMap::valid() for that!
+     */
+    bool valid() const { return handle_.index() != SlotMapHandle::INVALID_INDEX; }
+    operator bool() const { return valid(); }
+
+  private:
+    friend Friend;
+    friend struct std::hash<Cory::PrivateTypedHandle<T, Friend>>;
+    friend struct fmt::formatter<Cory::PrivateTypedHandle<T, Friend>>;
+    /* implicit */ PrivateTypedHandle(SlotMapHandle handle)
+        : handle_{handle}
+    {
+    }
+    operator SlotMapHandle() const noexcept { return handle_; }
+    SlotMapHandle handle_{};
+};
+
 inline SlotMapHandle::SlotMapHandle()
     : free_{1}
     , version_{0}
@@ -81,3 +117,22 @@ template <> struct std::hash<Cory::SlotMapHandle> {
         return Cory::hashCompose(0, s.alive(), s.index(), s.version());
     }
 };
+
+/// make PrivateTypedHandles formattable
+template <typename T, typename F>
+struct fmt::formatter<Cory::PrivateTypedHandle<T, F>> : public fmt::formatter<Cory::SlotMapHandle> {
+    auto format(Cory::PrivateTypedHandle<T, F> h, format_context &ctx)
+    {
+        return fmt::formatter<Cory::SlotMapHandle>::format(h.handle_, ctx);
+    }
+};
+
+// partial specialization needs to be in std, not sure if that's a good idea though..
+namespace std {
+template <typename T, typename F> struct hash<Cory::PrivateTypedHandle<T, F>> {
+    std::size_t operator()(const Cory::PrivateTypedHandle<T, F> &s) const noexcept
+    {
+        return std::hash<Cory::SlotMapHandle>{}(s);
+    }
+};
+} // namespace std

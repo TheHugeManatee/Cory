@@ -10,7 +10,7 @@ namespace Cory {
 template <class T>
 concept Enum = std::is_enum_v<T>;
 
-auto to_underlying(Enum auto value)
+constexpr auto to_underlying(Enum auto value)
 {
     return static_cast<std::underlying_type_t<decltype(value)>>(value);
 }
@@ -22,47 +22,47 @@ class BitField {
     using UnderlyingType = std::underlying_type_t<UnderlyingEnum>;
     static constexpr int NUM_BITS = std::numeric_limits<UnderlyingType>::digits;
 
-    BitField()
+    constexpr BitField()
         : bits_{}
     {
     }
-    BitField(UnderlyingEnum bits)
+    constexpr /*implicit*/ BitField(UnderlyingEnum bits)
         : bits_{to_underlying(bits)}
     {
     }
-    BitField(UnderlyingType bits)
+    constexpr /*implicit*/ BitField(UnderlyingType bits)
         : bits_{bits}
     {
     }
 
     /// access to the raw enum
-    [[nodiscard]] UnderlyingEnum bits() const { return UnderlyingEnum{bits_}; }
+    [[nodiscard]] constexpr UnderlyingEnum bits() const { return UnderlyingEnum(bits_); }
     /// access to the underlying bits
-    [[nodiscard]] UnderlyingType underlying_bits() const { return bits_; }
+    [[nodiscard]] constexpr UnderlyingType underlying_bits() const { return bits_; }
 
     /// set a bit
-    BitField &set(UnderlyingEnum bit)
+    constexpr BitField &set(UnderlyingEnum bit)
     {
         bits_ |= to_underlying(bit);
         return *this;
     }
 
     /// clear a bit
-    BitField &clear(UnderlyingEnum bit)
+    constexpr BitField &clear(UnderlyingEnum bit)
     {
         bits_ &= ~to_underlying(bit);
         return *this;
     }
 
     /// toggles a bit (sets it if it was unset, clears it if it was set)
-    BitField &toggle(UnderlyingEnum bit)
+    constexpr BitField &toggle(UnderlyingEnum bit)
     {
         bits_ ^= to_underlying(bit);
         return *this;
     }
 
     /// query bit
-    [[nodiscard]] bool is_set(UnderlyingEnum bit) const
+    [[nodiscard]] constexpr bool is_set(UnderlyingEnum bit) const
     {
         return (bits_ & to_underlying(bit)) == to_underlying(bit);
     }

@@ -31,6 +31,16 @@ TEST_CASE("BitField", "[Cory/Base]")
         CHECK(bitfield.set_bits() == std::vector<BitValues>{});
     }
 
+    SECTION("Constexpr usage")
+    {
+        constexpr auto bitfield = Cory::BitField<BitValues>{}.set(BitValues::Third);
+
+        static_assert(!bitfield.is_set(BitValues::First));
+        static_assert(!bitfield.is_set(BitValues::Second));
+        static_assert(bitfield.is_set(BitValues::Third));
+        static_assert(!bitfield.is_set(BitValues::Highest));
+    }
+
     SECTION("Setting and clearing bits")
     {
         Cory::BitField<BitValues> bitfield;

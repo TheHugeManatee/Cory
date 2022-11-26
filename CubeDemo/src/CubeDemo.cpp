@@ -239,7 +239,7 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
         .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = ctx_->graphicsQueueFamily(),
-        .dstQueueFamilyIndex = ctx_->computeQueueFamily(),
+        .dstQueueFamilyIndex = ctx_->graphicsQueueFamily(),
         .image = *frameCtx.colorImage,
         .subresourceRange = {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -316,6 +316,7 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
     glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 0.1f, 10.0f);
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
 
+    // update the uniform buffer
     CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
     ubo.view = viewMatrix;
     ubo.projection = projectionMatrix;

@@ -2,11 +2,12 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/constants.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/trigonometric.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
+#include <range/v3/range/concepts.hpp>
 
 namespace Cory {
 /// convert spherical coordinates (r, theta, phi) to cartesian (x, y, z)
@@ -14,10 +15,24 @@ inline glm::vec3 sphericalToCartesian(const glm::vec3 spherical);
 /// convert cartesian (x, y, z) to spherical coordinates (r, theta, phi)
 inline glm::vec3 cartesianToSpherical(const glm::vec3 cartesian);
 /// this is the same as what boost::hash_combine does
-template <typename T> std::size_t hashCombine(std::size_t seed, const T &v)
+template <typename T>
+    requires(!ranges::range<T>)
+std::size_t hashCombine(std::size_t seed, const T &v)
 {
     return seed ^ std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
+/// overload for ranges
+template <typename Range>
+    requires(ranges::range<Range>)
+std::size_t hashCombine(std::size_t seed, Range &&rng)
+{
+    std::size_t hash = seed;
+    for (const auto &v : rng) {
+        hash = hashCombine(hash, v);
+    }
+    return hash;
+}
+
 /// variadic template to make composing hashes of different things easier
 template <typename FirstArg> std::size_t hashCompose(std::size_t seed, FirstArg &&arg)
 {
@@ -86,7 +101,6 @@ inline glm::mat4 makePerspective(float fovy, float aspect, float near, float far
     ret[3][2] = -(far * near) / (far - near);
     return ret;
 }
-
 
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////

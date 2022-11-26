@@ -28,10 +28,10 @@ class TransientRenderPass : NoCopy {
     TransientRenderPass& operator= (TransientRenderPass&&) = default;
 
     /**
-     * starts the rendering and sets up the render pass according to the information described in
-     * the builder.
+     * starts the rendering and sets up the render pass according to
+     * the information described in the builder.
      *
-     *  1. Binds a pipeline with the required layout (created in the context's pipeline cache)
+     *  1. Binds a pipeline with the required layout - 
      *  2. Calls CmdBeginRendering with the attachments
      *  3. Set up the dynamic state (Depth test, cull mode, ...) as set up in the builder
      */

@@ -6,6 +6,7 @@
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/Framegraph/RenderPassDeclaration.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/CommandPool.h>
@@ -25,12 +26,9 @@ namespace passes {
 struct DepthPassOutputs {
     FG::TextureHandle depthTexture;
 };
-FG::RenderPassDeclaration<DepthPassOutputs> depthPass(FG::Framegraph &graph, glm::u32vec3 size)
+FG::RenderPassDeclaration<DepthPassOutputs>
+depthPass(Context &ctx, FG::Builder builder, glm::u32vec3 size)
 {
-    PipelineHandle depthPipeline = {/*TODO*/};
-
-    FG::Builder builder = graph.declarePass("DepthPrepass");
-
     auto depth = builder.create("depthTexture",
                                 size,
                                 FG::PixelFormat::D32,
@@ -39,21 +37,40 @@ FG::RenderPassDeclaration<DepthPassOutputs> depthPass(FG::Framegraph &graph, glm
                                 VK_ACCESS_2_SHADER_WRITE_BIT);
     DepthPassOutputs outputs{depth};
 
+    static ShaderHandle vertexShader = ctx.resources().createShader(
+        R"glsl(#version 450
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec3 inTexCoord;
+layout(location = 2) in vec4 inColor;
+void main() {
+    gl_Position = vec4(inPosition, 1.0);
+}
+)glsl",
+        ShaderType::eVertex,
+        "depth.vert");
+
+    static ShaderHandle fragmentShader = ctx.resources().createShader(
+        R"glsl(#version 450
+layout(location = 0) out vec4 outColor;
+void main() {
+    outColor = gl_FragCoord;
+}
+)glsl",
+        ShaderType::eFragment,
+        "depth.frag");
+
+    auto depthPass =
+        builder.declareRenderPass()
+            .attachDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, 1.0f)
+            .shaders({vertexShader, fragmentShader})
+            .finish();
+
     co_yield outputs;
     FG::RenderInput render = co_await builder.finishDeclaration();
-
-    // render.cmd->bind(depthPipeline);
-
-    //    render.cmd->setupRenderPass()
-    //        .attachDepth(outputs.depthTexture,
-    //                     VK_ATTACHMENT_LOAD_OP_CLEAR,
-    //                     VK_ATTACHMENT_STORE_OP_STORE,
-    //                     {.depth = 1.0f, .stencil = 0})
-    //        .begin();
-
+    CO_CORE_ASSERT(render.cmd != nullptr, "Uh-oh");
+    depthPass.begin(*render.cmd);
     CO_APP_INFO("[DepthPrepass] render commands executing");
-
-    //    render.cmd->endPass();
+    depthPass.end(*render.cmd);
 }
 
 struct DepthDebugOut {
@@ -72,7 +89,7 @@ FG::RenderPassDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
 
     auto depthVis = builder.create("depthDebugVis",
                                    depthInfo.size,
-                                   FG::PixelFormat::RGBA32,
+                                   FG::PixelFormat::BGRA32,
                                    FG::Layout::Attachment,
                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -99,7 +116,7 @@ FG::RenderPassDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
 
     auto normalVis = builder.create("normalDebugVis",
                                     normalInfo.size,
-                                    FG::PixelFormat::RGBA32,
+                                    FG::PixelFormat::BGRA32,
                                     FG::Layout::Attachment,
                                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                     VK_ACCESS_2_SHADER_WRITE_BIT);
@@ -128,7 +145,7 @@ FG::RenderPassDeclaration<DebugOut> debugGeneral(FG::Framegraph &graph,
 
     auto depthVis = builder.create("debugVis",
                                    dbgInfo.size,
-                                   FG::PixelFormat::RGBA32,
+                                   FG::PixelFormat::BGRA32,
                                    FG::Layout::Attachment,
                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                    VK_ACCESS_2_SHADER_WRITE_BIT);
@@ -155,13 +172,13 @@ FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHa
 
     auto color = builder.create("colorTexture",
                                 depthInfo.size,
-                                FG::PixelFormat::RGBA32,
+                                FG::PixelFormat::BGRA32,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                 VK_ACCESS_2_SHADER_WRITE_BIT);
     auto normal = builder.create("normalTexture",
                                  depthInfo.size,
-                                 FG::PixelFormat::RGBA32,
+                                 FG::PixelFormat::BGRA32,
                                  FG::Layout::Attachment,
                                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                  VK_ACCESS_2_SHADER_WRITE_BIT);
@@ -201,7 +218,7 @@ FG::RenderPassDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
 
     auto color = builder.create("postprocessTexture",
                                 curColorInfo.size,
-                                FG::PixelFormat::RGBA32,
+                                FG::PixelFormat::BGRA32,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                 VK_ACCESS_2_SHADER_WRITE_BIT);
@@ -220,13 +237,13 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
     FG::Framegraph fg(t.ctx());
     Magnum::Vk::Image prevFrame{Corrade::NoCreate};
     FG::TextureHandle prevFrameColor =
-        fg.declareInput({"previousFrameColor", glm::u32vec3{1024, 768, 1}, FG::PixelFormat::RGBA32},
+        fg.declareInput({"previousFrameColor", glm::u32vec3{1024, 768, 1}, FG::PixelFormat::BGRA32},
                         FG::Layout::Attachment,
                         VK_ACCESS_2_SHADER_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                         prevFrame);
 
-    auto depthPass = passes::depthPass(fg, {800, 600, 1});
+    auto depthPass = passes::depthPass(t.ctx(), fg.declarePass("depthPrepass"), {800, 600, 1});
     auto mainPass = passes::mainPass(fg, depthPass.output().depthTexture);
 
     auto depthDebugPass = passes::depthDebug(fg, depthPass.output().depthTexture);
@@ -252,5 +269,7 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 
     Magnum::Vk::CommandBuffer buffer = t.ctx().commandPool().allocate();
 
+    buffer.begin();
     fg.execute(buffer);
+    buffer.end();
 }

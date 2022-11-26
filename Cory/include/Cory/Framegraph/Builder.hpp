@@ -1,8 +1,9 @@
 #pragma once
 
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/TransientRenderPass.hpp>
 
-#include <cppcoro/task.hpp>
+#include <cppcoro/coroutine.hpp>
 #include <string_view>
 
 namespace Cory::Framegraph {
@@ -18,7 +19,7 @@ struct RenderTaskInfo {
         TextureAccessInfo accessInfo;
     };
     std::string name;
-    std::vector<InputDesc> inputs; // todo: needs to include clear value, load/store, layout
+    std::vector<InputDesc> inputs;
     std::vector<OutputDesc> outputs;
 
     // framegraph internal stuff
@@ -31,12 +32,14 @@ struct RenderTaskInfo {
  *
  * For defaults, see default values in RenderTaskInfo.
  *
- * Meant to be used only locally, hence not copy- or movable.
+ * Meant to be used only locally, hence not copyable.
  */
-class Builder : NoCopy, NoMove {
+class Builder : NoCopy {
   public:
     Builder(Framegraph &framegraph, std::string_view passName);
     ~Builder();
+
+    Builder(Builder&&) = default;
 
     /// declare that a render pass creates a certain texture
     TextureHandle create(std::string name,
@@ -56,6 +59,13 @@ class Builder : NoCopy, NoMove {
     /// declare that a render task reads from and writes to a certain texture
     std::pair<TextureHandle, TextureInfo>
     readWrite(TextureHandle handle, TextureAccessInfo readAccess, TextureAccessInfo writeAccess);
+
+    /**
+     * Declares a render pass with a default pipeline setup
+     * @param name              name of the render pass
+     * @return a builder class to set up the render pass. call finish() to obtain the pass object
+     */
+    TransientRenderPassBuilder declareRenderPass(std::string_view name = "");
 
     /**
      * @brief Finish declaration of the render task.

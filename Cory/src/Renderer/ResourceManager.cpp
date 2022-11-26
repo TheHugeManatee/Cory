@@ -73,16 +73,16 @@ void ResourceManager::release(BufferHandle bufferHandle)
 {
     data_->buffers.release(bufferHandle.handle_);
 }
-std::unordered_map<ResourceType, size_t> ResourceManager::resourcesInUse() const
-{
-    return {{ResourceType::Buffer, data_->buffers.size()},
-            {ResourceType::Shader, data_->shaders.size()}};
-}
 
 PipelineHandle
-ResourceManager::createPipeline(const Vk::RasterizationPipelineCreateInfo &createInfo)
+ResourceManager::createPipeline(std::string_view name,
+                                const Vk::RasterizationPipelineCreateInfo &createInfo)
 {
-    return data_->pipelines.emplace(std::ref(data_->ctx->device()), std::ref(createInfo));
+    auto handle = data_->pipelines.emplace(std::ref(data_->ctx->device()), std::ref(createInfo));
+
+    // TODO: nameVulkanObject()
+
+    return handle;
 }
 
 Vk::Pipeline &ResourceManager::operator[](PipelineHandle pipelineHandle)
@@ -96,4 +96,9 @@ void ResourceManager::release(PipelineHandle pipelineHandle)
     data_->pipelines.release(pipelineHandle);
 }
 
+std::unordered_map<ResourceType, size_t> ResourceManager::resourcesInUse() const
+{
+    return {{ResourceType::Buffer, data_->buffers.size()},
+            {ResourceType::Shader, data_->shaders.size()}};
+}
 } // namespace Cory

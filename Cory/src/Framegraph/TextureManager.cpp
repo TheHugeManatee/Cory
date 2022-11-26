@@ -35,12 +35,13 @@ TextureResourceManager::~TextureResourceManager() = default;
 
 TextureHandle TextureResourceManager::declareTexture(TextureInfo info)
 {
-    CO_CORE_DEBUG("Declaring '{}' of {}x{}x{} ({})",
+    CO_CORE_DEBUG("Declaring '{}' of {}x{}x{} ({}, {} samples)",
                   info.name,
                   info.size.x,
                   info.size.y,
                   info.size.z,
-                  info.format);
+                  info.format,
+                  info.sampleCount);
     auto handle = data_->textureResources_.emplace(
         TextureResource{info,
                         TextureState{.layout = Layout::Undefined,

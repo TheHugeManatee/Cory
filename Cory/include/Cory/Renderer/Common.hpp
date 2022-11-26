@@ -4,11 +4,12 @@
  */
 
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
+
+#include <Corrade/Containers/StringStlView.h>
+#include <Magnum/Vk/Vk.h> // forward declaration header
 #include <Magnum/Vk/Vulkan.h>
 
 #include <cstdint>
-
-#include <Cory/Renderer/MagnumFwd.hpp>
 
 namespace Cory {
 // forward declared classes/structs

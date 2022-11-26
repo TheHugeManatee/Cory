@@ -2,7 +2,8 @@
 
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
+
+namespace Vk = Magnum::Vk;
 
 namespace Cory::Framegraph {
 
@@ -76,6 +77,12 @@ std::pair<TextureHandle, TextureInfo> Builder::readWrite(TextureHandle handle,
     });
     // TODO versioning of the handles?
     return {handle, framegraph_.resources_.info(handle)};
+}
+
+TransientRenderPassBuilder Builder::declareRenderPass(std::string_view name)
+{
+    return TransientRenderPassBuilder(
+        *framegraph_.ctx_, name.empty() ? info_.name : name, framegraph_.resources_);
 }
 
 } // namespace Cory::Framegraph

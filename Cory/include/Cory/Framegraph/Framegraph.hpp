@@ -28,10 +28,9 @@ namespace Cory::Framegraph {
  * member.
  */
 struct RenderInput {
-    struct RenderPassResources *resources;
-
-    struct RenderContext *context;
-    CommandList *cmd;
+    struct RenderPassResources *resources{};
+    struct RenderContext *context{};
+    CommandList *cmd{};
 };
 
 /**
@@ -119,6 +118,7 @@ class Framegraph : NoCopy, NoMove {
     std::vector<TextureHandle> outputs_;
 
     SlotMap<RenderTaskInfo> renderPasses_;
+    CommandList* commandListInProgress_{};
 };
 
 } // namespace Cory::Framegraph

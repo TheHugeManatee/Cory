@@ -4,7 +4,6 @@
 
 #include <Magnum/Vk/CommandBuffer.h>
 
-#include <range/v3/action/unique.hpp>
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/reverse.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -45,11 +44,12 @@ void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
     std::vector<RenderTaskHandle> passesToExecute = compile();
 
     CommandList cmd{*ctx_, cmdBuffer};
-
+    commandListInProgress_ = &cmd;
     for (const auto &handle : passesToExecute) {
         executePass(cmd, handle);
     }
 }
+
 void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 {
     const RenderTaskInfo &rpInfo = renderPasses_[handle];
@@ -58,16 +58,14 @@ void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
     // ## handle resource transitions
     // TODO
 
-    // ## set up attachment infos
-    // ## call BeginRendering
-    // ## set up dynamic states
-    // ## update push constant data?
-
     CO_CORE_INFO("Executing rendering commands for {}", rpInfo.name);
     auto &coroHandle = rpInfo.coroHandle;
     if (!coroHandle.done()) { coroHandle.resume(); }
+
     CO_CORE_ASSERT(coroHandle.done(),
-                   "Render pass definition seems to have more unnecessary synchronization points!");
+                   "Render task coroutine seems to have more unnecessary coroutine synchronization "
+                   "points! A render task should only have a single co_yield and should wait on "
+                   "the builder's finishPassDeclaration() exactly once!");
 }
 
 TextureHandle Framegraph::declareInput(TextureInfo info,
@@ -96,17 +94,6 @@ std::vector<RenderTaskHandle> Framegraph::compile()
     resources_.allocate(requiredResources);
     dump(passes, requiredResources);
     return passes;
-}
-
-RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
-{
-    return fg.renderInput(passHandle);
-}
-
-void RenderTaskExecutionAwaiter::await_suspend(
-    cppcoro::coroutine_handle<> coroHandle) const noexcept
-{
-    fg.enqueueRenderPass(passHandle, coroHandle);
 }
 
 void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
@@ -248,7 +235,8 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
         ranges::views::filter([](const auto &it) { return it.second >= 0; }) |
         ranges::to<std::vector>;
 
-    std::ranges::sort(passesToExecute, {}, [](const auto &it) { return -it.second; });
+    // sort in descending order so the passes with the highest priority come first
+    ranges::sort(passesToExecute, {}, [](const auto &it) { return -it.second; });
 
     CO_APP_DEBUG("Render pass order after resolve:");
     for (const auto &[handle, prio] : passesToExecute) {
@@ -264,8 +252,25 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
 
 RenderInput Framegraph::renderInput(RenderTaskHandle passHandle)
 {
-    // TODO
-    return {};
+    CO_CORE_ASSERT(commandListInProgress_, "No command list recording in progress!");
+    return {
+        .resources = nullptr,
+        .context = nullptr,
+        .cmd = commandListInProgress_,
+    };
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
+{
+    return fg.renderInput(passHandle);
+}
+
+void RenderTaskExecutionAwaiter::await_suspend(
+    cppcoro::coroutine_handle<> coroHandle) const noexcept
+{
+    fg.enqueueRenderPass(passHandle, coroHandle);
 }
 
 } // namespace Cory::Framegraph

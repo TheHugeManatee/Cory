@@ -37,7 +37,7 @@ struct DynamicStates {
 
 enum class PassOutputKind { Create, Write };
 enum class PixelFormat { D32, RGBA32 };
-enum class Layout { Undefined, Color, DepthStencil, TransferSource, TransferDest, PresentSource };
+enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
 using PipelineStages = BitField<VkPipelineStageFlagBits2>;
 using ImageAspects = BitField<VkImageAspectFlagBits>;
 using AccessFlags = BitField<VkAccessFlagBits2>;
@@ -73,18 +73,18 @@ using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceMana
 constexpr VkImageLayout toVkImageLayout(Layout layout)
 {
     switch (layout) {
-    case Layout::Color:
-        return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    case Layout::DepthStencil:
-        return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-    case Layout::PresentSource:
-        return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     case Layout::Undefined:
         return VK_IMAGE_LAYOUT_UNDEFINED;
+    case Layout::Attachment:
+        return VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+    case Layout::ReadOnly:
+        return VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
     case Layout::TransferSource:
         return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     case Layout::TransferDest:
         return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    case Layout::PresentSource:
+        return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     }
     throw std::runtime_error{"Unknown Layout"};
 }

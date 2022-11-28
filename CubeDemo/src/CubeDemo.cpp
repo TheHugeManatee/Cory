@@ -10,8 +10,11 @@
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
+#include <Cory/Framegraph/CommandList.hpp>
+#include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <Corrade/Containers/Array.h>
@@ -21,6 +24,8 @@
 #include <Magnum/Math/Vector3.h>
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/CommandBuffer.h>
+#include <Magnum/Vk/DescriptorPool.h>
+#include <Magnum/Vk/DescriptorSetLayout.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/FramebufferCreateInfo.h>
@@ -148,12 +153,9 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 
 void CubeDemoApplication::createPipeline()
 {
-    Cory::ScopeTimer st{"Init/Pipeline"};
-    pipeline_ = std::make_unique<CubePipeline>(*ctx_,
-                                               *window_,
-                                               *mesh_,
-                                               std::filesystem::path{"cube.vert"},
-                                               std::filesystem::path{"cube.frag"});
+    Cory::ScopeTimer st{"Init/Shaders"};
+    vertexShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.vert"));
+    fragmentShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.frag"));
 }
 
 void CubeDemoApplication::createUBO()
@@ -163,7 +165,7 @@ void CubeDemoApplication::createUBO()
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
         *ctx_, window_->swapchain().maxFramesInFlight());
     for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
-        auto set = pipeline_->allocateDescriptorSet();
+        auto set = ctx_->descriptorPool().allocate(ctx_->defaultDescriptorSetLayout());
 
         auto bufferInfo = globalUbo_->descriptorInfo(i);
         VkWriteDescriptorSet write{
@@ -188,6 +190,9 @@ CubeDemoApplication::~CubeDemoApplication()
 
 void CubeDemoApplication::run()
 {
+
+    Cory::Framegraph::Framegraph fg(*ctx_);
+
     while (!window_->shouldClose()) {
         glfwPollEvents();
         imguiLayer_->newFrame(*ctx_);
@@ -198,7 +203,15 @@ void CubeDemoApplication::run()
 
         drawImguiControls();
 
-        recordCommands(frameCtx);
+        defineRenderPasses(fg, frameCtx);
+        frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
+        fg.execute(*frameCtx.commandBuffer);
+
+        // note - currently, we're letting imgui handle the final resolve and transition to
+        // present_layout
+        imguiLayer_->recordFrameCommands(*ctx_, frameCtx);
+
+        frameCtx.commandBuffer->end();
 
         window_->submitAndPresent(std::move(frameCtx));
 
@@ -208,6 +221,135 @@ void CubeDemoApplication::run()
 
     // wait until last frame is finished rendering
     ctx_->device()->DeviceWaitIdle(ctx_->device());
+}
+
+void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
+                                             const Cory::FrameContext &frameCtx)
+{
+    Cory::ScopeTimer s{"Frame/DeclarePasses"};
+
+    auto windowColorTarget = framegraph.declareInput(
+        {.name = "Window Color Texture",
+         .size = glm::u32vec3{window_->dimensions(), 1},
+         .format = frameCtx.colorImage->format(),
+         .sampleCount = window_->sampleCount()},
+         Cory::Framegraph::Layout::Attachment,
+        VK_ACCESS_2_NONE,
+        VK_PIPELINE_STAGE_2_NONE,
+        *frameCtx.colorImage,
+        *frameCtx.colorImageView);
+
+    auto windowDepthTarget =
+        framegraph.declareInput({.name = "Window Depth Texture",
+                                 .size = glm::u32vec3{window_->dimensions(), 1},
+                                 .format = frameCtx.depthImage->format(),
+                                 .sampleCount = window_->sampleCount()},
+                                Cory::Framegraph::Layout::Attachment,
+                                VK_ACCESS_2_NONE,
+                                VK_PIPELINE_STAGE_2_NONE,
+                                *frameCtx.depthImage,
+                                *frameCtx.depthImageView);
+
+    auto mainPass = mainCubeRenderTask(
+        framegraph.declareTask("Cube Render Pass"), windowColorTarget, windowDepthTarget, frameCtx);
+
+    auto [outInfo, outState] = framegraph.declareOutput(mainPass.output().colorOut);
+}
+
+Cory::Framegraph::RenderPassDeclaration<CubeDemoApplication::CubePassOutputs>
+CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
+                                        TextureHandle colorTarget,
+                                        TextureHandle depthTarget,
+                                        const Cory::FrameContext &frameCtx)
+{
+
+    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    float clearDepth = 1.0f;
+
+    auto [writtenColorHandle, colorInfo] =
+        builder.write(colorTarget,
+                      //                          // read
+                      //                          {.layout = Cory::Framegraph::Layout::Attachment,
+                      //                           .stage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      //                           .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+                      //                           .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT},
+                      //                          // write
+                      {.layout = Cory::Framegraph::Layout::Attachment,
+                       .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                       .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                       .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
+    builder.write(depthTarget,
+                  {.layout = Cory::Framegraph::Layout::Attachment,
+                   .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                   .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                   .imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT});
+
+    auto cubePass = builder.declareRenderPass("Cubes")
+                        .shaders({vertexShader_, fragmentShader_})
+                        .attach(colorTarget,
+                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
+                                VK_ATTACHMENT_STORE_OP_STORE,
+                                clearColor)
+                        .attachDepth(depthTarget,
+                                     VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
+                                     VK_ATTACHMENT_STORE_OP_STORE,
+                                     clearDepth)
+                        .finish();
+
+    co_yield CubePassOutputs{.colorOut = writtenColorHandle};
+    RenderInput renderApi = co_await builder.finishDeclaration();
+
+    auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
+
+    cubePass.begin(*renderApi.cmd);
+
+    PushConstants pushData{};
+
+    float fovy = glm::radians(70.0f);
+    float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
+    glm::mat4 viewMatrix = camera_.getViewMatrix();
+    glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 0.1f, 10.0f);
+    glm::mat4 viewProjection = projectionMatrix * viewMatrix;
+
+    // update the uniform buffer
+    CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
+    ubo.view = viewMatrix;
+    ubo.projection = projectionMatrix;
+    ubo.viewProjection = viewProjection;
+    // need explicit flush otherwise the mapped memory is not synced to the GPU
+    globalUbo_->flush(frameCtx.index);
+
+    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
+    ctx_->device()->CmdBindDescriptorSets(
+        renderApi.cmd->handle(),
+        VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+        // TODO make lyaout accessible through TransientRenderPass instead
+        ctx_->defaultPipelineLayout(),
+        0,
+        gsl::narrow<uint32_t>(sets.size()),
+        sets.data(),
+        0,
+        nullptr);
+
+    for (int idx = 0; idx < ad.num_cubes; ++idx) {
+        float i = ad.num_cubes == 1
+                      ? 1.0f
+                      : static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
+
+        animate(pushData, t, i);
+
+        ctx_->device()->CmdPushConstants(renderApi.cmd->handle(),
+                                         ctx_->defaultPipelineLayout(),
+                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
+                                         0,
+                                         sizeof(pushData),
+                                         &pushData);
+
+        // draw our triangle mesh
+        renderApi.cmd->handle().draw(*mesh_);
+    }
+
+    cubePass.end(*renderApi.cmd);
 }
 
 void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
@@ -248,20 +390,18 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
             .baseArrayLayer = 0,
             .layerCount = 1,
         }};
-    const VkDependencyInfo dependencyInfo{
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .pNext = nullptr,
-        .dependencyFlags = {},// ?
-        .memoryBarrierCount = 0,
-        .pMemoryBarriers = nullptr,
-        .bufferMemoryBarrierCount = 0,
-        .pBufferMemoryBarriers = nullptr,
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &imageMemoryBarrier
-    };
+    const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                          .pNext = nullptr,
+                                          .dependencyFlags = {}, // ?
+                                          .memoryBarrierCount = 0,
+                                          .pMemoryBarriers = nullptr,
+                                          .bufferMemoryBarrierCount = 0,
+                                          .pBufferMemoryBarriers = nullptr,
+                                          .imageMemoryBarrierCount = 1,
+                                          .pImageMemoryBarriers = &imageMemoryBarrier};
     ctx_->device()->CmdPipelineBarrier2(cmdBuffer, &dependencyInfo);
 
-    cmdBuffer.bindPipeline(pipeline_->pipeline());
+    // cmdBuffer.bindPipeline(pipeline_->pipeline());
 
     const VkRenderingAttachmentInfo colorAttachmentInfo{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -324,15 +464,15 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.index);
 
-    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
-    ctx_->device()->CmdBindDescriptorSets(cmdBuffer,
-                                          VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                          pipeline_->layout(),
-                                          0,
-                                          gsl::narrow<uint32_t>(sets.size()),
-                                          sets.data(),
-                                          0,
-                                          nullptr);
+    //    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
+    //    ctx_->device()->CmdBindDescriptorSets(cmdBuffer,
+    //                                          VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+    //                                          pipeline_->layout(),
+    //                                          0,
+    //                                          gsl::narrow<uint32_t>(sets.size()),
+    //                                          sets.data(),
+    //                                          0,
+    //                                          nullptr);
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
@@ -341,12 +481,12 @@ void CubeDemoApplication::recordCommands(Cory::FrameContext &frameCtx)
 
         animate(pushData, t, i);
 
-        ctx_->device()->CmdPushConstants(cmdBuffer,
-                                         pipeline_->layout(),
-                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
-                                         0,
-                                         sizeof(pushData),
-                                         &pushData);
+        //        ctx_->device()->CmdPushConstants(cmdBuffer,
+        //                                         pipeline_->layout(),
+        //                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
+        //                                         0,
+        //                                         sizeof(pushData),
+        //                                         &pushData);
 
         // draw our triangle mesh
         cmdBuffer.draw(*mesh_);

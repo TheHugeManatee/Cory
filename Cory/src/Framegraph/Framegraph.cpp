@@ -1,5 +1,6 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 
+#include <Cory/Base/Profiling.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
@@ -19,7 +20,7 @@ namespace Vk = Magnum::Vk;
 
 namespace Cory::Framegraph {
 
-Builder Framegraph::Framegraph::declarePass(std::string_view name)
+Builder Framegraph::Framegraph::declareTask(std::string_view name)
 {
     //
     return Builder{*this, name};
@@ -41,8 +42,11 @@ Framegraph::~Framegraph()
 
 void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
 {
+    Cory::ScopeTimer s1{"Framegraph/Execute"};
+
     std::vector<RenderTaskHandle> passesToExecute = compile();
 
+    Cory::ScopeTimer s2{"Framegraph/Execute/RecordPasses"};
     CommandList cmd{*ctx_, cmdBuffer};
     commandListInProgress_ = &cmd;
     for (const auto &handle : passesToExecute) {
@@ -96,6 +100,7 @@ std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TextureHandle han
 
 std::vector<RenderTaskHandle> Framegraph::compile()
 {
+    Cory::ScopeTimer s{"Framegraph/Execute/Compile"};
     // TODO this is where we would optimize and figure out the dependencies
     CO_CORE_INFO("Framegraph optimization not implemented.");
 
@@ -208,12 +213,12 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
         nextResourcesToResolve.pop_front();
         requiredResources.push_back(nextResource);
 
-        // if resource is external, we don't have to resolve it
-        if (ranges::contains(externalInputs_, nextResource)) { continue; }
-
         // determine the pass that writes/creates the resource
         auto writingPassIt = resourceToPass.find(nextResource);
         if (writingPassIt == resourceToPass.end()) {
+            // if resource is external, we don't have to resolve it
+            if (ranges::contains(externalInputs_, nextResource)) { continue; }
+
             CO_CORE_ERROR(
                 "Could not resolve frame dependency graph: resource '{}' ({}) is not created "
                 "by any render pass",
@@ -223,15 +228,18 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
         }
 
         RenderTaskHandle writingPass = writingPassIt->second;
-        CO_CORE_DEBUG(
-            "Resolving resource {}: created/written by render pass {}", nextResource, writingPass);
+        CO_CORE_DEBUG("Resolving resource {}: created/written by render pass {}",
+                      textures[nextResource].name,
+                      renderPasses_[writingPass].name);
         renderPasses_[writingPass].executionPriority = ++executionPrio;
 
         // enqueue the inputs of the pass for resolve
         auto rng = passInputs.equal_range(writingPass);
         ranges::transform(
             rng.first, rng.second, std::back_inserter(nextResourcesToResolve), [&](const auto &it) {
-                CO_CORE_DEBUG("Requesting input resource for {}: {}", writingPass, it.second);
+                CO_CORE_DEBUG("Requesting input resource for {}: {}",
+                              renderPasses_[writingPass].name,
+                              textures[it.second].name);
                 return it.second;
             });
     }

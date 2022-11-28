@@ -9,6 +9,8 @@
 #include <Magnum/Vk/Vk.h> // forward declaration header
 #include <Magnum/Vk/Vulkan.h>
 
+#include <Cory/Renderer/flextVkExt.h> // extensions
+
 #include <cstdint>
 
 namespace Cory {
@@ -26,6 +28,11 @@ class Swapchain;
 template <typename BufferStruct>
     requires std::is_trivial_v<BufferStruct>
 class UniformBufferObject;
+
+using PixelFormat = Magnum::Vk::PixelFormat;
+bool isColorFormat(PixelFormat format);
+bool isDepthFormat(PixelFormat format);
+bool isStencilFormat(PixelFormat format);
 
 // enums
 enum class ShaderType : uint32_t {

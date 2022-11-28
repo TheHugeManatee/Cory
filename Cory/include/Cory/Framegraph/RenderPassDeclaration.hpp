@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Cory/Base/Log.hpp>
+
 #include <cppcoro/coroutine.hpp>
 #include <cppcoro/is_awaitable.hpp>
 

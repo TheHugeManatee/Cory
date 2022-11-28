@@ -22,6 +22,7 @@
 
 using namespace Cory;
 namespace FG = Cory::Framegraph;
+namespace Vk = Magnum::Vk;
 
 namespace passes {
 
@@ -33,7 +34,7 @@ depthPass(Context &ctx, FG::Builder builder, glm::u32vec3 size)
 {
     auto depth = builder.create("depthTexture",
                                 size,
-                                FG::PixelFormat::D32,
+                                PixelFormat::Depth32F,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                 VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
@@ -81,7 +82,7 @@ struct DepthDebugOut {
 FG::RenderPassDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
                                                     FG::TextureHandle depthInput)
 {
-    FG::Builder builder = graph.declarePass("DepthDebug");
+    FG::Builder builder = graph.declareTask("DepthDebug");
 
     auto depthInfo = builder.read(depthInput,
                                   {.layout = FG::Layout::Attachment,
@@ -91,7 +92,7 @@ FG::RenderPassDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
 
     auto depthVis = builder.create("depthDebugVis",
                                    depthInfo.size,
-                                   FG::PixelFormat::RGBA32,
+                                   PixelFormat::RGBA8Srgb,
                                    FG::Layout::Attachment,
                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
@@ -108,7 +109,7 @@ struct NormalDebugOut {
 FG::RenderPassDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
                                                       FG::TextureHandle normalInput)
 {
-    FG::Builder builder = graph.declarePass("NormalDebug");
+    FG::Builder builder = graph.declareTask("NormalDebug");
 
     auto normalInfo = builder.read(normalInput,
                                    {.layout = FG::Layout::Attachment,
@@ -118,7 +119,7 @@ FG::RenderPassDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
 
     auto normalVis = builder.create("normalDebugVis",
                                     normalInfo.size,
-                                    FG::PixelFormat::RGBA32,
+                                    PixelFormat::RGBA8Srgb,
                                     FG::Layout::Attachment,
                                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                     VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
@@ -136,7 +137,7 @@ FG::RenderPassDeclaration<DebugOut> debugGeneral(FG::Framegraph &graph,
                                                  std::vector<FG::TextureHandle> debugTextures,
                                                  gsl::index debugViewIndex)
 {
-    FG::Builder builder = graph.declarePass("GeneralDebug");
+    FG::Builder builder = graph.declareTask("GeneralDebug");
 
     auto &textureToDebug = debugTextures[debugViewIndex];
     auto dbgInfo = builder.read(textureToDebug,
@@ -147,7 +148,7 @@ FG::RenderPassDeclaration<DebugOut> debugGeneral(FG::Framegraph &graph,
 
     auto depthVis = builder.create("debugVis",
                                    dbgInfo.size,
-                                   FG::PixelFormat::RGBA32,
+                                   PixelFormat::RGBA8Srgb,
                                    FG::Layout::Attachment,
                                    VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
@@ -164,7 +165,7 @@ struct MainOut {
 };
 FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHandle depthInput)
 {
-    FG::Builder builder = graph.declarePass("MainPass");
+    FG::Builder builder = graph.declareTask("MainPass");
 
     auto depthInfo = builder.read(depthInput,
                                   {.layout = FG::Layout::Attachment,
@@ -174,7 +175,7 @@ FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHa
 
     auto color = builder.create("colorTexture",
                                 depthInfo.size,
-                                FG::PixelFormat::RGBA32,
+                                PixelFormat::RGBA8Srgb,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                 VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
@@ -205,7 +206,7 @@ FG::RenderPassDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
                                                       FG::TextureHandle currentColorInput,
                                                       FG::TextureHandle previousColorInput)
 {
-    FG::Builder builder = graph.declarePass("Postprocess");
+    FG::Builder builder = graph.declareTask("Postprocess");
 
     auto curColorInfo = builder.read(currentColorInput,
                                      {.layout = FG::Layout::Attachment,
@@ -220,7 +221,7 @@ FG::RenderPassDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
 
     auto color = builder.create("postprocessTexture",
                                 curColorInfo.size,
-                                FG::PixelFormat::RGBA32,
+                                PixelFormat::RGBA8Srgb,
                                 FG::Layout::Attachment,
                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                 VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
@@ -248,13 +249,13 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
     Vk::ImageView prevFrameView{t.ctx().device(), Vk::ImageViewCreateInfo2D{prevFrame}};
 
     FG::TextureHandle prevFrameColor =
-        fg.declareInput({"previousFrameColor", glm::u32vec3{1024, 768, 1}, FG::PixelFormat::RGBA32},
+        fg.declareInput({"previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
                         FG::Layout::Attachment,
                         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
                         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                         prevFrame, prevFrameView);
 
-    auto depthPass = passes::depthPass(t.ctx(), fg.declarePass("depthPrepass"), {800, 600, 1});
+    auto depthPass = passes::depthPass(t.ctx(), fg.declareTask("depthPrepass"), {800, 600, 1});
     auto mainPass = passes::mainPass(fg, depthPass.output().depthTexture);
 
     auto depthDebugPass = passes::depthDebug(fg, depthPass.output().depthTexture);
@@ -264,7 +265,8 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 
     auto postProcess = passes::postProcess(fg, mainPass.output().color, prevFrameColor);
 
-    // provoke the coroutines to run so we have some stuff to cull in the graph
+    // provoke the coroutines to run so we have some stuff to cull in the graph - otherwise
+    // they won't even, that's how neat using coroutines is :)
     depthDebugPass.output();
     normalDebugPass.output();
     debugCombinePass.output();

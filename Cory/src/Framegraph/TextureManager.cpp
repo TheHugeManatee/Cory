@@ -94,12 +94,8 @@ void TextureResourceManager::allocate(TextureHandle handle)
         auto usage = isDepthFormat(r.info.format) ? Vk::ImageUsage::DepthStencilAttachment
                                                   : Vk::ImageUsage::ColorAttachment;
 
-        Vk::ImageCreateInfo2D createInfo{usage,
-                                         toMagnumPixelFormat(r.info.format),
-                                         size,
-                                         levels,
-                                         r.info.sampleCount,
-                                         initialLayout};
+        Vk::ImageCreateInfo2D createInfo{
+            usage, r.info.format, size, levels, r.info.sampleCount, initialLayout};
 
         // todo eventually want to externalize these memory flags
         r.image = Vk::Image{data_->ctx_->device(), createInfo, Vk::MemoryFlag::DeviceLocal};

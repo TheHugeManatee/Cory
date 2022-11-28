@@ -47,9 +47,9 @@ class Window : NoCopy, NoMove {
     /// pixel format of the offscreen color images
     [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return colorFormat_; }
     /// access the offscreen color image
-    [[nodiscard]] auto &colorImage() const noexcept { return colorImage_; }
+    [[nodiscard]] Magnum::Vk::Image &colorImage() noexcept { return colorImage_; }
     /// access the offscreen color image view
-    [[nodiscard]] auto &colorView() noexcept { return colorImageView_; }
+    [[nodiscard]] Magnum::Vk::ImageView &colorView() noexcept { return colorImageView_; }
     /// pixel format of the offscreen depth images
     [[nodiscard]] Magnum::Vk::PixelFormat depthFormat() const noexcept { return depthFormat_; }
     /// access the offscreen depth images

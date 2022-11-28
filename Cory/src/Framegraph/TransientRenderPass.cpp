@@ -138,7 +138,7 @@ void TransientRenderPass::begin(CommandList &cmd)
 {
     hasBegun_ = true;
     auto getColorFormat = [&](const std::pair<TextureHandle, AttachmentKind> &h) {
-        return toVkFormat(textures_->info(h.first).format);
+        return toVk(textures_->info(h.first).format);
     };
 
     // if a render area has not been set up explicitly, we determine it by checking the attachments
@@ -205,7 +205,7 @@ VkRenderingAttachmentInfo TransientRenderPass::makeAttachmentInfo(TextureHandle 
 {
     return VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
                                      .imageView = textures_->imageView(handle),
-                                     .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                                     .imageLayout = toVkImageLayout(textures_->state(handle).layout),
                                      .loadOp = attachmentKind.loadOp,
                                      .storeOp = attachmentKind.storeOp,
                                      .clearValue = attachmentKind.clearValue};

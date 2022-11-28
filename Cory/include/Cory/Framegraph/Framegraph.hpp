@@ -60,7 +60,7 @@ class Framegraph : NoCopy, NoMove {
 
     void execute(Magnum::Vk::CommandBuffer &cmdBuffer);
 
-    Builder declarePass(std::string_view name);
+    Builder declareTask(std::string_view name);
 
     /// to be called from Builder
     RenderInput renderInput(RenderTaskHandle passHandle);

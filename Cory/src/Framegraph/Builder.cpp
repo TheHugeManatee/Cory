@@ -50,9 +50,6 @@ TextureInfo Builder::read(TextureHandle &handle, TextureAccessInfo readAccess)
 std::pair<TextureHandle, TextureInfo> Builder::write(TextureHandle handle,
                                                      TextureAccessInfo writeAccess)
 {
-//    CO_CORE_ASSERT(framegraph_.resources_.state(handle).status != TextureMemoryStatus::External,
-//                   "External textures cannot be written to!");
-
     info_.outputs.push_back({
         .handle = handle,
         .kind = PassOutputKind::Write,
@@ -66,9 +63,6 @@ std::pair<TextureHandle, TextureInfo> Builder::readWrite(TextureHandle handle,
                                                          TextureAccessInfo readAccess,
                                                          TextureAccessInfo writeAccess)
 {
-//    CO_CORE_ASSERT(framegraph_.resources_.state(handle).status != TextureMemoryStatus::External,
-//                   "External textures cannot be written to!");
-
     info_.inputs.push_back({.handle = handle, .accessInfo = readAccess});
     info_.outputs.push_back({
         .handle = handle,

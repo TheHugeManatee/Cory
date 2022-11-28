@@ -56,6 +56,9 @@ template <typename StoredType_> class SlotMap : NoCopy {
     /// release the object, invalidating previous handles and reclaiming the memory for future use
     void release(SlotMapHandle id);
 
+    /// release all objects from the slot map
+    void clear();
+
     /// update by assigning a new value, will invalidate old handles to the entry
     template <typename ArgumentType> SlotMapHandle update(SlotMapHandle id, ArgumentType &&value);
 
@@ -275,6 +278,21 @@ template <typename StoredType_> void SlotMap<StoredType_>::release(SlotMapHandle
     freeList_.push_back(id.index());
 }
 
+template <typename StoredType_> void SlotMap<StoredType_>::clear()
+{
+    // call destructor on remaining objects if they are still alive
+    for (const auto &chunk : chunkTable_) {
+        for (StoredInner_ &object : *chunk) {
+            if constexpr (!std::is_trivial_v<StoredType>) {
+                if (object.id.alive()) {
+                    reinterpret_cast<StoredType *>(object.storage)->~StoredType();
+                }
+            }
+            object.id = object.id.setFreeBit(object.id);
+        }
+    }
+}
+
 template <typename StoredType_>
 template <typename ArgumentType>
 SlotMapHandle SlotMap<StoredType_>::update(SlotMapHandle id, ArgumentType &&value)
@@ -302,16 +320,7 @@ template <typename StoredType_> bool SlotMap<StoredType_>::isValid(SlotMapHandle
 
 template <typename StoredType_> SlotMap<StoredType_>::~SlotMap()
 {
-    if constexpr (!std::is_trivial_v<StoredType>) {
-        // call destructor on remaining objects if they are still alive
-        for (const auto &chunk : chunkTable_) {
-            for (StoredInner_ &object : *chunk) {
-                if (object.id.alive()) {
-                    reinterpret_cast<StoredType *>(object.storage)->~StoredType();
-                }
-            }
-        }
-    }
+    if constexpr (!std::is_trivial_v<StoredType>) { clear(); }
 }
 
 template <typename StoredType_>

@@ -181,7 +181,7 @@ FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHa
                                 VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
     auto normal = builder.create("normalTexture",
                                  depthInfo.size,
-                                 FG::PixelFormat::RGBA32,
+                                 PixelFormat::RGBA8Unorm,
                                  FG::Layout::Attachment,
                                  VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                                  VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT);
@@ -239,7 +239,7 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 
     namespace Vk = Magnum::Vk;
 
-    FG::Framegraph fg(t.ctx());
+    FG::Framegraph graph(t.ctx());
     Vk::Image prevFrame{t.ctx().device(),
                         Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment,
                                               Vk::PixelFormat::RGBA8Srgb,
@@ -248,22 +248,23 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
                         Vk::MemoryFlag::DeviceLocal};
     Vk::ImageView prevFrameView{t.ctx().device(), Vk::ImageViewCreateInfo2D{prevFrame}};
 
-    FG::TextureHandle prevFrameColor =
-        fg.declareInput({"previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
-                        FG::Layout::Attachment,
-                        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                        prevFrame, prevFrameView);
+    const FG::TextureHandle prevFrameColor = graph.declareInput(
+        {"previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
+        FG::Layout::Attachment,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        prevFrame,
+        prevFrameView);
 
-    auto depthPass = passes::depthPass(t.ctx(), fg.declareTask("depthPrepass"), {800, 600, 1});
-    auto mainPass = passes::mainPass(fg, depthPass.output().depthTexture);
+    auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("depthPrepass"), {800, 600, 1});
+    auto mainPass = passes::mainPass(graph, depthPass.output().depthTexture);
 
-    auto depthDebugPass = passes::depthDebug(fg, depthPass.output().depthTexture);
-    auto normalDebugPass = passes::normalDebug(fg, mainPass.output().normal);
+    auto depthDebugPass = passes::depthDebug(graph, depthPass.output().depthTexture);
+    auto normalDebugPass = passes::normalDebug(graph, mainPass.output().normal);
     auto debugCombinePass = passes::debugGeneral(
-        fg, {depthDebugPass.output().debugColor, normalDebugPass.output().debugColor}, 0);
+        graph, {depthDebugPass.output().debugColor, normalDebugPass.output().debugColor}, 0);
 
-    auto postProcess = passes::postProcess(fg, mainPass.output().color, prevFrameColor);
+    auto postProcess = passes::postProcess(graph, mainPass.output().color, prevFrameColor);
 
     // provoke the coroutines to run so we have some stuff to cull in the graph - otherwise
     // they won't even, that's how neat using coroutines is :)
@@ -273,7 +274,7 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 
     auto postprocessOut = postProcess.output();
 
-    auto [resultInfo, resultState] = fg.declareOutput(postprocessOut.color);
+    auto [resultInfo, resultState] = graph.declareOutput(postprocessOut.color);
 
     CO_APP_INFO("Final output is a color texture of {}x{}x{}",
                 resultInfo.size.x,
@@ -283,6 +284,6 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
     Magnum::Vk::CommandBuffer buffer = t.ctx().commandPool().allocate();
 
     buffer.begin();
-    fg.execute(buffer);
+    graph.execute(buffer);
     buffer.end();
 }

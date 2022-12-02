@@ -42,17 +42,20 @@ Framegraph::~Framegraph()
 
 void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
 {
-    Cory::ScopeTimer s1{"Framegraph/Execute"};
+    const Cory::ScopeTimer s1{"Framegraph/Execute"};
 
-    std::vector<RenderTaskHandle> passesToExecute = compile();
+    const std::vector<RenderTaskHandle> passesToExecute = compile();
 
-    Cory::ScopeTimer s2{"Framegraph/Execute/RecordPasses"};
+    const Cory::ScopeTimer s2{"Framegraph/Execute/RecordPasses"};
     CommandList cmd{*ctx_, cmdBuffer};
     commandListInProgress_ = &cmd;
+    auto resetCmdList = gsl::finally([this]() { commandListInProgress_ = nullptr; });
+
     for (const auto &handle : passesToExecute) {
         executePass(cmd, handle);
     }
 
+    //resources_.clear();
     externalInputs_.clear();
     outputs_.clear();
     renderPasses_.clear();
@@ -108,7 +111,7 @@ std::vector<RenderTaskHandle> Framegraph::compile()
 
     auto [passes, requiredResources] = resolve(outputs_);
     resources_.allocate(requiredResources);
-    //dump(passes, requiredResources);
+    // dump(passes, requiredResources);
     return passes;
 }
 

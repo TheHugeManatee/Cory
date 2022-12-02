@@ -92,7 +92,7 @@ class Framegraph : NoCopy, NoMove {
     /// coroHandle
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle)
     {
-        renderPasses_[passHandle].coroHandle = std::move(coroHandle);
+        renderPasses_[passHandle].coroHandle = coroHandle;
     }
 
     /**

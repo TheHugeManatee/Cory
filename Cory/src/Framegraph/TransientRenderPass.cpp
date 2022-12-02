@@ -54,7 +54,7 @@ class PipelineCache {
   private:
     PipelineHandle create(Context &ctx, std::string_view name, PipelineDescriptor &info)
     {
-        CO_CORE_INFO("Creating new pipline with name {} and hash {:X}", name, info.hash());
+        CO_CORE_INFO("Creating new pipeline for '{}' ({:X})", name, info.hash());
         // set up shaders
         auto &resources = ctx.resources();
         Vk::ShaderSet shaderSet{};
@@ -75,7 +75,7 @@ class PipelineCache {
                                             Vk::DynamicRasterizationState::DepthWriteEnable |
                                             Vk::DynamicRasterizationState::DepthCompareOperation);
 
-        VkPipelineViewportStateCreateInfo viewportState{
+        const VkPipelineViewportStateCreateInfo viewportState{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
             .viewportCount = 1,
             .scissorCount = 1,
@@ -83,14 +83,15 @@ class PipelineCache {
         pipelineCreateInfo->pViewportState = &viewportState;
 
         // multisampling setup
-        VkPipelineMultisampleStateCreateInfo multisampling{};
-        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = (VkSampleCountFlagBits)info.sampleCount;
+        const VkPipelineMultisampleStateCreateInfo multisampling{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            .rasterizationSamples = (VkSampleCountFlagBits)info.sampleCount,
+            .sampleShadingEnable = VK_FALSE,
+        };
 
         // note: depth setup is ignored and actually overridden the dynamic states, only stencil and
         // depth bounds are relevant here
-        VkPipelineDepthStencilStateCreateInfo depthStencilState{
+        const VkPipelineDepthStencilStateCreateInfo depthStencilState{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
             .depthTestEnable = VK_TRUE,
             .depthWriteEnable = VK_TRUE,
@@ -205,22 +206,22 @@ VkRenderingAttachmentInfo TransientRenderPass::makeAttachmentInfo(TextureHandle 
 {
     return VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
                                      .imageView = textures_->imageView(handle),
-                                     .imageLayout = toVkImageLayout(textures_->state(handle).layout),
+                                     .imageLayout =
+                                         toVkImageLayout(textures_->state(handle).layout),
                                      .loadOp = attachmentKind.loadOp,
                                      .storeOp = attachmentKind.storeOp,
                                      .clearValue = attachmentKind.clearValue};
 }
+
 int32_t TransientRenderPass::determineSampleCount() const
 {
     auto sampleCount = [this](auto pair) { return textures_->info(pair.first).sampleCount; };
-    if (colorAttachments_.empty()) {
-        return depthAttachment_.or_else([this]() { return stencilAttachment_; })
-            .transform(sampleCount)
-            .value_or(0); // sample count of zero is returned if there is no attachment at all!
-    }
-    else {
-        return sampleCount(colorAttachments_.front());
-    }
+
+    if (!colorAttachments_.empty()) { return sampleCount(colorAttachments_.front()); }
+
+    return depthAttachment_.or_else([this]() { return stencilAttachment_; })
+        .transform(sampleCount)
+        .value_or(0); // sample count of zero is returned if there is no attachment at all!
 }
 
 VkRect2D TransientRenderPass::determineRenderArea()
@@ -252,7 +253,7 @@ TransientRenderPassBuilder::TransientRenderPassBuilder(Context &ctx,
 {
 }
 
-TransientRenderPassBuilder::~TransientRenderPassBuilder() {}
+TransientRenderPassBuilder::~TransientRenderPassBuilder() = default;
 
 TransientRenderPassBuilder &TransientRenderPassBuilder::shaders(std::vector<ShaderHandle> shaders)
 {
@@ -265,8 +266,8 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attach(TextureHandle han
                                                                VkAttachmentStoreOp storeOp,
                                                                VkClearColorValue clearValue)
 {
-    renderPass_.colorAttachments_.push_back(
-        std::make_pair(handle, AttachmentKind{loadOp, storeOp, {.color = clearValue}}));
+    renderPass_.colorAttachments_.emplace_back(
+        handle, AttachmentKind{loadOp, storeOp, {.color = clearValue}});
     return *this;
 }
 

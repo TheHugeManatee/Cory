@@ -156,7 +156,7 @@ template <typename StoredType_> class SlotMap : NoCopy {
 
   private:
     std::allocator<Chunk> alloc_;
-    std::vector<Chunk*> chunkTable_;
+    std::vector<Chunk *> chunkTable_;
     std::vector<uint32_t> freeList_;
 };
 
@@ -293,11 +293,13 @@ template <typename StoredType_> void SlotMap<StoredType_>::clear()
         auto &chunk = *chunkPtr;
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
             const auto objectId = chunk.id[i];
-            if constexpr (!std::is_trivial_v<StoredType>) {
-                if (objectId.alive()) { chunk.storage[i].~StoredType(); }
+            // if it's alive, destroy it and put into free list
+            if (objectId.alive()) {
+                if constexpr (!std::is_trivial_v<StoredType>) { chunk.storage[i].~StoredType(); }
+                // clear free bit and increase version
+                chunk.id[i] = SlotMapHandle::setFreeBit(SlotMapHandle::nextVersion(objectId));
+                freeList_.push_back(chunk.id[i].index());
             }
-            chunk.id[i] = SlotMapHandle::setFreeBit(objectId);
-            freeList_.push_back(chunk.id[i].index());
         }
     }
 }
@@ -332,7 +334,7 @@ template <typename StoredType_> bool SlotMap<StoredType_>::isValid(SlotMapHandle
 template <typename StoredType_> SlotMap<StoredType_>::~SlotMap()
 {
     if constexpr (!std::is_trivial_v<StoredType>) { clear(); }
-    for (Chunk* chunkPtr : chunkTable_) {
+    for (Chunk *chunkPtr : chunkTable_) {
         alloc_.deallocate(chunkPtr, 1);
     }
 }

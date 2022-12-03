@@ -31,6 +31,10 @@ As such, it uses features that are only supported in rather modern compilers.
     - [x] automatically create render passes and layouts
     - [ ] perform automatic resource transitions
     - [ ] actually execute render pass code that renders stuff
+    - [ ] proper allocation of transient textures from arena
+    - [ ] create AccessInfo templates for most common usages
+    - [ ] automatically figure out required image usage for a transient image
+    - [ ] extend transient resource system to buffers
 - Window and event system
     - [x] basic mouse and kb event forwarding
     - [ ] better abstraction/encapsulation
@@ -39,9 +43,13 @@ As such, it uses features that are only supported in rather modern compilers.
 #### Mid Term
 
 - GameObject system (Entities + Components, not ECS)
-- C++ Modules (if possible)
 - Implement a simple Volume Raymarcher
 - Extend usage of c++20 coroutines where meaningful
+- Multithreading?!
+    - Multithreaded framegraph recording?
+    - Offload resource creation (shaders/pipelines) to another thread (pool)
+    - explicit sync with queues where necessary
+- C++ Modules (if possible)
 
 #### Long Term
 
@@ -139,4 +147,5 @@ Also, something something coroutines.
   asynchronously to rendering
 - [ ] [EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_mesh_shader.html): mesh
   shaders are the new hot thing, I should try at some point
-- [ ] [EXT_full_screen_exclusive](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_full_screen_exclusive.html): full screen stuff. maybe better handled through GLFW?
+- [ ] [EXT_full_screen_exclusive](https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_EXT_full_screen_exclusive.html):
+  full screen stuff. maybe better handled through GLFW?

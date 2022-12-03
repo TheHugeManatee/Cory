@@ -47,12 +47,10 @@ class CubeDemoApplication : public Cory::Application {
     Cory::Framegraph::RenderPassDeclaration<CubePassOutputs>
     mainCubeRenderTask(Cory::Framegraph::Builder builder,
                        Cory::Framegraph::TextureHandle colorTarget,
-                       Cory::Framegraph::TextureHandle depthTarget, const Cory::FrameContext& ctx);
+                       Cory::Framegraph::TextureHandle depthTarget,
+                       const Cory::FrameContext &ctx);
 
-    // record commands for a new command buffer
-    void recordCommands(Cory::FrameContext &frameCtx);
-
-    double now() const;
+    static double now();
     double getElapsedTimeSeconds() const;
 
     void drawImguiControls();

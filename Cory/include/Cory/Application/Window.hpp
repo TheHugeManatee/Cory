@@ -37,7 +37,7 @@ class Window : NoCopy, NoMove {
     Swapchain &swapchain() { return *swapchain_; };
 
     [[nodiscard]] FrameContext nextSwapchainImage();
-    void submitAndPresent(FrameContext &&frameCtx);
+    void submitAndPresent(FrameContext &frameCtx);
 
     [[nodiscard]] GLFWwindow *handle() { return window_.get(); }
     [[nodiscard]] const GLFWwindow *handle() const { return window_.get(); }

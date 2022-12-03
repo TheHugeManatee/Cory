@@ -85,14 +85,14 @@ class Framegraph : NoCopy, NoMove {
   private: /* member functions */
     RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info)
     {
-        return renderPasses_.emplace(info);
+        return renderTasks_.emplace(info);
     }
 
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
     /// coroHandle
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle)
     {
-        renderPasses_[passHandle].coroHandle = coroHandle;
+        renderTasks_[passHandle].coroHandle = coroHandle;
     }
 
     /**
@@ -117,7 +117,7 @@ class Framegraph : NoCopy, NoMove {
     std::vector<TextureHandle> externalInputs_;
     std::vector<TextureHandle> outputs_;
 
-    SlotMap<RenderTaskInfo> renderPasses_;
+    SlotMap<RenderTaskInfo> renderTasks_;
     CommandList* commandListInProgress_{};
 };
 

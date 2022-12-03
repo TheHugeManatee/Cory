@@ -35,7 +35,7 @@ Framegraph::Framegraph(Context &ctx)
 Framegraph::~Framegraph()
 {
     // destroy all coroutines
-    for (RenderTaskInfo &info : renderPasses_) {
+    for (RenderTaskInfo &info : renderTasks_) {
         info.coroHandle.destroy();
     }
 }
@@ -55,15 +55,15 @@ void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
         executePass(cmd, handle);
     }
 
-    //resources_.clear();
+    resources_.clear();
     externalInputs_.clear();
     outputs_.clear();
-    renderPasses_.clear();
+    renderTasks_.clear();
 }
 
 void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 {
-    const RenderTaskInfo &rpInfo = renderPasses_[handle];
+    const RenderTaskInfo &rpInfo = renderTasks_[handle];
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
     // ## handle resource transitions
@@ -124,7 +124,7 @@ void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
 
     std::unordered_map<TextureHandle, TextureInfo> textures;
 
-    for (const auto &[passHandle, passInfo] : renderPasses_.items()) {
+    for (const auto &[passHandle, passInfo] : renderTasks_.items()) {
         const std::string passCol = (!passInfo.coroHandle) ? "red"
                                     : ranges::contains(passes, RenderTaskHandle{passHandle})
                                         ? "black"
@@ -195,7 +195,7 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
     std::unordered_map<TextureHandle, RenderTaskHandle> resourceToPass;
     std::unordered_multimap<RenderTaskHandle, TextureHandle> passInputs;
     std::unordered_map<TextureHandle, TextureInfo> textures;
-    for (const auto &[passHandle, passInfo] : renderPasses_.items()) {
+    for (const auto &[passHandle, passInfo] : renderTasks_.items()) {
         for (const auto &[inputHandle, _] : passInfo.inputs) {
             passInputs.insert({passHandle, inputHandle});
             textures[inputHandle] = resources_.info(inputHandle);
@@ -233,21 +233,21 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
         RenderTaskHandle writingPass = writingPassIt->second;
         CO_CORE_TRACE("Resolving resource {}: created/written by render pass {}",
                       textures[nextResource].name,
-                      renderPasses_[writingPass].name);
-        renderPasses_[writingPass].executionPriority = ++executionPrio;
+                      renderTasks_[writingPass].name);
+        renderTasks_[writingPass].executionPriority = ++executionPrio;
 
         // enqueue the inputs of the pass for resolve
         auto rng = passInputs.equal_range(writingPass);
         ranges::transform(
             rng.first, rng.second, std::back_inserter(nextResourcesToResolve), [&](const auto &it) {
                 CO_CORE_TRACE("Requesting input resource for {}: {}",
-                              renderPasses_[writingPass].name,
+                              renderTasks_[writingPass].name,
                               textures[it.second].name);
                 return it.second;
             });
     }
 
-    auto items = renderPasses_.items();
+    auto items = renderTasks_.items();
     auto passesToExecute =
         items | ranges::views::transform([](const auto &it) {
             return std::make_pair(RenderTaskHandle{it.first}, it.second.executionPriority);
@@ -260,7 +260,7 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
 
     CO_CORE_TRACE("Render pass order after resolve:");
     for (const auto &[handle, prio] : passesToExecute) {
-        CO_CORE_TRACE("  [{}] {}", prio, renderPasses_[handle].name);
+        CO_CORE_TRACE("  [{}] {}", prio, renderTasks_[handle].name);
     }
 
     auto passes = passesToExecute |

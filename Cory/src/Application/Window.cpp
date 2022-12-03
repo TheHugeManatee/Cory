@@ -164,7 +164,7 @@ FrameContext Window::nextSwapchainImage()
 
     return frameCtx;
 }
-void Window::submitAndPresent(FrameContext &&frameCtx)
+void Window::submitAndPresent(FrameContext &frameCtx)
 {
     std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
     std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};

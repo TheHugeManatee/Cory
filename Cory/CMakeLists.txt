@@ -19,7 +19,10 @@ find_package(spdlog REQUIRED)
 
 set(CORY_SOURCES
         include/Cory/Application/Application.hpp
+        include/Cory/Application/CameraManipulator.cpp
+        include/Cory/Application/CameraManipulator.hpp
         include/Cory/Application/Common.hpp
+        include/Cory/Application/DynamicGeometry.hpp
         include/Cory/Application/ImGuiLayer.hpp
         include/Cory/Application/Window.hpp
         include/Cory/Base/BitField.hpp
@@ -35,9 +38,14 @@ set(CORY_SOURCES
         include/Cory/Base/SlotMapHandle.hpp
         include/Cory/Base/Utils.hpp
         include/Cory/Cory.hpp
+        include/Cory/Framegraph/Builder.hpp
+        include/Cory/Framegraph/CommandList.hpp
+        include/Cory/Framegraph/Common.hpp
         include/Cory/Framegraph/Framegraph.hpp
         include/Cory/Framegraph/RenderPassDeclaration.hpp
         include/Cory/Framegraph/TextureManager.hpp
+        include/Cory/Framegraph/TransientRenderPass.hpp
+        include/Cory/ImGui/Inputs.hpp
         include/Cory/Renderer/APIConversion.hpp
         include/Cory/Renderer/Common.hpp
         include/Cory/Renderer/Context.hpp
@@ -46,8 +54,11 @@ set(CORY_SOURCES
         include/Cory/Renderer/Shader.hpp
         include/Cory/Renderer/SingleShotCommandBuffer.hpp
         include/Cory/Renderer/Swapchain.hpp
+        include/Cory/Renderer/UniformBufferObject.hpp
         include/Cory/Renderer/VulkanUtils.hpp
+        include/Cory/Renderer/flextVkExt.h
         src/Application/Application.cpp
+        src/Application/DynamicGeometry.cpp
         src/Application/ImGuiLayer.cpp
         src/Application/Window.cpp
         src/Base/Log.cpp
@@ -55,17 +66,20 @@ set(CORY_SOURCES
         src/Base/ResourceLocator.cpp
         src/Base/Utils.cpp
         src/Cory.cpp
+        src/Framegraph/Builder.cpp
+        src/Framegraph/CommandList.cpp
         src/Framegraph/Framegraph.cpp
         src/Framegraph/TextureManager.cpp
+        src/Framegraph/TransientRenderPass.cpp
+        src/Renderer/Common.cpp
         src/Renderer/Context.cpp
         src/Renderer/ResourceManager.cpp
         src/Renderer/Shader.cpp
         src/Renderer/SingleShotCommandBuffer.cpp
         src/Renderer/Swapchain.cpp
+        src/Renderer/UniformBufferObject.cpp
         src/Renderer/VulkanUtils.cpp
-        src/Application/DynamicGeometry.cpp
-        include/Cory/Application/DynamicGeometry.hpp
-        include/Cory/Application/CameraManipulator.cpp include/Cory/Application/CameraManipulator.hpp include/Cory/ImGui/Inputs.hpp include/Cory/Renderer/UniformBufferObject.cpp include/Cory/Renderer/UniformBufferObject.hpp include/Cory/Framegraph/Common.hpp src/Framegraph/Builder.cpp include/Cory/Framegraph/Builder.hpp src/Framegraph/CommandList.cpp include/Cory/Framegraph/CommandList.hpp include/Cory/Renderer/flextVkExt.h src/Framegraph/TransientRenderPass.cpp include/Cory/Framegraph/TransientRenderPass.hpp)
+        )
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

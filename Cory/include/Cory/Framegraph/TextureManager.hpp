@@ -23,7 +23,8 @@ class TextureResourceManager {
                                    Layout layout,
                                    AccessFlags lastWriteAccess,
                                    PipelineStages lastWriteStage,
-                                   Magnum::Vk::Image &resource);
+                                   Magnum::Vk::Image &resource,
+                                   Magnum::Vk::ImageView &resourceView);
 
     void allocate(const std::vector<TextureHandle> &handles);
 

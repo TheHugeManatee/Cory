@@ -60,7 +60,7 @@ template <typename T, typename Friend> class PrivateTypedHandle {
      * check a handle for validity. Note: a valid handle does NOT imply that it
      * actually references an alive object in the slot map, use SlotMap::valid() for that!
      */
-    bool valid() const { return handle_.index() != SlotMapHandle::INVALID_INDEX; }
+    [[nodiscard]] bool valid() const { return handle_.index() != SlotMapHandle::INVALID_INDEX; }
     operator bool() const { return valid(); }
 
   private:
@@ -89,7 +89,7 @@ inline SlotMapHandle::SlotMapHandle(uint32_t index, uint32_t version, bool free)
 }
 inline SlotMapHandle SlotMapHandle::nextVersion(SlotMapHandle old)
 {
-    return {old.index(), old.version() + 1};
+    return {old.index(), old.version() + 1, old.alive()};
 }
 inline SlotMapHandle SlotMapHandle::clearFreeBit(SlotMapHandle handle)
 {

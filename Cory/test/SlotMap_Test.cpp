@@ -85,10 +85,12 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
 
         auto h3 = sm.insert(3.0);
         CHECK(h3 != h2);
-        auto h3_address = &sm[h3];
+        auto *h3_address = &sm[h3];
         // verify that slots are reused but access through the old handle still throws
         CHECK(h3_address == h2_address);
         CHECK_THROWS(sm[h2]);
+
+        CHECK(sm.size() == 2);
     }
 
     SECTION("Updating a value")
@@ -102,6 +104,23 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
 
         // trying to update with outdated handle also throws
         CHECK_THROWS(sm.update(h2));
+    }
+
+    SECTION("Clearing values")
+    {
+        sm.clear();
+
+        CHECK(sm.size() == 0);
+        CHECK_THROWS(sm[h1]);
+        CHECK_THROWS(sm[h2]);
+
+        // after a new insertion, still both old handles should be invalid
+        auto h3 = sm.insert(3.0);
+        CHECK(h3 != h1);
+        CHECK(h3 != h2);
+
+        CHECK_THROWS(sm[h1]);
+        CHECK_THROWS(sm[h2]);
     }
 }
 

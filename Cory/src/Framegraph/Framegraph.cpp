@@ -1,5 +1,6 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 
+#include <Cory/Base/Profiling.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
@@ -19,7 +20,7 @@ namespace Vk = Magnum::Vk;
 
 namespace Cory::Framegraph {
 
-Builder Framegraph::Framegraph::declarePass(std::string_view name)
+Builder Framegraph::Framegraph::declareTask(std::string_view name)
 {
     //
     return Builder{*this, name};
@@ -34,33 +35,50 @@ Framegraph::Framegraph(Context &ctx)
 Framegraph::~Framegraph()
 {
     // destroy all coroutines
-    for (RenderTaskInfo &info : renderPasses_) {
+    for (RenderTaskInfo &info : renderTasks_) {
         info.coroHandle.destroy();
     }
 }
 
 void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
 {
-    std::vector<RenderTaskHandle> passesToExecute = compile();
+    const Cory::ScopeTimer s1{"Framegraph/Execute"};
 
+    const std::vector<RenderTaskHandle> passesToExecute = compile();
+
+    const Cory::ScopeTimer s2{"Framegraph/Execute/RecordPasses"};
     CommandList cmd{*ctx_, cmdBuffer};
     commandListInProgress_ = &cmd;
+    auto resetCmdList = gsl::finally([this]() { commandListInProgress_ = nullptr; });
+
     for (const auto &handle : passesToExecute) {
         executePass(cmd, handle);
     }
+
+    resources_.clear();
+    externalInputs_.clear();
+    outputs_.clear();
+    renderTasks_.clear();
 }
 
 void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 {
-    const RenderTaskInfo &rpInfo = renderPasses_[handle];
+    const RenderTaskInfo &rpInfo = renderTasks_[handle];
 
-    CO_CORE_INFO("Setting up Render pass {}", rpInfo.name);
+    CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
     // ## handle resource transitions
-    // TODO
+    for (auto input : rpInfo.inputs) {
+        resources_.readBarrier(cmd.handle(), input.handle, input.accessInfo);
+    }
 
-    CO_CORE_INFO("Executing rendering commands for {}", rpInfo.name);
+    CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
     auto &coroHandle = rpInfo.coroHandle;
     if (!coroHandle.done()) { coroHandle.resume(); }
+
+    // record writes to output resources of this render pass
+    for (auto output : rpInfo.outputs) {
+        resources_.recordWrite(cmd.handle(), output.handle, output.accessInfo);
+    }
 
     CO_CORE_ASSERT(coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
@@ -72,9 +90,11 @@ TextureHandle Framegraph::declareInput(TextureInfo info,
                                        Layout layout,
                                        AccessFlags lastWriteAccess,
                                        PipelineStages lastWriteStage,
-                                       Vk::Image &image)
+                                       Vk::Image &image,
+                                       Vk::ImageView &imageView)
 {
-    auto handle = resources_.registerExternal(info, layout, lastWriteAccess, lastWriteStage, image);
+    auto handle = resources_.registerExternal(
+        info, layout, lastWriteAccess, lastWriteStage, image, imageView);
     externalInputs_.push_back(handle);
     return handle;
 }
@@ -87,12 +107,11 @@ std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TextureHandle han
 
 std::vector<RenderTaskHandle> Framegraph::compile()
 {
-    // TODO this is where we would optimize and figure out the dependencies
-    CO_CORE_INFO("Framegraph optimization not implemented.");
+    Cory::ScopeTimer s{"Framegraph/Execute/Compile"};
 
     auto [passes, requiredResources] = resolve(outputs_);
     resources_.allocate(requiredResources);
-    dump(passes, requiredResources);
+    // dump(passes, requiredResources);
     return passes;
 }
 
@@ -105,7 +124,7 @@ void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
 
     std::unordered_map<TextureHandle, TextureInfo> textures;
 
-    for (const auto &[passHandle, passInfo] : renderPasses_.items()) {
+    for (const auto &[passHandle, passInfo] : renderTasks_.items()) {
         const std::string passCol = (!passInfo.coroHandle) ? "red"
                                     : ranges::contains(passes, RenderTaskHandle{passHandle})
                                         ? "black"
@@ -150,9 +169,7 @@ void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
                         info.size.z,
                         info.format,
                         state.layout);
-        const float penWidth =
-            ranges::contains(outputs_, handle) || ranges::contains(externalInputs_, handle) ? 3.0f
-                                                                                            : 1.0f;
+        const float penWidth = ranges::contains(outputs_, handle) ? 3.0f : 1.0f;
         fmt::format_to(
             std::back_inserter(out),
             "  \"{0}\" [shape=rectangle,label=\"{1}\",color={2},fontcolor={2},penwidth={3}]\n",
@@ -178,7 +195,7 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
     std::unordered_map<TextureHandle, RenderTaskHandle> resourceToPass;
     std::unordered_multimap<RenderTaskHandle, TextureHandle> passInputs;
     std::unordered_map<TextureHandle, TextureInfo> textures;
-    for (const auto &[passHandle, passInfo] : renderPasses_.items()) {
+    for (const auto &[passHandle, passInfo] : renderTasks_.items()) {
         for (const auto &[inputHandle, _] : passInfo.inputs) {
             passInputs.insert({passHandle, inputHandle});
             textures[inputHandle] = resources_.info(inputHandle);
@@ -199,12 +216,12 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
         nextResourcesToResolve.pop_front();
         requiredResources.push_back(nextResource);
 
-        // if resource is external, we don't have to resolve it
-        if (ranges::contains(externalInputs_, nextResource)) { continue; }
-
         // determine the pass that writes/creates the resource
         auto writingPassIt = resourceToPass.find(nextResource);
         if (writingPassIt == resourceToPass.end()) {
+            // if resource is external, we don't have to resolve it
+            if (ranges::contains(externalInputs_, nextResource)) { continue; }
+
             CO_CORE_ERROR(
                 "Could not resolve frame dependency graph: resource '{}' ({}) is not created "
                 "by any render pass",
@@ -214,20 +231,23 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
         }
 
         RenderTaskHandle writingPass = writingPassIt->second;
-        CO_CORE_DEBUG(
-            "Resolving resource {}: created/written by render pass {}", nextResource, writingPass);
-        renderPasses_[writingPass].executionPriority = ++executionPrio;
+        CO_CORE_TRACE("Resolving resource {}: created/written by render pass {}",
+                      textures[nextResource].name,
+                      renderTasks_[writingPass].name);
+        renderTasks_[writingPass].executionPriority = ++executionPrio;
 
         // enqueue the inputs of the pass for resolve
         auto rng = passInputs.equal_range(writingPass);
         ranges::transform(
             rng.first, rng.second, std::back_inserter(nextResourcesToResolve), [&](const auto &it) {
-                CO_CORE_DEBUG("Requesting input resource for {}: {}", writingPass, it.second);
+                CO_CORE_TRACE("Requesting input resource for {}: {}",
+                              renderTasks_[writingPass].name,
+                              textures[it.second].name);
                 return it.second;
             });
     }
 
-    auto items = renderPasses_.items();
+    auto items = renderTasks_.items();
     auto passesToExecute =
         items | ranges::views::transform([](const auto &it) {
             return std::make_pair(RenderTaskHandle{it.first}, it.second.executionPriority);
@@ -238,9 +258,9 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
     // sort in descending order so the passes with the highest priority come first
     ranges::sort(passesToExecute, {}, [](const auto &it) { return -it.second; });
 
-    CO_APP_DEBUG("Render pass order after resolve:");
+    CO_CORE_TRACE("Render pass order after resolve:");
     for (const auto &[handle, prio] : passesToExecute) {
-        CO_APP_DEBUG("  [{}] {}", prio, renderPasses_[handle].name);
+        CO_CORE_TRACE("  [{}] {}", prio, renderTasks_[handle].name);
     }
 
     auto passes = passesToExecute |

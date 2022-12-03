@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+    <Type Name="Cory::SlotMapHandle">
+        <DisplayString Condition="free_ || index_ == 0xFFFFFFFF">{{invalid}}</DisplayString>
+        <DisplayString>{{{index_}/{version_}}}</DisplayString>
+        <Expand>
+            <Item Name="[index]">index_</Item>
+            <Item Name="[version]">version_</Item>
+            <Item Name="[free]">free_</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="Cory::PrivateTypedHandle&lt;*,*&gt;">
+        <DisplayString>{handle_}</DisplayString>
+        <Expand>
+            <Item Name="[handle]">handle_</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="Cory::SlotMap&lt;*&gt;">
+        <DisplayString>{{ size={size()} }}</DisplayString>
+        <Expand>
+            <Item Name="[size]">size()</Item>
+            <Item Name="[capacity]">capacity()</Item>
+            <Item Name="[free]">freeList_.size()</Item>
+
+            <CustomListItems MaxItemsPerView="50" Condition="chunkTable_.size() &gt; 0">
+                <Variable Name="_elementIdx" InitialValue="0"/>
+                <Variable Name="_capacity" InitialValue="capacity()"/>
+
+                <Size>size()</Size>
+                <Loop>
+                    <Break Condition="_elementIdx >= _capacity"/>
+
+                    <If Condition="objectAt(_elementIdx).id.free_ == 0">
+                        <Item Name="{objectAt(_elementIdx).id}">objectAt(_elementIdx).storage</Item>
+                    </If>
+                    <Exec>++ _elementIdx</Exec>
+                </Loop>
+            </CustomListItems>
+
+        </Expand>
+    </Type>
+
+</AutoVisualizer>

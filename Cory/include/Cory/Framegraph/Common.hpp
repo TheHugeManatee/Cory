@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/flextVkExt.h>
+
+#include <Cory/Renderer/APIConversion.hpp>
 
 #include <functional>
 
@@ -37,7 +38,6 @@ struct DynamicStates {
 };
 
 enum class PassOutputKind { Create, Write };
-enum class PixelFormat { D32, BGRA32 };
 enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
 using PipelineStages = BitField<VkPipelineStageFlagBits2>;
 using ImageAspects = BitField<VkImageAspectFlagBits>;
@@ -50,7 +50,7 @@ enum class TextureMemoryStatus { Virtual, Allocated, External };
 struct TextureInfo {
     std::string name;
     glm::u32vec3 size;
-    PixelFormat format;
+    Magnum::Vk::PixelFormat format;
     int32_t sampleCount{1};
 };
 
@@ -64,8 +64,8 @@ struct TextureState {
 /// describes information about the intended access (read or write) for a texture resource
 struct TextureAccessInfo {
     Layout layout;
-    AccessFlags access;
     PipelineStages stage;
+    AccessFlags access;
     ImageAspects imageAspect;
 };
 
@@ -90,16 +90,4 @@ constexpr VkImageLayout toVkImageLayout(Layout layout)
     }
     throw std::runtime_error{"Unknown Layout"};
 }
-
-constexpr VkFormat toVkFormat(PixelFormat format)
-{
-    switch (format) {
-    case PixelFormat::D32:
-        return VK_FORMAT_D32_SFLOAT;
-    case PixelFormat::BGRA32:
-        return VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    throw std::runtime_error{"Unknown format"};
-}
-
 } // namespace Cory::Framegraph

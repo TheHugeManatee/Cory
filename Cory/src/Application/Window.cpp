@@ -3,6 +3,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/APIConversion.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/SingleShotCommandBuffer.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <Magnum/Vk/Device.h>
@@ -163,7 +164,7 @@ FrameContext Window::nextSwapchainImage()
 
     return frameCtx;
 }
-void Window::submitAndPresent(FrameContext &&frameCtx)
+void Window::submitAndPresent(FrameContext &frameCtx)
 {
     std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
     std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
@@ -226,6 +227,70 @@ void Window::createColorAndDepthResources()
             return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
         }) |
         ranges::to<std::vector<Vk::ImageView>>;
+
+    {
+        SingleShotCommandBuffer setInitialLayoutCmds{ctx_};
+        { // color image
+            const VkImageMemoryBarrier2 imageMemoryBarrier{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                .dstAccessMask = VK_ACCESS_2_NONE,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                .srcQueueFamilyIndex = ctx_.graphicsQueueFamily(),
+                .dstQueueFamilyIndex = ctx_.graphicsQueueFamily(),
+                .image = colorImage_,
+                .subresourceRange = {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                }};
+            const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                                  .pNext = nullptr,
+                                                  .dependencyFlags = {}, // ?
+                                                  .memoryBarrierCount = 0,
+                                                  .pMemoryBarriers = nullptr,
+                                                  .bufferMemoryBarrierCount = 0,
+                                                  .pBufferMemoryBarriers = nullptr,
+                                                  .imageMemoryBarrierCount = 1,
+                                                  .pImageMemoryBarriers = &imageMemoryBarrier};
+            ctx_.device()->CmdPipelineBarrier2(setInitialLayoutCmds, &dependencyInfo);
+        }
+        { // depth image
+            const VkImageMemoryBarrier2 imageMemoryBarrier{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                .srcAccessMask = VK_ACCESS_2_NONE,
+                .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                .dstAccessMask = VK_ACCESS_2_NONE,
+                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                .newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                .srcQueueFamilyIndex = ctx_.graphicsQueueFamily(),
+                .dstQueueFamilyIndex = ctx_.graphicsQueueFamily(),
+                .image = depthImages_[0],
+                .subresourceRange = {
+                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                }};
+            const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                                  .pNext = nullptr,
+                                                  .dependencyFlags = {}, // ?
+                                                  .memoryBarrierCount = 0,
+                                                  .pMemoryBarriers = nullptr,
+                                                  .bufferMemoryBarrierCount = 0,
+                                                  .pBufferMemoryBarriers = nullptr,
+                                                  .imageMemoryBarrierCount = 1,
+                                                  .pImageMemoryBarriers = &imageMemoryBarrier};
+            ctx_.device()->CmdPipelineBarrier2(setInitialLayoutCmds, &dependencyInfo);
+        }
+    }
 }
 
 void Window::createGlfwWindow()

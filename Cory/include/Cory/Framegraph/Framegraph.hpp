@@ -60,7 +60,7 @@ class Framegraph : NoCopy, NoMove {
 
     void execute(Magnum::Vk::CommandBuffer &cmdBuffer);
 
-    Builder declarePass(std::string_view name);
+    Builder declareTask(std::string_view name);
 
     /// to be called from Builder
     RenderInput renderInput(RenderTaskHandle passHandle);
@@ -70,7 +70,7 @@ class Framegraph : NoCopy, NoMove {
                                Layout layout,
                                AccessFlags lastWriteAccess,
                                PipelineStages lastWriteStage,
-                               Magnum::Vk::Image &image);
+                               Magnum::Vk::Image &image, Magnum::Vk::ImageView& imageView);
 
     /**
      * declare that a resource is to be read afterwards. returns general
@@ -85,14 +85,14 @@ class Framegraph : NoCopy, NoMove {
   private: /* member functions */
     RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info)
     {
-        return renderPasses_.emplace(info);
+        return renderTasks_.emplace(info);
     }
 
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
     /// coroHandle
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle)
     {
-        renderPasses_[passHandle].coroHandle = std::move(coroHandle);
+        renderTasks_[passHandle].coroHandle = coroHandle;
     }
 
     /**
@@ -117,7 +117,7 @@ class Framegraph : NoCopy, NoMove {
     std::vector<TextureHandle> externalInputs_;
     std::vector<TextureHandle> outputs_;
 
-    SlotMap<RenderTaskInfo> renderPasses_;
+    SlotMap<RenderTaskInfo> renderTasks_;
     CommandList* commandListInProgress_{};
 };
 

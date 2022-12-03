@@ -37,7 +37,7 @@ class Window : NoCopy, NoMove {
     Swapchain &swapchain() { return *swapchain_; };
 
     [[nodiscard]] FrameContext nextSwapchainImage();
-    void submitAndPresent(FrameContext &&frameCtx);
+    void submitAndPresent(FrameContext &frameCtx);
 
     [[nodiscard]] GLFWwindow *handle() { return window_.get(); }
     [[nodiscard]] const GLFWwindow *handle() const { return window_.get(); }
@@ -47,9 +47,9 @@ class Window : NoCopy, NoMove {
     /// pixel format of the offscreen color images
     [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return colorFormat_; }
     /// access the offscreen color image
-    [[nodiscard]] auto &colorImage() const noexcept { return colorImage_; }
+    [[nodiscard]] Magnum::Vk::Image &colorImage() noexcept { return colorImage_; }
     /// access the offscreen color image view
-    [[nodiscard]] auto &colorView() noexcept { return colorImageView_; }
+    [[nodiscard]] Magnum::Vk::ImageView &colorView() noexcept { return colorImageView_; }
     /// pixel format of the offscreen depth images
     [[nodiscard]] Magnum::Vk::PixelFormat depthFormat() const noexcept { return depthFormat_; }
     /// access the offscreen depth images
@@ -100,7 +100,6 @@ class Window : NoCopy, NoMove {
     void createGlfwWindow();
 
   private:
-
     Context &ctx_;
     std::string windowName_;
     int32_t sampleCount_;

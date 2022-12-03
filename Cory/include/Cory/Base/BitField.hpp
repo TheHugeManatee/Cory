@@ -35,7 +35,7 @@ class BitField {
     {
     }
 
-    auto operator<=>(BitField rhs) const = default;
+    auto operator<=>(const BitField& rhs) const = default;
 
     /// access to the raw enum
     [[nodiscard]] constexpr UnderlyingEnum bits() const { return UnderlyingEnum(bits_); }

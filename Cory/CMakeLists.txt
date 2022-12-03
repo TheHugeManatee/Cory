@@ -42,7 +42,7 @@ set(CORY_SOURCES
         include/Cory/Framegraph/CommandList.hpp
         include/Cory/Framegraph/Common.hpp
         include/Cory/Framegraph/Framegraph.hpp
-        include/Cory/Framegraph/RenderPassDeclaration.hpp
+        include/Cory/Framegraph/RenderTaskDeclaration.hpp
         include/Cory/Framegraph/TextureManager.hpp
         include/Cory/Framegraph/TransientRenderPass.hpp
         include/Cory/ImGui/Inputs.hpp

@@ -37,11 +37,9 @@ TextureResourceManager::~TextureResourceManager() = default;
 
 TextureHandle TextureResourceManager::declareTexture(TextureInfo info)
 {
-    CO_CORE_DEBUG("Declaring '{}' of {}x{}x{} ({}, {} samples)",
+    CO_CORE_DEBUG("Declaring '{}' of {} ({}, {} samples)",
                   info.name,
-                  info.size.x,
-                  info.size.y,
-                  info.size.z,
+                  info.size,
                   info.format,
                   info.sampleCount);
     auto handle = data_->textureResources_.emplace(
@@ -78,12 +76,7 @@ TextureHandle TextureResourceManager::registerExternal(TextureInfo info,
 void TextureResourceManager::allocate(TextureHandle handle)
 {
     TextureResource &res = data_->textureResources_[handle];
-    CO_CORE_DEBUG("Allocating '{}' of {}x{}x{} ({})",
-                  res.info.name,
-                  res.info.size.x,
-                  res.info.size.y,
-                  res.info.size.z,
-                  res.info.format);
+    CO_CORE_DEBUG("Allocating '{}' of {} ({})", res.info.name, res.info.size, res.info.format);
     // TODO allocate from a big buffer instead of individual allocations
 
     {
@@ -100,11 +93,14 @@ void TextureResourceManager::allocate(TextureHandle handle)
 
         // todo eventually want to externalize these memory flags
         res.image = Vk::Image{data_->ctx_->device(), createInfo, Vk::MemoryFlag::DeviceLocal};
+
+        nameVulkanObject(data_->ctx_->device(), res.image, res.info.name);
     }
 
     {
         const Vk::ImageViewCreateInfo2D createInfo{res.image};
         res.view = Vk::ImageView{data_->ctx_->device(), createInfo};
+        nameVulkanObject(data_->ctx_->device(), res.image, res.info.name);
     }
     res.state.status = TextureMemoryStatus::Allocated;
 }
@@ -126,7 +122,14 @@ void TextureResourceManager::readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
 {
     auto &info = data_->textureResources_[handle].info;
     auto &state = data_->textureResources_[handle].state;
-    CO_CORE_DEBUG("BARRIER synchronizing data written to '{}' in {}|{} to be read from {}|{}",
+
+    // check if the barrier can be foregone
+    if (state.layout == readAccessInfo.layout && state.lastWriteStage == readAccessInfo.stage &&
+        state.lastWriteAccess == readAccessInfo.access) {
+        return;
+    }
+
+    CO_CORE_TRACE("BARRIER synchronizing data written to '{}' in ({},{}) to be read from ({},{})",
                   info.name,
                   state.lastWriteStage,
                   state.lastWriteAccess,
@@ -199,10 +202,12 @@ Magnum::Vk::ImageView &TextureResourceManager::imageView(TextureHandle handle)
 {
     return data_->textureResources_[handle].view;
 }
+
 TextureState TextureResourceManager::state(TextureHandle handle) const
 {
     return data_->textureResources_[handle].state;
 }
+
 void TextureResourceManager::clear() { data_->textureResources_.clear(); }
 
 } // namespace Cory::Framegraph

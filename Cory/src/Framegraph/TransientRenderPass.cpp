@@ -261,35 +261,35 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::shaders(std::vector<Shad
     return *this;
 }
 
-TransientRenderPassBuilder &TransientRenderPassBuilder::attach(TextureHandle handle,
+TransientRenderPassBuilder &TransientRenderPassBuilder::attach(TransientTextureHandle handle,
                                                                VkAttachmentLoadOp loadOp,
                                                                VkAttachmentStoreOp storeOp,
                                                                VkClearColorValue clearValue)
 {
     renderPass_.colorAttachments_.emplace_back(
-        handle, AttachmentKind{loadOp, storeOp, {.color = clearValue}});
+        handle.texture, AttachmentKind{loadOp, storeOp, {.color = clearValue}});
     return *this;
 }
 
-TransientRenderPassBuilder &TransientRenderPassBuilder::attachDepth(TextureHandle handle,
+TransientRenderPassBuilder &TransientRenderPassBuilder::attachDepth(TransientTextureHandle handle,
                                                                     VkAttachmentLoadOp loadOp,
                                                                     VkAttachmentStoreOp storeOp,
                                                                     float clearValue)
 {
 
     renderPass_.depthAttachment_ = std::make_pair(
-        handle,
+        handle.texture,
         AttachmentKind{loadOp, storeOp, {.depthStencil = {.depth = clearValue, .stencil = 0}}});
     return *this;
 }
 
-TransientRenderPassBuilder &TransientRenderPassBuilder::attachStencil(TextureHandle handle,
+TransientRenderPassBuilder &TransientRenderPassBuilder::attachStencil(TransientTextureHandle handle,
                                                                       VkAttachmentLoadOp loadOp,
                                                                       VkAttachmentStoreOp storeOp,
                                                                       uint32_t clearValue)
 {
     renderPass_.stencilAttachment_ = std::make_pair(
-        handle,
+        handle.texture,
         AttachmentKind{loadOp, storeOp, {.depthStencil = {.depth = 1.0f, .stencil = clearValue}}});
     return *this;
 }

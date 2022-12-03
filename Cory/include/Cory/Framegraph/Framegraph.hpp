@@ -48,6 +48,11 @@ struct RenderTaskExecutionAwaiter {
     void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
 };
 
+struct ExecutionInfo {
+    std::vector<RenderTaskHandle> passes;
+    std::vector<TextureHandle> resources;
+};
+
 /**
  * The framegraph.
  *
@@ -58,7 +63,9 @@ class Framegraph : NoCopy, NoMove {
     explicit Framegraph(Context &ctx);
     ~Framegraph();
 
-    void execute(Magnum::Vk::CommandBuffer &cmdBuffer);
+    ExecutionInfo execute(Magnum::Vk::CommandBuffer &cmdBuffer);
+
+    void retireImmediate();
 
     Builder declareTask(std::string_view name);
 
@@ -66,21 +73,21 @@ class Framegraph : NoCopy, NoMove {
     RenderInput renderInput(RenderTaskHandle passHandle);
 
     /// declare an external texture as an input
-    TextureHandle declareInput(TextureInfo info,
-                               Layout layout,
-                               AccessFlags lastWriteAccess,
-                               PipelineStages lastWriteStage,
-                               Magnum::Vk::Image &image, Magnum::Vk::ImageView& imageView);
+    TransientTextureHandle declareInput(TextureInfo info,
+                                        Layout layout,
+                                        AccessFlags lastWriteAccess,
+                                        PipelineStages lastWriteStage,
+                                        Magnum::Vk::Image &image,
+                                        Magnum::Vk::ImageView &imageView);
 
     /**
      * declare that a resource is to be read afterwards. returns general
      * information and synchronization state of the last write to the
      * texture so external code can synchronize with it
      */
-    std::pair<TextureInfo, TextureState> declareOutput(TextureHandle handle);
+    std::pair<TextureInfo, TextureState> declareOutput(TransientTextureHandle handle);
 
-    void dump(const std::vector<RenderTaskHandle> &passes,
-              const std::vector<TextureHandle> &realizedTextures);
+    void dump(const ExecutionInfo &info);
 
   private: /* member functions */
     RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info)
@@ -102,10 +109,9 @@ class Framegraph : NoCopy, NoMove {
      * are required to execute said resources.
      * Updates the internal information about which render pass is required.
      */
-    std::pair<std::vector<RenderTaskHandle>, std::vector<TextureHandle>>
-    resolve(const std::vector<TextureHandle> &requestedResources);
+    ExecutionInfo resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
-    std::vector<RenderTaskHandle> compile();
+    ExecutionInfo compile();
     void executePass(CommandList &cmd, RenderTaskHandle handle);
 
   private:                             /* members */
@@ -114,11 +120,11 @@ class Framegraph : NoCopy, NoMove {
 
     Context *ctx_;
     TextureResourceManager resources_;
-    std::vector<TextureHandle> externalInputs_;
-    std::vector<TextureHandle> outputs_;
+    std::vector<TransientTextureHandle> externalInputs_;
+    std::vector<TransientTextureHandle> outputs_;
 
     SlotMap<RenderTaskInfo> renderTasks_;
-    CommandList* commandListInProgress_{};
+    CommandList *commandListInProgress_{};
 };
 
 } // namespace Cory::Framegraph

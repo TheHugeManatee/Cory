@@ -6,10 +6,12 @@
 
 #pragma once
 
+#include <Magnum/Vk/Vk.h>
+
 #include <cstdint>
 #include <memory>
 
-typedef struct VkImageView_T *VkImageView;
+using VkImageView = struct VkImageView_T *;
 
 namespace Cory {
 
@@ -26,7 +28,7 @@ class ImGuiLayer {
     void deinit(Context &ctx);
 
     void newFrame(Context &ctx);
-    void recordFrameCommands(Context &ctx, FrameContext& frameCtx);
+    void recordFrameCommands(Context &ctx, uint32_t frameIdx, Magnum::Vk::CommandBuffer &cmdBuffer);
 
   private:
     struct Private;

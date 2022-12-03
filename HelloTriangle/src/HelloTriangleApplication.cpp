@@ -158,7 +158,7 @@ void HelloTriangleApplication::run()
 
         recordCommands(frameCtx);
 
-        window_->submitAndPresent(std::move(frameCtx));
+        window_->submitAndPresent(frameCtx);
 
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
@@ -217,7 +217,7 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     cmdBuffer.endRenderPass();
 
-    imguiLayer_->recordFrameCommands(*ctx_, frameCtx);
+    imguiLayer_->recordFrameCommands(*ctx_, frameCtx.index, *frameCtx.commandBuffer);
 
     cmdBuffer.end();
 }

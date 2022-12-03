@@ -37,7 +37,7 @@ struct DynamicStates {
     DepthWrite depthWrite{DepthWrite::Enabled};
 };
 
-enum class PassOutputKind { Create, Write };
+enum class TaskOutputKind { Create, Write };
 enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
 using PipelineStages = BitField<VkPipelineStageFlagBits2>;
 using ImageAspects = BitField<VkImageAspectFlagBits>;
@@ -70,6 +70,11 @@ struct TextureAccessInfo {
 };
 
 using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureResourceManager>;
+struct TransientTextureHandle {
+    TextureHandle texture{};
+    uint32_t version{0};
+    auto operator<=>(const TransientTextureHandle &) const = default;
+};
 using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
 
 constexpr VkImageLayout toVkImageLayout(Layout layout)
@@ -91,3 +96,11 @@ constexpr VkImageLayout toVkImageLayout(Layout layout)
     throw std::runtime_error{"Unknown Layout"};
 }
 } // namespace Cory::Framegraph
+
+/// make SlotMapHandle hashable
+template <> struct std::hash<Cory::Framegraph::TransientTextureHandle> {
+    std::size_t operator()(const Cory::Framegraph::TransientTextureHandle &s) const noexcept
+    {
+        return Cory::hashCompose(s.version, s.texture);
+    }
+};

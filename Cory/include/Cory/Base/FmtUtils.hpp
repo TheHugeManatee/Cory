@@ -4,6 +4,9 @@
 
 #include <Corrade/Containers/StringView.h>
 #include <magic_enum.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #if !defined(MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT)
 #define MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT true
@@ -61,5 +64,34 @@ template <> struct fmt::formatter<Corrade::Containers::StringView, char> {
     auto format(Corrade::Containers::StringView v, format_context &ctx) const
     {
         return fmt::format_to(ctx.out(), "{}", std::string_view{v.data(), v.size()});
+    }
+};
+
+// formatters for glm vector types
+template <typename glm::length_t L, typename ElementType>
+struct fmt::formatter<glm::vec<L, ElementType>> : public fmt::formatter<ElementType> {
+    auto format(glm::vec<L, ElementType> c, format_context &ctx)
+    {
+        auto out = ctx.out();
+        *out = '(';
+        ctx.advance_to(out);
+        ctx.advance_to(formatter<ElementType>::format(c[0], ctx));
+        *out = ',';
+        ctx.advance_to(out);
+        ctx.advance_to(formatter<ElementType>::format(c[1], ctx));
+        if constexpr (L > 2) {
+            *out = ',';
+            ctx.advance_to(out);
+            ctx.advance_to(formatter<ElementType>::format(c[2], ctx));
+        }
+        if constexpr (L > 3) {
+            *out = ',';
+            ctx.advance_to(out);
+            ctx.advance_to(formatter<ElementType>::format(c[3], ctx));
+        }
+
+        *out = ')';
+        ctx.advance_to(out);
+        return out;
     }
 };

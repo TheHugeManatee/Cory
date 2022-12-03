@@ -59,14 +59,22 @@ class Log {
 #define CO_CORE_ERROR(...) ::Cory::Log::GetCoreLogger()->error(__VA_ARGS__)
 #define CO_CORE_WARN(...)  ::Cory::Log::GetCoreLogger()->warn(__VA_ARGS__)
 #define CO_CORE_DEBUG(...) ::Cory::Log::GetCoreLogger()->debug(__VA_ARGS__)
+#ifdef _DEBUG
 #define CO_CORE_TRACE(...) ::Cory::Log::GetCoreLogger()->trace(__VA_ARGS__)
+#else
+#define CO_CORE_TRACE(...)
+#endif
 #define CO_CORE_INFO(...)  ::Cory::Log::GetCoreLogger()->info(__VA_ARGS__)
 
 #define CO_APP_FATAL(...) ::Cory::Log::GetAppLogger()->critical(__VA_ARGS__)
 #define CO_APP_ERROR(...) ::Cory::Log::GetAppLogger()->error(__VA_ARGS__)
 #define CO_APP_WARN(...)  ::Cory::Log::GetAppLogger()->warn(__VA_ARGS__)
 #define CO_APP_DEBUG(...) ::Cory::Log::GetAppLogger()->debug(__VA_ARGS__)
+#ifdef _DEBUG
 #define CO_APP_TRACE(...) ::Cory::Log::GetAppLogger()->trace(__VA_ARGS__)
+#else
+#define CO_APP_TRACE(...)
+#endif
 #define CO_APP_INFO(...)  ::Cory::Log::GetAppLogger()->info(__VA_ARGS__)
 
 #define CO_CORE_ASSERT(condition, message, ...)                                                    \

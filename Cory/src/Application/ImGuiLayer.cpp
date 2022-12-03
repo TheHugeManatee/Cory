@@ -242,14 +242,15 @@ void ImGuiLayer::newFrame(Context &ctx)
     ImGui::NewFrame();
 }
 
-void ImGuiLayer::recordFrameCommands(Context &ctx, FrameContext &frameCtx)
+void ImGuiLayer::recordFrameCommands(Context &ctx,
+                                     uint32_t frameIdx,
+                                     Magnum::Vk::CommandBuffer &cmdBuffer)
 {
-    // Rendering
     ImGui::Render();
 
     // TODO: VK_SUBPASS_CONTENTS_INLINE?
-    frameCtx.commandBuffer->beginRenderPass(
-        Vk::RenderPassBeginInfo{data_->renderPass, data_->framebuffers[frameCtx.index]}
+    cmdBuffer.beginRenderPass(
+        Vk::RenderPassBeginInfo{data_->renderPass, data_->framebuffers[frameIdx]}
             .clearColor(0, data_->clearValue)
             .clearDepthStencil(1, 0.0f, 0));
 
@@ -261,13 +262,13 @@ void ImGuiLayer::recordFrameCommands(Context &ctx, FrameContext &frameCtx)
     viewport.height = static_cast<float>(windowDim.y);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
-    VkRect2D scissor{{0, 0},
-                     {static_cast<uint32_t>(windowDim.x), static_cast<uint32_t>(windowDim.y)}};
-    ctx.device()->CmdSetViewport(*frameCtx.commandBuffer, 0, 1, &viewport);
-    ctx.device()->CmdSetScissor(*frameCtx.commandBuffer, 0, 1, &scissor);
+    const VkRect2D scissor{
+        {0, 0}, {static_cast<uint32_t>(windowDim.x), static_cast<uint32_t>(windowDim.y)}};
+    ctx.device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
+    ctx.device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *frameCtx.commandBuffer);
-    frameCtx.commandBuffer->endRenderPass();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer);
+    cmdBuffer.endRenderPass();
 }
 void ImGuiLayer::setupCustomColors()
 {

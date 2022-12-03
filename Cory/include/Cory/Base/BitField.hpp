@@ -35,6 +35,8 @@ class BitField {
     {
     }
 
+    auto operator<=>(const BitField& rhs) const = default;
+
     /// access to the raw enum
     [[nodiscard]] constexpr UnderlyingEnum bits() const { return UnderlyingEnum(bits_); }
     /// access to the underlying bits
@@ -73,7 +75,7 @@ class BitField {
         std::vector<UnderlyingEnum> setBits;
 
         for (unsigned int digit = NUM_BITS; digit > 0; --digit) {
-            UnderlyingEnum bit{UnderlyingType(1u << (digit - 1))};
+            UnderlyingEnum bit{UnderlyingType(1) << (digit - 1)};
             if (is_set(bit)) { setBits.push_back(bit); }
         }
         return setBits;
@@ -91,6 +93,6 @@ struct fmt::formatter<Cory::BitField<E>, std::enable_if_t<std::is_enum_v<E>, cha
     auto format(Cory::BitField<E> e, format_context &ctx) const
     {
         return fmt::format_to(
-            ctx.out(), "0x{:X} [{}]", e.underlying_bits(), fmt::join(e.set_bits(), " | "));
+            ctx.out(), "{}", fmt::join(e.set_bits(), " | "));
     }
 };

@@ -4,10 +4,10 @@
 #include <chrono>
 #include <cstdint>
 #include <iterator>
+#include <map>
 #include <numeric>
 #include <string>
 #include <string_view>
-#include <unordered_map>
 
 namespace Cory {
 
@@ -73,10 +73,10 @@ class Profiler {
   public:
     using Record = ProfilerRecord<128>;
     static void PushCounter(std::string &name, int64_t deltaNs);
-    static std::unordered_map<std::string, Record> GetRecords() { return s_records; }
+    static std::map<std::string, Record> GetRecords() { return s_records; }
 
   private:
-    static std::unordered_map<std::string, Record> s_records;
+    static std::map<std::string, Record> s_records;
 };
 
 class ScopeTimer {

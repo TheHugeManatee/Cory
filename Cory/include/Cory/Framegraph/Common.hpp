@@ -1,7 +1,8 @@
 #pragma once
 
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/flextVkExt.h>
+
+#include <Cory/Renderer/APIConversion.hpp>
 
 #include <functional>
 
@@ -36,8 +37,7 @@ struct DynamicStates {
     DepthWrite depthWrite{DepthWrite::Enabled};
 };
 
-enum class PassOutputKind { Create, Write };
-enum class PixelFormat { D32, BGRA32 };
+enum class TaskOutputKind { Create, Write };
 enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
 using PipelineStages = BitField<VkPipelineStageFlagBits2>;
 using ImageAspects = BitField<VkImageAspectFlagBits>;
@@ -50,7 +50,7 @@ enum class TextureMemoryStatus { Virtual, Allocated, External };
 struct TextureInfo {
     std::string name;
     glm::u32vec3 size;
-    PixelFormat format;
+    Magnum::Vk::PixelFormat format;
     int32_t sampleCount{1};
 };
 
@@ -64,12 +64,17 @@ struct TextureState {
 /// describes information about the intended access (read or write) for a texture resource
 struct TextureAccessInfo {
     Layout layout;
-    AccessFlags access;
     PipelineStages stage;
+    AccessFlags access;
     ImageAspects imageAspect;
 };
 
 using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureResourceManager>;
+struct TransientTextureHandle {
+    TextureHandle texture{};
+    uint32_t version{0};
+    auto operator<=>(const TransientTextureHandle &) const = default;
+};
 using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
 
 constexpr VkImageLayout toVkImageLayout(Layout layout)
@@ -90,16 +95,12 @@ constexpr VkImageLayout toVkImageLayout(Layout layout)
     }
     throw std::runtime_error{"Unknown Layout"};
 }
-
-constexpr VkFormat toVkFormat(PixelFormat format)
-{
-    switch (format) {
-    case PixelFormat::D32:
-        return VK_FORMAT_D32_SFLOAT;
-    case PixelFormat::BGRA32:
-        return VK_FORMAT_B8G8R8A8_SRGB;
-    }
-    throw std::runtime_error{"Unknown format"};
-}
-
 } // namespace Cory::Framegraph
+
+/// make SlotMapHandle hashable
+template <> struct std::hash<Cory::Framegraph::TransientTextureHandle> {
+    std::size_t operator()(const Cory::Framegraph::TransientTextureHandle &s) const noexcept
+    {
+        return Cory::hashCompose(s.version, s.texture);
+    }
+};

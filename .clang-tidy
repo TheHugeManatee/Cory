@@ -23,6 +23,9 @@ WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle:     none
 
+CheckOptions:
+  - key: hicpp-signed-bitwise.IgnorePositiveIntegerLiterals
+    value: True
 
 
 

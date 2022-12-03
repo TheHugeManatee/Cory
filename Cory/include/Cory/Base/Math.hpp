@@ -17,14 +17,14 @@ inline glm::vec3 cartesianToSpherical(const glm::vec3 cartesian);
 /// this is the same as what boost::hash_combine does
 template <typename T>
     requires(!ranges::range<T>)
-std::size_t hashCombine(std::size_t seed, const T &v)
+constexpr std::size_t hashCombine(std::size_t seed, const T &v)
 {
     return seed ^ std::hash<T>{}(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 /// overload for ranges
 template <typename Range>
     requires(ranges::range<Range>)
-std::size_t hashCombine(std::size_t seed, Range &&rng)
+constexpr std::size_t hashCombine(std::size_t seed, Range &&rng)
 {
     std::size_t hash = seed;
     for (const auto &v : rng) {
@@ -34,12 +34,12 @@ std::size_t hashCombine(std::size_t seed, Range &&rng)
 }
 
 /// variadic template to make composing hashes of different things easier
-template <typename FirstArg> std::size_t hashCompose(std::size_t seed, FirstArg &&arg)
+template <typename FirstArg> std::size_t constexpr hashCompose(std::size_t seed, FirstArg &&arg)
 {
     return hashCombine(seed, std::forward<FirstArg>(arg));
 }
 template <typename FirstArg, typename... Args>
-std::size_t hashCompose(std::size_t seed, FirstArg &&arg, Args &&...args)
+constexpr std::size_t hashCompose(std::size_t seed, FirstArg &&arg, Args &&...args)
 {
     return hashCompose(hashCombine(seed, std::forward<FirstArg>(arg)), std::forward<Args>(args)...);
 }

@@ -11,28 +11,28 @@ static_assert(std::movable<Cory::SlotMap<int>> && !std::copyable<Cory::SlotMap<i
 TEST_CASE("SlotMapHandle", "[Cory/Base]")
 {
     using namespace Cory;
-    SlotMapHandle h_invalid{};
+    const SlotMapHandle h_invalid{};
 
     CHECK(h_invalid.index() == SlotMapHandle::INVALID_INDEX);
     CHECK(h_invalid.version() == 0);
-    CHECK_FALSE(h_invalid.alive());
+    CHECK_FALSE(h_invalid.valid());
 
-    SlotMapHandle h1{0, 0};
+    const SlotMapHandle h1{0, 0};
     CHECK(h1.index() == 0);
     CHECK(h1.version() == 0);
-    CHECK(h1.alive());
+    CHECK(h1.valid());
     // CHECK_FALSE(h1.v & SlotMapHandle::FREE_BIT);
 
     auto h1_v2 = SlotMapHandle::nextVersion(h1);
     CHECK(h1_v2.index() == 0);
     CHECK(h1_v2.version() == 1);
-    CHECK(h1_v2.alive());
+    CHECK(h1_v2.valid());
     // CHECK_FALSE(h1_v2.v & SlotMapHandle::FREE_BIT);
 
     auto h1_free = SlotMapHandle::setFreeBit(h1_v2);
     CHECK(h1_free.index() == 0);
     CHECK(h1_free.version() == 1);
-    CHECK_FALSE(h1_free.alive());
+    CHECK_FALSE(h1_free.valid());
     // CHECK(h1_free.v & SlotMapHandle::FREE_BIT);
 
     auto h1_unfree = SlotMapHandle::clearFreeBit(h1_free);
@@ -56,8 +56,8 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
     CHECK(sm[h2] == 42.0);
 
     // save address for later
-    auto h1_address = &sm[h1];
-    auto h2_address = &sm[h2];
+    const auto h1_address = &sm[h1];
+    const auto h2_address = &sm[h2];
 
     // check size makes sense
     CHECK(sm.size() == 2);
@@ -72,7 +72,7 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
         CHECK(sm.size() == 1002);
 
         CHECK(sm[h1] == 41.0);
-        auto h1_address_new = &sm[h1];
+        const auto h1_address_new = &sm[h1];
         // check that address stays stable
         CHECK(h1_address == h1_address_new);
     }
@@ -125,7 +125,7 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
 }
 
 // test struct that uses an external storage to track its lifetime
-enum ObjectState { UNINIT, ALIVE, DEAD, THROW_ON_CONSTRUCTION };
+enum ObjectState { UNINIT, VALID, DEAD, THROW_ON_CONSTRUCTION };
 struct Foo {
     Foo(ObjectState &bookkeep)
         : bookkeep_{bookkeep}
@@ -133,11 +133,11 @@ struct Foo {
         if (bookkeep_ == THROW_ON_CONSTRUCTION) {
             throw std::runtime_error{"Object threw on construction"};
         }
-        bookkeep_ = ALIVE;
+        bookkeep_ = VALID;
     }
     ~Foo()
     {
-        if (bookkeep_ != ALIVE) {
+        if (bookkeep_ != VALID) {
             FAIL("already destructed or not properly constructed: bookkeep_ = " +
                  std::to_string(bookkeep_));
         }
@@ -156,7 +156,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         SlotMap<Foo> sm;
         ObjectState bookkeeper{UNINIT};
         auto h = sm.emplace(std::ref(bookkeeper));
-        CHECK(bookkeeper == ALIVE);
+        CHECK(bookkeeper == VALID);
         sm.release(h);
         CHECK(bookkeeper == DEAD);
     }
@@ -177,12 +177,12 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
             SlotMap<Foo> sm;
             auto h1 = sm.emplace(std::ref(bookkeeper1));
             auto h2 = sm.emplace(std::ref(bookkeeper2));
-            CHECK(bookkeeper1 == ALIVE);
-            CHECK(bookkeeper2 == ALIVE);
+            CHECK(bookkeeper1 == VALID);
+            CHECK(bookkeeper2 == VALID);
 
             sm.release(h1);
             CHECK(bookkeeper1 == DEAD);
-            CHECK(bookkeeper2 == ALIVE);
+            CHECK(bookkeeper2 == VALID);
         }
 
         CHECK(bookkeeper1 == DEAD);
@@ -191,10 +191,9 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
 
     SECTION("Correct construction and destruction of many stored objects")
     {
-        std::srand(std::time(0));
         // poor man's fuzz-testing
-        std::vector<ObjectState> bookkeeper1(rand() % 512 + 1, UNINIT);
-        std::vector<ObjectState> bookkeeper2(rand() % 512 + 1, UNINIT);
+        std::vector<ObjectState> bookkeeper1(std::rand() % 512 + 1, UNINIT);
+        std::vector<ObjectState> bookkeeper2(std::rand() % 512 + 1, UNINIT);
         {
             SlotMap<Foo> sm;
 
@@ -203,7 +202,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
                 ranges::views::transform([&](auto &b) { return sm.emplace(std::ref(b)); }) |
                 ranges::to<std::vector<SlotMapHandle>>();
 
-            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == VALID; }));
             CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == UNINIT; }));
 
             auto handles2 =
@@ -211,31 +210,31 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
                 ranges::views::transform([&](auto &b) { return sm.emplace(std::ref(b)); }) |
                 ranges::to<std::vector<SlotMapHandle>>();
 
-            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == ALIVE; }));
-            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == VALID; }));
+            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == VALID; }));
 
             // invalidating a bunch of handles
             auto handles3 = handles2 |
                             ranges::views::transform([&](auto &h) { return sm.update(h); }) |
                             ranges::to<std::vector<SlotMapHandle>>();
             // old handles have been invalidated
-            for (SlotMapHandle &h : handles2) {
+            for (const SlotMapHandle &h : handles2) {
                 CHECK_THROWS(sm[h]);
             }
-            // all objects are still alive
-            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == ALIVE; }));
-            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == ALIVE; }));
+            // all objects are still valid
+            CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == VALID; }));
+            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == VALID; }));
 
             // releasing the handles
             ranges::for_each(handles1, [&](auto &h) { sm.release(h); });
 
             // old handles have been invalidated
-            for (SlotMapHandle &h : handles1) {
+            for (const SlotMapHandle &h : handles1) {
                 CHECK_THROWS(sm[h]);
             }
-            // only values from set 2 are still alive
+            // only values from set 2 are still valid
             CHECK(ranges::all_of(bookkeeper1, [](const ObjectState &v) { return v == DEAD; }));
-            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == ALIVE; }));
+            CHECK(ranges::all_of(bookkeeper2, [](const ObjectState &v) { return v == VALID; }));
         }
 
         // after sm goes out of scope, all objects have been properly destructed
@@ -245,8 +244,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
 
     SECTION("Iterators and use with ranges")
     {
-        std::srand(std::time(0));
-        std::vector<ObjectState> bookkeeper(rand() % 512 + 1, UNINIT);
+        std::vector<ObjectState> bookkeeper(std::rand() % 512 + 1, UNINIT);
 
         SlotMap<Foo> sm;
 
@@ -256,7 +254,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
 
         for (auto it = sm.begin(); it != sm.end(); ++it) {
             const Foo &f = *it;
-            CHECK(f.bookkeep_ == ALIVE);
+            CHECK(f.bookkeep_ == VALID);
         }
 
         // kill every third element
@@ -269,10 +267,10 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
             ranges::all_of(bookkeeper | ranges::views::stride(3), [](int b) { return b == DEAD; }));
         CHECK(sm.size() == bookkeeper.size() - numKilled);
 
-        // check that we only iterate over alive elements
+        // check that we only iterate over valid elements
         size_t numIterated = {};
         for (const Foo &f : sm) {
-            CHECK(f.bookkeep_ == ALIVE);
+            CHECK(f.bookkeep_ == VALID);
             ++numIterated;
         }
         // verify we iterated over as many elements as we should have
@@ -281,7 +279,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         // iterating over const objects should work also
         const SlotMap<Foo> &csm{sm};
         for (const Foo &f : csm) {
-            CHECK(f.bookkeep_ == ALIVE);
+            CHECK(f.bookkeep_ == VALID);
             ++numIterated;
         }
 
@@ -301,7 +299,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         //        auto b = ranges::begin(sm);
         //        auto e = ranges::end(sm);
         //
-        //        CHECK(ranges::all_of(sm, [](const Foo& f) { return f.bookkeep_ == ALIVE; }));
+        //        CHECK(ranges::all_of(sm, [](const Foo& f) { return f.bookkeep_ == valid; }));
     }
 
     SECTION("Iterating over handles and items")
@@ -319,7 +317,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         // iterating over the handles
         gsl::index i{};
         for (SlotMapHandle h : sm.handles()) {
-            REQUIRE(h.alive());
+            REQUIRE(h.valid());
             CHECK(h == handles[i]);
             i++;
         }
@@ -329,7 +327,7 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         const SlotMap<Foo> &csm = sm;
         gsl::index j{};
         for (auto &[h, v] : csm.items()) {
-            REQUIRE(h.alive());
+            REQUIRE(h.valid());
             CHECK(h == handles[j]);
             CHECK(&v.bookkeep_ == &bookkeepers[j]);
             j++;
@@ -345,10 +343,10 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         ObjectState book{UNINIT};
         auto h = sm.emplace(std::ref(book));
         ResolvableHandle rh{sm, h};
-        CHECK(rh->bookkeep_ == ALIVE);
+        CHECK(rh->bookkeep_ == VALID);
 
         const ResolvableHandle crh{rh};
-        CHECK(crh->bookkeep_ == ALIVE);
+        CHECK(crh->bookkeep_ == VALID);
     }
 }
 

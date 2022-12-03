@@ -260,7 +260,7 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
     freeList_.pop_back();
 
     auto object = objectAt(free);
-    CO_CORE_ASSERT(!object.id.alive(), "We got a live object from the free list!");
+    CO_CORE_ASSERT(!object.id.valid(), "We got a live object from the free list!");
 
     try {
         // try to construct the object in the storage
@@ -294,7 +294,7 @@ template <typename StoredType_> void SlotMap<StoredType_>::clear()
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
             const auto objectId = chunk.id[i];
             // if it's alive, destroy it and put into free list
-            if (objectId.alive()) {
+            if (objectId.valid()) {
                 if constexpr (!std::is_trivial_v<StoredType>) { chunk.storage[i].~StoredType(); }
                 // clear free bit and increase version
                 chunk.id[i] = SlotMapHandle::setFreeBit(SlotMapHandle::nextVersion(objectId));
@@ -323,7 +323,7 @@ template <typename StoredType_> SlotMapHandle SlotMap<StoredType_>::update(SlotM
 
 template <typename StoredType_> bool SlotMap<StoredType_>::isValid(SlotMapHandle id) const
 {
-    if (!id.alive()) return false;
+    if (!id.valid()) { return false; }
 
     const uint32_t chunkIndex = id.index() / CHUNK_SIZE;
     if (chunkIndex >= chunkTable_.size()) { return false; }
@@ -361,8 +361,8 @@ typename SlotMap<StoredType_>::ConstStoredInner SlotMap<StoredType_>::objectAt(u
 template <typename StoredType_>
 typename SlotMap<StoredType_>::StoredInner SlotMap<StoredType_>::validatedGet(SlotMapHandle handle)
 {
-    if (!handle.alive()) {
-        throw std::runtime_error{"Given handle is dead."}; //
+    if (!handle.valid()) {
+        throw std::runtime_error{"Given handle is dead or invalid."}; //
     }
 
     if (handle.index() >= capacity()) {
@@ -395,7 +395,7 @@ uint32_t SlotMap<StoredType_>::findNextAliveIndex(uint32_t start) const
     uint32_t cap = static_cast<uint32_t>(capacity());
     for (uint32_t index = start; index < cap; ++index) {
         ConstStoredInner object = objectAt(index);
-        if (object.id.alive()) { return index; }
+        if (object.id.valid()) { return index; }
     }
     return cap;
 }
@@ -407,7 +407,7 @@ cppcoro::generator<SlotMapHandle> SlotMap<StoredType_>::handles() const
         auto &chunk = *chunkPtr;
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
             auto handle = chunk.id[i];
-            if (handle.alive()) { co_yield handle; }
+            if (handle.valid()) { co_yield handle; }
         }
     }
 }
@@ -418,7 +418,7 @@ cppcoro::generator<std::pair<SlotMapHandle, StoredType_ &>> SlotMap<StoredType_>
     for (auto &chunkPtr : chunkTable_) {
         auto &chunk = *chunkPtr;
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
-            if (chunk.id[i].alive()) {
+            if (chunk.id[i].valid()) {
                 co_yield std::make_pair(chunk.id[i], std::ref(chunk.storage[i]));
             }
         }
@@ -431,7 +431,7 @@ SlotMap<StoredType_>::items() const
     for (auto &chunkPtr : chunkTable_) {
         auto &chunk = *chunkPtr;
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
-            if (chunk.id[i].alive()) {
+            if (chunk.id[i].valid()) {
                 co_yield std::make_pair(chunk.id[i], std::ref(chunk.storage[i]));
             }
         }

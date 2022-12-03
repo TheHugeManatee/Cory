@@ -23,7 +23,7 @@ float availableWidth() { return ::ImGui::GetContentRegionAvail().x; }
 template <typename... Args> void Text(fmt::format_string<Args...> fmtString, Args... args)
 {
     std::string formatted = fmt::format(fmtString, std::forward<Args>(args)...);
-    ::ImGui::Text("%s", formatted.c_str());
+    ::ImGui::Text("%s", formatted.c_str()); // NOLINT
 }
 
 // template for float, int
@@ -31,7 +31,7 @@ template <typename ValueType, typename... Arguments>
     requires std::same_as<ValueType, float> || std::same_as<ValueType, int32_t>
 auto Slider(std::string_view label, ValueType &value, Arguments... args)
 {
-    ::ImGui::Text(label.data());
+    ::ImGui::Text("%s", label.data()); // NOLINT
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (std::same_as<ValueType, float>) {
@@ -46,7 +46,7 @@ auto Slider(std::string_view label, ValueType &value, Arguments... args)
 template <glm::length_t L, typename T, typename... Arguments>
 auto Slider(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 {
-    ::ImGui::Text(label.data());
+    ::ImGui::Text("%s", label.data()); // NOLINT
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (L == 2) {
@@ -81,7 +81,7 @@ template <typename ValueType, typename... Arguments>
              std::same_as<ValueType, int32_t>
 auto Input(std::string_view label, ValueType &value, Arguments... args)
 {
-    ::ImGui::Text(label.data());
+    ::ImGui::Text("%s", label.data()); // NOLINT
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (std::same_as<ValueType, double>) {
@@ -99,7 +99,7 @@ auto Input(std::string_view label, ValueType &value, Arguments... args)
 template <glm::length_t L, typename T, typename... Arguments>
 auto Input(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 {
-    ::ImGui::Text(label.data());
+    ::ImGui::Text("%s", label.data()); // NOLINT
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (L == 2) {

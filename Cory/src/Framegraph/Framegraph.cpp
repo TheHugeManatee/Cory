@@ -37,10 +37,9 @@ Framegraph::~Framegraph() { retireImmediate(); }
 ExecutionInfo Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
 {
     const Cory::ScopeTimer s1{"Framegraph/Execute"};
-
     const auto executionInfo = compile();
 
-    const Cory::ScopeTimer s2{"Framegraph/Execute/RecordPasses"};
+    const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
     CommandList cmd{*ctx_, cmdBuffer};
 
     commandListInProgress_ = &cmd;
@@ -67,6 +66,7 @@ void Framegraph::retireImmediate()
 void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 {
     const RenderTaskInfo &rpInfo = renderTasks_[handle];
+    const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
     // handle input resource transitions

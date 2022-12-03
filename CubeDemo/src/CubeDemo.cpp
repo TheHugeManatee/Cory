@@ -466,7 +466,8 @@ void CubeDemoApplication::drawImguiControls()
 
                 auto h = hist | ranges::views::transform([](auto v) { return float(v); }) |
                          ranges::to<std::vector>;
-                ImGui::PlotLines("", h.data(), gsl::narrow<int>(h.size()));
+                ImGui::PlotLines(
+                    "", h.data(), gsl::narrow<int>(h.size()), 0, nullptr, 0.0f, float(stats.max));
             }
             ImGui::EndTable();
         }

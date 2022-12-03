@@ -120,7 +120,6 @@ void TextureResourceManager::readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
                                          TextureHandle handle,
                                          TextureAccessInfo readAccessInfo)
 {
-    auto &info = data_->textureResources_[handle].info;
     auto &state = data_->textureResources_[handle].state;
 
     // check if the barrier can be foregone
@@ -129,6 +128,7 @@ void TextureResourceManager::readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
         return;
     }
 
+    [[maybe_unused]] const auto &info = data_->textureResources_[handle].info;
     CO_CORE_TRACE("BARRIER synchronizing data written to '{}' in ({},{}) to be read from ({},{})",
                   info.name,
                   state.lastWriteStage,

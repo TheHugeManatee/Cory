@@ -38,7 +38,7 @@ TransientTextureHandle Builder::create(std::string name,
     const TextureAccessInfo accessInfo{.layout = initialLayout,
                                        .stage = writeStage,
                                        .access = writeAccess,
-                                       .imageAspect = aspects};
+                                       .imageAspect = gsl::narrow_cast<ImageAspects>(aspects)};
 
     auto handle = TransientTextureHandle{.texture = framegraph_.resources_.declareTexture(info),
                                          .version = 0};

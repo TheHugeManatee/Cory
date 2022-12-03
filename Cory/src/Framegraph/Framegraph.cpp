@@ -32,43 +32,51 @@ Framegraph::Framegraph(Context &ctx)
 {
 }
 
-Framegraph::~Framegraph()
-{
-    // destroy all coroutines
-    for (RenderTaskInfo &info : renderTasks_) {
-        info.coroHandle.destroy();
-    }
-}
+Framegraph::~Framegraph() { retireImmediate(); }
 
-void Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
+ExecutionInfo Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
 {
     const Cory::ScopeTimer s1{"Framegraph/Execute"};
+    const auto executionInfo = compile();
 
-    const std::vector<RenderTaskHandle> passesToExecute = compile();
-
-    const Cory::ScopeTimer s2{"Framegraph/Execute/RecordPasses"};
+    const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
     CommandList cmd{*ctx_, cmdBuffer};
+
     commandListInProgress_ = &cmd;
     auto resetCmdList = gsl::finally([this]() { commandListInProgress_ = nullptr; });
 
-    for (const auto &handle : passesToExecute) {
+    for (const auto &handle : executionInfo.passes) {
         executePass(cmd, handle);
     }
+    return executionInfo;
+}
 
+void Framegraph::retireImmediate()
+{
     resources_.clear();
     externalInputs_.clear();
     outputs_.clear();
+
+    for (RenderTaskInfo &info : renderTasks_) {
+        info.coroHandle.destroy();
+    }
     renderTasks_.clear();
 }
 
 void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 {
     const RenderTaskInfo &rpInfo = renderTasks_[handle];
+    const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
-    // ## handle resource transitions
+    // handle input resource transitions
     for (auto input : rpInfo.inputs) {
-        resources_.readBarrier(cmd.handle(), input.handle, input.accessInfo);
+        resources_.readBarrier(cmd.handle(), input.handle.texture, input.accessInfo);
+    }
+    for (auto input : rpInfo.outputs | ranges::views::filter([](const auto &desc) {
+                          return desc.kind == TaskOutputKind::Create;
+                      })) {
+        resources_.readBarrier(cmd.handle(), input.handle.texture, input.accessInfo);
     }
 
     CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
@@ -77,7 +85,7 @@ void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
 
     // record writes to output resources of this render pass
     for (auto output : rpInfo.outputs) {
-        resources_.recordWrite(cmd.handle(), output.handle, output.accessInfo);
+        resources_.recordWrite(cmd.handle(), output.handle.texture, output.accessInfo);
     }
 
     CO_CORE_ASSERT(coroHandle.done(),
@@ -86,69 +94,75 @@ void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
                    "the builder's finishPassDeclaration() exactly once!");
 }
 
-TextureHandle Framegraph::declareInput(TextureInfo info,
-                                       Layout layout,
-                                       AccessFlags lastWriteAccess,
-                                       PipelineStages lastWriteStage,
-                                       Vk::Image &image,
-                                       Vk::ImageView &imageView)
+TransientTextureHandle Framegraph::declareInput(TextureInfo info,
+                                                Layout layout,
+                                                AccessFlags lastWriteAccess,
+                                                PipelineStages lastWriteStage,
+                                                Vk::Image &image,
+                                                Vk::ImageView &imageView)
 {
     auto handle = resources_.registerExternal(
         info, layout, lastWriteAccess, lastWriteStage, image, imageView);
-    externalInputs_.push_back(handle);
-    return handle;
+
+    TransientTextureHandle thandle{.texture = handle, .version = 0};
+
+    externalInputs_.push_back(thandle);
+    return thandle;
 }
 
-std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TextureHandle handle)
+std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureHandle handle)
 {
     outputs_.push_back(handle);
-    return {resources_.info(handle), resources_.state(handle)};
+    return {resources_.info(handle.texture), resources_.state(handle.texture)};
 }
 
-std::vector<RenderTaskHandle> Framegraph::compile()
+ExecutionInfo Framegraph::compile()
 {
-    Cory::ScopeTimer s{"Framegraph/Execute/Compile"};
+    const Cory::ScopeTimer s{"Framegraph/Execute/Compile"};
 
     auto [passes, requiredResources] = resolve(outputs_);
     resources_.allocate(requiredResources);
-    // dump(passes, requiredResources);
-    return passes;
+
+    return {passes, requiredResources};
 }
 
-void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
-                      const std::vector<TextureHandle> &realizedTextures)
+void Framegraph::dump(const ExecutionInfo &executionInfo)
 {
     std::string out{"digraph G {\n"
                     "rankdir=LR;\n"
                     "node [fontsize=12,fontname=\"Courier New\"]\n"};
 
-    std::unordered_map<TextureHandle, TextureInfo> textures;
+    std::unordered_map<TransientTextureHandle, TextureInfo> textures;
 
     for (const auto &[passHandle, passInfo] : renderTasks_.items()) {
-        const std::string passCol = (!passInfo.coroHandle) ? "red"
-                                    : ranges::contains(passes, RenderTaskHandle{passHandle})
-                                        ? "black"
-                                        : "gray";
+        const std::string passCol =
+            (!passInfo.coroHandle)                                                 ? "red"
+            : ranges::contains(executionInfo.passes, RenderTaskHandle{passHandle}) ? "black"
+                                                                                   : "gray";
         fmt::format_to(std::back_inserter(out),
                        "  \"{0}\" [shape=ellipse,color={1},fontcolor={1}]\n",
                        passInfo.name,
                        passCol);
 
         for (const auto &[inputHandle, _] : passInfo.inputs) {
-            auto inputInfo = resources_.info(inputHandle);
-            fmt::format_to(
-                std::back_inserter(out), "  \"{}\" -> \"{}\" \n", inputInfo.name, passInfo.name);
+            auto inputInfo = resources_.info(inputHandle.texture);
+            fmt::format_to(std::back_inserter(out),
+                           "  \"{} v{}\" -> \"{}\" \n",
+                           inputInfo.name,
+                           inputHandle.version,
+                           passInfo.name);
             textures[inputHandle] = inputInfo;
         }
 
         for (const auto &[outputHandle, kind, _] : passInfo.outputs) {
-            auto outputInfo = resources_.info(outputHandle);
-            const std::string color = kind == PassOutputKind::Create ? "darkgreen" : "black";
-            const std::string label = kind == PassOutputKind::Create ? "creates" : "";
+            auto outputInfo = resources_.info(outputHandle.texture);
+            const std::string color = kind == TaskOutputKind::Create ? "darkgreen" : "black";
+            const std::string label = kind == TaskOutputKind::Create ? "creates" : "";
             fmt::format_to(std::back_inserter(out),
-                           "  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
+                           "  \"{}\" -> \"{} v{}\" [style=dashed,color={},label=\"{}\"]\n",
                            passInfo.name,
                            outputInfo.name,
+                           outputHandle.version,
                            color,
                            label);
             textures[outputHandle] = outputInfo;
@@ -156,24 +170,25 @@ void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
     }
 
     for (const auto &[handle, info] : textures) {
-        auto state = resources_.state(handle);
-        const std::string color = ranges::contains(externalInputs_, handle)    ? "blue"
-                                  : ranges::contains(realizedTextures, handle) ? "black"
-                                                                               : "gray";
+        auto state = resources_.state(handle.texture);
+        const std::string color = ranges::contains(externalInputs_, handle) ? "blue"
+                                  : ranges::contains(executionInfo.resources, handle.texture)
+                                      ? "black"
+                                      : "gray";
         const std::string label =
-            fmt::format("{}{}\\n[{}x{}x{} {},{}]",
+            fmt::format("{} v{}{}\\n[{} {},{}]",
                         info.name,
+                        handle.version,
                         state.status == TextureMemoryStatus::External ? " (ext)" : "",
-                        info.size.x,
-                        info.size.y,
-                        info.size.z,
+                        info.size,
                         info.format,
                         state.layout);
         const float penWidth = ranges::contains(outputs_, handle) ? 3.0f : 1.0f;
         fmt::format_to(
             std::back_inserter(out),
-            "  \"{0}\" [shape=rectangle,label=\"{1}\",color={2},fontcolor={2},penwidth={3}]\n",
+            "  \"{0} v{1}\" [shape=rectangle,label=\"{2}\",color={3},fontcolor={3},penwidth={4}]\n",
             info.name,
+            handle.version,
             label,
             color,
             penWidth);
@@ -183,8 +198,7 @@ void Framegraph::dump(const std::vector<RenderTaskHandle> &passes,
     CO_CORE_INFO(out);
 }
 
-std::pair<std::vector<RenderTaskHandle>, std::vector<TextureHandle>>
-Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
+ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResources)
 {
     // counter to assign render passes an increasing execution priority - passes
     // with higher priority should be executed earlier
@@ -192,29 +206,29 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
 
     // first, reorder the information into a more convenient graph representation
     // essentially, in- and out-edges
-    std::unordered_map<TextureHandle, RenderTaskHandle> resourceToPass;
-    std::unordered_multimap<RenderTaskHandle, TextureHandle> passInputs;
-    std::unordered_map<TextureHandle, TextureInfo> textures;
+    std::unordered_map<TransientTextureHandle, RenderTaskHandle> resourceToPass;
+    std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> passInputs;
+    std::unordered_map<TransientTextureHandle, TextureInfo> textures;
     for (const auto &[passHandle, passInfo] : renderTasks_.items()) {
         for (const auto &[inputHandle, _] : passInfo.inputs) {
             passInputs.insert({passHandle, inputHandle});
-            textures[inputHandle] = resources_.info(inputHandle);
+            textures[inputHandle] = resources_.info(inputHandle.texture);
         }
         for (const auto &[outputHandle, kind, _] : passInfo.outputs) {
             resourceToPass[outputHandle] = passHandle;
-            textures[outputHandle] = resources_.info(outputHandle);
+            textures[outputHandle] = resources_.info(outputHandle.texture);
         }
     }
 
     std::vector<TextureHandle> requiredResources; // collects all actually required resources
 
     // flood-fill the graph starting at the resources requested from the outside
-    std::deque<TextureHandle> nextResourcesToResolve{requestedResources.cbegin(),
-                                                     requestedResources.cend()};
+    std::deque<TransientTextureHandle> nextResourcesToResolve{requestedResources.cbegin(),
+                                                              requestedResources.cend()};
     while (!nextResourcesToResolve.empty()) {
         auto nextResource = nextResourcesToResolve.front();
         nextResourcesToResolve.pop_front();
-        requiredResources.push_back(nextResource);
+        requiredResources.push_back(nextResource.texture);
 
         // determine the pass that writes/creates the resource
         auto writingPassIt = resourceToPass.find(nextResource);
@@ -223,26 +237,37 @@ Framegraph::resolve(const std::vector<TextureHandle> &requestedResources)
             if (ranges::contains(externalInputs_, nextResource)) { continue; }
 
             CO_CORE_ERROR(
-                "Could not resolve frame dependency graph: resource '{}' ({}) is not created "
+                "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not created "
                 "by any render pass",
                 textures[nextResource].name,
-                nextResource);
+                nextResource.version,
+                nextResource.texture);
             return {};
         }
 
         RenderTaskHandle writingPass = writingPassIt->second;
-        CO_CORE_TRACE("Resolving resource {}: created/written by render pass {}",
+        CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render pass '{}'",
                       textures[nextResource].name,
+                      nextResource.version,
                       renderTasks_[writingPass].name);
         renderTasks_[writingPass].executionPriority = ++executionPrio;
 
-        // enqueue the inputs of the pass for resolve
+        // mark the resources created by the task as required
+        for (const RenderTaskInfo::OutputDesc &created :
+             renderTasks_[writingPass].outputs | ranges::views::filter([](const auto &outputDesc) {
+                 return outputDesc.kind == TaskOutputKind::Create;
+             })) {
+            requiredResources.push_back(created.handle.texture);
+        }
+
+        // enqueue the inputs of the task for resolution
         auto rng = passInputs.equal_range(writingPass);
         ranges::transform(
             rng.first, rng.second, std::back_inserter(nextResourcesToResolve), [&](const auto &it) {
-                CO_CORE_TRACE("Requesting input resource for {}: {}",
+                CO_CORE_TRACE("Requesting input resource for {}: '{} v{}'",
                               renderTasks_[writingPass].name,
-                              textures[it.second].name);
+                              textures[it.second].name,
+                              it.second.version);
                 return it.second;
             });
     }

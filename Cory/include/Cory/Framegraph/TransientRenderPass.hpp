@@ -73,15 +73,15 @@ class TransientRenderPassBuilder : NoCopy, NoMove {
 
     TransientRenderPassBuilder &shaders(std::vector<ShaderHandle> shaders);
 
-    TransientRenderPassBuilder &attach(TextureHandle handle,
+    TransientRenderPassBuilder &attach(TransientTextureHandle handle,
                                        VkAttachmentLoadOp loadOp,
                                        VkAttachmentStoreOp storeOp,
                                        VkClearColorValue clearValue);
-    TransientRenderPassBuilder &attachDepth(TextureHandle handle,
+    TransientRenderPassBuilder &attachDepth(TransientTextureHandle handle,
                                             VkAttachmentLoadOp loadOp,
                                             VkAttachmentStoreOp storeOp,
                                             float clearValue);
-    TransientRenderPassBuilder &attachStencil(TextureHandle handle,
+    TransientRenderPassBuilder &attachStencil(TransientTextureHandle handle,
                                               VkAttachmentLoadOp loadOp,
                                               VkAttachmentStoreOp storeOp,
                                               uint32_t clearValue);

@@ -3,7 +3,7 @@
 
     <Type Name="Cory::SlotMapHandle">
         <DisplayString Condition="free_ || index_ == 0xFFFFFFFF">{{invalid}}</DisplayString>
-        <DisplayString>{{{index_}/{version_}}}</DisplayString>
+        <DisplayString>{{{index_}_{version_}}}</DisplayString>
         <Expand>
             <Item Name="[index]">index_</Item>
             <Item Name="[version]">version_</Item>

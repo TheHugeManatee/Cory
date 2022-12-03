@@ -24,7 +24,7 @@ class SlotMapHandle {
     SlotMapHandle(uint32_t index, uint32_t version = 0, bool free = false);
     [[nodiscard]] uint32_t index() const noexcept { return index_; }
     [[nodiscard]] uint32_t version() const noexcept { return version_; }
-    [[nodiscard]] bool alive() const noexcept { return !free_; }
+    [[nodiscard]] bool valid() const noexcept { return !free_ && index_ != INVALID_INDEX; }
 
     [[nodiscard]] static SlotMapHandle nextVersion(SlotMapHandle old);
     [[nodiscard]] static SlotMapHandle clearFreeBit(SlotMapHandle handle);
@@ -60,18 +60,21 @@ template <typename T, typename Friend> class PrivateTypedHandle {
      * check a handle for validity. Note: a valid handle does NOT imply that it
      * actually references an alive object in the slot map, use SlotMap::valid() for that!
      */
-    [[nodiscard]] bool valid() const { return handle_.index() != SlotMapHandle::INVALID_INDEX; }
-    operator bool() const { return valid(); }
+    [[nodiscard]] bool valid() const { return handle_.valid(); }
+    explicit operator bool() const { return valid(); }
 
   private:
     friend Friend;
     friend struct std::hash<Cory::PrivateTypedHandle<T, Friend>>;
     friend struct fmt::formatter<Cory::PrivateTypedHandle<T, Friend>>;
-    /* implicit */ PrivateTypedHandle(SlotMapHandle handle)
+    /* implicit */ PrivateTypedHandle(SlotMapHandle handle) // NOLINT
         : handle_{handle}
     {
     }
-    operator SlotMapHandle() const noexcept { return handle_; }
+    /*implicit*/ operator SlotMapHandle() const noexcept // NOLINT
+    {
+        return handle_;
+    }
     SlotMapHandle handle_{};
 };
 
@@ -89,7 +92,7 @@ inline SlotMapHandle::SlotMapHandle(uint32_t index, uint32_t version, bool free)
 }
 inline SlotMapHandle SlotMapHandle::nextVersion(SlotMapHandle old)
 {
-    return {old.index(), old.version() + 1, old.alive()};
+    return {old.index(), old.version() + 1, old.free_ > 0};
 }
 inline SlotMapHandle SlotMapHandle::clearFreeBit(SlotMapHandle handle)
 {
@@ -106,7 +109,9 @@ template <> struct fmt::formatter<Cory::SlotMapHandle> {
     template <typename ParseContext> constexpr auto parse(ParseContext &ctx) { return ctx.end(); }
     auto format(Cory::SlotMapHandle h, format_context &ctx)
     {
-        return fmt::format_to(ctx.out(), "{}({}{})", h.index(), h.version(), h.alive() ? "" : "F");
+        if (h.valid()) { return fmt::format_to(ctx.out(), "{{{},{}}}", h.index(), h.version()); }
+
+        return fmt::format_to(ctx.out(), "{{invalid}}");
     }
 };
 
@@ -114,7 +119,7 @@ template <> struct fmt::formatter<Cory::SlotMapHandle> {
 template <> struct std::hash<Cory::SlotMapHandle> {
     std::size_t operator()(const Cory::SlotMapHandle &s) const noexcept
     {
-        return Cory::hashCompose(0, s.alive(), s.index(), s.version());
+        return Cory::hashCompose(0, s.valid(), s.index(), s.version());
     }
 };
 

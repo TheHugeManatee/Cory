@@ -207,13 +207,11 @@ void CubeDemoApplication::run()
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
         fg.execute(*frameCtx.commandBuffer);
 
-        // note - currently, we're letting imgui handle the final resolve and transition to
-        // present_layout
-        imguiLayer_->recordFrameCommands(*ctx_, frameCtx);
-
         frameCtx.commandBuffer->end();
 
         window_->submitAndPresent(frameCtx);
+
+        fg.retireImmediate(); // TODO need to retire much later..
 
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
@@ -253,13 +251,16 @@ void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
     auto mainPass = mainCubeRenderTask(
         framegraph.declareTask("Cube Render Pass"), windowColorTarget, windowDepthTarget, frameCtx);
 
-    auto [outInfo, outState] = framegraph.declareOutput(mainPass.output().colorOut);
+    auto imguiPass =
+        imguiRenderTask(framegraph.declareTask("ImGui"), mainPass.output().colorOut, frameCtx);
+
+    auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
 
-Cory::Framegraph::RenderPassDeclaration<CubeDemoApplication::CubePassOutputs>
+Cory::Framegraph::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
 CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
-                                        TextureHandle colorTarget,
-                                        TextureHandle depthTarget,
+                                        TransientTextureHandle colorTarget,
+                                        TransientTextureHandle depthTarget,
                                         const Cory::FrameContext &frameCtx)
 {
 
@@ -290,7 +291,7 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
                                      clearDepth)
                         .finish();
 
-    co_yield CubePassOutputs{.colorOut = writtenColorHandle};
+    co_yield PassOutputs{.colorOut = writtenColorHandle};
     RenderInput renderApi = co_await builder.finishDeclaration();
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
@@ -344,6 +345,32 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
     }
 
     cubePass.end(*renderApi.cmd);
+}
+
+Cory::Framegraph::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
+CubeDemoApplication::imguiRenderTask(Cory::Framegraph::Builder builder,
+                                     TransientTextureHandle colorTarget,
+                                     const Cory::FrameContext &frameCtx)
+{
+    auto [writtenColorHandle, colorInfo] =
+        builder.readWrite(colorTarget,
+                          // read
+                          {.layout = Cory::Framegraph::Layout::Attachment,
+                           .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+                           .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT},
+                          // write
+                          {.layout = Cory::Framegraph::Layout::Attachment,
+                           .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                           .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
+
+    co_yield PassOutputs{.colorOut = writtenColorHandle};
+    RenderInput renderApi = co_await builder.finishDeclaration();
+
+    // note - currently, we're letting imgui handle the final resolve and transition to
+    // present_layout
+    imguiLayer_->recordFrameCommands(*ctx_, frameCtx.index, renderApi.cmd->handle());
 }
 
 void CubeDemoApplication::createGeometry()
@@ -439,7 +466,8 @@ void CubeDemoApplication::drawImguiControls()
 
                 auto h = hist | ranges::views::transform([](auto v) { return float(v); }) |
                          ranges::to<std::vector>;
-                ImGui::PlotLines("", h.data(), gsl::narrow<int>(h.size()));
+                ImGui::PlotLines(
+                    "", h.data(), gsl::narrow<int>(h.size()), 0, nullptr, 0.0f, float(stats.max));
             }
             ImGui::EndTable();
         }
@@ -452,7 +480,7 @@ void CubeDemoApplication::setupCameraCallbacks()
 
     window_->onMouseMoved.connect([this](glm::vec2 pos) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        const auto wnd = window_->handle();
+        auto *const wnd = window_->handle();
         const Cory::CameraManipulator::MouseButton mouseButton =
             (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
                 ? Cory::CameraManipulator::MouseButton::Left

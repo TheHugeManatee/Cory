@@ -5,7 +5,7 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/RenderPassDeclaration.hpp>
+#include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
@@ -27,9 +27,9 @@ namespace Vk = Magnum::Vk;
 namespace passes {
 
 struct DepthPassOutputs {
-    FG::TextureHandle depthTexture;
+    FG::TransientTextureHandle depthTexture;
 };
-FG::RenderPassDeclaration<DepthPassOutputs>
+FG::RenderTaskDeclaration<DepthPassOutputs>
 depthPass(Context &ctx, FG::Builder builder, glm::u32vec3 size)
 {
     auto depth = builder.create("depthTexture",
@@ -77,10 +77,10 @@ void main() {
 }
 
 struct DepthDebugOut {
-    FG::TextureHandle debugColor;
+    FG::TransientTextureHandle debugColor;
 };
-FG::RenderPassDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
-                                                    FG::TextureHandle depthInput)
+FG::RenderTaskDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
+                                                    FG::TransientTextureHandle depthInput)
 {
     FG::Builder builder = graph.declareTask("DepthDebug");
 
@@ -104,10 +104,10 @@ FG::RenderPassDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
 }
 
 struct NormalDebugOut {
-    FG::TextureHandle debugColor;
+    FG::TransientTextureHandle debugColor;
 };
-FG::RenderPassDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
-                                                      FG::TextureHandle normalInput)
+FG::RenderTaskDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
+                                                      FG::TransientTextureHandle normalInput)
 {
     FG::Builder builder = graph.declareTask("NormalDebug");
 
@@ -131,11 +131,12 @@ FG::RenderPassDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
 }
 
 struct DebugOut {
-    FG::TextureHandle debugColor;
+    FG::TransientTextureHandle debugColor;
 };
-FG::RenderPassDeclaration<DebugOut> debugGeneral(FG::Framegraph &graph,
-                                                 std::vector<FG::TextureHandle> debugTextures,
-                                                 gsl::index debugViewIndex)
+FG::RenderTaskDeclaration<DebugOut>
+debugGeneral(FG::Framegraph &graph,
+             std::vector<FG::TransientTextureHandle> debugTextures,
+             gsl::index debugViewIndex)
 {
     FG::Builder builder = graph.declareTask("GeneralDebug");
 
@@ -160,10 +161,11 @@ FG::RenderPassDeclaration<DebugOut> debugGeneral(FG::Framegraph &graph,
 }
 
 struct MainOut {
-    FG::TextureHandle color;
-    FG::TextureHandle normal;
+    FG::TransientTextureHandle color;
+    FG::TransientTextureHandle normal;
 };
-FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHandle depthInput)
+FG::RenderTaskDeclaration<MainOut> mainPass(FG::Framegraph &graph,
+                                            FG::TransientTextureHandle depthInput)
 {
     FG::Builder builder = graph.declareTask("MainPass");
 
@@ -200,11 +202,11 @@ FG::RenderPassDeclaration<MainOut> mainPass(FG::Framegraph &graph, FG::TextureHa
 }
 
 struct PostProcessOut {
-    FG::TextureHandle color;
+    FG::TransientTextureHandle color;
 };
-FG::RenderPassDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
-                                                      FG::TextureHandle currentColorInput,
-                                                      FG::TextureHandle previousColorInput)
+FG::RenderTaskDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
+                                                      FG::TransientTextureHandle currentColorInput,
+                                                      FG::TransientTextureHandle previousColorInput)
 {
     FG::Builder builder = graph.declareTask("Postprocess");
 
@@ -248,7 +250,7 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
                         Vk::MemoryFlag::DeviceLocal};
     Vk::ImageView prevFrameView{t.ctx().device(), Vk::ImageViewCreateInfo2D{prevFrame}};
 
-    const FG::TextureHandle prevFrameColor = graph.declareInput(
+    const FG::TransientTextureHandle prevFrameColor = graph.declareInput(
         {"previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
         FG::Layout::Attachment,
         VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -282,8 +284,12 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
                 resultInfo.size.z);
 
     Magnum::Vk::CommandBuffer buffer = t.ctx().commandPool().allocate();
+    nameVulkanObject(t.ctx().device(), buffer, "Framegraph Test");
 
     buffer.begin();
-    graph.execute(buffer);
+
+    auto g = graph.execute(buffer);
+    graph.dump(g);
+
     buffer.end();
 }

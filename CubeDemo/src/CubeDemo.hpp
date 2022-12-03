@@ -4,7 +4,7 @@
 #include <Cory/Application/CameraManipulator.hpp>
 #include <Cory/Application/Common.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/RenderPassDeclaration.hpp>
+#include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
@@ -27,7 +27,7 @@ struct CubeUBO {
 
 using namespace Cory::Framegraph;
 
-class CubeDemoApplication : public Cory::Application {
+class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove {
   public:
     CubeDemoApplication(int argc, char **argv);
     ~CubeDemoApplication();
@@ -41,17 +41,21 @@ class CubeDemoApplication : public Cory::Application {
     void createPipeline();
     void defineRenderPasses(Framegraph &framegraph, const Cory::FrameContext &frameCtx);
 
-    struct CubePassOutputs {
-        Cory::Framegraph::TextureHandle colorOut;
+    struct PassOutputs {
+        Cory::Framegraph::TransientTextureHandle colorOut;
     };
-    Cory::Framegraph::RenderPassDeclaration<CubePassOutputs>
+    Cory::Framegraph::RenderTaskDeclaration<PassOutputs>
     mainCubeRenderTask(Cory::Framegraph::Builder builder,
-                       Cory::Framegraph::TextureHandle colorTarget,
-                       Cory::Framegraph::TextureHandle depthTarget,
+                       Cory::Framegraph::TransientTextureHandle colorTarget,
+                       Cory::Framegraph::TransientTextureHandle depthTarget,
                        const Cory::FrameContext &ctx);
+    Cory::Framegraph::RenderTaskDeclaration<PassOutputs>
+    imguiRenderTask(Cory::Framegraph::Builder builder,
+                    Cory::Framegraph::TransientTextureHandle colorTarget,
+                    const Cory::FrameContext &ctx);
 
     static double now();
-    double getElapsedTimeSeconds() const;
+    [[nodiscard]] double getElapsedTimeSeconds() const;
 
     void drawImguiControls();
 

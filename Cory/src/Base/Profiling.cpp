@@ -4,7 +4,7 @@
 
 namespace Cory {
 
-std::unordered_map<std::string, Profiler::Record> Profiler::s_records;
+std::map<std::string, Profiler::Record> Profiler::s_records;
 
 void Profiler::PushCounter(std::string &name, int64_t deltaNs) { s_records[name].push(deltaNs); }
 

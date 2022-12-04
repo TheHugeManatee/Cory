@@ -235,7 +235,7 @@ FG::RenderTaskDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
 }
 } // namespace passes
 
-TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
+TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 {
     testing::VulkanTester t;
 

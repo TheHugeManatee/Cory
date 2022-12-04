@@ -289,7 +289,7 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
     buffer.begin();
 
     auto g = graph.record(buffer);
-    graph.dump(g);
+    CO_APP_INFO(graph.dump(g));
 
     buffer.end();
 }

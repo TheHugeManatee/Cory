@@ -49,8 +49,17 @@ struct RenderTaskExecutionAwaiter {
 };
 
 struct ExecutionInfo {
-    std::vector<RenderTaskHandle> passes;
+    struct TransitionInfo {
+        enum class Direction { ResourceToTask, TaskToResource };
+        Direction direction;
+        RenderTaskHandle task;
+        TransientTextureHandle resource;
+        TextureState stateBefore;
+        TextureState stateAfter;
+    };
+    std::vector<RenderTaskHandle> tasks;
     std::vector<TextureHandle> resources;
+    std::vector<TransitionInfo> transitions;
 };
 
 /**
@@ -87,7 +96,7 @@ class Framegraph : NoCopy, NoMove {
      */
     std::pair<TextureInfo, TextureState> declareOutput(TransientTextureHandle handle);
 
-    void dump(const ExecutionInfo &info);
+    [[nodiscard]] std::string dump(const ExecutionInfo &info);
 
   private: /* member functions */
     RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info)
@@ -103,9 +112,9 @@ class Framegraph : NoCopy, NoMove {
     }
 
     /**
-     * @brief resolve which render passes need to be executed for requested resources
+     * @brief resolve which render tasks need to be executed for requested resources
      *
-     * Returns the passes that need to be executed in the given order, and all resources that
+     * Returns the tasks that need to be executed in the given order, and all resources that
      * are required to execute said resources.
      * Updates the internal information about which render pass is required.
      */
@@ -114,9 +123,12 @@ class Framegraph : NoCopy, NoMove {
     ExecutionInfo compile();
     void executePass(CommandList &cmd, RenderTaskHandle handle);
 
+    cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>> renderTasks() const;
+
   private:                             /* members */
     friend Builder;                    // convenience so it can call finishPassDeclaration
     friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
+    friend FramegraphVisualizer;       // accesses all the internals
 
     Context *ctx_;
     TextureResourceManager resources_;

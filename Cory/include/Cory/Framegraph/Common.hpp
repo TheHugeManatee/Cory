@@ -14,6 +14,7 @@ class Framegraph;
 class Builder;
 class TextureResourceManager;
 class CommandList;
+class FramegraphVisualizer;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
 enum class DepthTest {

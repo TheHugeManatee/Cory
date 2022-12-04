@@ -210,7 +210,7 @@ void CubeDemoApplication::run()
         window_->submitAndPresent(frameCtx);
 
         if (dumpNextFramegraph_) {
-            fg.dump(execInfo);
+            CO_APP_INFO(fg.dump(execInfo));
             dumpNextFramegraph_ = false;
         }
 

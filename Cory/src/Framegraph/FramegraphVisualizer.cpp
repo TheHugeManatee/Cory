@@ -17,12 +17,16 @@ struct Index {
         RenderTaskInfo info;
         bool executed{false};
     };
-    struct DependencyInfo {};
+    struct DependencyInfo {
+        TransientTextureHandle resource;
+        RenderTaskHandle task;
+    };
 
     std::unordered_map<TransientTextureHandle, TextureData> textures;
     std::unordered_map<RenderTaskHandle, TaskData> tasks;
     std::vector<DependencyInfo> inputDependencies;
     std::vector<DependencyInfo> outputDependencies;
+    std::vector<DependencyInfo> createDependencies;
 };
 
 void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInfo) const
@@ -36,22 +40,39 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
 
             index.textures[inputHandle].handle = inputHandle;
             index.textures[inputHandle].info = inputInfo;
+
+            index.inputDependencies.emplace_back(Index::DependencyInfo{
+                .resource = inputHandle,
+                .task = passHandle,
+            });
         }
 
         for (const auto &[outputHandle, kind, _] : passInfo.outputs) {
             auto outputInfo = graph_.resources_.info(outputHandle.texture);
-            const std::string color = kind == TaskOutputKind::Create ? "darkgreen" : "black";
-            const std::string label = kind == TaskOutputKind::Create ? "creates" : "";
 
             index.textures[outputHandle].handle = outputHandle;
             index.textures[outputHandle].info = outputInfo;
+
+            (kind == TaskOutputKind::Create ? index.createDependencies : index.outputDependencies)
+                .emplace_back(Index::DependencyInfo{
+                    .resource = outputHandle,
+                    .task = passHandle,
+                });
         }
     }
+    // mark all external inputs
     for (auto externalInput : graph_.externalInputs_) {
         index.textures.at(externalInput).external = true;
     }
+    // mark all output resources
     for (auto externalOutput : graph_.outputs_) {
         index.textures.at(externalOutput).output = true;
+    }
+    // mark all texture entries that refer to an allocated resource as allocated
+    for (auto allocated : executionInfo.resources) {
+        for (auto &[h, data] : index.textures) {
+            if (data.handle.texture == allocated) { data.allocated = true; }
+        }
     }
 }
 
@@ -81,38 +102,18 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
                                                                   : "gray";
         append(
             "  \"{0}\" [shape=ellipse,color={1},fontcolor={1}]\n", make_label(taskData), passColor);
-
-        for (const auto &[inputHandle, accessInfo] : taskData.info.inputs) {
-            const auto &textureData = index.textures[inputHandle];
-            append("  \"{}\" -> \"{}\" \n", make_label(textureData), make_label(taskData));
-        }
-
-        for (const auto &[outputHandle, kind, _] : taskData.info.outputs) {
-            const auto &textureData = index.textures[outputHandle];
-            const std::string color = kind == TaskOutputKind::Create ? "darkgreen" : "black";
-            const std::string label = kind == TaskOutputKind::Create ? "creates" : "";
-            append("  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
-                   make_label(taskData),
-                   make_label(textureData),
-                   color,
-                   label);
-        }
     }
 
     for (const auto &[handle, textureData] : index.textures) {
-        auto state = graph_.resources_.state(handle.texture);
-        const std::string color = ranges::contains(graph_.externalInputs_, handle) ? "blue"
-                                  : ranges::contains(executionInfo.resources, handle.texture)
-                                      ? "black"
-                                      : "gray";
-        const std::string label =
-            fmt::format("{} {}\\n[{} {},{}]",
-                        make_label(textureData),
-                        state.status == TextureMemoryStatus::External ? " (ext)" : "",
-                        textureData.info.size,
-                        textureData.info.format,
-                        state.layout);
-        const float penWidth = ranges::contains(graph_.outputs_, handle) ? 3.0f : 1.0f;
+        const std::string color = textureData.external    ? "blue"
+                                  : textureData.allocated ? "black"
+                                                          : "gray";
+        const std::string label = fmt::format("{} {}\\n[{} {}]",
+                                              make_label(textureData),
+                                              textureData.external ? " (ext)" : "",
+                                              textureData.info.size,
+                                              textureData.info.format);
+        const float penWidth = textureData.output ? 3.0f : 1.0f;
         append("  \"{0}\" [shape=rectangle,label=\"{1}\",color={2},fontcolor={2},penwidth={3}]\n",
                make_label(textureData),
                label,
@@ -120,8 +121,32 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
                penWidth);
     }
 
-    out += "}\n";
+    for (const Index::DependencyInfo &dep : index.inputDependencies) {
+        append("  \"{}\" -> \"{}\" \n",
+               make_label(index.textures[dep.resource]),
+               make_label(index.tasks[dep.task]));
+    }
+    for (const Index::DependencyInfo &dep : index.createDependencies) {
 
+        const std::string color = "darkgreen";
+        const std::string label = "creates";
+        append("  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
+               make_label(index.tasks[dep.task]),
+               make_label(index.textures[dep.resource]),
+               color,
+               label);
+    }
+    for (const Index::DependencyInfo &dep : index.outputDependencies) {
+        const std::string color = "black";
+        const std::string label = "";
+        append("  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
+               make_label(index.tasks[dep.task]),
+               make_label(index.textures[dep.resource]),
+               color,
+               label);
+    }
+
+    out += "}\n";
     return out;
 }
 

@@ -43,8 +43,8 @@ struct RenderInput {
 struct RenderTaskExecutionAwaiter {
     RenderTaskHandle passHandle;
     Framegraph &fg;
-    constexpr bool await_ready() const noexcept { return false; }
-    RenderInput await_resume() const noexcept;
+    [[nodiscard]] constexpr bool await_ready() const noexcept { return false; }
+    [[nodiscard]] RenderInput await_resume() const noexcept;
     void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
 };
 
@@ -63,7 +63,7 @@ class Framegraph : NoCopy, NoMove {
     explicit Framegraph(Context &ctx);
     ~Framegraph();
 
-    ExecutionInfo execute(Magnum::Vk::CommandBuffer &cmdBuffer);
+    ExecutionInfo record(Magnum::Vk::CommandBuffer &cmdBuffer);
 
     void retireImmediate();
 

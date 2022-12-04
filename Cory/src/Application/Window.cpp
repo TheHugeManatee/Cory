@@ -128,6 +128,7 @@ std::unique_ptr<Swapchain> Window::createSwapchain()
 
 FrameContext Window::nextSwapchainImage()
 {
+    const Cory::ScopeTimer s{"Window/NextSwapchainImage"};
     FrameContext frameCtx = swapchain_->nextImage();
 
     // if the swapchain needs resizing, we wait for
@@ -166,21 +167,27 @@ FrameContext Window::nextSwapchainImage()
 }
 void Window::submitAndPresent(FrameContext &frameCtx)
 {
-    std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
-    std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
+    {
+        const Cory::ScopeTimer s{"Window/Submit"};
 
-    Magnum::Vk::SubmitInfo submitInfo{};
-    submitInfo.setCommandBuffers({*frameCtx.commandBuffer});
-    submitInfo->pWaitSemaphores = waitSemaphores.data();
-    submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-    submitInfo->pWaitDstStageMask = waitStages.data();
-    submitInfo->pSignalSemaphores = signalSemaphores.data();
-    submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+        std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
+        std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
 
-    ctx_.graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
+        Magnum::Vk::SubmitInfo submitInfo{};
+        submitInfo.setCommandBuffers({*frameCtx.commandBuffer});
+        submitInfo->pWaitSemaphores = waitSemaphores.data();
+        submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+        submitInfo->pWaitDstStageMask = waitStages.data();
+        submitInfo->pSignalSemaphores = signalSemaphores.data();
+        submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
 
-    swapchain_->present(frameCtx);
+        ctx_.graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
+    }
+    {
+        const Cory::ScopeTimer s{"Window/Present"};
+        swapchain_->present(frameCtx);
+    }
 
     if (fpsCounter_.lap()) {
         auto s = fpsCounter_.stats();
@@ -214,7 +221,7 @@ void Window::createColorAndDepthResources()
 
     // depth
     depthImages_ =
-        swapchain().images() | ranges::views::transform([&](const Vk::Image &colorImage) {
+        swapchain().images() | ranges::views::transform([&](const Vk::Image &) {
             auto usage = Vk::ImageUsage::DepthStencilAttachment;
             return Vk::Image{ctx_.device(),
                              Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},

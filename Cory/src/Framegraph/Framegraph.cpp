@@ -34,7 +34,7 @@ Framegraph::Framegraph(Context &ctx)
 
 Framegraph::~Framegraph() { retireImmediate(); }
 
-ExecutionInfo Framegraph::execute(Vk::CommandBuffer &cmdBuffer)
+ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
 {
     const Cory::ScopeTimer s1{"Framegraph/Execute"};
     const auto executionInfo = compile();
@@ -130,7 +130,8 @@ void Framegraph::dump(const ExecutionInfo &executionInfo)
 {
     std::string out{"digraph G {\n"
                     "rankdir=LR;\n"
-                    "node [fontsize=12,fontname=\"Courier New\"]\n"};
+                    "node [fontsize=12,fontname=\"Courier New\"]\n"
+                    "edge [fontsize=10,fontname=\"Courier New\"]\n"};
 
     std::unordered_map<TransientTextureHandle, TextureInfo> textures;
 

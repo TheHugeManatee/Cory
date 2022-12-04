@@ -74,6 +74,7 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     std::vector<Magnum::Vk::DescriptorSet> descriptorSets_;
     double startupTime_;
+    bool dumpNextFramegraph_{false};
 
     Cory::CameraManipulator camera_;
 };

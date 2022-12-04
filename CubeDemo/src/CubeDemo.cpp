@@ -199,17 +199,20 @@ void CubeDemoApplication::run()
         // TODO process events?
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
-        ImGui::ShowDemoWindow();
-
         drawImguiControls();
 
         defineRenderPasses(fg, frameCtx);
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
-        fg.execute(*frameCtx.commandBuffer);
+        auto execInfo = fg.record(*frameCtx.commandBuffer);
 
         frameCtx.commandBuffer->end();
 
         window_->submitAndPresent(frameCtx);
+
+        if (dumpNextFramegraph_) {
+            fg.dump(execInfo);
+            dumpNextFramegraph_ = false;
+        }
 
         fg.retireImmediate(); // TODO need to retire much later..
 
@@ -392,6 +395,7 @@ void CubeDemoApplication::drawImguiControls()
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
     if (ImGui::Begin("Animation Params")) {
+        if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
         if (ImGui::Button("Restart")) { startupTime_ = now(); }
 
         CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);

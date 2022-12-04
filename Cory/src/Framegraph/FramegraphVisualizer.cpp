@@ -1,7 +1,9 @@
 #include "FramegraphVisualizer.h"
 
 #include <Cory/Framegraph/TextureManager.hpp>
+
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/find_if.hpp>
 
 namespace Cory::Framegraph {
 
@@ -20,6 +22,7 @@ struct Index {
     struct DependencyInfo {
         TransientTextureHandle resource;
         RenderTaskHandle task;
+        std::optional<ExecutionInfo::TransitionInfo> transitionInfo;
     };
 
     std::unordered_map<TransientTextureHandle, TextureData> textures;
@@ -31,9 +34,20 @@ struct Index {
 
 void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInfo) const
 {
-    for (const auto &[passHandle, passInfo] : graph_.renderTasks()) {
-        index.tasks[passHandle].info = passInfo;
-        index.tasks[passHandle].executed = ranges::contains(executionInfo.tasks, passHandle);
+    auto findTransitionInfo =
+        [&](TransientTextureHandle resource,
+            RenderTaskHandle task) -> std::optional<ExecutionInfo::TransitionInfo> {
+        auto it = ranges::find_if(executionInfo.transitions,
+                                  [&](const ExecutionInfo::TransitionInfo &info) {
+                                      return info.resource == resource && info.task == task;
+                                  });
+        if (it == executionInfo.transitions.end()) { return std::nullopt; }
+        return *it;
+    };
+
+    for (const auto &[taskHandle, passInfo] : graph_.renderTasks()) {
+        index.tasks[taskHandle].info = passInfo;
+        index.tasks[taskHandle].executed = ranges::contains(executionInfo.tasks, taskHandle);
 
         for (const auto &[inputHandle, _] : passInfo.inputs) {
             auto inputInfo = graph_.resources_.info(inputHandle.texture);
@@ -43,8 +57,8 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
 
             index.inputDependencies.emplace_back(Index::DependencyInfo{
                 .resource = inputHandle,
-                .task = passHandle,
-            });
+                .task = taskHandle,
+                .transitionInfo = findTransitionInfo(inputHandle, taskHandle)});
         }
 
         for (const auto &[outputHandle, kind, _] : passInfo.outputs) {
@@ -56,8 +70,8 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
             (kind == TaskOutputKind::Create ? index.createDependencies : index.outputDependencies)
                 .emplace_back(Index::DependencyInfo{
                     .resource = outputHandle,
-                    .task = passHandle,
-                });
+                    .task = taskHandle,
+                    .transitionInfo = findTransitionInfo(outputHandle, taskHandle)});
         }
     }
     // mark all external inputs
@@ -94,6 +108,15 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
             return fmt::format("{} v{}", thing.info.name, thing.handle.version);
         }
         if constexpr (std::is_same_v<ThingType, Index::TaskData>) { return thing.info.name; }
+        if constexpr (std::is_same_v<ThingType, Index::DependencyInfo>) {
+            std::string label;
+            if (thing.transitionInfo) {
+                label = fmt::format("{} ➡️ {}",
+                                    thing.transitionInfo->stateBefore.layout,
+                                    thing.transitionInfo->stateAfter.layout);
+            }
+            return label;
+        }
     };
 
     for (const auto &[h, taskData] : index.tasks) {
@@ -122,14 +145,16 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     }
 
     for (const Index::DependencyInfo &dep : index.inputDependencies) {
-        append("  \"{}\" -> \"{}\" \n",
+
+        append("  \"{}\" -> \"{}\" [label=\"{}\"]\n",
                make_label(index.textures[dep.resource]),
-               make_label(index.tasks[dep.task]));
+               make_label(index.tasks[dep.task]),
+               make_label(dep));
     }
     for (const Index::DependencyInfo &dep : index.createDependencies) {
 
         const std::string color = "darkgreen";
-        const std::string label = "creates";
+        const std::string label = make_label(dep);
         append("  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
                make_label(index.tasks[dep.task]),
                make_label(index.textures[dep.resource]),
@@ -138,8 +163,8 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     }
     for (const Index::DependencyInfo &dep : index.outputDependencies) {
         const std::string color = "black";
-        const std::string label = "";
-        append("  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
+        const std::string label = make_label(dep);
+        append("  \"{}\" -> \"{}\" [color={},label=\"{}\"]\n",
                make_label(index.tasks[dep.task]),
                make_label(index.textures[dep.resource]),
                color,

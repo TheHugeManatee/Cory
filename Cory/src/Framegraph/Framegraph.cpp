@@ -11,6 +11,7 @@
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/transform.hpp>
 #include <range/v3/range/conversion.hpp>
+#include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
@@ -38,7 +39,7 @@ Framegraph::~Framegraph() { retireImmediate(); }
 ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
 {
     const Cory::ScopeTimer s1{"Framegraph/Execute"};
-    const auto executionInfo = compile();
+    auto executionInfo = compile();
 
     const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
     CommandList cmd{*ctx_, cmdBuffer};
@@ -47,7 +48,9 @@ ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
     auto resetCmdList = gsl::finally([this]() { commandListInProgress_ = nullptr; });
 
     for (const auto &handle : executionInfo.tasks) {
-        executePass(cmd, handle);
+        auto transitions = executePass(cmd, handle);
+        executionInfo.transitions.insert(
+            executionInfo.transitions.end(), transitions.begin(), transitions.end());
     }
     return executionInfo;
 }
@@ -64,20 +67,34 @@ void Framegraph::retireImmediate()
     renderTasks_.clear();
 }
 
-void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
+std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &cmd,
+                                                                   RenderTaskHandle handle)
 {
+    std::vector<ExecutionInfo::TransitionInfo> transitions;
     const RenderTaskInfo &rpInfo = renderTasks_[handle];
     const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
     // handle input resource transitions
-    for (auto input : rpInfo.inputs) {
+    auto inputsAndCreatedOutputs = ranges::views::concat(
+        rpInfo.inputs, rpInfo.outputs | ranges::views::filter([](const auto &desc) {
+                           return desc.kind == TaskOutputKind::Create;
+                       }) | ranges::views::transform([](const auto &desc) {
+                           return RenderTaskInfo::InputDesc{.handle = desc.handle,
+                                                            .accessInfo = desc.accessInfo};
+                       }));
+    for (auto input : inputsAndCreatedOutputs) {
+        ExecutionInfo::TransitionInfo info{
+            .direction = ExecutionInfo::TransitionInfo::Direction::ResourceToTask,
+            .task = handle,
+            .resource = input.handle,
+            .stateBefore = resources_.state(input.handle.texture),
+            .stateAfter = {}};
+
         resources_.readBarrier(cmd.handle(), input.handle.texture, input.accessInfo);
-    }
-    for (auto input : rpInfo.outputs | ranges::views::filter([](const auto &desc) {
-                          return desc.kind == TaskOutputKind::Create;
-                      })) {
-        resources_.readBarrier(cmd.handle(), input.handle.texture, input.accessInfo);
+
+        info.stateAfter = resources_.state(input.handle.texture);
+        transitions.push_back(info);
     }
 
     CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
@@ -93,6 +110,8 @@ void Framegraph::executePass(CommandList &cmd, RenderTaskHandle handle)
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
                    "points! A render task should only have a single co_yield and should wait on "
                    "the builder's finishPassDeclaration() exactly once!");
+
+    return transitions;
 }
 
 TransientTextureHandle Framegraph::declareInput(TextureInfo info,

@@ -118,10 +118,11 @@ class Framegraph : NoCopy, NoMove {
      * are required to execute said resources.
      * Updates the internal information about which render pass is required.
      */
-    ExecutionInfo resolve(const std::vector<TransientTextureHandle> &requestedResources);
+    [[nodiscard]] ExecutionInfo resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
-    ExecutionInfo compile();
-    void executePass(CommandList &cmd, RenderTaskHandle handle);
+    [[nodiscard]] ExecutionInfo compile();
+    [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandList &cmd,
+                                                           RenderTaskHandle handle);
 
     cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>> renderTasks() const;
 

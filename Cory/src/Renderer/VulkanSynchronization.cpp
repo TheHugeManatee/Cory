@@ -69,7 +69,7 @@ typedef struct ThsvsVkAccessInfo {
     VkImageLayout           imageLayout;
 } ThsvsVkAccessInfo;
 
-const ThsvsVkAccessInfo ThsvsAccessMap[THSVS_NUM_ACCESS_TYPES] = {
+const ThsvsVkAccessInfo ThsvsAccessMap[static_cast<uint32_t>(AccessType::NUM_ACCESS_TYPES)] = {
     // THSVS_ACCESS_NONE
     {   0,
      0,
@@ -374,7 +374,7 @@ const ThsvsVkAccessInfo ThsvsAccessMap[THSVS_NUM_ACCESS_TYPES] = {
 
 void thsvsGetAccessInfo(
     uint32_t               accessCount,
-    const ThsvsAccessType* pAccesses,
+    const AccessType* pAccesses,
     VkPipelineStageFlags*  pStageMask,
     VkAccessFlags*         pAccessMask,
     VkImageLayout*         pImageLayout,
@@ -387,7 +387,7 @@ void thsvsGetAccessInfo(
 
     for (uint32_t i = 0; i < accessCount; ++i)
     {
-        ThsvsAccessType access = pAccesses[i];
+        AccessType access = pAccesses[i];
         const ThsvsVkAccessInfo* pAccessInfo = &ThsvsAccessMap[access];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -402,7 +402,7 @@ void thsvsGetAccessInfo(
 
         *pStageMask |= pAccessInfo->stageMask;
 
-        if (access > THSVS_END_OF_READ_ACCESS)
+        if (access > AccessType::END_OF_READ_ACCESS)
             *pHasWriteAccess = true;
 
         *pAccessMask |= pAccessInfo->accessMask;
@@ -433,7 +433,7 @@ void thsvsGetVulkanMemoryBarrier(
 
     for (uint32_t i = 0; i < thBarrier.prevAccessCount; ++i)
     {
-        ThsvsAccessType prevAccess = thBarrier.pPrevAccesses[i];
+        AccessType prevAccess = thBarrier.pPrevAccesses[i];
         const ThsvsVkAccessInfo* pPrevAccessInfo = &ThsvsAccessMap[prevAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -449,13 +449,13 @@ void thsvsGetVulkanMemoryBarrier(
         *pSrcStages |= pPrevAccessInfo->stageMask;
 
         // Add appropriate availability operations - for writes only.
-        if (prevAccess > THSVS_END_OF_READ_ACCESS)
+        if (prevAccess > AccessType::END_OF_READ_ACCESS)
             pVkBarrier->srcAccessMask |= pPrevAccessInfo->accessMask;
     }
 
     for (uint32_t i = 0; i < thBarrier.nextAccessCount; ++i)
     {
-        ThsvsAccessType nextAccess = thBarrier.pNextAccesses[i];
+        AccessType nextAccess = thBarrier.pNextAccesses[i];
         const ThsvsVkAccessInfo* pNextAccessInfo = &ThsvsAccessMap[nextAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -507,7 +507,7 @@ void thsvsGetVulkanBufferMemoryBarrier(
 
     for (uint32_t i = 0; i < thBarrier.prevAccessCount; ++i)
     {
-        ThsvsAccessType prevAccess = thBarrier.pPrevAccesses[i];
+        AccessType prevAccess = thBarrier.pPrevAccesses[i];
         const ThsvsVkAccessInfo* pPrevAccessInfo = &ThsvsAccessMap[prevAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -523,13 +523,13 @@ void thsvsGetVulkanBufferMemoryBarrier(
         *pSrcStages |= pPrevAccessInfo->stageMask;
 
         // Add appropriate availability operations - for writes only.
-        if (prevAccess > THSVS_END_OF_READ_ACCESS)
+        if (prevAccess > AccessType::END_OF_READ_ACCESS)
             pVkBarrier->srcAccessMask |= pPrevAccessInfo->accessMask;
     }
 
     for (uint32_t i = 0; i < thBarrier.nextAccessCount; ++i)
     {
-        ThsvsAccessType nextAccess = thBarrier.pNextAccesses[i];
+        AccessType nextAccess = thBarrier.pNextAccesses[i];
         const ThsvsVkAccessInfo* pNextAccessInfo = &ThsvsAccessMap[nextAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -579,7 +579,7 @@ void thsvsGetVulkanImageMemoryBarrier(
 
     for (uint32_t i = 0; i < thBarrier.prevAccessCount; ++i)
     {
-        ThsvsAccessType prevAccess = thBarrier.pPrevAccesses[i];
+        AccessType prevAccess = thBarrier.pPrevAccesses[i];
         const ThsvsVkAccessInfo* pPrevAccessInfo = &ThsvsAccessMap[prevAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -595,7 +595,7 @@ void thsvsGetVulkanImageMemoryBarrier(
         *pSrcStages |= pPrevAccessInfo->stageMask;
 
         // Add appropriate availability operations - for writes only.
-        if (prevAccess > THSVS_END_OF_READ_ACCESS)
+        if (prevAccess > AccessType::END_OF_READ_ACCESS)
             pVkBarrier->srcAccessMask |= pPrevAccessInfo->accessMask;
 
         if (thBarrier.discardContents == VK_TRUE)
@@ -608,16 +608,16 @@ void thsvsGetVulkanImageMemoryBarrier(
 
             switch(thBarrier.prevLayout)
             {
-            case THSVS_IMAGE_LAYOUT_GENERAL:
-                if (prevAccess == THSVS_ACCESS_PRESENT)
+            case ImageLayout::GENERAL:
+                if (prevAccess == AccessType::PRESENT)
                     layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
                 else
                     layout = VK_IMAGE_LAYOUT_GENERAL;
                 break;
-            case THSVS_IMAGE_LAYOUT_OPTIMAL:
+            case ImageLayout::OPTIMAL:
                 layout = pPrevAccessInfo->imageLayout;
                 break;
-            case THSVS_IMAGE_LAYOUT_GENERAL_AND_PRESENTATION:
+            case ImageLayout::GENERAL_AND_PRESENTATION:
                 layout = VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR;
                 break;
             }
@@ -633,7 +633,7 @@ void thsvsGetVulkanImageMemoryBarrier(
 
     for (uint32_t i = 0; i < thBarrier.nextAccessCount; ++i)
     {
-        ThsvsAccessType nextAccess = thBarrier.pNextAccesses[i];
+        AccessType nextAccess = thBarrier.pNextAccesses[i];
         const ThsvsVkAccessInfo* pNextAccessInfo = &ThsvsAccessMap[nextAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -657,16 +657,16 @@ void thsvsGetVulkanImageMemoryBarrier(
         VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
         switch(thBarrier.nextLayout)
         {
-        case THSVS_IMAGE_LAYOUT_GENERAL:
-            if (nextAccess == THSVS_ACCESS_PRESENT)
+        case ImageLayout::GENERAL:
+            if (nextAccess == AccessType::PRESENT)
                 layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
             else
                 layout = VK_IMAGE_LAYOUT_GENERAL;
             break;
-        case THSVS_IMAGE_LAYOUT_OPTIMAL:
+        case ImageLayout::OPTIMAL:
             layout = pNextAccessInfo->imageLayout;
             break;
-        case THSVS_IMAGE_LAYOUT_GENERAL_AND_PRESENTATION:
+        case ImageLayout::GENERAL_AND_PRESENTATION:
             layout = VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR;
             break;
         }
@@ -770,13 +770,13 @@ void thsvsCmdSetEvent(
     VkCommandBuffer           commandBuffer,
     VkEvent                   event,
     uint32_t                  prevAccessCount,
-    const ThsvsAccessType*    pPrevAccesses)
+    const AccessType*    pPrevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
     for (uint32_t i = 0; i < prevAccessCount; ++i)
     {
-        ThsvsAccessType prevAccess = pPrevAccesses[i];
+        AccessType prevAccess = pPrevAccesses[i];
         const ThsvsVkAccessInfo* pPrevAccessInfo = &ThsvsAccessMap[prevAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -797,13 +797,13 @@ void thsvsCmdResetEvent(
     VkCommandBuffer           commandBuffer,
     VkEvent                   event,
     uint32_t                  prevAccessCount,
-    const ThsvsAccessType*    pPrevAccesses)
+    const AccessType*    pPrevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
     for (uint32_t i = 0; i < prevAccessCount; ++i)
     {
-        ThsvsAccessType prevAccess = pPrevAccesses[i];
+        AccessType prevAccess = pPrevAccesses[i];
         const ThsvsVkAccessInfo* pPrevAccessInfo = &ThsvsAccessMap[prevAccess];
 
 #ifdef THSVS_ERROR_CHECK_ACCESS_TYPE_IN_RANGE

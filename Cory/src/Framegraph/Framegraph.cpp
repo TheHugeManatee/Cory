@@ -8,6 +8,7 @@
 #include <Magnum/Vk/CommandBuffer.h>
 
 #include <range/v3/algorithm/contains.hpp>
+#include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/transform.hpp>
 #include <range/v3/range/conversion.hpp>
@@ -74,37 +75,33 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     const RenderTaskInfo &rpInfo = renderTasks_[handle];
     const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
-    CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
-    // handle input resource transitions
-    auto inputsAndCreatedOutputs = ranges::views::concat(
-        rpInfo.inputs, rpInfo.outputs | ranges::views::filter([](const auto &desc) {
-                           return desc.kind == TaskOutputKind::Create;
-                       }) | ranges::views::transform([](const auto &desc) {
-                           return RenderTaskInfo::InputDesc{.handle = desc.handle,
-                                                            .accessInfo = desc.accessInfo};
-                       }));
-    for (auto input : inputsAndCreatedOutputs) {
+    auto emitBarrier = [&](auto resourceInfo) {
         ExecutionInfo::TransitionInfo info{
             .direction = ExecutionInfo::TransitionInfo::Direction::ResourceToTask,
             .task = handle,
-            .resource = input.handle,
-            .stateBefore = resources_.state(input.handle.texture),
+            .resource = resourceInfo.handle,
+            .stateBefore = resources_.state(resourceInfo.handle.texture),
             .stateAfter = {}};
 
-        resources_.readBarrier(cmd.handle(), input.handle.texture, input.accessInfo);
+        resources_.readBarrier(cmd.handle(), resourceInfo.handle.texture, resourceInfo.accessInfo);
+        if constexpr (std::is_same_v<decltype(resourceInfo), RenderTaskInfo::OutputDesc>) {
+            resources_.recordWrite(
+                cmd.handle(), resourceInfo.handle.texture, resourceInfo.accessInfo);
+        }
 
-        info.stateAfter = resources_.state(input.handle.texture);
+        info.stateAfter = resources_.state(resourceInfo.handle.texture);
         transitions.push_back(info);
-    }
+    };
+
+    CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
+    // barriers for the inputs - ofc we need those
+    ranges::for_each(rpInfo.inputs, emitBarrier);
+    // barriers for the outputs we also need, to prevent re-ordering the command stream
+    ranges::for_each(rpInfo.outputs, emitBarrier);
 
     CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
-    auto &coroHandle = rpInfo.coroHandle;
+    const auto &coroHandle = rpInfo.coroHandle;
     if (!coroHandle.done()) { coroHandle.resume(); }
-
-    // record writes to output resources of this render pass
-    for (auto output : rpInfo.outputs) {
-        resources_.recordWrite(cmd.handle(), output.handle.texture, output.accessInfo);
-    }
 
     CO_CORE_ASSERT(coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "

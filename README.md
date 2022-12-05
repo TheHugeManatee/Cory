@@ -29,12 +29,13 @@ As such, it uses features that are only supported in rather modern compilers.
 - Render Graphs/Frame Graphs
     - [x] basic coroutine-based API and render pass resolution via graph search
     - [x] automatically create render passes and layouts
-    - [ ] perform automatic resource transitions
-    - [ ] actually execute render pass code that renders stuff
+    - [x] perform automatic resource transitions
+    - [x] actually execute render pass code that renders stuff
     - [ ] proper allocation of transient textures from arena
     - [ ] create AccessInfo templates for most common usages
     - [ ] automatically figure out required image usage for a transient image
     - [ ] extend transient resource system to buffers
+    - [ ] split barriers
 - Window and event system
     - [x] basic mouse and kb event forwarding
     - [ ] better abstraction/encapsulation
@@ -97,6 +98,7 @@ the top of the header files:
 - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT License
 - imGuIZMO.quat for rotation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause License
 - KDBindings, https://github.com/KDAB/KDBindings, MIT License
+- simpler_vulkan_synchronization by Tobias Hector, https://github.com/Tobski/simple_vulkan_synchronization/, MIT License
 
 See `conanfile.txt` for the additional libraries and their exact versions used. I update them to their latest versions
 sporadically, but there is of course always some flexibility in using different versions.

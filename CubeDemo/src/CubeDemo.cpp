@@ -184,6 +184,9 @@ void CubeDemoApplication::createUBO()
 
 CubeDemoApplication::~CubeDemoApplication()
 {
+    // wait until last frame is finished rendering
+    ctx_->device()->DeviceWaitIdle(ctx_->device());
+
     imguiLayer_->deinit(*ctx_);
     CO_APP_TRACE("Destroying CubeDemoApplication");
 }
@@ -219,9 +222,6 @@ void CubeDemoApplication::run()
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
     }
-
-    // wait until last frame is finished rendering
-    ctx_->device()->DeviceWaitIdle(ctx_->device());
 }
 
 void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
@@ -279,7 +279,7 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
     builder.write(depthTarget,
                   {.layout = Cory::Framegraph::Layout::Attachment,
                    .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                   .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                   .access = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                    .imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT});
 
     auto cubePass = builder.declareRenderPass("Cubes")

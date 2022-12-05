@@ -4,6 +4,7 @@
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find_if.hpp>
+#include <range/v3/view/enumerate.hpp>
 
 namespace Cory::Framegraph {
 
@@ -76,7 +77,17 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
     }
     // mark all external inputs
     for (auto externalInput : graph_.externalInputs_) {
-        index.textures.at(externalInput).external = true;
+        if (index.textures.contains(externalInput)) {
+            index.textures.at(externalInput).external = true;
+        }
+        else {
+            auto inputInfo = graph_.resources_.info(externalInput.texture);
+            index.textures.insert(std::make_pair(
+                externalInput,
+                Index::TextureData{.handle = externalInput,
+                                   .info = graph_.resources_.info(externalInput.texture),
+                                   .external = true}));
+        }
     }
     // mark all output resources
     for (auto externalOutput : graph_.outputs_) {
@@ -108,14 +119,18 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
             return fmt::format("{} v{}", thing.info.name, thing.handle.version);
         }
         if constexpr (std::is_same_v<ThingType, Index::TaskData>) { return thing.info.name; }
-        if constexpr (std::is_same_v<ThingType, Index::DependencyInfo>) {
-            std::string label;
-            if (thing.transitionInfo) {
-                label = fmt::format("{} ➡️ {}",
-                                    thing.transitionInfo->stateBefore.layout,
-                                    thing.transitionInfo->stateAfter.layout);
-            }
-            return label;
+        if constexpr (std::is_same_v<ThingType, TextureState>) {
+            return fmt::format("layout={}\\nstage={}\\naccess={}",
+                               thing.layout,
+                               thing.lastWriteStage,
+                               thing.lastWriteAccess);
+            //                label = fmt::format("{} >> {}\\n{} >> {}\\n{} >> {}",
+            //                                    thing.transitionInfo->stateBefore.layout,
+            //                                    thing.transitionInfo->stateAfter.layout,
+            //                                    thing.transitionInfo->stateBefore.lastWriteStage,
+            //                                    thing.transitionInfo->stateAfter.lastWriteStage,
+            //                                    thing.transitionInfo->stateBefore.lastWriteAccess,
+            //                                    thing.transitionInfo->stateAfter.lastWriteAccess);
         }
     };
 
@@ -145,30 +160,50 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     }
 
     for (const Index::DependencyInfo &dep : index.inputDependencies) {
-
         append("  \"{}\" -> \"{}\" [label=\"{}\"]\n",
                make_label(index.textures[dep.resource]),
                make_label(index.tasks[dep.task]),
-               make_label(dep));
+               "");
     }
     for (const Index::DependencyInfo &dep : index.createDependencies) {
 
         const std::string color = "darkgreen";
-        const std::string label = make_label(dep);
+        const std::string label = fmt::format(
+            "{}", dep.transitionInfo ? dep.transitionInfo->stateAfter.layout : Layout::Undefined);
         append("  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
                make_label(index.tasks[dep.task]),
                make_label(index.textures[dep.resource]),
                color,
                label);
     }
-    for (const Index::DependencyInfo &dep : index.outputDependencies) {
-        const std::string color = "black";
-        const std::string label = make_label(dep);
-        append("  \"{}\" -> \"{}\" [color={},label=\"{}\"]\n",
-               make_label(index.tasks[dep.task]),
-               make_label(index.textures[dep.resource]),
-               color,
-               label);
+
+    for (const auto &[idx, dep] : ranges::views::enumerate(index.outputDependencies)) {
+
+        const std::string barrierName = fmt::format("Barrier_{}", idx);
+        if (dep.transitionInfo) {
+            const std::string color = "orange";
+            append("  \"{}\" [shape=diamond,color={},label=\"Barrier\"]", barrierName, color);
+
+            append("  \"{}\" -> \"{}\" [color={},label=\"{}\"]\n",
+                   barrierName,
+                   make_label(index.textures[dep.resource]),
+                   "black",
+                   make_label(dep.transitionInfo->stateBefore));
+
+            append("  \"{}\" -> \"{}\" [color={},label=\"{}\"]\n",
+                   make_label(index.tasks[dep.task]),
+                   barrierName,
+                   "black",
+                   make_label(dep.transitionInfo->stateBefore));
+        }
+        else {
+            const std::string color = "red";
+            append("  \"{}\" -> \"{}\" [color={},label=\"{}\"]\n",
+                   make_label(index.tasks[dep.task]),
+                   make_label(index.textures[dep.resource]),
+                   color,
+                   "<no barrier>");
+        }
     }
 
     out += "}\n";

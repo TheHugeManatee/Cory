@@ -38,35 +38,35 @@ class BitField {
     auto operator<=>(const BitField &rhs) const = default;
 
     /// access to the raw enum
-    [[nodiscard]] constexpr UnderlyingEnum bits() const { return UnderlyingEnum(bits_); }
+    [[nodiscard]] constexpr UnderlyingEnum bits() const { return bits_; }
     /// access to the underlying bits
-    [[nodiscard]] constexpr UnderlyingType underlying_bits() const { return bits_; }
+    [[nodiscard]] constexpr UnderlyingType underlying_bits() const { return to_underlying(bits_); }
 
     /// set a bit
     constexpr BitField &set(UnderlyingEnum bit)
     {
-        bits_ |= to_underlying(bit);
+        bits_ = UnderlyingEnum(to_underlying(bits_) | to_underlying(bit));
         return *this;
     }
 
     /// clear a bit
     constexpr BitField &clear(UnderlyingEnum bit)
     {
-        bits_ &= ~to_underlying(bit);
+        bits_ = UnderlyingEnum(to_underlying(bits_) & ~to_underlying(bit));
         return *this;
     }
 
     /// toggles a bit (sets it if it was unset, clears it if it was set)
     constexpr BitField &toggle(UnderlyingEnum bit)
     {
-        bits_ ^= to_underlying(bit);
+        bits_ = UnderlyingEnum(to_underlying(bits_) ^ to_underlying(bit));
         return *this;
     }
 
     /// query bit
     [[nodiscard]] constexpr bool is_set(UnderlyingEnum bit) const
     {
-        return (bits_ & to_underlying(bit)) == to_underlying(bit);
+        return (to_underlying(bits_) & to_underlying(bit)) == to_underlying(bit);
     }
 
     /// returns a vector of single bits that are set
@@ -82,7 +82,7 @@ class BitField {
     }
 
   private:
-    UnderlyingType bits_;
+    UnderlyingEnum bits_;
 };
 
 } // namespace Cory

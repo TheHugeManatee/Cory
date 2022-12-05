@@ -412,8 +412,8 @@ layouts) then a global barrier should be preferred.
 Simply define the previous and next access types of resources affected.
 */
 struct GlobalBarrier {
-    std::span<AccessType> prevAccesses;
-    std::span<AccessType> nextAccesses;
+    std::span<const AccessType> prevAccesses;
+    std::span<const AccessType> nextAccesses;
 };
 
 /**
@@ -432,8 +432,8 @@ queue in the destination queue family, with a semaphore guaranteeing
 execution order between them.
 */
 struct BufferBarrier {
-    std::span<AccessType> prevAccesses;
-    std::span<AccessType> nextAccesses;
+    std::span<const AccessType> prevAccesses;
+    std::span<const AccessType> nextAccesses;
     uint32_t srcQueueFamilyIndex;
     uint32_t dstQueueFamilyIndex;
     VkBuffer buffer;
@@ -468,8 +468,8 @@ going to be immediately overwritten. A good example of when to use this is
 when an application re-uses a presented image after vkAcquireNextImageKHR.
 */
 struct ImageBarrier {
-    std::span<AccessType> prevAccesses;
-    std::span<AccessType> nextAccesses;
+    std::span<const AccessType> prevAccesses;
+    std::span<const AccessType> nextAccesses;
     ImageLayout prevLayout;
     ImageLayout nextLayout;
     VkBool32 discardContents;
@@ -488,7 +488,7 @@ VkImageLayout GetVkImageLayout(AccessType access);
 Mapping function that translates a set of accesses into the corresponding
 pipeline stages, VkAccessFlags, and image layout.
 */
-void GetAccessInfo(std::span<AccessType> accesses,
+void GetAccessInfo(std::span<const AccessType> accesses,
                    VkPipelineStageFlags *pStageMask,
                    VkAccessFlags *pAccessMask,
                    VkImageLayout *pImageLayout,
@@ -536,8 +536,8 @@ commandBuffer is passed unmodified to vkCmdPipelineBarrier.
 void CmdPipelineBarrier(Magnum::Vk::Device &device,
                         VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
-                        std::span<BufferBarrier> bufferBarriers,
-                        std::span<ImageBarrier> imageBarriers);
+                        std::span<const BufferBarrier> bufferBarriers,
+                        std::span<const ImageBarrier> imageBarriers);
 
 /**
 Wrapper around vkCmdSetEvent.
@@ -549,7 +549,7 @@ commandBuffer and event are passed unmodified to vkCmdSetEvent.
 void CmdSetEvent(Magnum::Vk::Device &device,
                  VkCommandBuffer commandBuffer,
                  VkEvent event,
-                 std::span<AccessType> prevAccesses);
+                 std::span<const AccessType> prevAccesses);
 
 /**
 Wrapper around vkCmdResetEvent.
@@ -561,7 +561,7 @@ commandBuffer and event are passed unmodified to vkCmdResetEvent.
 void CmdResetEvent(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
                    VkEvent event,
-                   std::span<AccessType> prevAccesses);
+                   std::span<const AccessType> prevAccesses);
 
 /**
 Simplified wrapper around vkCmdWaitEvents.
@@ -575,8 +575,8 @@ vkCmdWaitEvents.
 */
 void CmdWaitEvents(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
-                   std::span<VkEvent> events,
+                   std::span<const VkEvent> events,
                    const GlobalBarrier *pGlobalBarrier,
-                   std::span<BufferBarrier> bufferBarriers,
-                   std::span<ImageBarrier> imageBarriers);
+                   std::span<const BufferBarrier> bufferBarriers,
+                   std::span<const ImageBarrier> imageBarriers);
 } // namespace Cory::Sync

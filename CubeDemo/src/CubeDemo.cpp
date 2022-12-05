@@ -234,9 +234,7 @@ void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.colorImage->format(),
                                  .sampleCount = window_->sampleCount()},
-                                Cory::Framegraph::Layout::Attachment,
-                                VK_ACCESS_2_NONE,
-                                VK_PIPELINE_STAGE_2_NONE,
+                                Cory::Sync::AccessType::None,
                                 *frameCtx.colorImage,
                                 *frameCtx.colorImageView);
 
@@ -245,9 +243,7 @@ void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.depthImage->format(),
                                  .sampleCount = window_->sampleCount()},
-                                Cory::Framegraph::Layout::Attachment,
-                                VK_ACCESS_2_NONE,
-                                VK_PIPELINE_STAGE_2_NONE,
+                                Cory::Sync::AccessType::None,
                                 *frameCtx.depthImage,
                                 *frameCtx.depthImageView);
 
@@ -271,16 +267,8 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
     float clearDepth = 1.0f;
 
     auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget,
-                      {.layout = Cory::Framegraph::Layout::Attachment,
-                       .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                       .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                       .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
-    builder.write(depthTarget,
-                  {.layout = Cory::Framegraph::Layout::Attachment,
-                   .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                   .access = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
-                   .imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT});
+        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
+    builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
     auto cubePass = builder.declareRenderPass("Cubes")
                         .shaders({vertexShader_, fragmentShader_})
@@ -356,17 +344,7 @@ CubeDemoApplication::imguiRenderTask(Cory::Framegraph::Builder builder,
                                      const Cory::FrameContext &frameCtx)
 {
     auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(colorTarget,
-                          // read
-                          {.layout = Cory::Framegraph::Layout::Attachment,
-                           .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-                           .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT},
-                          // write
-                          {.layout = Cory::Framegraph::Layout::Attachment,
-                           .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                           .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
+        builder.readWrite(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
 
     co_yield PassOutputs{.colorOut = writtenColorHandle};
     RenderInput renderApi = co_await builder.finishDeclaration();

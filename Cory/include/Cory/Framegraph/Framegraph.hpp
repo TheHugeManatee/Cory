@@ -54,8 +54,8 @@ struct ExecutionInfo {
         Direction direction;
         RenderTaskHandle task;
         TransientTextureHandle resource;
-        TextureState stateBefore;
-        TextureState stateAfter;
+        Sync::AccessType stateBefore;
+        Sync::AccessType stateAfter;
     };
     std::vector<RenderTaskHandle> tasks;
     std::vector<TextureHandle> resources;
@@ -83,9 +83,7 @@ class Framegraph : NoCopy, NoMove {
 
     /// declare an external texture as an input
     TransientTextureHandle declareInput(TextureInfo info,
-                                        Layout layout,
-                                        AccessFlags lastWriteAccess,
-                                        PipelineStages lastWriteStage,
+                                        Sync::AccessType lastWriteAccess,
                                         Magnum::Vk::Image &image,
                                         Magnum::Vk::ImageView &imageView);
 
@@ -118,11 +116,12 @@ class Framegraph : NoCopy, NoMove {
      * are required to execute said resources.
      * Updates the internal information about which render pass is required.
      */
-    [[nodiscard]] ExecutionInfo resolve(const std::vector<TransientTextureHandle> &requestedResources);
+    [[nodiscard]] ExecutionInfo
+    resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
     [[nodiscard]] ExecutionInfo compile();
     [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandList &cmd,
-                                                           RenderTaskHandle handle);
+                                                                         RenderTaskHandle handle);
 
     cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>> renderTasks() const;
 

@@ -9,6 +9,7 @@
 #include <Magnum/Vk/Vk.h> // forward declaration header
 #include <Magnum/Vk/Vulkan.h>
 
+#include <Cory/Renderer/Synchronization.hpp>
 #include <Cory/Renderer/flextVkExt.h> // extensions
 
 #include <cstdint>

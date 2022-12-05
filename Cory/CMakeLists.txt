@@ -79,7 +79,7 @@ set(CORY_SOURCES
         src/Renderer/Swapchain.cpp
         src/Renderer/UniformBufferObject.cpp
         src/Renderer/VulkanUtils.cpp
-        src/Framegraph/FramegraphVisualizer.cpp src/Framegraph/FramegraphVisualizer.h)
+        src/Framegraph/FramegraphVisualizer.cpp src/Framegraph/FramegraphVisualizer.h src/Renderer/Synchronization.cpp include/Cory/Renderer/Synchronization.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

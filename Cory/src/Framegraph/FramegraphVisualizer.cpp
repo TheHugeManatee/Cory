@@ -50,29 +50,30 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
         index.tasks[taskHandle].info = passInfo;
         index.tasks[taskHandle].executed = ranges::contains(executionInfo.tasks, taskHandle);
 
-        for (const auto &[inputHandle, _] : passInfo.inputs) {
-            auto inputInfo = graph_.resources_.info(inputHandle.texture);
+        for (const RenderTaskInfo::Dependency &input : passInfo.inputs) {
+            auto inputInfo = graph_.resources_.info(input.handle.texture);
 
-            index.textures[inputHandle].handle = inputHandle;
-            index.textures[inputHandle].info = inputInfo;
+            index.textures[input.handle].handle = input.handle;
+            index.textures[input.handle].info = inputInfo;
 
             index.inputDependencies.emplace_back(Index::DependencyInfo{
-                .resource = inputHandle,
+                .resource = input.handle,
                 .task = taskHandle,
-                .transitionInfo = findTransitionInfo(inputHandle, taskHandle)});
+                .transitionInfo = findTransitionInfo(input.handle, taskHandle)});
         }
 
-        for (const auto &[outputHandle, kind, _] : passInfo.outputs) {
-            auto outputInfo = graph_.resources_.info(outputHandle.texture);
+        for (const RenderTaskInfo::Dependency &output : passInfo.outputs) {
+            auto outputInfo = graph_.resources_.info(output.handle.texture);
 
-            index.textures[outputHandle].handle = outputHandle;
-            index.textures[outputHandle].info = outputInfo;
+            index.textures[output.handle].handle = output.handle;
+            index.textures[output.handle].info = outputInfo;
 
-            (kind == TaskOutputKind::Create ? index.createDependencies : index.outputDependencies)
+            (output.kind.is_set(TaskDependencyKindBits::Create) ? index.createDependencies
+                                                                : index.outputDependencies)
                 .emplace_back(Index::DependencyInfo{
-                    .resource = outputHandle,
+                    .resource = output.handle,
                     .task = taskHandle,
-                    .transitionInfo = findTransitionInfo(outputHandle, taskHandle)});
+                    .transitionInfo = findTransitionInfo(output.handle, taskHandle)});
         }
     }
     // mark all external inputs
@@ -118,19 +119,21 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
         if constexpr (std::is_same_v<ThingType, Index::TextureData>) {
             return fmt::format("{} v{}", thing.info.name, thing.handle.version);
         }
-        if constexpr (std::is_same_v<ThingType, Index::TaskData>) { return thing.info.name; }
-        if constexpr (std::is_same_v<ThingType, TextureState>) {
+        else if constexpr (std::is_same_v<ThingType, Index::TaskData>) {
+            return thing.info.name;
+        }
+        else if constexpr (std::is_same_v<ThingType, TextureState>) {
             return fmt::format("layout={}\\nstage={}\\naccess={}",
                                thing.layout,
                                thing.lastWriteStage,
-                               thing.lastWriteAccess);
+                               thing.lastAccess);
             //                label = fmt::format("{} >> {}\\n{} >> {}\\n{} >> {}",
             //                                    thing.transitionInfo->stateBefore.layout,
             //                                    thing.transitionInfo->stateAfter.layout,
             //                                    thing.transitionInfo->stateBefore.lastWriteStage,
             //                                    thing.transitionInfo->stateAfter.lastWriteStage,
-            //                                    thing.transitionInfo->stateBefore.lastWriteAccess,
-            //                                    thing.transitionInfo->stateAfter.lastWriteAccess);
+            //                                    thing.transitionInfo->stateBefore.lastAccess,
+            //                                    thing.transitionInfo->stateAfter.lastAccess);
         }
     };
 
@@ -169,7 +172,7 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
 
         const std::string color = "darkgreen";
         const std::string label = fmt::format(
-            "{}", dep.transitionInfo ? dep.transitionInfo->stateAfter.layout : Layout::Undefined);
+            "{}", dep.transitionInfo ? dep.transitionInfo->stateAfter : Sync::AccessType::None);
         append("  \"{}\" -> \"{}\" [style=dashed,color={},label=\"{}\"]\n",
                make_label(index.tasks[dep.task]),
                make_label(index.textures[dep.resource]),
@@ -188,13 +191,13 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
                    barrierName,
                    make_label(index.textures[dep.resource]),
                    "black",
-                   make_label(dep.transitionInfo->stateBefore));
+                   dep.transitionInfo->stateBefore);
 
             append("  \"{}\" -> \"{}\" [color={},label=\"{}\"]\n",
                    make_label(index.tasks[dep.task]),
                    barrierName,
                    "black",
-                   make_label(dep.transitionInfo->stateBefore));
+                   dep.transitionInfo->stateBefore);
         }
         else {
             const std::string color = "red";

@@ -38,11 +38,15 @@ struct DynamicStates {
     DepthWrite depthWrite{DepthWrite::Enabled};
 };
 
-enum class TaskOutputKind { Create, Write };
-enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
-using PipelineStages = BitField<VkPipelineStageFlagBits2>;
-using ImageAspects = BitField<VkImageAspectFlagBits>;
-using AccessFlags = BitField<VkAccessFlagBits2>;
+enum class TaskDependencyKindBits {
+    Create = 1 << 0,
+    Read = 1 << 1,
+    Write = 1 << 2,
+    ReadWrite = Read | Write,
+    CreateWrite = Create | Write
+};
+using TaskDependencyKind = BitField<TaskDependencyKindBits>;
+enum class ImageContents { Retain, Discard };
 
 using RenderTaskHandle = PrivateTypedHandle<RenderTaskInfo, Framegraph>;
 
@@ -56,18 +60,8 @@ struct TextureInfo {
 };
 
 struct TextureState {
-    Layout layout{Layout::Undefined};
-    AccessFlags lastWriteAccess{VK_ACCESS_NONE};
-    PipelineStages lastWriteStage{VK_PIPELINE_STAGE_NONE};
+    Sync::AccessType lastAccess{Sync::AccessType::None};
     TextureMemoryStatus status{TextureMemoryStatus::Virtual};
-};
-
-/// describes information about the intended access (read or write) for a texture resource
-struct TextureAccessInfo {
-    Layout layout;
-    PipelineStages stage;
-    AccessFlags access;
-    ImageAspects imageAspect;
 };
 
 using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureResourceManager>;
@@ -78,24 +72,6 @@ struct TransientTextureHandle {
 };
 using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
 
-constexpr VkImageLayout toVkImageLayout(Layout layout)
-{
-    switch (layout) {
-    case Layout::Undefined:
-        return VK_IMAGE_LAYOUT_UNDEFINED;
-    case Layout::Attachment:
-        return VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-    case Layout::ReadOnly:
-        return VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
-    case Layout::TransferSource:
-        return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    case Layout::TransferDest:
-        return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    case Layout::PresentSource:
-        return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    }
-    throw std::runtime_error{"Unknown Layout"};
-}
 } // namespace Cory::Framegraph
 
 /// make SlotMapHandle hashable

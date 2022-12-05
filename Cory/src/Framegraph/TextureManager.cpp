@@ -42,34 +42,25 @@ TextureHandle TextureResourceManager::declareTexture(TextureInfo info)
                   info.size,
                   info.format,
                   info.sampleCount);
-    auto handle = data_->textureResources_.emplace(
-        TextureResource{info,
-                        TextureState{.layout = Layout::Undefined,
-                                     .lastWriteAccess = VK_ACCESS_NONE,
-                                     .lastWriteStage = VK_PIPELINE_STAGE_NONE,
-                                     .status = TextureMemoryStatus::Virtual},
-                        Vk::Image{Corrade::NoCreate},
-                        Vk::ImageView{Corrade::NoCreate}});
+    auto handle = data_->textureResources_.emplace(TextureResource{
+        info,
+        TextureState{.lastAccess = Sync::AccessType::None, .status = TextureMemoryStatus::Virtual},
+        Vk::Image{Corrade::NoCreate},
+        Vk::ImageView{Corrade::NoCreate}});
     return handle;
 }
 
 TextureHandle TextureResourceManager::registerExternal(TextureInfo info,
-                                                       Layout layout,
-                                                       AccessFlags lastWriteAccess,
-                                                       PipelineStages lastWriteStage,
+                                                       Sync::AccessType lastWriteAccess,
                                                        Magnum::Vk::Image &resource,
                                                        Magnum::Vk::ImageView &resourceView)
 {
-    auto handle = data_->textureResources_.emplace(
-        TextureResource{std::move(info),
-                        TextureState{.layout = layout,
-                                     .lastWriteAccess = lastWriteAccess,
-                                     .lastWriteStage = lastWriteStage,
-                                     .status = TextureMemoryStatus::External},
-                        Vk::Image::wrap(data_->ctx_->device(), resource, resource.format()),
-                        Vk::ImageView::wrap(data_->ctx_->device(), resourceView)});
+    auto handle = data_->textureResources_.emplace(TextureResource{
+        std::move(info),
+        TextureState{.lastAccess = lastWriteAccess, .status = TextureMemoryStatus::External},
+        Vk::Image::wrap(data_->ctx_->device(), resource, resource.format()),
+        Vk::ImageView::wrap(data_->ctx_->device(), resourceView)});
 
-    // data_->textureResources_[handle].image.;
     return handle;
 }
 
@@ -116,76 +107,69 @@ void TextureResourceManager::allocate(const std::vector<TextureHandle> &handles)
     }
 }
 
-void TextureResourceManager::readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
-                                         TextureHandle handle,
-                                         TextureAccessInfo readAccessInfo)
+Sync::ImageBarrier TextureResourceManager::synchronizeTexture(Magnum::Vk::CommandBuffer &cmdBuffer,
+                                                              TextureHandle handle,
+                                                              Sync::AccessType readAccess,
+                                                              ImageContents contentsMode)
 {
+    const auto &info = data_->textureResources_[handle].info;
+    auto aspectMask = VkImageAspectFlags(imageAspectsFor(info.format));
     auto &state = data_->textureResources_[handle].state;
 
-    // check if the barrier can be foregone
-    if (state.layout == readAccessInfo.layout && state.lastWriteStage == readAccessInfo.stage &&
-        state.lastWriteAccess == readAccessInfo.access) {
-        return;
-    }
+    const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
+    Sync::ImageBarrier barrier{.prevAccesses{},
+                               .nextAccesses{},
+                               .prevLayout = Sync::ImageLayout::Optimal,
+                               .nextLayout = Sync::ImageLayout::Optimal,
+                               .discardContents = discard,
+                               // todo: we should get family somewhere else and not from the context
+                               .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
+                               .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
+                               .image = image(handle),
+                               .subresourceRange = {
+                                   .aspectMask = aspectMask,
+                                   .baseMipLevel = 0,
+                                   .levelCount = 1,
+                                   .baseArrayLayer = 0,
+                                   .layerCount = 1,
+                               }};
 
-    [[maybe_unused]] const auto &info = data_->textureResources_[handle].info;
-    CO_CORE_TRACE("BARRIER synchronizing data written to '{}' in ({},{}) to be read from ({},{})",
+    CO_CORE_TRACE("BARRIER synchronizing data written to '{}' as to be read as {}",
                   info.name,
-                  state.lastWriteStage,
-                  state.lastWriteAccess,
-                  readAccessInfo.stage,
-                  readAccessInfo.access);
+                  state.lastAccess,
+                  readAccess);
 
-    const VkImageAspectFlags aspectMask = readAccessInfo.imageAspect.bits();
-    const VkImageMemoryBarrier2 imageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = state.lastWriteStage.bits(),
-        .srcAccessMask = state.lastWriteAccess.bits(),
-        .dstStageMask = readAccessInfo.stage.bits(),
-        .dstAccessMask = readAccessInfo.access.bits(),
-        .oldLayout = toVkImageLayout(state.layout),
-        .newLayout = toVkImageLayout(readAccessInfo.layout),
-        // todo: we should get family somewhere else and not from the context
-        .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
-        .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
-        .image = image(handle),
-        .subresourceRange = {
-            .aspectMask = aspectMask,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        }};
-    const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                                          .pNext = nullptr,
-                                          .dependencyFlags = {}, // ?
-                                          .memoryBarrierCount = 0,
-                                          .pMemoryBarriers = nullptr,
-                                          .bufferMemoryBarrierCount = 0,
-                                          .pBufferMemoryBarriers = nullptr,
-                                          .imageMemoryBarrierCount = 1,
-                                          .pImageMemoryBarriers = &imageMemoryBarrier};
-    data_->ctx_->device()->CmdPipelineBarrier2(cmdBuffer, &dependencyInfo);
-    state.layout = readAccessInfo.layout;
-}
-
-void TextureResourceManager::recordWrite(Magnum::Vk::CommandBuffer &cmdBuffer,
-                                         TextureHandle handle,
-                                         TextureAccessInfo writeAccessInfo)
-{
-    auto &state = data_->textureResources_[handle].state;
-    state.layout = writeAccessInfo.layout;
-    state.lastWriteStage = writeAccessInfo.stage;
-    state.lastWriteAccess = writeAccessInfo.access;
-}
-
-void TextureResourceManager::readWriteBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
-                                              TextureHandle handle,
-                                              TextureAccessInfo readAccessInfo,
-                                              TextureAccessInfo writeAccessInfo)
-{
-    readBarrier(cmdBuffer, handle, readAccessInfo);
-    recordWrite(cmdBuffer, handle, writeAccessInfo);
+    //    const VkImageMemoryBarrier2 imageMemoryBarrier{
+    //        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+    //        .srcStageMask = state.lastWriteStage.bits(),
+    //        .srcAccessMask = state.lastAccess.bits(),
+    //        .dstStageMask = readAccessInfo.stage.bits(),
+    //        .dstAccessMask = readAccessInfo.access.bits(),
+    //        .oldLayout = toVkImageLayout(state.layout),
+    //        .newLayout = toVkImageLayout(readAccessInfo.layout),
+    //        // todo: we should get family somewhere else and not from the context
+    //        .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
+    //        .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
+    //        .image = image(handle),
+    //        .subresourceRange = {
+    //            .aspectMask = aspectMask,
+    //            .baseMipLevel = 0,
+    //            .levelCount = 1,
+    //            .baseArrayLayer = 0,
+    //            .layerCount = 1,
+    //        }};
+    //    const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    //                                          .pNext = nullptr,
+    //                                          .dependencyFlags = {}, // ?
+    //                                          .memoryBarrierCount = 0,
+    //                                          .pMemoryBarriers = nullptr,
+    //                                          .bufferMemoryBarrierCount = 0,
+    //                                          .pBufferMemoryBarriers = nullptr,
+    //                                          .imageMemoryBarrierCount = 1,
+    //                                          .pImageMemoryBarriers = &imageMemoryBarrier};
+    //    data_->ctx_->device()->CmdPipelineBarrier2(cmdBuffer, &dependencyInfo);
+    state.lastAccess = readAccess;
+    return barrier;
 }
 
 const TextureInfo &TextureResourceManager::info(TextureHandle handle) const

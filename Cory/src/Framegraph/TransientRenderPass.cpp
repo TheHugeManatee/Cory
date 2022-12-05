@@ -204,13 +204,13 @@ void TransientRenderPass::end(CommandList &cmd)
 VkRenderingAttachmentInfo TransientRenderPass::makeAttachmentInfo(TextureHandle handle,
                                                                   AttachmentKind attachmentKind)
 {
-    return VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-                                     .imageView = textures_->imageView(handle),
-                                     .imageLayout =
-                                         toVkImageLayout(textures_->state(handle).layout),
-                                     .loadOp = attachmentKind.loadOp,
-                                     .storeOp = attachmentKind.storeOp,
-                                     .clearValue = attachmentKind.clearValue};
+    return VkRenderingAttachmentInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = textures_->imageView(handle),
+        .imageLayout = Sync::GetVkImageLayout(textures_->state(handle).lastAccess),
+        .loadOp = attachmentKind.loadOp,
+        .storeOp = attachmentKind.storeOp,
+        .clearValue = attachmentKind.clearValue};
 }
 
 int32_t TransientRenderPass::determineSampleCount() const

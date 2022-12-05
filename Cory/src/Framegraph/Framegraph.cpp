@@ -88,7 +88,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
 
     auto emitBarrier = [&](const RenderTaskInfo::Dependency &resourceInfo) {
         transitions.push_back(ExecutionInfo::TransitionInfo{
-            .direction = ExecutionInfo::TransitionInfo::Direction::ResourceToTask,
+            .kind = resourceInfo.kind,
             .task = handle,
             .resource = resourceInfo.handle,
             .stateBefore = resources_.state(resourceInfo.handle.texture).lastAccess,

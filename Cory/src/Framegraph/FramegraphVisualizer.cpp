@@ -120,13 +120,6 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
                                thing.layout,
                                thing.lastWriteStage,
                                thing.lastAccess);
-            //                label = fmt::format("{} >> {}\\n{} >> {}\\n{} >> {}",
-            //                                    thing.transitionInfo->stateBefore.layout,
-            //                                    thing.transitionInfo->stateAfter.layout,
-            //                                    thing.transitionInfo->stateBefore.lastWriteStage,
-            //                                    thing.transitionInfo->stateAfter.lastWriteStage,
-            //                                    thing.transitionInfo->stateBefore.lastAccess,
-            //                                    thing.transitionInfo->stateAfter.lastAccess);
         }
     };
 

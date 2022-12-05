@@ -20,32 +20,21 @@ class TextureResourceManager {
     TextureHandle declareTexture(TextureInfo info);
 
     TextureHandle registerExternal(TextureInfo info,
-                                   Layout layout,
-                                   AccessFlags lastWriteAccess,
-                                   PipelineStages lastWriteStage,
+                                   Sync::AccessType lastWriteAccess,
                                    Magnum::Vk::Image &resource,
                                    Magnum::Vk::ImageView &resourceView);
 
     void allocate(const std::vector<TextureHandle> &handles);
 
     // emit a synchronization to sync subsequent reads with the last write access
-    void readBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
+    Sync::ImageBarrier synchronizeTexture(Magnum::Vk::CommandBuffer &cmdBuffer,
                      TextureHandle handle,
-                     TextureAccessInfo readAccessInfo);
-    // record a write access to synchronize subsequent read accesses
-    void recordWrite(Magnum::Vk::CommandBuffer &cmdBuffer,
-                     TextureHandle handle,
-                     TextureAccessInfo writeAccessInfo);
+                     Sync::AccessType readAccess, ImageContents contentsMode);
 
-    void readWriteBarrier(Magnum::Vk::CommandBuffer &cmdBuffer,
-                          TextureHandle handle,
-                          TextureAccessInfo readAccessInfo,
-                          TextureAccessInfo writeAccessInfo);
-
-    const TextureInfo &info(TextureHandle handle) const;
+    [[nodiscard]] const TextureInfo &info(TextureHandle handle) const;
     Magnum::Vk::Image &image(TextureHandle handle);
     Magnum::Vk::ImageView &imageView(TextureHandle handle);
-    TextureState state(TextureHandle handle) const;
+    [[nodiscard]] TextureState state(TextureHandle handle) const;
 
     void clear();
 

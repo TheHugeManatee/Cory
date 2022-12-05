@@ -27,62 +27,62 @@ RenderTaskExecutionAwaiter Builder::finishDeclaration()
 TransientTextureHandle Builder::create(std::string name,
                                        glm::u32vec3 size,
                                        PixelFormat format,
-                                       Layout initialLayout,
-                                       PipelineStages writeStage,
-                                       AccessFlags writeAccess)
+                                       Sync::AccessType writeAccess)
 {
     const TextureInfo info{.name = std::move(name), .size = size, .format = format};
-
-    // by default, access all aspects for the format
-    auto aspects = VkImageAspectFlags(Vk::imageAspectsFor(format));
-    const TextureAccessInfo accessInfo{.layout = initialLayout,
-                                       .stage = writeStage,
-                                       .access = writeAccess,
-                                       .imageAspect = gsl::narrow_cast<ImageAspects>(aspects)};
 
     auto handle = TransientTextureHandle{.texture = framegraph_.resources_.declareTexture(info),
                                          .version = 0};
 
-    info_.outputs.push_back(
-        {.handle = handle, .kind = TaskOutputKind::Create, .accessInfo = accessInfo});
+    info_.outputs.push_back(RenderTaskInfo::Dependency{
+        .kind = TaskDependencyKindBits::CreateWrite,
+        .handle = handle,
+        .access = writeAccess,
+    });
     return handle;
 }
 
-TextureInfo Builder::read(TransientTextureHandle &handle, TextureAccessInfo readAccess)
+TextureInfo Builder::read(TransientTextureHandle &handle, Sync::AccessType readAccess)
 {
-    info_.inputs.push_back({.handle = handle, .accessInfo = readAccess});
+    info_.inputs.push_back(RenderTaskInfo::Dependency{
+        .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
     return framegraph_.resources_.info(handle.texture);
 }
 
 std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHandle handle,
-                                                              TextureAccessInfo writeAccess)
+                                                              Sync::AccessType writeAccess)
 {
     // increase the version of the texture handle to record the modification
     auto outputHandle =
         TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
     info_.outputs.push_back({
+        .kind = TaskDependencyKindBits::Write,
         .handle = outputHandle,
-        .kind = TaskOutputKind::Write,
-        .accessInfo = writeAccess,
+        .access = writeAccess,
     });
 
     return {outputHandle, framegraph_.resources_.info(handle.texture)};
 }
 
 std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextureHandle handle,
-                                                                  TextureAccessInfo readAccess,
-                                                                  TextureAccessInfo writeAccess)
+                                                                  Sync::AccessType readWriteAccess)
 {
-    info_.inputs.push_back({.handle = handle, .accessInfo = readAccess});
-    auto outputHandle =
-        TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
-    info_.outputs.push_back({
-        .handle = outputHandle,
-        .kind = TaskOutputKind::Write,
-        .accessInfo = writeAccess,
+    info_.inputs.push_back({
+        .kind = TaskDependencyKindBits::Read,
+        .handle = handle,
+        .access = readWriteAccess,
     });
 
     // increase the version of the texture handle to record the modification
+    auto outputHandle =
+        TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
+
+    info_.outputs.push_back({
+        .kind = TaskDependencyKindBits::Write,
+        .handle = outputHandle,
+        .access = readWriteAccess,
+    });
+
     return {outputHandle, framegraph_.resources_.info(handle.texture)};
 }
 

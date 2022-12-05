@@ -211,7 +211,7 @@ AccessType defines all potential resource usages in the Vulkan API.
 */
 enum class AccessType : uint32_t {
     // No access. Useful primarily for initialization
-    NONE,
+    None,
 
     // Read access
     //    // Requires VK_NV_device_generated_commands to be enabled
@@ -480,10 +480,15 @@ struct ImageBarrier {
 };
 
 /**
+ * Access the corresponding layout to a specific access type
+ */
+VkImageLayout GetVkImageLayout(AccessType access);
+
+/**
 Mapping function that translates a set of accesses into the corresponding
 pipeline stages, VkAccessFlags, and image layout.
 */
-void GetAccessInfo(const std::span<AccessType> &accesses,
+void GetAccessInfo(std::span<AccessType> accesses,
                    VkPipelineStageFlags *pStageMask,
                    VkAccessFlags *pAccessMask,
                    VkImageLayout *pImageLayout,

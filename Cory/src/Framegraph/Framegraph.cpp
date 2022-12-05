@@ -4,6 +4,7 @@
 
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
+#include <Cory/Renderer/Context.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 
@@ -12,12 +13,12 @@
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/transform.hpp>
 #include <range/v3/range/conversion.hpp>
-#include <range/v3/view/concat.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <deque>
 #include <unordered_map>
+#include <utility>
 
 namespace Vk = Magnum::Vk;
 
@@ -35,7 +36,15 @@ Framegraph::Framegraph(Context &ctx)
 {
 }
 
-Framegraph::~Framegraph() { retireImmediate(); }
+Framegraph::~Framegraph()
+{
+    try {
+        retireImmediate();
+    }
+    catch (const std::exception &e) {
+        CO_APP_ERROR("Uncaught exception in destructor: {}", e.what());
+    }
+}
 
 ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
 {
@@ -75,29 +84,29 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     const RenderTaskInfo &rpInfo = renderTasks_[handle];
     const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
-    auto emitBarrier = [&](auto resourceInfo) {
-        ExecutionInfo::TransitionInfo info{
+    CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
+    std::vector<Sync::ImageBarrier> imageBarriers;
+    auto emitBarrier = [&](const RenderTaskInfo::Dependency &resourceInfo) {
+        transitions.push_back(ExecutionInfo::TransitionInfo{
             .direction = ExecutionInfo::TransitionInfo::Direction::ResourceToTask,
             .task = handle,
             .resource = resourceInfo.handle,
-            .stateBefore = resources_.state(resourceInfo.handle.texture),
-            .stateAfter = {}};
+            .stateBefore = resources_.state(resourceInfo.handle.texture).lastAccess,
+            .stateAfter = resourceInfo.access});
 
-        resources_.readBarrier(cmd.handle(), resourceInfo.handle.texture, resourceInfo.accessInfo);
-        if constexpr (std::is_same_v<decltype(resourceInfo), RenderTaskInfo::OutputDesc>) {
-            resources_.recordWrite(
-                cmd.handle(), resourceInfo.handle.texture, resourceInfo.accessInfo);
-        }
+        const auto contentsMode = resourceInfo.kind.is_set(TaskDependencyKindBits::Read)
+                                      ? ImageContents::Retain
+                                      : ImageContents::Discard;
 
-        info.stateAfter = resources_.state(resourceInfo.handle.texture);
-        transitions.push_back(info);
+        imageBarriers.push_back(resources_.synchronizeTexture(
+            cmd.handle(), resourceInfo.handle.texture, resourceInfo.access, contentsMode));
     };
 
-    CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
-    // barriers for the inputs - ofc we need those
+    // fill the barriers from the inputs and outputs
     ranges::for_each(rpInfo.inputs, emitBarrier);
-    // barriers for the outputs we also need, to prevent re-ordering the command stream
     ranges::for_each(rpInfo.outputs, emitBarrier);
+
+    Sync::CmdPipelineBarrier(ctx_->device(), cmd.handle(), nullptr, {}, imageBarriers);
 
     CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
     const auto &coroHandle = rpInfo.coroHandle;
@@ -112,14 +121,11 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
 }
 
 TransientTextureHandle Framegraph::declareInput(TextureInfo info,
-                                                Layout layout,
-                                                AccessFlags lastWriteAccess,
-                                                PipelineStages lastWriteStage,
+                                                Sync::AccessType lastWriteAccess,
                                                 Vk::Image &image,
                                                 Vk::ImageView &imageView)
 {
-    auto handle = resources_.registerExternal(
-        info, layout, lastWriteAccess, lastWriteStage, image, imageView);
+    auto handle = resources_.registerExternal(std::move(info), lastWriteAccess, image, imageView);
 
     TransientTextureHandle thandle{.texture = handle, .version = 0};
 
@@ -145,7 +151,7 @@ ExecutionInfo Framegraph::compile()
 
 std::string Framegraph::dump(const ExecutionInfo &executionInfo)
 {
-    FramegraphVisualizer visualizer(*this);
+    const FramegraphVisualizer visualizer(*this);
     return visualizer.generateDotGraph(executionInfo);
 }
 
@@ -161,13 +167,13 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskInputs;
     std::unordered_map<TransientTextureHandle, TextureInfo> textures;
     for (const auto &[taskHandle, taskInfo] : renderTasks_.items()) {
-        for (const auto &[inputHandle, _] : taskInfo.inputs) {
-            taskInputs.insert({taskHandle, inputHandle});
-            textures[inputHandle] = resources_.info(inputHandle.texture);
+        for (const RenderTaskInfo::Dependency &input : taskInfo.inputs) {
+            taskInputs.insert({taskHandle, input.handle});
+            textures[input.handle] = resources_.info(input.handle.texture);
         }
-        for (const auto &[outputHandle, kind, _] : taskInfo.outputs) {
-            resourceToTask[outputHandle] = taskHandle;
-            textures[outputHandle] = resources_.info(outputHandle.texture);
+        for (const RenderTaskInfo::Dependency &output : taskInfo.outputs) {
+            resourceToTask[output.handle] = taskHandle;
+            textures[output.handle] = resources_.info(output.handle.texture);
         }
     }
 
@@ -196,7 +202,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
             return {};
         }
 
-        RenderTaskHandle writingTask = writingTaskIt->second;
+        const RenderTaskHandle writingTask = writingTaskIt->second;
         CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render task '{}'",
                       textures[nextResource].name,
                       nextResource.version,
@@ -204,9 +210,9 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         renderTasks_[writingTask].executionPriority = ++executionPrio;
 
         // mark the resources created by the task as required
-        for (const RenderTaskInfo::OutputDesc &created :
+        for (const RenderTaskInfo::Dependency &created :
              renderTasks_[writingTask].outputs | ranges::views::filter([](const auto &outputDesc) {
-                 return outputDesc.kind == TaskOutputKind::Create;
+                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
              })) {
             requiredResources.push_back(created.handle.texture);
         }

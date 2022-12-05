@@ -41,12 +41,12 @@
 /*
 Checks for barriers defining multiple usages that have different layouts
 */
-// #define _ERROR_CHECK_MIXED_IMAGE_LAYOUT
+#define SYNC_ERROR_CHECK_MIXED_IMAGE_LAYOUT
 
 /*
 Checks if an image/buffer barrier is used when a global barrier would suffice
 */
-#define SYNC_ERROR_CHECK_COULD_USE_GLOBAL_BARRIER
+//#define SYNC_ERROR_CHECK_COULD_USE_GLOBAL_BARRIER
 
 /*
 Checks if a write access is listed alongside any other access - if so it
@@ -85,7 +85,7 @@ May consider other allocation strategies in future.
 
 #if defined(SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE) ||                                              \
     defined(SYNC_ERROR_CHECK_COULD_USE_GLOBAL_BARRIER) ||                                          \
-    defined(_ERROR_CHECK_MIXED_IMAGE_LAYOUT) || defined(SYNC_ERROR_CHECK_POTENTIAL_HAZARD)
+    defined(SYNC_ERROR_CHECK_MIXED_IMAGE_LAYOUT) || defined(SYNC_ERROR_CHECK_POTENTIAL_HAZARD)
 #include <assert.h>
 #endif
 
@@ -367,6 +367,12 @@ static_assert(AccessMap.back().stageMask == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT &
                   (VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT) &&
               AccessMap.back().imageLayout == VK_IMAGE_LAYOUT_GENERAL);
 
+
+VkImageLayout GetVkImageLayout(AccessType access)
+{
+    return AccessMap[static_cast<uint32_t>(access)].imageLayout;
+}
+
 void GetAccessInfo(std::span<AccessType> accesses,
                    VkPipelineStageFlags *pStageMask,
                    VkAccessFlags *pAccessMask,
@@ -400,7 +406,7 @@ void GetAccessInfo(std::span<AccessType> accesses,
 
         VkImageLayout layout = pAccessInfo->imageLayout;
 
-#ifdef _ERROR_CHECK_MIXED_IMAGE_LAYOUT
+#ifdef SYNC_ERROR_CHECK_MIXED_IMAGE_LAYOUT
         assert(*pImageLayout == VK_IMAGE_LAYOUT_UNDEFINED || *pImageLayout == layout);
 #endif
 
@@ -597,7 +603,7 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
                 //                break;
             }
 
-#ifdef _ERROR_CHECK_MIXED_IMAGE_LAYOUT
+#ifdef SYNC_ERROR_CHECK_MIXED_IMAGE_LAYOUT
             assert(pVkBarrier->oldLayout == VK_IMAGE_LAYOUT_UNDEFINED ||
                    pVkBarrier->oldLayout == layout);
 #endif
@@ -643,7 +649,7 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
             //     break;
         }
 
-#ifdef _ERROR_CHECK_MIXED_IMAGE_LAYOUT
+#ifdef SYNC_ERROR_CHECK_MIXED_IMAGE_LAYOUT
         assert(pVkBarrier->newLayout == VK_IMAGE_LAYOUT_UNDEFINED ||
                pVkBarrier->newLayout == layout);
 #endif
@@ -853,5 +859,4 @@ void CmdWaitEvents(Magnum::Vk::Device &device,
     SYNC_TEMP_FREE(pBufferMemoryBarriers);
     SYNC_TEMP_FREE(pImageMemoryBarriers);
 }
-
 } // namespace Cory::Sync

@@ -9,18 +9,14 @@
 namespace Cory::Framegraph {
 
 struct RenderTaskInfo {
-    struct InputDesc {
+    struct Dependency {
+        TaskDependencyKind kind;
         TransientTextureHandle handle;
-        TextureAccessInfo accessInfo;
-    };
-    struct OutputDesc {
-        TransientTextureHandle handle;
-        TaskOutputKind kind;
-        TextureAccessInfo accessInfo;
+        Sync::AccessType access;
     };
     std::string name;
-    std::vector<InputDesc> inputs;
-    std::vector<OutputDesc> outputs;
+    std::vector<Dependency> inputs;
+    std::vector<Dependency> outputs;
 
     // framegraph internal stuff
     cppcoro::coroutine_handle<> coroHandle;
@@ -42,24 +38,19 @@ class Builder : NoCopy {
     Builder(Builder &&) = default;
 
     /// declare that a render pass creates a certain texture
-    TransientTextureHandle create(std::string name,
-                                  glm::u32vec3 size,
-                                  PixelFormat format,
-                                  Layout initialLayout,
-                                  PipelineStages writeStage,
-                                  AccessFlags writeAccess);
+    TransientTextureHandle
+    create(std::string name, glm::u32vec3 size, PixelFormat format, Sync::AccessType writeAccess);
 
     /// declares a dependency to the named resource
-    TextureInfo read(TransientTextureHandle &h, TextureAccessInfo readAccess);
+    TextureInfo read(TransientTextureHandle &h, Sync::AccessType readAccess);
 
     /// declare that a render task writes to a certain texture
     std::pair<TransientTextureHandle, TextureInfo> write(TransientTextureHandle handle,
-                                                         TextureAccessInfo writeAccess);
+                                                         Sync::AccessType writeAccess);
 
     /// declare that a render task reads from and writes to a certain texture
     std::pair<TransientTextureHandle, TextureInfo> readWrite(TransientTextureHandle handle,
-                                                             TextureAccessInfo readAccess,
-                                                             TextureAccessInfo writeAccess);
+                                                             Sync::AccessType readWriteAccess);
 
     /**
      * Declares a render pass with a default pipeline setup

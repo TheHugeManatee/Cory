@@ -126,7 +126,7 @@ MEMORY ALLOCATION
     storage for the Vulkan barrier equivalents in order to pass them to the
     respective Vulkan commands.
 
-    These use the `_TEMP_ALLOC(size)` and `_TEMP_FREE(x)` macros,
+    These use the `SYNC_TEMP_ALLOC(size)` and `SYNC_TEMP_FREE(x)` macros,
     which are by default set to alloca(size) and ((void)(x)), respectively.
     If you don't want to use stack space or would rather use your own
     allocation strategy, these can be overridden by defining these macros

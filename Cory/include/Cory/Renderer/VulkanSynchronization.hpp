@@ -36,7 +36,7 @@ passes are not addressed in this API at present.
 
 USAGE
 
-   #define the symbol THSVS_SIMPLER_VULKAN_SYNCHRONIZATION_IMPLEMENTATION in
+   #define the symbol _SIMPLER_VULKAN_SYNCHRONIZATION_IMPLEMENTATION in
    *one* C/C++ file before the #include of this file; the implementation
    will be generated in that file.
 
@@ -44,7 +44,7 @@ VERSION
 
     alpha.9
 
-    Alpha.9 adds the thsvsGetAccessInfo function to translate access types into a thsvsVkAccessInfo.
+    Alpha.9 adds the GetAccessInfo function to translate access types into a VkAccessInfo.
 
 
 VERSION HISTORY
@@ -83,29 +83,29 @@ them (!)
 
     Uniform and vertex buffer access in one enum, matching
 D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER:
-     - THSVS_ACCESS_ANY_SHADER_READ_UNIFORM_BUFFER_OR_VERTEX_BUFFER
+     - _ACCESS_ANY_SHADER_READ_UNIFORM_BUFFER_OR_VERTEX_BUFFER
 
     Color read *and* write access, matching D3D12_RESOURCE_STATE_RENDER_TARGET:
-     - THSVS_ACCESS_COLOR_ATTACHMENT_READ_WRITE
+     - _ACCESS_COLOR_ATTACHMENT_READ_WRITE
 
-    Also the "THSVS_ACCESS_*_SHADER_READ_SAMPLED_IMAGE" enums have been renamed to the form
-"THSVS_ACCESS_*_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER"
+    Also the "_ACCESS_*_SHADER_READ_SAMPLED_IMAGE" enums have been renamed to the form
+"_ACCESS_*_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER"
 
     alpha.2
 
     Alpha.2 adds four new resource states for "ANY SHADER ACCESS":
-     - THSVS_ACCESS_ANY_SHADER_READ_UNIFORM_BUFFER
-     - THSVS_ACCESS_ANY_SHADER_READ_SAMPLED_IMAGE
-     - THSVS_ACCESS_ANY_SHADER_READ_OTHER
-     - THSVS_ACCESS_ANY_SHADER_WRITE
+     - _ACCESS_ANY_SHADER_READ_UNIFORM_BUFFER
+     - _ACCESS_ANY_SHADER_READ_SAMPLED_IMAGE
+     - _ACCESS_ANY_SHADER_READ_OTHER
+     - _ACCESS_ANY_SHADER_WRITE
 
     alpha.1
 
     Alpha.1 adds three new resource states:
-     - THSVS_ACCESS_GENERAL (Any access on the device)
-     - THSVS_ACCESS_DEPTH_ATTACHMENT_WRITE_STENCIL_READ_ONLY (Write access to only the depth aspect
+     - _ACCESS_GENERAL (Any access on the device)
+     - _ACCESS_DEPTH_ATTACHMENT_WRITE_STENCIL_READ_ONLY (Write access to only the depth aspect
 of a depth/stencil attachment)
-     - THSVS_ACCESS_STENCIL_ATTACHMENT_WRITE_DEPTH_READ_ONLY (Write access to only the stencil
+     - _ACCESS_STENCIL_ATTACHMENT_WRITE_DEPTH_READ_ONLY (Write access to only the stencil
 aspect of a depth/stencil attachment)
 
     It also fixes a couple of typos, and adds clarification as to when extensions need to be enabled
@@ -122,16 +122,16 @@ to use a feature.
 
 MEMORY ALLOCATION
 
-    The thsvsCmdPipelineBarrier and thWaitEvents commands allocate temporary
+    The CmdPipelineBarrier and thWaitEvents commands allocate temporary
     storage for the Vulkan barrier equivalents in order to pass them to the
     respective Vulkan commands.
 
-    These use the `THSVS_TEMP_ALLOC(size)` and `THSVS_TEMP_FREE(x)` macros,
+    These use the `_TEMP_ALLOC(size)` and `_TEMP_FREE(x)` macros,
     which are by default set to alloca(size) and ((void)(x)), respectively.
     If you don't want to use stack space or would rather use your own
     allocation strategy, these can be overridden by defining these macros
     in before #include-ing the header file with
-    THSVS_SIMPLER_VULKAN_SYNCHRONIZATION_IMPLEMENTATION defined.
+    _SIMPLER_VULKAN_SYNCHRONIZATION_IMPLEMENTATION defined.
 
     I'd rather avoid the need for these allocations in what are likely to be
     high-traffic commands, but currently just want to ship something - may
@@ -162,7 +162,7 @@ ERROR CHECKS
 
     By default, as with the Vulkan API, this library does NOT check for
     errors.
-    However, a number of optional error checks (THSVS_ERROR_CHECK_*) can be
+    However, a number of optional error checks (_ERROR_CHECK_*) can be
     enabled by uncommenting the relevant #defines.
     Currently, error checks simply assert at the point a failure is detected
     and do not output an error message.
@@ -177,7 +177,7 @@ ISSUES
     This header was clean of warnings using -Wall as of time of publishing
     on both gcc 4.8.4 and clang 3.5, using the c99 standard.
 
-    There's a potential pitfall in thsvsCmdPipelineBarrier and thsvsCmdWaitEvents
+    There's a potential pitfall in CmdPipelineBarrier and CmdWaitEvents
     where alloca is used for temporary allocations. See MEMORY ALLOCATION
     for more information.
 
@@ -188,10 +188,13 @@ ISSUES
 */
 
 #include <Magnum/Vk/Vulkan.h>
+#include <Magnum/Vk/Vk.h>
 
 #include <cstdint>
 
-/*
+namespace Cory::Sync {
+
+/**
 AccessType defines all potential resource usages in the Vulkan API.
 */
 enum AccessType {
@@ -199,9 +202,9 @@ enum AccessType {
     NONE,
 
     // Read access
-    // Requires VK_NV_device_generated_commands to be enabled
-    // Command buffer read operation as defined by NV_device_generated_commands
-    COMMAND_BUFFER_READ_NV,
+//    // Requires VK_NV_device_generated_commands to be enabled
+//    // Command buffer read operation as defined by NV_device_generated_commands
+//    COMMAND_BUFFER_READ_NV,
     // Read as an indirect buffer for drawing or dispatch
     INDIRECT_BUFFER,
     // Read as an index buffer for drawing
@@ -232,25 +235,25 @@ enum AccessType {
     GEOMETRY_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
     // Read as any other resource in a geometry shader
     GEOMETRY_SHADER_READ_OTHER,
-    // Read as a uniform buffer in a task shader
-    TASK_SHADER_READ_UNIFORM_BUFFER_NV,
-    // Read as a sampled image/uniform texel buffer in a task shader
-    TASK_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER_NV,
-    // Read as any other resource in a task shader
-    TASK_SHADER_READ_OTHER_NV,
-    // Read as a uniform buffer in a mesh shader
-    MESH_SHADER_READ_UNIFORM_BUFFER_NV,
-    // Read as a sampled image/uniform texel buffer in a mesh shader
-    MESH_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER_NV,
-    // Read as any other resource in a mesh shader
-    MESH_SHADER_READ_OTHER_NV,
-    // Read as a transform feedback counter buffer
-    TRANSFORM_FEEDBACK_COUNTER_READ_EXT,
-    // Read as a fragment density map image
-    FRAGMENT_DENSITY_MAP_READ_EXT,
-    // Read as a shading rate image
-    SHADING_RATE_READ_NV,
-    // Read as a uniform buffer in a fragment shader
+    //    // Read as a uniform buffer in a task shader
+    //    TASK_SHADER_READ_UNIFORM_BUFFER_NV,
+    //    // Read as a sampled image/uniform texel buffer in a task shader
+    //    TASK_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER_NV,
+    //    // Read as any other resource in a task shader
+    //    TASK_SHADER_READ_OTHER_NV,
+    //    // Read as a uniform buffer in a mesh shader
+    //    MESH_SHADER_READ_UNIFORM_BUFFER_NV,
+    //    // Read as a sampled image/uniform texel buffer in a mesh shader
+    //    MESH_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER_NV,
+    //    // Read as any other resource in a mesh shader
+    //    MESH_SHADER_READ_OTHER_NV,
+    //    // Read as a transform feedback counter buffer
+    //    TRANSFORM_FEEDBACK_COUNTER_READ_EXT,
+    //    // Read as a fragment density map image
+    //    FRAGMENT_DENSITY_MAP_READ_EXT,
+    //    // Read as a shading rate image
+    //    SHADING_RATE_READ_NV,
+    //    // Read as a uniform buffer in a fragment shader
     FRAGMENT_SHADER_READ_UNIFORM_BUFFER,
     // Read as a sampled image/uniform texel buffer  in a fragment shader
     FRAGMENT_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
@@ -262,8 +265,8 @@ enum AccessType {
     FRAGMENT_SHADER_READ_OTHER,
     // Read by standard blending/logic operations or subpass load operations
     COLOR_ATTACHMENT_READ,
-    // Read by advanced blending, standard blending, logic operations, or subpass load operations
-    COLOR_ATTACHMENT_ADVANCED_BLENDING_EXT,
+//    // Read by advanced blending, standard blending, logic operations, or subpass load operations
+//    COLOR_ATTACHMENT_ADVANCED_BLENDING_EXT,
     // Read by depth/stencil tests or subpass load operations
     DEPTH_STENCIL_ATTACHMENT_READ,
     // Read as a uniform buffer in a compute shader
@@ -289,23 +292,23 @@ enum AccessType {
     // Read by the presentation engine (i.e. vkQueuePresentKHR)
     PRESENT,
 
-    // Requires VK_EXT_conditional_rendering to be enabled
-    // Read by conditional rendering
-    CONDITIONAL_RENDERING_READ_EXT,
-
-    // Requires VK_NV_ray_tracing to be enabled
-    // Read by a ray tracing shader as an acceleration structure
-    RAY_TRACING_SHADER_ACCELERATION_STRUCTURE_READ_NV,
-    // Read as an acceleration structure during a build
-    ACCELERATION_STRUCTURE_BUILD_READ_NV,
+//    // Requires VK_EXT_conditional_rendering to be enabled
+//    // Read by conditional rendering
+//    CONDITIONAL_RENDERING_READ_EXT,
+//
+//    // Requires VK_NV_ray_tracing to be enabled
+//    // Read by a ray tracing shader as an acceleration structure
+//    RAY_TRACING_SHADER_ACCELERATION_STRUCTURE_READ_NV,
+//    // Read as an acceleration structure during a build
+//    ACCELERATION_STRUCTURE_BUILD_READ_NV,
 
     // Read accesses end
     END_OF_READ_ACCESS,
 
     // Write access
-    // Requires VK_NV_device_generated_commands to be enabled
-    // Command buffer write operation
-    COMMAND_BUFFER_WRITE_NV,
+//    // Requires VK_NV_device_generated_commands to be enabled
+//    // Command buffer write operation
+//    COMMAND_BUFFER_WRITE_NV,
     // Written as any resource in a vertex shader
     VERTEX_SHADER_WRITE,
     // Written as any resource in a tessellation control shader
@@ -315,17 +318,17 @@ enum AccessType {
     // Written as any resource in a geometry shader
     GEOMETRY_SHADER_WRITE,
 
-    // Requires VK_NV_mesh_shading to be enabled
-    // Written as any resource in a task shader
-    TASK_SHADER_WRITE_NV,
-    // Written as any resource in a mesh shader
-    MESH_SHADER_WRITE_NV,
-
-    // Requires VK_EXT_transform_feedback to be enabled
-    // Written as a transform feedback buffer
-    TRANSFORM_FEEDBACK_WRITE_EXT,
-    // Written as a transform feedback counter buffer
-    TRANSFORM_FEEDBACK_COUNTER_WRITE_EXT,
+//    // Requires VK_NV_mesh_shading to be enabled
+//    // Written as any resource in a task shader
+//    TASK_SHADER_WRITE_NV,
+//    // Written as any resource in a mesh shader
+//    MESH_SHADER_WRITE_NV,
+//
+//    // Requires VK_EXT_transform_feedback to be enabled
+//    // Written as a transform feedback buffer
+//    TRANSFORM_FEEDBACK_WRITE_EXT,
+//    // Written as a transform feedback counter buffer
+//    TRANSFORM_FEEDBACK_COUNTER_WRITE_EXT,
 
     // Written as any resource in a fragment shader
     FRAGMENT_SHADER_WRITE,
@@ -353,9 +356,9 @@ enum AccessType {
     // Written on the host
     HOST_WRITE,
 
-    // Requires VK_NV_ray_tracing to be enabled
-    // Written as an acceleration structure during a build
-    ACCELERATION_STRUCTURE_BUILD_WRITE_NV,
+    //    // Requires VK_NV_ray_tracing to be enabled
+    //    // Written as an acceleration structure during a build
+    //    ACCELERATION_STRUCTURE_BUILD_WRITE_NV,
 
     // Read or written as a color attachment during rendering
     COLOR_ATTACHMENT_READ_WRITE,
@@ -368,11 +371,11 @@ enum AccessType {
     NUM_ACCESS_TYPES
 };
 
-/*
+/**
 ImageLayout defines a handful of layout options for images.
 Rather than a list of all possible image layouts, this reduced list is
 correlated with the access types to map to the correct Vulkan layouts.
-THSVS_IMAGE_LAYOUT_OPTIMAL is usually preferred.
+_IMAGE_LAYOUT_OPTIMAL is usually preferred.
 */
 enum class ImageLayout {
     // Choose the most optimal layout for each usage. Performs layout transitions as appropriate for
@@ -385,24 +388,24 @@ enum class ImageLayout {
     // Requires VK_KHR_shared_presentable_image to be enabled. Can only be used for shared
     // presentable images (i.e. single-buffered swap chains).
     // As GENERAL, but also allows presentation engines to access it - no layout transitions
-    GENERAL_AND_PRESENTATION
+    // GENERAL_AND_PRESENTATION
 };
 
-/*
+/**
 Global barriers define a set of accesses on multiple resources at once.
 If a buffer or image doesn't require a queue ownership transfer, or an image
 doesn't require a layout transition (e.g. you're using one of the GENERAL
 layouts) then a global barrier should be preferred.
 Simply define the previous and next access types of resources affected.
 */
-struct ThsvsGlobalBarrier {
+struct GlobalBarrier {
     uint32_t prevAccessCount;
     const AccessType *pPrevAccesses;
     uint32_t nextAccessCount;
     const AccessType *pNextAccesses;
 };
 
-/*
+/**
 Buffer barriers should only be used when a queue family ownership transfer
 is required - prefer global barriers at all other times.
 
@@ -417,7 +420,7 @@ twice - once by a queue in the source queue family, and then once again by a
 queue in the destination queue family, with a semaphore guaranteeing
 execution order between them.
 */
-struct ThsvsBufferBarrier {
+struct BufferBarrier {
     uint32_t prevAccessCount;
     const AccessType *pPrevAccesses;
     uint32_t nextAccessCount;
@@ -429,13 +432,13 @@ struct ThsvsBufferBarrier {
     VkDeviceSize size;
 };
 
-/*
+/**
 Image barriers should only be used when a queue family ownership transfer
 or an image layout transition is required - prefer global barriers at all
 other times.
-In general it is better to use image barriers with THSVS_IMAGE_LAYOUT_OPTIMAL
+In general it is better to use image barriers with _IMAGE_LAYOUT_OPTIMAL
 than it is to use global barriers with images using either of the
-THSVS_IMAGE_LAYOUT_GENERAL* layouts.
+_IMAGE_LAYOUT_GENERAL* layouts.
 
 Access types are defined in the same way as for a global memory barrier, but
 they only affect the image subresource range identified by image and
@@ -455,7 +458,7 @@ This is particularly useful for transient images where the contents are
 going to be immediately overwritten. A good example of when to use this is
 when an application re-uses a presented image after vkAcquireNextImageKHR.
 */
-struct ThsvsImageBarrier {
+struct ImageBarrier {
     uint32_t prevAccessCount;
     const AccessType *pPrevAccesses;
     uint32_t nextAccessCount;
@@ -469,48 +472,48 @@ struct ThsvsImageBarrier {
     VkImageSubresourceRange subresourceRange;
 };
 
-/*
+/**
 Mapping function that translates a set of accesses into the corresponding
 pipeline stages, VkAccessFlags, and image layout.
 */
-void thsvsGetAccessInfo(uint32_t accessCount,
+void GetAccessInfo(uint32_t accessCount,
                         const AccessType *pAccesses,
                         VkPipelineStageFlags *pStageMask,
                         VkAccessFlags *pAccessMask,
                         VkImageLayout *pImageLayout,
                         bool *pHasWriteAccess);
 
-/*
+/**
 Mapping function that translates a global barrier into a set of source and
 destination pipeline stages, and a VkMemoryBarrier, that can be used with
 Vulkan's synchronization methods.
 */
-void thsvsGetVulkanMemoryBarrier(const ThsvsGlobalBarrier &thBarrier,
+void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier,
                                  VkPipelineStageFlags *pSrcStages,
                                  VkPipelineStageFlags *pDstStages,
                                  VkMemoryBarrier *pVkBarrier);
 
-/*
+/**
 Mapping function that translates a buffer barrier into a set of source and
 destination pipeline stages, and a VkBufferMemoryBarrier, that can be used
 with Vulkan's synchronization methods.
 */
-void thsvsGetVulkanBufferMemoryBarrier(const ThsvsBufferBarrier &thBarrier,
+void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
                                        VkPipelineStageFlags *pSrcStages,
                                        VkPipelineStageFlags *pDstStages,
                                        VkBufferMemoryBarrier *pVkBarrier);
 
-/*
+/**
 Mapping function that translates an image barrier into a set of source and
 destination pipeline stages, and a VkBufferMemoryBarrier, that can be used
 with Vulkan's synchronization methods.
 */
-void thsvsGetVulkanImageMemoryBarrier(const ThsvsImageBarrier &thBarrier,
+void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
                                       VkPipelineStageFlags *pSrcStages,
                                       VkPipelineStageFlags *pDstStages,
                                       VkImageMemoryBarrier *pVkBarrier);
 
-/*
+/**
 Simplified wrapper around vkCmdPipelineBarrier.
 
 The mapping functions defined above are used to translate the passed in
@@ -519,38 +522,38 @@ barriers to be passed to vkCmdPipelineBarrier.
 
 commandBuffer is passed unmodified to vkCmdPipelineBarrier.
 */
-void thsvsCmdPipelineBarrier(VkCommandBuffer commandBuffer,
-                             const ThsvsGlobalBarrier *pGlobalBarrier,
+void CmdPipelineBarrier(VkCommandBuffer commandBuffer,
+                             const GlobalBarrier *pGlobalBarrier,
                              uint32_t bufferBarrierCount,
-                             const ThsvsBufferBarrier *pBufferBarriers,
+                             const BufferBarrier *pBufferBarriers,
                              uint32_t imageBarrierCount,
-                             const ThsvsImageBarrier *pImageBarriers);
+                             const ImageBarrier *pImageBarriers);
 
-/*
+/**
 Wrapper around vkCmdSetEvent.
 
 Sets an event when the accesses defined by pPrevAccesses are completed.
 
 commandBuffer and event are passed unmodified to vkCmdSetEvent.
 */
-void thsvsCmdSetEvent(VkCommandBuffer commandBuffer,
+void CmdSetEvent(VkCommandBuffer commandBuffer,
                       VkEvent event,
                       uint32_t prevAccessCount,
                       const AccessType *pPrevAccesses);
 
-/*
+/**
 Wrapper around vkCmdResetEvent.
 
 Resets an event when the accesses defined by pPrevAccesses are completed.
 
 commandBuffer and event are passed unmodified to vkCmdResetEvent.
 */
-void thsvsCmdResetEvent(VkCommandBuffer commandBuffer,
+void CmdResetEvent(VkCommandBuffer commandBuffer,
                         VkEvent event,
                         uint32_t prevAccessCount,
                         const AccessType *pPrevAccesses);
 
-/*
+/**
 Simplified wrapper around vkCmdWaitEvents.
 
 The mapping functions defined above are used to translate the passed in
@@ -560,11 +563,12 @@ barriers to be passed to vkCmdPipelineBarrier.
 commandBuffer, eventCount, and pEvents are passed unmodified to
 vkCmdWaitEvents.
 */
-void thsvsCmdWaitEvents(VkCommandBuffer commandBuffer,
+void CmdWaitEvents(VkCommandBuffer commandBuffer,
                         uint32_t eventCount,
                         const VkEvent *pEvents,
-                        const ThsvsGlobalBarrier *pGlobalBarrier,
+                        const GlobalBarrier *pGlobalBarrier,
                         uint32_t bufferBarrierCount,
-                        const ThsvsBufferBarrier *pBufferBarriers,
+                        const BufferBarrier *pBufferBarriers,
                         uint32_t imageBarrierCount,
-                        const ThsvsImageBarrier *pImageBarriers);
+                        const ImageBarrier *pImageBarriers);
+} // namespace Cory::Sync

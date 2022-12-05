@@ -14,7 +14,7 @@ namespace Cory::Framegraph {
 // Framegraph and Builder classes, not intended to be used directly
 class TextureResourceManager {
   public:
-    TextureResourceManager(Context &ctx);
+    explicit TextureResourceManager(Context &ctx);
     ~TextureResourceManager();
 
     TextureHandle declareTexture(TextureInfo info);
@@ -42,7 +42,7 @@ class TextureResourceManager {
                           TextureAccessInfo readAccessInfo,
                           TextureAccessInfo writeAccessInfo);
 
-    const TextureInfo &info(TextureHandle handle);
+    const TextureInfo &info(TextureHandle handle) const;
     Magnum::Vk::Image &image(TextureHandle handle);
     Magnum::Vk::ImageView &imageView(TextureHandle handle);
     TextureState state(TextureHandle handle) const;

@@ -35,7 +35,7 @@ class BitField {
     {
     }
 
-    auto operator<=>(const BitField& rhs) const = default;
+    auto operator<=>(const BitField &rhs) const = default;
 
     /// access to the raw enum
     [[nodiscard]] constexpr UnderlyingEnum bits() const { return UnderlyingEnum(bits_); }
@@ -92,7 +92,7 @@ struct fmt::formatter<Cory::BitField<E>, std::enable_if_t<std::is_enum_v<E>, cha
     : fmt::formatter<std::string_view, char> {
     auto format(Cory::BitField<E> e, format_context &ctx) const
     {
-        return fmt::format_to(
-            ctx.out(), "{}", fmt::join(e.set_bits(), " | "));
+        if (e.bits() == E{}) { return fmt::format_to(ctx.out(), "{}", E{}); }
+        return fmt::format_to(ctx.out(), "{}", fmt::join(e.set_bits(), " | "));
     }
 };

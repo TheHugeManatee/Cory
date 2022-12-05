@@ -235,7 +235,7 @@ FG::RenderTaskDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
 }
 } // namespace passes
 
-TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
+TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 {
     testing::VulkanTester t;
 
@@ -288,8 +288,8 @@ TEST_CASE("Framegraph API exploration", "[Cory/Framegraph/Framegraph]")
 
     buffer.begin();
 
-    auto g = graph.execute(buffer);
-    graph.dump(g);
+    auto g = graph.record(buffer);
+    CO_APP_INFO(graph.dump(g));
 
     buffer.end();
 }

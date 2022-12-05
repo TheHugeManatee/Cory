@@ -188,7 +188,7 @@ void TextureResourceManager::readWriteBarrier(Magnum::Vk::CommandBuffer &cmdBuff
     recordWrite(cmdBuffer, handle, writeAccessInfo);
 }
 
-const TextureInfo &TextureResourceManager::info(TextureHandle handle)
+const TextureInfo &TextureResourceManager::info(TextureHandle handle) const
 {
     return data_->textureResources_[handle].info;
 }

@@ -19,7 +19,7 @@
     </Type>
 
     <Type Name="Cory::SlotMap&lt;*&gt;">
-        <DisplayString>{{ size={size()} }}</DisplayString>
+        <DisplayString>{{ size={size()}, capacity={capacity()} }}</DisplayString>
         <Expand>
             <Item Name="[size]">size()</Item>
             <Item Name="[capacity]">capacity()</Item>
@@ -40,6 +40,18 @@
                 </Loop>
             </CustomListItems>
 
+        </Expand>
+    </Type>
+
+    <Type Name="Cory::SlotMap&lt;*&gt;::Chunk">
+        <DisplayString>{{ size={CHUNK_SIZE} }}</DisplayString>
+        <Expand>
+            <Item Name="[size]">CHUNK_SIZE</Item>
+            <IndexListItems>
+                <Size>CHUNK_SIZE</Size>
+                <ValueNode Condition="id[$i].free_ == 0">storage[$i]</ValueNode>
+                <ValueNode Condition="id[$i].free_ != 0">id[$i]</ValueNode>
+            </IndexListItems>
         </Expand>
     </Type>
 

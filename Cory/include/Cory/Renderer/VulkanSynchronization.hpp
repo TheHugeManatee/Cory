@@ -187,10 +187,11 @@ ISSUES
     via a pull request yourself if you're so inclined.
 */
 
-#include <Magnum/Vk/Vulkan.h>
 #include <Magnum/Vk/Vk.h>
+#include <Magnum/Vk/Vulkan.h>
 
 #include <cstdint>
+#include <vector>
 
 namespace Cory::Sync {
 
@@ -202,9 +203,9 @@ enum AccessType {
     NONE,
 
     // Read access
-//    // Requires VK_NV_device_generated_commands to be enabled
-//    // Command buffer read operation as defined by NV_device_generated_commands
-//    COMMAND_BUFFER_READ_NV,
+    //    // Requires VK_NV_device_generated_commands to be enabled
+    //    // Command buffer read operation as defined by NV_device_generated_commands
+    //    COMMAND_BUFFER_READ_NV,
     // Read as an indirect buffer for drawing or dispatch
     INDIRECT_BUFFER,
     // Read as an index buffer for drawing
@@ -265,8 +266,9 @@ enum AccessType {
     FRAGMENT_SHADER_READ_OTHER,
     // Read by standard blending/logic operations or subpass load operations
     COLOR_ATTACHMENT_READ,
-//    // Read by advanced blending, standard blending, logic operations, or subpass load operations
-//    COLOR_ATTACHMENT_ADVANCED_BLENDING_EXT,
+    //    // Read by advanced blending, standard blending, logic operations, or subpass load
+    //    operations
+    //    COLOR_ATTACHMENT_ADVANCED_BLENDING_EXT,
     // Read by depth/stencil tests or subpass load operations
     DEPTH_STENCIL_ATTACHMENT_READ,
     // Read as a uniform buffer in a compute shader
@@ -292,23 +294,23 @@ enum AccessType {
     // Read by the presentation engine (i.e. vkQueuePresentKHR)
     PRESENT,
 
-//    // Requires VK_EXT_conditional_rendering to be enabled
-//    // Read by conditional rendering
-//    CONDITIONAL_RENDERING_READ_EXT,
-//
-//    // Requires VK_NV_ray_tracing to be enabled
-//    // Read by a ray tracing shader as an acceleration structure
-//    RAY_TRACING_SHADER_ACCELERATION_STRUCTURE_READ_NV,
-//    // Read as an acceleration structure during a build
-//    ACCELERATION_STRUCTURE_BUILD_READ_NV,
+    //    // Requires VK_EXT_conditional_rendering to be enabled
+    //    // Read by conditional rendering
+    //    CONDITIONAL_RENDERING_READ_EXT,
+    //
+    //    // Requires VK_NV_ray_tracing to be enabled
+    //    // Read by a ray tracing shader as an acceleration structure
+    //    RAY_TRACING_SHADER_ACCELERATION_STRUCTURE_READ_NV,
+    //    // Read as an acceleration structure during a build
+    //    ACCELERATION_STRUCTURE_BUILD_READ_NV,
 
     // Read accesses end
     END_OF_READ_ACCESS,
 
     // Write access
-//    // Requires VK_NV_device_generated_commands to be enabled
-//    // Command buffer write operation
-//    COMMAND_BUFFER_WRITE_NV,
+    //    // Requires VK_NV_device_generated_commands to be enabled
+    //    // Command buffer write operation
+    //    COMMAND_BUFFER_WRITE_NV,
     // Written as any resource in a vertex shader
     VERTEX_SHADER_WRITE,
     // Written as any resource in a tessellation control shader
@@ -318,17 +320,17 @@ enum AccessType {
     // Written as any resource in a geometry shader
     GEOMETRY_SHADER_WRITE,
 
-//    // Requires VK_NV_mesh_shading to be enabled
-//    // Written as any resource in a task shader
-//    TASK_SHADER_WRITE_NV,
-//    // Written as any resource in a mesh shader
-//    MESH_SHADER_WRITE_NV,
-//
-//    // Requires VK_EXT_transform_feedback to be enabled
-//    // Written as a transform feedback buffer
-//    TRANSFORM_FEEDBACK_WRITE_EXT,
-//    // Written as a transform feedback counter buffer
-//    TRANSFORM_FEEDBACK_COUNTER_WRITE_EXT,
+    //    // Requires VK_NV_mesh_shading to be enabled
+    //    // Written as any resource in a task shader
+    //    TASK_SHADER_WRITE_NV,
+    //    // Written as any resource in a mesh shader
+    //    MESH_SHADER_WRITE_NV,
+    //
+    //    // Requires VK_EXT_transform_feedback to be enabled
+    //    // Written as a transform feedback buffer
+    //    TRANSFORM_FEEDBACK_WRITE_EXT,
+    //    // Written as a transform feedback counter buffer
+    //    TRANSFORM_FEEDBACK_COUNTER_WRITE_EXT,
 
     // Written as any resource in a fragment shader
     FRAGMENT_SHADER_WRITE,
@@ -399,10 +401,8 @@ layouts) then a global barrier should be preferred.
 Simply define the previous and next access types of resources affected.
 */
 struct GlobalBarrier {
-    uint32_t prevAccessCount;
-    const AccessType *pPrevAccesses;
-    uint32_t nextAccessCount;
-    const AccessType *pNextAccesses;
+    std::vector<AccessType> prevAccesses;
+    std::vector<AccessType> nextAccesses;
 };
 
 /**
@@ -421,10 +421,8 @@ queue in the destination queue family, with a semaphore guaranteeing
 execution order between them.
 */
 struct BufferBarrier {
-    uint32_t prevAccessCount;
-    const AccessType *pPrevAccesses;
-    uint32_t nextAccessCount;
-    const AccessType *pNextAccesses;
+    std::vector<AccessType> prevAccesses;
+    std::vector<AccessType> nextAccesses;
     uint32_t srcQueueFamilyIndex;
     uint32_t dstQueueFamilyIndex;
     VkBuffer buffer;
@@ -459,10 +457,8 @@ going to be immediately overwritten. A good example of when to use this is
 when an application re-uses a presented image after vkAcquireNextImageKHR.
 */
 struct ImageBarrier {
-    uint32_t prevAccessCount;
-    const AccessType *pPrevAccesses;
-    uint32_t nextAccessCount;
-    const AccessType *pNextAccesses;
+    std::vector<AccessType> prevAccesses;
+    std::vector<AccessType> nextAccesses;
     ImageLayout prevLayout;
     ImageLayout nextLayout;
     VkBool32 discardContents;
@@ -476,12 +472,11 @@ struct ImageBarrier {
 Mapping function that translates a set of accesses into the corresponding
 pipeline stages, VkAccessFlags, and image layout.
 */
-void GetAccessInfo(uint32_t accessCount,
-                        const AccessType *pAccesses,
-                        VkPipelineStageFlags *pStageMask,
-                        VkAccessFlags *pAccessMask,
-                        VkImageLayout *pImageLayout,
-                        bool *pHasWriteAccess);
+void GetAccessInfo(const std::vector<AccessType>& accesses,
+                   VkPipelineStageFlags *pStageMask,
+                   VkAccessFlags *pAccessMask,
+                   VkImageLayout *pImageLayout,
+                   bool *pHasWriteAccess);
 
 /**
 Mapping function that translates a global barrier into a set of source and
@@ -489,9 +484,9 @@ destination pipeline stages, and a VkMemoryBarrier, that can be used with
 Vulkan's synchronization methods.
 */
 void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier,
-                                 VkPipelineStageFlags *pSrcStages,
-                                 VkPipelineStageFlags *pDstStages,
-                                 VkMemoryBarrier *pVkBarrier);
+                            VkPipelineStageFlags *pSrcStages,
+                            VkPipelineStageFlags *pDstStages,
+                            VkMemoryBarrier *pVkBarrier);
 
 /**
 Mapping function that translates a buffer barrier into a set of source and
@@ -499,9 +494,9 @@ destination pipeline stages, and a VkBufferMemoryBarrier, that can be used
 with Vulkan's synchronization methods.
 */
 void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
-                                       VkPipelineStageFlags *pSrcStages,
-                                       VkPipelineStageFlags *pDstStages,
-                                       VkBufferMemoryBarrier *pVkBarrier);
+                                  VkPipelineStageFlags *pSrcStages,
+                                  VkPipelineStageFlags *pDstStages,
+                                  VkBufferMemoryBarrier *pVkBarrier);
 
 /**
 Mapping function that translates an image barrier into a set of source and
@@ -509,9 +504,9 @@ destination pipeline stages, and a VkBufferMemoryBarrier, that can be used
 with Vulkan's synchronization methods.
 */
 void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
-                                      VkPipelineStageFlags *pSrcStages,
-                                      VkPipelineStageFlags *pDstStages,
-                                      VkImageMemoryBarrier *pVkBarrier);
+                                 VkPipelineStageFlags *pSrcStages,
+                                 VkPipelineStageFlags *pDstStages,
+                                 VkImageMemoryBarrier *pVkBarrier);
 
 /**
 Simplified wrapper around vkCmdPipelineBarrier.
@@ -522,12 +517,11 @@ barriers to be passed to vkCmdPipelineBarrier.
 
 commandBuffer is passed unmodified to vkCmdPipelineBarrier.
 */
-void CmdPipelineBarrier(VkCommandBuffer commandBuffer,
-                             const GlobalBarrier *pGlobalBarrier,
-                             uint32_t bufferBarrierCount,
-                             const BufferBarrier *pBufferBarriers,
-                             uint32_t imageBarrierCount,
-                             const ImageBarrier *pImageBarriers);
+void CmdPipelineBarrier(Magnum::Vk::Device &device,
+                        VkCommandBuffer commandBuffer,
+                        const GlobalBarrier *pGlobalBarrier,
+                        const std::vector<BufferBarrier> &bufferBarriers,
+                        const std::vector<ImageBarrier> &imageBarriers);
 
 /**
 Wrapper around vkCmdSetEvent.
@@ -536,10 +530,10 @@ Sets an event when the accesses defined by pPrevAccesses are completed.
 
 commandBuffer and event are passed unmodified to vkCmdSetEvent.
 */
-void CmdSetEvent(VkCommandBuffer commandBuffer,
-                      VkEvent event,
-                      uint32_t prevAccessCount,
-                      const AccessType *pPrevAccesses);
+void CmdSetEvent(Magnum::Vk::Device &device,
+                 VkCommandBuffer commandBuffer,
+                 VkEvent event,
+                 const std::vector<AccessType>& prevAccesses);
 
 /**
 Wrapper around vkCmdResetEvent.
@@ -548,10 +542,10 @@ Resets an event when the accesses defined by pPrevAccesses are completed.
 
 commandBuffer and event are passed unmodified to vkCmdResetEvent.
 */
-void CmdResetEvent(VkCommandBuffer commandBuffer,
-                        VkEvent event,
-                        uint32_t prevAccessCount,
-                        const AccessType *pPrevAccesses);
+void CmdResetEvent(Magnum::Vk::Device &device,
+                   VkCommandBuffer commandBuffer,
+                   VkEvent event,
+                   const std::vector<AccessType>& prevAccesses);
 
 /**
 Simplified wrapper around vkCmdWaitEvents.
@@ -563,12 +557,10 @@ barriers to be passed to vkCmdPipelineBarrier.
 commandBuffer, eventCount, and pEvents are passed unmodified to
 vkCmdWaitEvents.
 */
-void CmdWaitEvents(VkCommandBuffer commandBuffer,
-                        uint32_t eventCount,
-                        const VkEvent *pEvents,
-                        const GlobalBarrier *pGlobalBarrier,
-                        uint32_t bufferBarrierCount,
-                        const BufferBarrier *pBufferBarriers,
-                        uint32_t imageBarrierCount,
-                        const ImageBarrier *pImageBarriers);
+void CmdWaitEvents(Magnum::Vk::Device &device,
+                   VkCommandBuffer commandBuffer,
+                   const std::vector<VkEvent>& events,
+                   const GlobalBarrier *pGlobalBarrier,
+                   const std::vector<BufferBarrier> &bufferBarriers,
+                   const std::vector<ImageBarrier> &imageBarriers);
 } // namespace Cory::Sync

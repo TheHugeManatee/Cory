@@ -1,6 +1,8 @@
 #include <Cory/Renderer/VulkanSynchronization.hpp>
 
+#include <Magnum/Vk/Device.h>
 #include <array>
+#include <gsl/narrow>
 
 //// Optional Error Checking ////
 /*
@@ -327,12 +329,11 @@ static_assert(AccessMap[AccessType::END_OF_READ_ACCESS].stageMask == 0 &&
               AccessMap[AccessType::END_OF_READ_ACCESS].accessMask == 0 &&
               AccessMap[AccessType::END_OF_READ_ACCESS].imageLayout == VK_IMAGE_LAYOUT_UNDEFINED);
 static_assert(AccessMap.back().stageMask == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT &&
-              AccessMap.back().accessMask == VK_ACCESS_MEMORY_READ_BIT |
-                  VK_ACCESS_MEMORY_WRITE_BIT &&
+              AccessMap.back().accessMask ==
+                  (VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT) &&
               AccessMap.back().imageLayout == VK_IMAGE_LAYOUT_GENERAL);
 
-void GetAccessInfo(uint32_t accessCount,
-                   const AccessType *pAccesses,
+void GetAccessInfo(const std::vector<AccessType> &accesses,
                    VkPipelineStageFlags *pStageMask,
                    VkAccessFlags *pAccessMask,
                    VkImageLayout *pImageLayout,
@@ -343,8 +344,8 @@ void GetAccessInfo(uint32_t accessCount,
     *pImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     *pHasWriteAccess = false;
 
-    for (uint32_t i = 0; i < accessCount; ++i) {
-        AccessType access = pAccesses[i];
+    for (uint32_t i = 0; i < accesses.size(); ++i) {
+        AccessType access = accesses[i];
         const AccessInfo *pAccessInfo = &AccessMap[access];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -381,12 +382,12 @@ void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier,
     *pSrcStages = 0;
     *pDstStages = 0;
     pVkBarrier->sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    pVkBarrier->pNext = NULL;
+    pVkBarrier->pNext = nullptr;
     pVkBarrier->srcAccessMask = 0;
     pVkBarrier->dstAccessMask = 0;
 
-    for (uint32_t i = 0; i < thBarrier.prevAccessCount; ++i) {
-        AccessType prevAccess = thBarrier.pPrevAccesses[i];
+    for (uint32_t i = 0; i < thBarrier.prevAccesses.size(); ++i) {
+        AccessType prevAccess = thBarrier.prevAccesses[i];
         const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -406,8 +407,8 @@ void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier,
             pVkBarrier->srcAccessMask |= pPrevAccessInfo->accessMask;
     }
 
-    for (uint32_t i = 0; i < thBarrier.nextAccessCount; ++i) {
-        AccessType nextAccess = thBarrier.pNextAccesses[i];
+    for (uint32_t i = 0; i < thBarrier.nextAccesses.size(); ++i) {
+        AccessType nextAccess = thBarrier.nextAccesses[i];
         const AccessInfo *pNextAccessInfo = &AccessMap[nextAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -441,7 +442,7 @@ void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
     *pSrcStages = 0;
     *pDstStages = 0;
     pVkBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-    pVkBarrier->pNext = NULL;
+    pVkBarrier->pNext = nullptr;
     pVkBarrier->srcAccessMask = 0;
     pVkBarrier->dstAccessMask = 0;
     pVkBarrier->srcQueueFamilyIndex = thBarrier.srcQueueFamilyIndex;
@@ -454,8 +455,8 @@ void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
     assert(pVkBarrier->srcQueueFamilyIndex != pVkBarrier->dstQueueFamilyIndex);
 #endif
 
-    for (uint32_t i = 0; i < thBarrier.prevAccessCount; ++i) {
-        AccessType prevAccess = thBarrier.pPrevAccesses[i];
+    for (uint32_t i = 0; i < thBarrier.prevAccesses.size(); ++i) {
+        AccessType prevAccess = thBarrier.prevAccesses[i];
         const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -475,8 +476,8 @@ void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
             pVkBarrier->srcAccessMask |= pPrevAccessInfo->accessMask;
     }
 
-    for (uint32_t i = 0; i < thBarrier.nextAccessCount; ++i) {
-        AccessType nextAccess = thBarrier.pNextAccesses[i];
+    for (uint32_t i = 0; i < thBarrier.nextAccesses.size(); ++i) {
+        AccessType nextAccess = thBarrier.nextAccesses[i];
         const AccessInfo *pNextAccessInfo = &AccessMap[nextAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -511,7 +512,7 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
     *pSrcStages = 0;
     *pDstStages = 0;
     pVkBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    pVkBarrier->pNext = NULL;
+    pVkBarrier->pNext = nullptr;
     pVkBarrier->srcAccessMask = 0;
     pVkBarrier->dstAccessMask = 0;
     pVkBarrier->srcQueueFamilyIndex = thBarrier.srcQueueFamilyIndex;
@@ -521,8 +522,8 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
     pVkBarrier->oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     pVkBarrier->newLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    for (uint32_t i = 0; i < thBarrier.prevAccessCount; ++i) {
-        AccessType prevAccess = thBarrier.pPrevAccesses[i];
+    for (uint32_t i = 0; i < thBarrier.prevAccesses.size(); ++i) {
+        AccessType prevAccess = thBarrier.prevAccesses[i];
         const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -570,8 +571,8 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
         }
     }
 
-    for (uint32_t i = 0; i < thBarrier.nextAccessCount; ++i) {
-        AccessType nextAccess = thBarrier.pNextAccesses[i];
+    for (uint32_t i = 0; i < thBarrier.nextAccesses.size(); ++i) {
+        AccessType nextAccess = thBarrier.nextAccesses[i];
         const AccessInfo *pNextAccessInfo = &AccessMap[nextAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -625,27 +626,26 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
     if (*pDstStages == 0) *pDstStages = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 }
 
-void CmdPipelineBarrier(VkCommandBuffer commandBuffer,
+void CmdPipelineBarrier(Magnum::Vk::Device &device,
+                        VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
-                        uint32_t bufferBarrierCount,
-                        const BufferBarrier *pBufferBarriers,
-                        uint32_t imageBarrierCount,
-                        const ImageBarrier *pImageBarriers)
+                        const std::vector<BufferBarrier> &bufferBarriers,
+                        const std::vector<ImageBarrier> &imageBarriers)
 {
     VkMemoryBarrier memoryBarrier;
     // Vulkan pipeline barrier command parameters
     //                     commandBuffer;
     VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    uint32_t memoryBarrierCount = (pGlobalBarrier != NULL) ? 1 : 0;
-    VkMemoryBarrier *pMemoryBarriers = (pGlobalBarrier != NULL) ? &memoryBarrier : NULL;
-    uint32_t bufferMemoryBarrierCount = bufferBarrierCount;
-    VkBufferMemoryBarrier *pBufferMemoryBarriers = NULL;
-    uint32_t imageMemoryBarrierCount = imageBarrierCount;
-    VkImageMemoryBarrier *pImageMemoryBarriers = NULL;
+    uint32_t memoryBarrierCount = (pGlobalBarrier != nullptr) ? 1 : 0;
+    VkMemoryBarrier *pMemoryBarriers = (pGlobalBarrier != nullptr) ? &memoryBarrier : nullptr;
+    uint32_t bufferMemoryBarrierCount = gsl::narrow<uint32_t>(bufferBarriers.size());
+    VkBufferMemoryBarrier *pBufferMemoryBarriers = nullptr;
+    uint32_t imageMemoryBarrierCount = gsl::narrow<uint32_t>(imageBarriers.size());
+    VkImageMemoryBarrier *pImageMemoryBarriers = nullptr;
 
     // Global memory barrier
-    if (pGlobalBarrier != NULL) {
+    if (pGlobalBarrier != nullptr) {
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
         GetVulkanMemoryBarrier(
@@ -655,61 +655,59 @@ void CmdPipelineBarrier(VkCommandBuffer commandBuffer,
     }
 
     // Buffer memory barriers
-    if (bufferBarrierCount > 0) {
+    if (bufferMemoryBarrierCount > 0) {
         pBufferMemoryBarriers = (VkBufferMemoryBarrier *)_TEMP_ALLOC(sizeof(VkBufferMemoryBarrier) *
                                                                      bufferMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
-        for (uint32_t i = 0; i < bufferBarrierCount; ++i) {
-            GetVulkanBufferMemoryBarrier(pBufferBarriers[i],
-                                         &tempSrcStageMask,
-                                         &tempDstStageMask,
-                                         &pBufferMemoryBarriers[i]);
+        for (uint32_t i = 0; i < bufferMemoryBarrierCount; ++i) {
+            GetVulkanBufferMemoryBarrier(
+                bufferBarriers[i], &tempSrcStageMask, &tempDstStageMask, &pBufferMemoryBarriers[i]);
             srcStageMask |= tempSrcStageMask;
             dstStageMask |= tempDstStageMask;
         }
     }
 
     // Image memory barriers
-    if (imageBarrierCount > 0) {
+    if (imageMemoryBarrierCount > 0) {
         pImageMemoryBarriers = (VkImageMemoryBarrier *)_TEMP_ALLOC(sizeof(VkImageMemoryBarrier) *
                                                                    imageMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
-        for (uint32_t i = 0; i < imageBarrierCount; ++i) {
+        for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i) {
             GetVulkanImageMemoryBarrier(
-                pImageBarriers[i], &tempSrcStageMask, &tempDstStageMask, &pImageMemoryBarriers[i]);
+                imageBarriers[i], &tempSrcStageMask, &tempDstStageMask, &pImageMemoryBarriers[i]);
             srcStageMask |= tempSrcStageMask;
             dstStageMask |= tempDstStageMask;
         }
     }
 
-    vkCmdPipelineBarrier(commandBuffer,
-                         srcStageMask,
-                         dstStageMask,
-                         0,
-                         memoryBarrierCount,
-                         pMemoryBarriers,
-                         bufferMemoryBarrierCount,
-                         pBufferMemoryBarriers,
-                         imageMemoryBarrierCount,
-                         pImageMemoryBarriers);
+    device->CmdPipelineBarrier(commandBuffer,
+                               srcStageMask,
+                               dstStageMask,
+                               0,
+                               memoryBarrierCount,
+                               pMemoryBarriers,
+                               bufferMemoryBarrierCount,
+                               pBufferMemoryBarriers,
+                               imageMemoryBarrierCount,
+                               pImageMemoryBarriers);
 
     _TEMP_FREE(pBufferMemoryBarriers);
     _TEMP_FREE(pImageMemoryBarriers);
 }
 
-void CmdSetEvent(VkCommandBuffer commandBuffer,
+void CmdSetEvent(Magnum::Vk::Device &device,
+                 VkCommandBuffer commandBuffer,
                  VkEvent event,
-                 uint32_t prevAccessCount,
-                 const AccessType *pPrevAccesses)
+                 const std::vector<AccessType>& prevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-    for (uint32_t i = 0; i < prevAccessCount; ++i) {
-        AccessType prevAccess = pPrevAccesses[i];
+    for (uint32_t i = 0; i < prevAccesses.size(); ++i) {
+        AccessType prevAccess = prevAccesses[i];
         const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -720,18 +718,18 @@ void CmdSetEvent(VkCommandBuffer commandBuffer,
         stageMask |= pPrevAccessInfo->stageMask;
     }
 
-    vkCmdSetEvent(commandBuffer, event, stageMask);
+    device->CmdSetEvent(commandBuffer, event, stageMask);
 }
 
-void CmdResetEvent(VkCommandBuffer commandBuffer,
+void CmdResetEvent(Magnum::Vk::Device &device,
+                   VkCommandBuffer commandBuffer,
                    VkEvent event,
-                   uint32_t prevAccessCount,
-                   const AccessType *pPrevAccesses)
+                   const std::vector<AccessType>& prevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
-    for (uint32_t i = 0; i < prevAccessCount; ++i) {
-        AccessType prevAccess = pPrevAccesses[i];
+    for (uint32_t i = 0; i < prevAccesses.size(); ++i) {
+        AccessType prevAccess = prevAccesses[i];
         const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
 
 #ifdef _ERROR_CHECK_ACCESS_TYPE_IN_RANGE
@@ -742,17 +740,15 @@ void CmdResetEvent(VkCommandBuffer commandBuffer,
         stageMask |= pPrevAccessInfo->stageMask;
     }
 
-    vkCmdResetEvent(commandBuffer, event, stageMask);
+    device->CmdResetEvent(commandBuffer, event, stageMask);
 }
 
-void CmdWaitEvents(VkCommandBuffer commandBuffer,
-                   uint32_t eventCount,
-                   const VkEvent *pEvents,
+void CmdWaitEvents(Magnum::Vk::Device &device,
+                   VkCommandBuffer commandBuffer,
+                   const std::vector<VkEvent>& events,
                    const GlobalBarrier *pGlobalBarrier,
-                   uint32_t bufferBarrierCount,
-                   const BufferBarrier *pBufferBarriers,
-                   uint32_t imageBarrierCount,
-                   const ImageBarrier *pImageBarriers)
+                   const std::vector<BufferBarrier> &bufferBarriers,
+                   const std::vector<ImageBarrier> &imageBarriers)
 {
     VkMemoryBarrier memoryBarrier;
     // Vulkan pipeline barrier command parameters
@@ -761,15 +757,15 @@ void CmdWaitEvents(VkCommandBuffer commandBuffer,
     //                     pEvents;
     VkPipelineStageFlags srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     VkPipelineStageFlags dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    uint32_t memoryBarrierCount = (pGlobalBarrier != NULL) ? 1 : 0;
-    VkMemoryBarrier *pMemoryBarriers = (pGlobalBarrier != NULL) ? &memoryBarrier : NULL;
-    uint32_t bufferMemoryBarrierCount = bufferBarrierCount;
-    VkBufferMemoryBarrier *pBufferMemoryBarriers = NULL;
-    uint32_t imageMemoryBarrierCount = imageBarrierCount;
-    VkImageMemoryBarrier *pImageMemoryBarriers = NULL;
+    uint32_t memoryBarrierCount = (pGlobalBarrier != nullptr) ? 1 : 0;
+    VkMemoryBarrier *pMemoryBarriers = (pGlobalBarrier != nullptr) ? &memoryBarrier : nullptr;
+    uint32_t bufferMemoryBarrierCount = gsl::narrow<uint32_t>(bufferBarriers.size());
+    VkBufferMemoryBarrier *pBufferMemoryBarriers = nullptr;
+    uint32_t imageMemoryBarrierCount = gsl::narrow<uint32_t>(imageBarriers.size());
+    VkImageMemoryBarrier *pImageMemoryBarriers = nullptr;
 
     // Global memory barrier
-    if (pGlobalBarrier != NULL) {
+    if (pGlobalBarrier != nullptr) {
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
         GetVulkanMemoryBarrier(
@@ -779,48 +775,46 @@ void CmdWaitEvents(VkCommandBuffer commandBuffer,
     }
 
     // Buffer memory barriers
-    if (bufferBarrierCount > 0) {
+    if (bufferMemoryBarrierCount > 0) {
         pBufferMemoryBarriers = (VkBufferMemoryBarrier *)_TEMP_ALLOC(sizeof(VkBufferMemoryBarrier) *
                                                                      bufferMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
-        for (uint32_t i = 0; i < bufferBarrierCount; ++i) {
-            GetVulkanBufferMemoryBarrier(pBufferBarriers[i],
-                                         &tempSrcStageMask,
-                                         &tempDstStageMask,
-                                         &pBufferMemoryBarriers[i]);
+        for (uint32_t i = 0; i < bufferMemoryBarrierCount; ++i) {
+            GetVulkanBufferMemoryBarrier(
+                bufferBarriers[i], &tempSrcStageMask, &tempDstStageMask, &pBufferMemoryBarriers[i]);
             srcStageMask |= tempSrcStageMask;
             dstStageMask |= tempDstStageMask;
         }
     }
 
     // Image memory barriers
-    if (imageBarrierCount > 0) {
+    if (imageMemoryBarrierCount > 0) {
         pImageMemoryBarriers = (VkImageMemoryBarrier *)_TEMP_ALLOC(sizeof(VkImageMemoryBarrier) *
                                                                    imageMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
-        for (uint32_t i = 0; i < imageBarrierCount; ++i) {
+        for (uint32_t i = 0; i < imageMemoryBarrierCount; ++i) {
             GetVulkanImageMemoryBarrier(
-                pImageBarriers[i], &tempSrcStageMask, &tempDstStageMask, &pImageMemoryBarriers[i]);
+                imageBarriers[i], &tempSrcStageMask, &tempDstStageMask, &pImageMemoryBarriers[i]);
             srcStageMask |= tempSrcStageMask;
             dstStageMask |= tempDstStageMask;
         }
     }
 
-    vkCmdWaitEvents(commandBuffer,
-                    eventCount,
-                    pEvents,
-                    srcStageMask,
-                    dstStageMask,
-                    memoryBarrierCount,
-                    pMemoryBarriers,
-                    bufferMemoryBarrierCount,
-                    pBufferMemoryBarriers,
-                    imageMemoryBarrierCount,
-                    pImageMemoryBarriers);
+    device->CmdWaitEvents(commandBuffer,
+                          gsl::narrow<uint32_t>(events.size()),
+                          events.data(),
+                          srcStageMask,
+                          dstStageMask,
+                          memoryBarrierCount,
+                          pMemoryBarriers,
+                          bufferMemoryBarrierCount,
+                          pBufferMemoryBarriers,
+                          imageMemoryBarrierCount,
+                          pImageMemoryBarriers);
 
     _TEMP_FREE(pBufferMemoryBarriers);
     _TEMP_FREE(pImageMemoryBarriers);

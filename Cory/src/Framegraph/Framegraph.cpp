@@ -71,7 +71,7 @@ void Framegraph::retireImmediate()
     externalInputs_.clear();
     outputs_.clear();
 
-    for (RenderTaskInfo &info : renderTasks_) {
+    for (RenderTaskInfo &info : renderTasks_) { // NOLINT (false positive)
         info.coroHandle.destroy();
     }
     renderTasks_.clear();
@@ -85,7 +85,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
-    std::vector<Sync::ImageBarrier> imageBarriers;
+
     auto emitBarrier = [&](const RenderTaskInfo::Dependency &resourceInfo) {
         transitions.push_back(ExecutionInfo::TransitionInfo{
             .direction = ExecutionInfo::TransitionInfo::Direction::ResourceToTask,
@@ -98,12 +98,13 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
                                       ? ImageContents::Retain
                                       : ImageContents::Discard;
 
-        imageBarriers.push_back(resources_.synchronizeTexture(
-            cmd.handle(), resourceInfo.handle.texture, resourceInfo.access, contentsMode));
+        return resources_.synchronizeTexture(
+            resourceInfo.handle.texture, resourceInfo.access, contentsMode);
     };
 
     // fill the barriers from the inputs and outputs
-    ranges::for_each(rpInfo.dependencies, emitBarrier);
+    const std::vector<Sync::ImageBarrier> imageBarriers =
+        rpInfo.dependencies | ranges::views::transform(emitBarrier) | ranges::to<std::vector>;
 
     Sync::CmdPipelineBarrier(ctx_->device(), cmd.handle(), nullptr, {}, imageBarriers);
 

@@ -107,9 +107,8 @@ void TextureResourceManager::allocate(const std::vector<TextureHandle> &handles)
     }
 }
 
-Sync::ImageBarrier TextureResourceManager::synchronizeTexture(Magnum::Vk::CommandBuffer &cmdBuffer,
-                                                              TextureHandle handle,
-                                                              Sync::AccessType readAccess,
+Sync::ImageBarrier TextureResourceManager::synchronizeTexture(TextureHandle handle,
+                                                              Sync::AccessType access,
                                                               ImageContents contentsMode)
 {
     const auto &info = data_->textureResources_[handle].info;
@@ -134,41 +133,12 @@ Sync::ImageBarrier TextureResourceManager::synchronizeTexture(Magnum::Vk::Comman
                                    .layerCount = 1,
                                }};
 
-    CO_CORE_TRACE("BARRIER synchronizing data written to '{}' as to be read as {}",
+    CO_CORE_TRACE("BARRIER synchronizing data written to '{}' as {} to be read as {}",
                   info.name,
                   state.lastAccess,
-                  readAccess);
+                  access);
 
-    //    const VkImageMemoryBarrier2 imageMemoryBarrier{
-    //        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-    //        .srcStageMask = state.lastWriteStage.bits(),
-    //        .srcAccessMask = state.lastAccess.bits(),
-    //        .dstStageMask = readAccessInfo.stage.bits(),
-    //        .dstAccessMask = readAccessInfo.access.bits(),
-    //        .oldLayout = toVkImageLayout(state.layout),
-    //        .newLayout = toVkImageLayout(readAccessInfo.layout),
-    //        // todo: we should get family somewhere else and not from the context
-    //        .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
-    //        .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
-    //        .image = image(handle),
-    //        .subresourceRange = {
-    //            .aspectMask = aspectMask,
-    //            .baseMipLevel = 0,
-    //            .levelCount = 1,
-    //            .baseArrayLayer = 0,
-    //            .layerCount = 1,
-    //        }};
-    //    const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-    //                                          .pNext = nullptr,
-    //                                          .dependencyFlags = {}, // ?
-    //                                          .memoryBarrierCount = 0,
-    //                                          .pMemoryBarriers = nullptr,
-    //                                          .bufferMemoryBarrierCount = 0,
-    //                                          .pBufferMemoryBarriers = nullptr,
-    //                                          .imageMemoryBarrierCount = 1,
-    //                                          .pImageMemoryBarriers = &imageMemoryBarrier};
-    //    data_->ctx_->device()->CmdPipelineBarrier2(cmdBuffer, &dependencyInfo);
-    state.lastAccess = readAccess;
+    state.lastAccess = access;
     return barrier;
 }
 

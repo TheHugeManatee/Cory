@@ -16,7 +16,7 @@ Builder::Builder(Framegraph &framegraph, std::string_view passName)
     info_.name = passName;
     CO_CORE_TRACE("Pass {}: declaration started", info_.name);
 }
-Builder::~Builder() { CO_CORE_TRACE("Pass {}: Builder destroyed", info_.name); }
+Builder::~Builder() {}
 
 RenderTaskExecutionAwaiter Builder::finishDeclaration()
 {

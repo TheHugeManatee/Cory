@@ -1,5 +1,16 @@
 #pragma once
 
+// This is a C++ port of the "simple_vulkan_synchronization" library by Tobias Hector:
+// https://github.com/Tobski/simple_vulkan_synchronization
+//
+// Changes (c) 2022 Jakob Weiss:
+//   - Remove the THSVS prefix from functions and structures in favor of a namespace
+//   - remove (comment out) many enum values for which my vulkan header did not have the right enum
+//     values
+//   - C++ify the interface, replacing count+pointer with std::span where applicable
+//   - Rename enum values to avoid SCREAMING_SNAKE_CASE in favor of CamelCase + scoped enums
+
+// The library is originally under the MIT license:
 // Copyright (c) 2017-2019 Tobias Hector
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -191,14 +202,14 @@ ISSUES
 #include <Magnum/Vk/Vulkan.h>
 
 #include <cstdint>
-#include <vector>
+#include <span>
 
 namespace Cory::Sync {
 
 /**
 AccessType defines all potential resource usages in the Vulkan API.
 */
-enum AccessType {
+enum class AccessType : uint32_t {
     // No access. Useful primarily for initialization
     NONE,
 
@@ -207,35 +218,35 @@ enum AccessType {
     //    // Command buffer read operation as defined by NV_device_generated_commands
     //    COMMAND_BUFFER_READ_NV,
     // Read as an indirect buffer for drawing or dispatch
-    INDIRECT_BUFFER,
+    IndirectBuffer,
     // Read as an index buffer for drawing
-    INDEX_BUFFER,
+    IndexBuffer,
     // Read as a vertex buffer for drawing
-    VERTEX_BUFFER,
+    VertexBuffer,
     // Read as a uniform buffer in a vertex shader
-    VERTEX_SHADER_READ_UNIFORM_BUFFER,
+    VertexShaderReadUniformBuffer,
     // Read as a sampled image/uniform texel buffer in a vertex shader
-    VERTEX_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
+    VertexShaderReadSampledImageOrUniformTexelBuffer,
     // Read as any other resource in a vertex shader
-    VERTEX_SHADER_READ_OTHER,
+    VertexShaderReadOther,
     // Read as a uniform buffer in a tessellation control shader
-    TESSELLATION_CONTROL_SHADER_READ_UNIFORM_BUFFER,
+    TessellationControlShaderReadUniformBuffer,
     // Read as a sampled image/uniform texel buffer  in a tessellation control shader
-    TESSELLATION_CONTROL_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
+    TessellationControlShaderReadSampledImageOrUniformTexelBuffer,
     // Read as any other resource in a tessellation control shader
-    TESSELLATION_CONTROL_SHADER_READ_OTHER,
+    TessellationControlShaderReadOther,
     // Read as a uniform buffer in a tessellation evaluation shader
-    TESSELLATION_EVALUATION_SHADER_READ_UNIFORM_BUFFER,
+    TessellationEvaluationShaderReadUniformBuffer,
     // Read as a sampled image/uniform texel buffer in a tessellation evaluation shader
-    TESSELLATION_EVALUATION_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
+    TessellationEvaluationShaderReadSampledImageOrUniformTexelBuffer,
     // Read as any other resource in a tessellation evaluation shader
-    TESSELLATION_EVALUATION_SHADER_READ_OTHER,
+    TessellationEvaluationShaderReadOther,
     // Read as a uniform buffer in a geometry shader
-    GEOMETRY_SHADER_READ_UNIFORM_BUFFER,
+    GeometryShaderReadUniformBuffer,
     // Read as a sampled image/uniform texel buffer  in a geometry shader
-    GEOMETRY_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
+    GeometryShaderReadSampledImageOrUniformTexelBuffer,
     // Read as any other resource in a geometry shader
-    GEOMETRY_SHADER_READ_OTHER,
+    GeometryShaderReadOther,
     //    // Read as a uniform buffer in a task shader
     //    TASK_SHADER_READ_UNIFORM_BUFFER_NV,
     //    // Read as a sampled image/uniform texel buffer in a task shader
@@ -255,44 +266,44 @@ enum AccessType {
     //    // Read as a shading rate image
     //    SHADING_RATE_READ_NV,
     //    // Read as a uniform buffer in a fragment shader
-    FRAGMENT_SHADER_READ_UNIFORM_BUFFER,
+    FragmentShaderReadUniformBuffer,
     // Read as a sampled image/uniform texel buffer  in a fragment shader
-    FRAGMENT_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
+    FragmentShaderReadSampledImageOrUniformTexelBuffer,
     // Read as an input attachment with a color format in a fragment shader
-    FRAGMENT_SHADER_READ_COLOR_INPUT_ATTACHMENT,
+    FragmentShaderReadColorInputAttachment,
     // Read as an input attachment with a depth/stencil format in a fragment shader
-    FRAGMENT_SHADER_READ_DEPTH_STENCIL_INPUT_ATTACHMENT,
+    FragmentShaderReadDepthStencilInputAttachment,
     // Read as any other resource in a fragment shader
-    FRAGMENT_SHADER_READ_OTHER,
+    FragmentShaderReadOther,
     // Read by standard blending/logic operations or subpass load operations
-    COLOR_ATTACHMENT_READ,
+    ColorAttachmentRead,
     //    // Read by advanced blending, standard blending, logic operations, or subpass load
     //    operations
     //    COLOR_ATTACHMENT_ADVANCED_BLENDING_EXT,
     // Read by depth/stencil tests or subpass load operations
-    DEPTH_STENCIL_ATTACHMENT_READ,
+    DepthStencilAttachmentRead,
     // Read as a uniform buffer in a compute shader
-    COMPUTE_SHADER_READ_UNIFORM_BUFFER,
+    ComputeShaderReadUniformBuffer,
     // Read as a sampled image/uniform texel buffer in a compute shader
-    COMPUTE_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
+    ComputeShaderReadSampledImageOrUniformTexelBuffer,
     // Read as any other resource in a compute shader
-    COMPUTE_SHADER_READ_OTHER,
+    ComputeShaderReadOther,
     // Read as a uniform buffer in any shader
-    ANY_SHADER_READ_UNIFORM_BUFFER,
+    AnyShaderReadUniformBuffer,
     // Read as a uniform buffer in any shader, or a vertex buffer
-    ANY_SHADER_READ_UNIFORM_BUFFER_OR_VERTEX_BUFFER,
+    AnyShaderReadUniformBufferOrVertexBuffer,
     // Read as a sampled image in any shader
-    ANY_SHADER_READ_SAMPLED_IMAGE_OR_UNIFORM_TEXEL_BUFFER,
+    AnyShaderReadSampledImageOrUniformTexelBuffer,
     // Read as any other resource (excluding attachments) in any shader
-    ANY_SHADER_READ_OTHER,
+    AnyShaderReadOther,
     // Read as the source of a transfer operation
-    TRANSFER_READ,
+    TransferRead,
     // Read on the host
-    HOST_READ,
+    HostRead,
 
     // Requires VK_KHR_swapchain to be enabled
     // Read by the presentation engine (i.e. vkQueuePresentKHR)
-    PRESENT,
+    Present,
 
     //    // Requires VK_EXT_conditional_rendering to be enabled
     //    // Read by conditional rendering
@@ -312,13 +323,13 @@ enum AccessType {
     //    // Command buffer write operation
     //    COMMAND_BUFFER_WRITE_NV,
     // Written as any resource in a vertex shader
-    VERTEX_SHADER_WRITE,
+    VertexShaderWrite,
     // Written as any resource in a tessellation control shader
-    TESSELLATION_CONTROL_SHADER_WRITE,
+    TessellationControlShaderWrite,
     // Written as any resource in a tessellation evaluation shader
-    TESSELLATION_EVALUATION_SHADER_WRITE,
+    TessellationEvaluationShaderWrite,
     // Written as any resource in a geometry shader
-    GEOMETRY_SHADER_WRITE,
+    GeometryShaderWrite,
 
     //    // Requires VK_NV_mesh_shading to be enabled
     //    // Written as any resource in a task shader
@@ -333,41 +344,41 @@ enum AccessType {
     //    TRANSFORM_FEEDBACK_COUNTER_WRITE_EXT,
 
     // Written as any resource in a fragment shader
-    FRAGMENT_SHADER_WRITE,
+    FragmentShaderWrite,
     // Written as a color attachment during rendering, or via a subpass store op
-    COLOR_ATTACHMENT_WRITE,
+    ColorAttachmentWrite,
     // Written as a depth/stencil attachment during rendering, or via a subpass store op
-    DEPTH_STENCIL_ATTACHMENT_WRITE,
+    DepthStencilAttachmentWrite,
 
     // Requires VK_KHR_maintenance2 to be enabled
     // Written as a depth aspect of a depth/stencil attachment during rendering, whilst the stencil
     // aspect is read-only
-    DEPTH_ATTACHMENT_WRITE_STENCIL_READ_ONLY,
+    DepthAttachmentWriteStencilReadOnly,
     // Written as a stencil aspect of a depth/stencil attachment during rendering, whilst the depth
     // aspect is read-only
-    STENCIL_ATTACHMENT_WRITE_DEPTH_READ_ONLY,
+    StencilAttachmentWriteDepthReadOnly,
 
     // Written as any resource in a compute shader
-    COMPUTE_SHADER_WRITE,
+    ComputeShaderWrite,
     // Written as any resource in any shader
-    ANY_SHADER_WRITE,
+    AnyShaderWrite,
     // Written as the destination of a transfer operation
-    TRANSFER_WRITE,
+    TransferWrite,
     // Data pre-filled by host before device access starts
-    HOST_PREINITIALIZED,
+    HostPreinitialized,
     // Written on the host
-    HOST_WRITE,
+    HostWrite,
 
     //    // Requires VK_NV_ray_tracing to be enabled
     //    // Written as an acceleration structure during a build
     //    ACCELERATION_STRUCTURE_BUILD_WRITE_NV,
 
     // Read or written as a color attachment during rendering
-    COLOR_ATTACHMENT_READ_WRITE,
+    ColorAttachmentReadWrite,
 
     // General access
     // Covers any access - useful for debug, generally avoid for performance reasons
-    GENERAL,
+    General,
 
     // Number of access types
     NUM_ACCESS_TYPES
@@ -382,27 +393,27 @@ _IMAGE_LAYOUT_OPTIMAL is usually preferred.
 enum class ImageLayout {
     // Choose the most optimal layout for each usage. Performs layout transitions as appropriate for
     // the access.
-    OPTIMAL,
+    Optimal,
     // Layout accessible by all Vulkan access types on a device - no layout transitions except for
     // presentation
-    GENERAL,
+    General,
 
     // Requires VK_KHR_shared_presentable_image to be enabled. Can only be used for shared
     // presentable images (i.e. single-buffered swap chains).
-    // As GENERAL, but also allows presentation engines to access it - no layout transitions
+    // As General, but also allows presentation engines to access it - no layout transitions
     // GENERAL_AND_PRESENTATION
 };
 
 /**
 Global barriers define a set of accesses on multiple resources at once.
 If a buffer or image doesn't require a queue ownership transfer, or an image
-doesn't require a layout transition (e.g. you're using one of the GENERAL
+doesn't require a layout transition (e.g. you're using one of the General
 layouts) then a global barrier should be preferred.
 Simply define the previous and next access types of resources affected.
 */
 struct GlobalBarrier {
-    std::vector<AccessType> prevAccesses;
-    std::vector<AccessType> nextAccesses;
+    std::span<AccessType> prevAccesses;
+    std::span<AccessType> nextAccesses;
 };
 
 /**
@@ -421,8 +432,8 @@ queue in the destination queue family, with a semaphore guaranteeing
 execution order between them.
 */
 struct BufferBarrier {
-    std::vector<AccessType> prevAccesses;
-    std::vector<AccessType> nextAccesses;
+    std::span<AccessType> prevAccesses;
+    std::span<AccessType> nextAccesses;
     uint32_t srcQueueFamilyIndex;
     uint32_t dstQueueFamilyIndex;
     VkBuffer buffer;
@@ -457,8 +468,8 @@ going to be immediately overwritten. A good example of when to use this is
 when an application re-uses a presented image after vkAcquireNextImageKHR.
 */
 struct ImageBarrier {
-    std::vector<AccessType> prevAccesses;
-    std::vector<AccessType> nextAccesses;
+    std::span<AccessType> prevAccesses;
+    std::span<AccessType> nextAccesses;
     ImageLayout prevLayout;
     ImageLayout nextLayout;
     VkBool32 discardContents;
@@ -472,7 +483,7 @@ struct ImageBarrier {
 Mapping function that translates a set of accesses into the corresponding
 pipeline stages, VkAccessFlags, and image layout.
 */
-void GetAccessInfo(const std::vector<AccessType>& accesses,
+void GetAccessInfo(const std::span<AccessType> &accesses,
                    VkPipelineStageFlags *pStageMask,
                    VkAccessFlags *pAccessMask,
                    VkImageLayout *pImageLayout,
@@ -520,8 +531,8 @@ commandBuffer is passed unmodified to vkCmdPipelineBarrier.
 void CmdPipelineBarrier(Magnum::Vk::Device &device,
                         VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
-                        const std::vector<BufferBarrier> &bufferBarriers,
-                        const std::vector<ImageBarrier> &imageBarriers);
+                        std::span<BufferBarrier> bufferBarriers,
+                        std::span<ImageBarrier> imageBarriers);
 
 /**
 Wrapper around vkCmdSetEvent.
@@ -533,7 +544,7 @@ commandBuffer and event are passed unmodified to vkCmdSetEvent.
 void CmdSetEvent(Magnum::Vk::Device &device,
                  VkCommandBuffer commandBuffer,
                  VkEvent event,
-                 const std::vector<AccessType>& prevAccesses);
+                 std::span<AccessType> prevAccesses);
 
 /**
 Wrapper around vkCmdResetEvent.
@@ -545,7 +556,7 @@ commandBuffer and event are passed unmodified to vkCmdResetEvent.
 void CmdResetEvent(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
                    VkEvent event,
-                   const std::vector<AccessType>& prevAccesses);
+                   std::span<AccessType> prevAccesses);
 
 /**
 Simplified wrapper around vkCmdWaitEvents.
@@ -559,8 +570,8 @@ vkCmdWaitEvents.
 */
 void CmdWaitEvents(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
-                   const std::vector<VkEvent>& events,
+                   std::span<VkEvent> events,
                    const GlobalBarrier *pGlobalBarrier,
-                   const std::vector<BufferBarrier> &bufferBarriers,
-                   const std::vector<ImageBarrier> &imageBarriers);
+                   std::span<BufferBarrier> bufferBarriers,
+                   std::span<ImageBarrier> imageBarriers);
 } // namespace Cory::Sync

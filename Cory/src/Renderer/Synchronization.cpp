@@ -1,3 +1,34 @@
+// This is a C++ port of the "simple_vulkan_synchronization" library by Tobias Hector:
+// https://github.com/Tobski/simple_vulkan_synchronization
+//
+// Changes (c) 2022 Jakob Weiss:
+//   - Remove the THSVS prefix from functions and structures in favor of a namespace
+//   - remove (comment out) many enum values for which my vulkan header did not have the right enum
+//     values
+//   - C++ify the interface, replacing count+pointer with std::span where applicable
+//   - Rename enum values to avoid SCREAMING_SNAKE_CASE in favor of CamelCase + scoped enums
+
+// The library is originally under the MIT license:
+// Copyright (c) 2017-2019 Tobias Hector
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is furnished to do
+// so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 #include <Cory/Renderer/Synchronization.hpp>
 
 #include <Magnum/Vk/Device.h>
@@ -327,15 +358,16 @@ constexpr std::array<AccessInfo, static_cast<uint32_t>(AccessType::NUM_ACCESS_TY
       VK_IMAGE_LAYOUT_GENERAL}}};
 
 // spot-check that we did not go out of sync when we deleted/commented away some of the entries
-static_assert(AccessMap[AccessType::END_OF_READ_ACCESS].stageMask == 0 &&
-              AccessMap[AccessType::END_OF_READ_ACCESS].accessMask == 0 &&
-              AccessMap[AccessType::END_OF_READ_ACCESS].imageLayout == VK_IMAGE_LAYOUT_UNDEFINED);
+static_assert(AccessMap[static_cast<uint32_t>(AccessType::END_OF_READ_ACCESS)].stageMask == 0 &&
+              AccessMap[static_cast<uint32_t>(AccessType::END_OF_READ_ACCESS)].accessMask == 0 &&
+              AccessMap[static_cast<uint32_t>(AccessType::END_OF_READ_ACCESS)].imageLayout ==
+                  VK_IMAGE_LAYOUT_UNDEFINED);
 static_assert(AccessMap.back().stageMask == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT &&
               AccessMap.back().accessMask ==
                   (VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT) &&
               AccessMap.back().imageLayout == VK_IMAGE_LAYOUT_GENERAL);
 
-void GetAccessInfo(const std::vector<AccessType> &accesses,
+void GetAccessInfo(std::span<AccessType> accesses,
                    VkPipelineStageFlags *pStageMask,
                    VkAccessFlags *pAccessMask,
                    VkImageLayout *pImageLayout,
@@ -348,16 +380,16 @@ void GetAccessInfo(const std::vector<AccessType> &accesses,
 
     for (uint32_t i = 0; i < accesses.size(); ++i) {
         AccessType access = accesses[i];
-        const AccessInfo *pAccessInfo = &AccessMap[access];
+        const AccessInfo *pAccessInfo = &AccessMap[static_cast<uint32_t>(access)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the previous access index is a valid range for the lookup
-        assert(access < NUM_ACCESS_TYPES);
+        assert(access < AccessType::NUM_ACCESS_TYPES);
 #endif
 
 #ifdef SYNC_ERROR_CHECK_POTENTIAL_HAZARD
         // Asserts that the access is a read, else it's a write and it should appear on its own.
-        assert(access < END_OF_READ_ACCESS || accesses.size() == 1);
+        assert(access < AccessType::END_OF_READ_ACCESS || accesses.size() == 1);
 #endif
 
         *pStageMask |= pAccessInfo->stageMask;
@@ -390,16 +422,16 @@ void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier,
 
     for (uint32_t i = 0; i < thBarrier.prevAccesses.size(); ++i) {
         AccessType prevAccess = thBarrier.prevAccesses[i];
-        const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
+        const AccessInfo *pPrevAccessInfo = &AccessMap[static_cast<uint32_t>(prevAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the previous access index is a valid range for the lookup
-        assert(prevAccess < NUM_ACCESS_TYPES);
+        assert(prevAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
 #ifdef SYNC_ERROR_CHECK_POTENTIAL_HAZARD
         // Asserts that the access is a read, else it's a write and it should appear on its own.
-        assert(prevAccess < END_OF_READ_ACCESS || thBarrier.prevAccesses.size() == 1);
+        assert(prevAccess < AccessType::END_OF_READ_ACCESS || thBarrier.prevAccesses.size() == 1);
 #endif
 
         *pSrcStages |= pPrevAccessInfo->stageMask;
@@ -411,16 +443,16 @@ void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier,
 
     for (uint32_t i = 0; i < thBarrier.nextAccesses.size(); ++i) {
         AccessType nextAccess = thBarrier.nextAccesses[i];
-        const AccessInfo *pNextAccessInfo = &AccessMap[nextAccess];
+        const AccessInfo *pNextAccessInfo = &AccessMap[static_cast<uint32_t>(nextAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the next access index is a valid range for the lookup
-        assert(nextAccess < NUM_ACCESS_TYPES);
+        assert(nextAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
 #ifdef SYNC_ERROR_CHECK_POTENTIAL_HAZARD
         // Asserts that the access is a read, else it's a write and it should appear on its own.
-        assert(nextAccess < END_OF_READ_ACCESS || thBarrier.nextAccesses.size() == 1);
+        assert(nextAccess < AccessType::END_OF_READ_ACCESS || thBarrier.nextAccesses.size() == 1);
 #endif
         *pDstStages |= pNextAccessInfo->stageMask;
 
@@ -459,16 +491,16 @@ void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
 
     for (uint32_t i = 0; i < thBarrier.prevAccesses.size(); ++i) {
         AccessType prevAccess = thBarrier.prevAccesses[i];
-        const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
+        const AccessInfo *pPrevAccessInfo = &AccessMap[static_cast<uint32_t>(prevAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the previous access index is a valid range for the lookup
-        assert(prevAccess < NUM_ACCESS_TYPES);
+        assert(prevAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
 #ifdef SYNC_ERROR_CHECK_POTENTIAL_HAZARD
         // Asserts that the access is a read, else it's a write and it should appear on its own.
-        assert(prevAccess < END_OF_READ_ACCESS || thBarrier.prevAccesses.size() == 1);
+        assert(prevAccess < AccessType::END_OF_READ_ACCESS || thBarrier.prevAccesses.size() == 1);
 #endif
 
         *pSrcStages |= pPrevAccessInfo->stageMask;
@@ -480,16 +512,16 @@ void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
 
     for (uint32_t i = 0; i < thBarrier.nextAccesses.size(); ++i) {
         AccessType nextAccess = thBarrier.nextAccesses[i];
-        const AccessInfo *pNextAccessInfo = &AccessMap[nextAccess];
+        const AccessInfo *pNextAccessInfo = &AccessMap[static_cast<uint32_t>(nextAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the next access index is a valid range for the lookup
-        assert(nextAccess < NUM_ACCESS_TYPES);
+        assert(nextAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
 #ifdef SYNC_ERROR_CHECK_POTENTIAL_HAZARD
         // Asserts that the access is a read, else it's a write and it should appear on its own.
-        assert(nextAccess < END_OF_READ_ACCESS || thBarrier.nextAccesses.size() == 1);
+        assert(nextAccess < AccessType::END_OF_READ_ACCESS || thBarrier.nextAccesses.size() == 1);
 #endif
 
         *pDstStages |= pNextAccessInfo->stageMask;
@@ -526,16 +558,16 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
 
     for (uint32_t i = 0; i < thBarrier.prevAccesses.size(); ++i) {
         AccessType prevAccess = thBarrier.prevAccesses[i];
-        const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
+        const AccessInfo *pPrevAccessInfo = &AccessMap[static_cast<uint32_t>(prevAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the previous access index is a valid range for the lookup
-        assert(prevAccess < NUM_ACCESS_TYPES);
+        assert(prevAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
 #ifdef SYNC_ERROR_CHECK_POTENTIAL_HAZARD
         // Asserts that the access is a read, else it's a write and it should appear on its own.
-        assert(prevAccess < END_OF_READ_ACCESS || thBarrier.prevAccesses.size() == 1);
+        assert(prevAccess < AccessType::END_OF_READ_ACCESS || thBarrier.prevAccesses.size() == 1);
 #endif
 
         *pSrcStages |= pPrevAccessInfo->stageMask;
@@ -551,13 +583,13 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
             VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
             switch (thBarrier.prevLayout) {
-            case ImageLayout::GENERAL:
-                if (prevAccess == AccessType::PRESENT)
+            case ImageLayout::General:
+                if (prevAccess == AccessType::Present)
                     layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
                 else
                     layout = VK_IMAGE_LAYOUT_GENERAL;
                 break;
-            case ImageLayout::OPTIMAL:
+            case ImageLayout::Optimal:
                 layout = pPrevAccessInfo->imageLayout;
                 break;
                 //            case ImageLayout::GENERAL_AND_PRESENTATION:
@@ -575,16 +607,16 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
 
     for (uint32_t i = 0; i < thBarrier.nextAccesses.size(); ++i) {
         AccessType nextAccess = thBarrier.nextAccesses[i];
-        const AccessInfo *pNextAccessInfo = &AccessMap[nextAccess];
+        const AccessInfo *pNextAccessInfo = &AccessMap[static_cast<uint32_t>(nextAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the next access index is a valid range for the lookup
-        assert(nextAccess < NUM_ACCESS_TYPES);
+        assert(nextAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
 #ifdef SYNC_ERROR_CHECK_POTENTIAL_HAZARD
         // Asserts that the access is a read, else it's a write and it should appear on its own.
-        assert(nextAccess < END_OF_READ_ACCESS || thBarrier.nextAccesses.size() == 1);
+        assert(nextAccess < AccessType::END_OF_READ_ACCESS || thBarrier.nextAccesses.size() == 1);
 #endif
 
         *pDstStages |= pNextAccessInfo->stageMask;
@@ -597,13 +629,13 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
 
         VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
         switch (thBarrier.nextLayout) {
-        case ImageLayout::GENERAL:
-            if (nextAccess == AccessType::PRESENT)
+        case ImageLayout::General:
+            if (nextAccess == AccessType::Present)
                 layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
             else
                 layout = VK_IMAGE_LAYOUT_GENERAL;
             break;
-        case ImageLayout::OPTIMAL:
+        case ImageLayout::Optimal:
             layout = pNextAccessInfo->imageLayout;
             break;
             // case ImageLayout::GENERAL_AND_PRESENTATION:
@@ -631,8 +663,8 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
 void CmdPipelineBarrier(Magnum::Vk::Device &device,
                         VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
-                        const std::vector<BufferBarrier> &bufferBarriers,
-                        const std::vector<ImageBarrier> &imageBarriers)
+                        std::span<BufferBarrier> bufferBarriers,
+                        std::span<ImageBarrier> imageBarriers)
 {
     VkMemoryBarrier memoryBarrier;
     // Vulkan pipeline barrier command parameters
@@ -658,8 +690,8 @@ void CmdPipelineBarrier(Magnum::Vk::Device &device,
 
     // Buffer memory barriers
     if (bufferMemoryBarrierCount > 0) {
-        pBufferMemoryBarriers = (VkBufferMemoryBarrier *)SYNC_TEMP_ALLOC(sizeof(VkBufferMemoryBarrier) *
-                                                                     bufferMemoryBarrierCount);
+        pBufferMemoryBarriers = (VkBufferMemoryBarrier *)SYNC_TEMP_ALLOC(
+            sizeof(VkBufferMemoryBarrier) * bufferMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
@@ -673,8 +705,8 @@ void CmdPipelineBarrier(Magnum::Vk::Device &device,
 
     // Image memory barriers
     if (imageMemoryBarrierCount > 0) {
-        pImageMemoryBarriers = (VkImageMemoryBarrier *)SYNC_TEMP_ALLOC(sizeof(VkImageMemoryBarrier) *
-                                                                   imageMemoryBarrierCount);
+        pImageMemoryBarriers = (VkImageMemoryBarrier *)SYNC_TEMP_ALLOC(
+            sizeof(VkImageMemoryBarrier) * imageMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
@@ -704,17 +736,17 @@ void CmdPipelineBarrier(Magnum::Vk::Device &device,
 void CmdSetEvent(Magnum::Vk::Device &device,
                  VkCommandBuffer commandBuffer,
                  VkEvent event,
-                 const std::vector<AccessType> &prevAccesses)
+                 std::span<AccessType> prevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
     for (uint32_t i = 0; i < prevAccesses.size(); ++i) {
         AccessType prevAccess = prevAccesses[i];
-        const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
+        const AccessInfo *pPrevAccessInfo = &AccessMap[static_cast<uint32_t>(prevAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the previous access index is a valid range for the lookup
-        assert(prevAccess < NUM_ACCESS_TYPES);
+        assert(prevAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
         stageMask |= pPrevAccessInfo->stageMask;
@@ -726,17 +758,17 @@ void CmdSetEvent(Magnum::Vk::Device &device,
 void CmdResetEvent(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
                    VkEvent event,
-                   const std::vector<AccessType> &prevAccesses)
+                   std::span<AccessType> prevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
     for (uint32_t i = 0; i < prevAccesses.size(); ++i) {
         AccessType prevAccess = prevAccesses[i];
-        const AccessInfo *pPrevAccessInfo = &AccessMap[prevAccess];
+        const AccessInfo *pPrevAccessInfo = &AccessMap[static_cast<uint32_t>(prevAccess)];
 
 #ifdef SYNC_ERROR_CHECK_ACCESS_TYPE_IN_RANGE
         // Asserts that the previous access index is a valid range for the lookup
-        assert(prevAccess < NUM_ACCESS_TYPES);
+        assert(prevAccess < AccessType::NUM_ACCESS_TYPES);
 #endif
 
         stageMask |= pPrevAccessInfo->stageMask;
@@ -747,10 +779,10 @@ void CmdResetEvent(Magnum::Vk::Device &device,
 
 void CmdWaitEvents(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
-                   const std::vector<VkEvent> &events,
+                   std::span<VkEvent> events,
                    const GlobalBarrier *pGlobalBarrier,
-                   const std::vector<BufferBarrier> &bufferBarriers,
-                   const std::vector<ImageBarrier> &imageBarriers)
+                   std::span<BufferBarrier> bufferBarriers,
+                   std::span<ImageBarrier> imageBarriers)
 {
     VkMemoryBarrier memoryBarrier;
     // Vulkan pipeline barrier command parameters
@@ -778,8 +810,8 @@ void CmdWaitEvents(Magnum::Vk::Device &device,
 
     // Buffer memory barriers
     if (bufferMemoryBarrierCount > 0) {
-        pBufferMemoryBarriers = (VkBufferMemoryBarrier *)SYNC_TEMP_ALLOC(sizeof(VkBufferMemoryBarrier) *
-                                                                     bufferMemoryBarrierCount);
+        pBufferMemoryBarriers = (VkBufferMemoryBarrier *)SYNC_TEMP_ALLOC(
+            sizeof(VkBufferMemoryBarrier) * bufferMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;
@@ -793,8 +825,8 @@ void CmdWaitEvents(Magnum::Vk::Device &device,
 
     // Image memory barriers
     if (imageMemoryBarrierCount > 0) {
-        pImageMemoryBarriers = (VkImageMemoryBarrier *)SYNC_TEMP_ALLOC(sizeof(VkImageMemoryBarrier) *
-                                                                   imageMemoryBarrierCount);
+        pImageMemoryBarriers = (VkImageMemoryBarrier *)SYNC_TEMP_ALLOC(
+            sizeof(VkImageMemoryBarrier) * imageMemoryBarrierCount);
 
         VkPipelineStageFlags tempSrcStageMask = 0;
         VkPipelineStageFlags tempDstStageMask = 0;

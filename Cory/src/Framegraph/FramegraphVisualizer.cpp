@@ -50,30 +50,23 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
         index.tasks[taskHandle].info = passInfo;
         index.tasks[taskHandle].executed = ranges::contains(executionInfo.tasks, taskHandle);
 
-        for (const RenderTaskInfo::Dependency &input : passInfo.inputs) {
-            auto inputInfo = graph_.resources_.info(input.handle.texture);
+        for (const RenderTaskInfo::Dependency &dependency : passInfo.dependencies) {
+            auto info = graph_.resources_.info(dependency.handle.texture);
 
-            index.textures[input.handle].handle = input.handle;
-            index.textures[input.handle].info = inputInfo;
+            index.textures[dependency.handle].handle = dependency.handle;
+            index.textures[dependency.handle].info = info;
 
-            index.inputDependencies.emplace_back(Index::DependencyInfo{
-                .resource = input.handle,
+            std::vector<Index::DependencyInfo> &dependencyList =
+                (dependency.kind.is_set(TaskDependencyKindBits::Create)
+                     ? index.createDependencies
+                     : (dependency.kind.is_set(TaskDependencyKindBits::Write)
+                            ? index.outputDependencies
+                            : index.inputDependencies));
+
+            dependencyList.emplace_back(Index::DependencyInfo{
+                .resource = dependency.handle,
                 .task = taskHandle,
-                .transitionInfo = findTransitionInfo(input.handle, taskHandle)});
-        }
-
-        for (const RenderTaskInfo::Dependency &output : passInfo.outputs) {
-            auto outputInfo = graph_.resources_.info(output.handle.texture);
-
-            index.textures[output.handle].handle = output.handle;
-            index.textures[output.handle].info = outputInfo;
-
-            (output.kind.is_set(TaskDependencyKindBits::Create) ? index.createDependencies
-                                                                : index.outputDependencies)
-                .emplace_back(Index::DependencyInfo{
-                    .resource = output.handle,
-                    .task = taskHandle,
-                    .transitionInfo = findTransitionInfo(output.handle, taskHandle)});
+                .transitionInfo = findTransitionInfo(dependency.handle, taskHandle)});
         }
     }
     // mark all external inputs

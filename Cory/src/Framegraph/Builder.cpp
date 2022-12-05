@@ -34,7 +34,7 @@ TransientTextureHandle Builder::create(std::string name,
     auto handle = TransientTextureHandle{.texture = framegraph_.resources_.declareTexture(info),
                                          .version = 0};
 
-    info_.outputs.push_back(RenderTaskInfo::Dependency{
+    info_.dependencies.push_back(RenderTaskInfo::Dependency{
         .kind = TaskDependencyKindBits::CreateWrite,
         .handle = handle,
         .access = writeAccess,
@@ -44,7 +44,7 @@ TransientTextureHandle Builder::create(std::string name,
 
 TextureInfo Builder::read(TransientTextureHandle &handle, Sync::AccessType readAccess)
 {
-    info_.inputs.push_back(RenderTaskInfo::Dependency{
+    info_.dependencies.push_back(RenderTaskInfo::Dependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
     return framegraph_.resources_.info(handle.texture);
 }
@@ -55,7 +55,7 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHa
     // increase the version of the texture handle to record the modification
     auto outputHandle =
         TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
-    info_.outputs.push_back({
+    info_.dependencies.push_back({
         .kind = TaskDependencyKindBits::Write,
         .handle = outputHandle,
         .access = writeAccess,
@@ -67,7 +67,7 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHa
 std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextureHandle handle,
                                                                   Sync::AccessType readWriteAccess)
 {
-    info_.inputs.push_back({
+    info_.dependencies.push_back({
         .kind = TaskDependencyKindBits::Read,
         .handle = handle,
         .access = readWriteAccess,
@@ -77,7 +77,7 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextu
     auto outputHandle =
         TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
 
-    info_.outputs.push_back({
+    info_.dependencies.push_back({
         .kind = TaskDependencyKindBits::Write,
         .handle = outputHandle,
         .access = readWriteAccess,

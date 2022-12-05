@@ -15,8 +15,7 @@ struct RenderTaskInfo {
         Sync::AccessType access;
     };
     std::string name;
-    std::vector<Dependency> inputs;
-    std::vector<Dependency> outputs;
+    std::vector<Dependency> dependencies;
 
     // framegraph internal stuff
     cppcoro::coroutine_handle<> coroHandle;

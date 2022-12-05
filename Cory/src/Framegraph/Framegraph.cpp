@@ -103,8 +103,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     };
 
     // fill the barriers from the inputs and outputs
-    ranges::for_each(rpInfo.inputs, emitBarrier);
-    ranges::for_each(rpInfo.outputs, emitBarrier);
+    ranges::for_each(rpInfo.dependencies, emitBarrier);
 
     Sync::CmdPipelineBarrier(ctx_->device(), cmd.handle(), nullptr, {}, imageBarriers);
 
@@ -167,13 +166,14 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskInputs;
     std::unordered_map<TransientTextureHandle, TextureInfo> textures;
     for (const auto &[taskHandle, taskInfo] : renderTasks_.items()) {
-        for (const RenderTaskInfo::Dependency &input : taskInfo.inputs) {
-            taskInputs.insert({taskHandle, input.handle});
-            textures[input.handle] = resources_.info(input.handle.texture);
-        }
-        for (const RenderTaskInfo::Dependency &output : taskInfo.outputs) {
-            resourceToTask[output.handle] = taskHandle;
-            textures[output.handle] = resources_.info(output.handle.texture);
+        for (const RenderTaskInfo::Dependency &dependency : taskInfo.dependencies) {
+            if (dependency.kind.is_set(TaskDependencyKindBits::Read)) {
+                taskInputs.insert({taskHandle, dependency.handle});
+            }
+            if (dependency.kind.is_set(TaskDependencyKindBits::Write)) {
+                resourceToTask[dependency.handle] = taskHandle;
+            }
+            textures[dependency.handle] = resources_.info(dependency.handle.texture);
         }
     }
 
@@ -211,9 +211,10 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
 
         // mark the resources created by the task as required
         for (const RenderTaskInfo::Dependency &created :
-             renderTasks_[writingTask].outputs | ranges::views::filter([](const auto &outputDesc) {
-                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-             })) {
+             renderTasks_[writingTask].dependencies |
+                 ranges::views::filter([](const auto &outputDesc) {
+                     return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+                 })) {
             requiredResources.push_back(created.handle.texture);
         }
 

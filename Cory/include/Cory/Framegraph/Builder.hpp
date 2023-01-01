@@ -31,7 +31,7 @@ struct RenderTaskInfo {
  */
 class Builder : NoCopy {
   public:
-    Builder(Framegraph &framegraph, std::string_view passName);
+    Builder(Context &ctx, Framegraph &framegraph, std::string_view passName);
     ~Builder();
 
     /// move-constructible because it is intended to be provided by-value to the pass coroutine
@@ -74,6 +74,7 @@ class Builder : NoCopy {
     const std::string &name() const { return info_.name; }
 
   private:
+    Context &ctx_;
     RenderTaskInfo info_;
     Framegraph &framegraph_;
 };

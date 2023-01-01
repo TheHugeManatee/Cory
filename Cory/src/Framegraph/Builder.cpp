@@ -2,6 +2,7 @@
 
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/Framegraph/TextureManager.hpp>
 
 #include <Magnum/Vk/Image.h>
 
@@ -9,8 +10,9 @@ namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
-Builder::Builder(Framegraph &framegraph, std::string_view passName)
-    : info_{}
+Builder::Builder(Context &ctx, Framegraph &framegraph, std::string_view passName)
+    : ctx_{ctx}
+    , info_{}
     , framegraph_{framegraph}
 {
     info_.name = passName;
@@ -31,7 +33,7 @@ TransientTextureHandle Builder::create(std::string name,
 {
     const TextureInfo info{.name = std::move(name), .size = size, .format = format};
 
-    auto handle = TransientTextureHandle{.texture = framegraph_.resources_.declareTexture(info),
+    auto handle = TransientTextureHandle{.texture = framegraph_.resources().declareTexture(info),
                                          .version = 0};
 
     info_.dependencies.push_back(RenderTaskInfo::Dependency{
@@ -46,7 +48,7 @@ TextureInfo Builder::read(TransientTextureHandle &handle, Sync::AccessType readA
 {
     info_.dependencies.push_back(RenderTaskInfo::Dependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
-    return framegraph_.resources_.info(handle.texture);
+    return framegraph_.resources().info(handle.texture);
 }
 
 std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHandle handle,
@@ -61,7 +63,7 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHa
         .access = writeAccess,
     });
 
-    return {outputHandle, framegraph_.resources_.info(handle.texture)};
+    return {outputHandle, framegraph_.resources().info(handle.texture)};
 }
 
 std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextureHandle handle,
@@ -83,13 +85,13 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextu
         .access = readWriteAccess,
     });
 
-    return {outputHandle, framegraph_.resources_.info(handle.texture)};
+    return {outputHandle, framegraph_.resources().info(handle.texture)};
 }
 
 TransientRenderPassBuilder Builder::declareRenderPass(std::string_view name)
 {
     return TransientRenderPassBuilder{
-        *framegraph_.ctx_, name.empty() ? info_.name : name, framegraph_.resources_};
+        ctx_, name.empty() ? info_.name : name, framegraph_.resources()};
 }
 
 } // namespace Cory

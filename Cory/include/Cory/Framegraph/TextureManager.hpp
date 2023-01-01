@@ -23,10 +23,13 @@ namespace Cory {
  *  - Currently, allocates each Image separately - technically, could use an
  *    GPU arena for this
  */
-class TextureResourceManager {
+class TextureResourceManager : NoCopy {
   public:
     explicit TextureResourceManager(Context &ctx);
     ~TextureResourceManager();
+
+    TextureResourceManager(TextureResourceManager &&);
+    TextureResourceManager &operator=(TextureResourceManager &&);
 
     TextureHandle declareTexture(TextureInfo info);
 
@@ -46,9 +49,8 @@ class TextureResourceManager {
      *
      * Will store the given @a access to sync subsequent accesses to the texture
      */
-    Sync::ImageBarrier synchronizeTexture(TextureHandle handle,
-                                          Sync::AccessType access,
-                                          ImageContents contentsMode);
+    Sync::ImageBarrier
+    synchronizeTexture(TextureHandle handle, Sync::AccessType access, ImageContents contentsMode);
 
     [[nodiscard]] const TextureInfo &info(TextureHandle handle) const;
     Magnum::Vk::Image &image(TextureHandle handle);

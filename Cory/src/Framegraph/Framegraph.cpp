@@ -4,12 +4,12 @@
 
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
+#include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/Renderer/Context.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 
 #include <range/v3/algorithm/contains.hpp>
-#include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/algorithm/transform.hpp>
 #include <range/v3/range/conversion.hpp>
@@ -24,27 +24,48 @@ namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
+struct FramegraphPrivate {
+    FramegraphPrivate(Context &ctx_param)
+        : ctx{&ctx_param}
+        , resources{ctx_param}
+    {
+    }
+
+    Context *ctx;
+    TextureResourceManager resources;
+    std::vector<TransientTextureHandle> externalInputs;
+    std::vector<TransientTextureHandle> outputs;
+
+    SlotMap<RenderTaskInfo> renderTasks;
+    CommandList *commandListInProgress{};
+};
+
 Builder Framegraph::Framegraph::declareTask(std::string_view name)
 {
     //
-    return Builder{*this, name};
+    return Builder{*data_->ctx, *this, name};
 }
 
 Framegraph::Framegraph(Context &ctx)
-    : ctx_{&ctx}
-    , resources_{*ctx_}
+    : data_{std::make_unique<FramegraphPrivate>(ctx)}
 {
 }
 
 Framegraph::~Framegraph()
 {
-    try {
-        retireImmediate();
-    }
-    catch (const std::exception &e) {
-        CO_APP_ERROR("Uncaught exception in destructor: {}", e.what());
+    // if data_ is empty, object is moved-from
+    if (data_) {
+        try {
+            retireImmediate();
+        }
+        catch (const std::exception &e) {
+            CO_APP_ERROR("Uncaught exception in destructor: {}", e.what());
+        }
     }
 }
+
+Framegraph::Framegraph(Framegraph &&) = default;
+Framegraph &Framegraph::operator=(Framegraph &&) = default;
 
 ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
 {
@@ -52,10 +73,10 @@ ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
     auto executionInfo = compile();
 
     const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
-    CommandList cmd{*ctx_, cmdBuffer};
+    CommandList cmd{*data_->ctx, cmdBuffer};
 
-    commandListInProgress_ = &cmd;
-    auto resetCmdList = gsl::finally([this]() { commandListInProgress_ = nullptr; });
+    data_->commandListInProgress = &cmd;
+    auto resetCmdList = gsl::finally([this]() { data_->commandListInProgress = nullptr; });
 
     for (const auto &handle : executionInfo.tasks) {
         auto transitions = executePass(cmd, handle);
@@ -67,21 +88,21 @@ ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
 
 void Framegraph::retireImmediate()
 {
-    resources_.clear();
-    externalInputs_.clear();
-    outputs_.clear();
+    data_->resources.clear();
+    data_->externalInputs.clear();
+    data_->outputs.clear();
 
-    for (RenderTaskInfo &info : renderTasks_) { // NOLINT (false positive)
+    for (RenderTaskInfo &info : data_->renderTasks) { // NOLINT (false positive)
         info.coroHandle.destroy();
     }
-    renderTasks_.clear();
+    data_->renderTasks.clear();
 }
 
 std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &cmd,
                                                                    RenderTaskHandle handle)
 {
     std::vector<ExecutionInfo::TransitionInfo> transitions;
-    const RenderTaskInfo &rpInfo = renderTasks_[handle];
+    const RenderTaskInfo &rpInfo = data_->renderTasks[handle];
     const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
@@ -91,14 +112,14 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
             .kind = resourceInfo.kind,
             .task = handle,
             .resource = resourceInfo.handle,
-            .stateBefore = resources_.state(resourceInfo.handle.texture).lastAccess,
+            .stateBefore = data_->resources.state(resourceInfo.handle.texture).lastAccess,
             .stateAfter = resourceInfo.access});
 
         const auto contentsMode = resourceInfo.kind.is_set(TaskDependencyKindBits::Read)
                                       ? ImageContents::Retain
                                       : ImageContents::Discard;
 
-        return resources_.synchronizeTexture(
+        return data_->resources.synchronizeTexture(
             resourceInfo.handle.texture, resourceInfo.access, contentsMode);
     };
 
@@ -106,7 +127,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     const std::vector<Sync::ImageBarrier> imageBarriers =
         rpInfo.dependencies | ranges::views::transform(emitBarrier) | ranges::to<std::vector>;
 
-    Sync::CmdPipelineBarrier(ctx_->device(), cmd.handle(), nullptr, {}, imageBarriers);
+    Sync::CmdPipelineBarrier(data_->ctx->device(), cmd.handle(), nullptr, {}, imageBarriers);
 
     CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
     const auto &coroHandle = rpInfo.coroHandle;
@@ -125,26 +146,27 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
                                                 Vk::Image &image,
                                                 Vk::ImageView &imageView)
 {
-    auto handle = resources_.registerExternal(std::move(info), lastWriteAccess, image, imageView);
+    auto handle =
+        data_->resources.registerExternal(std::move(info), lastWriteAccess, image, imageView);
 
     TransientTextureHandle thandle{.texture = handle, .version = 0};
 
-    externalInputs_.push_back(thandle);
+    data_->externalInputs.push_back(thandle);
     return thandle;
 }
 
 std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureHandle handle)
 {
-    outputs_.push_back(handle);
-    return {resources_.info(handle.texture), resources_.state(handle.texture)};
+    data_->outputs.push_back(handle);
+    return {data_->resources.info(handle.texture), data_->resources.state(handle.texture)};
 }
 
 ExecutionInfo Framegraph::compile()
 {
     const Cory::ScopeTimer s{"Framegraph/Execute/Compile"};
 
-    auto execInfo = resolve(outputs_);
-    resources_.allocate(execInfo.resources);
+    auto execInfo = resolve(data_->outputs);
+    data_->resources.allocate(execInfo.resources);
 
     return std::move(execInfo);
 }
@@ -154,6 +176,27 @@ std::string Framegraph::dump(const ExecutionInfo &executionInfo)
     const FramegraphVisualizer visualizer(*this);
     return visualizer.generateDotGraph(executionInfo);
 }
+
+RenderTaskHandle Framegraph::finishPassDeclaration(RenderTaskInfo &&info)
+{
+    return data_->renderTasks.emplace(info);
+}
+
+/// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
+/// coroHandle
+void Framegraph::enqueueRenderPass(RenderTaskHandle passHandle,
+                                   cppcoro::coroutine_handle<> coroHandle)
+{
+    data_->renderTasks[passHandle].coroHandle = coroHandle;
+}
+
+TextureResourceManager &Framegraph::resources() { return data_->resources; }
+const TextureResourceManager &Framegraph::resources() const { return data_->resources; }
+const std::vector<TransientTextureHandle> &Framegraph::externalInputs() const
+{
+    return data_->externalInputs;
+}
+const std::vector<TransientTextureHandle> &Framegraph::outputs() const { return data_->outputs; }
 
 ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResources)
 {
@@ -166,7 +209,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     std::unordered_map<TransientTextureHandle, RenderTaskHandle> resourceToTask;
     std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskInputs;
     std::unordered_map<TransientTextureHandle, TextureInfo> textures;
-    for (const auto &[taskHandle, taskInfo] : renderTasks_.items()) {
+    for (const auto &[taskHandle, taskInfo] : data_->renderTasks.items()) {
         for (const RenderTaskInfo::Dependency &dependency : taskInfo.dependencies) {
             if (dependency.kind.is_set(TaskDependencyKindBits::Read)) {
                 taskInputs.insert({taskHandle, dependency.handle});
@@ -174,7 +217,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
             if (dependency.kind.is_set(TaskDependencyKindBits::Write)) {
                 resourceToTask[dependency.handle] = taskHandle;
             }
-            textures[dependency.handle] = resources_.info(dependency.handle.texture);
+            textures[dependency.handle] = data_->resources.info(dependency.handle.texture);
         }
     }
 
@@ -192,7 +235,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         auto writingTaskIt = resourceToTask.find(nextResource);
         if (writingTaskIt == resourceToTask.end()) {
             // if resource is external, we don't have to resolve it
-            if (ranges::contains(externalInputs_, nextResource)) { continue; }
+            if (ranges::contains(data_->externalInputs, nextResource)) { continue; }
 
             CO_CORE_ERROR(
                 "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not created "
@@ -207,12 +250,12 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render task '{}'",
                       textures[nextResource].name,
                       nextResource.version,
-                      renderTasks_[writingTask].name);
-        renderTasks_[writingTask].executionPriority = ++executionPrio;
+                      data_->renderTasks[writingTask].name);
+        data_->renderTasks[writingTask].executionPriority = ++executionPrio;
 
         // mark the resources created by the task as required
         for (const RenderTaskInfo::Dependency &created :
-             renderTasks_[writingTask].dependencies |
+             data_->renderTasks[writingTask].dependencies |
                  ranges::views::filter([](const auto &outputDesc) {
                      return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
                  })) {
@@ -224,14 +267,14 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         ranges::transform(
             rng.first, rng.second, std::back_inserter(nextResourcesToResolve), [&](const auto &it) {
                 CO_CORE_TRACE("Requesting input resource for {}: '{} v{}'",
-                              renderTasks_[writingTask].name,
+                              data_->renderTasks[writingTask].name,
                               textures[it.second].name,
                               it.second.version);
                 return it.second;
             });
     }
 
-    auto items = renderTasks_.items();
+    auto items = data_->renderTasks.items();
     auto tasksToExecute =
         items | ranges::views::transform([](const auto &it) {
             return std::make_pair(RenderTaskHandle{it.first}, it.second.executionPriority);
@@ -244,7 +287,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
 
     CO_CORE_TRACE("Render task order after resolve:");
     for (const auto &[handle, prio] : tasksToExecute) {
-        CO_CORE_TRACE("  [{}] {}", prio, renderTasks_[handle].name);
+        CO_CORE_TRACE("  [{}] {}", prio, data_->renderTasks[handle].name);
     }
 
     auto tasks = tasksToExecute |
@@ -257,18 +300,18 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
 
 RenderInput Framegraph::renderInput(RenderTaskHandle passHandle)
 {
-    CO_CORE_ASSERT(commandListInProgress_, "No command list recording in progress!");
+    CO_CORE_ASSERT(data_->commandListInProgress, "No command list recording in progress!");
     return {
         .resources = nullptr,
         .context = nullptr,
-        .cmd = commandListInProgress_,
+        .cmd = data_->commandListInProgress,
     };
 }
 
 cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
 Framegraph::renderTasks() const
 {
-    for (const auto &[passHandle, passInfo] : renderTasks_.items()) {
+    for (const auto &[passHandle, passInfo] : data_->renderTasks.items()) {
         co_yield std::make_pair(RenderTaskHandle{passHandle}, passInfo);
     }
 }

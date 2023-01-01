@@ -2,15 +2,12 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/FmtUtils.hpp>
-#include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/Builder.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
 
-#include <cppcoro/shared_task.hpp>
-#include <cppcoro/task.hpp>
-#include <cppcoro/when_all_ready.hpp>
 #include <glm/vec3.hpp>
+
+#include <cppcoro/generator.hpp>
 
 #include <concepts>
 #include <set>
@@ -66,15 +63,30 @@ struct ExecutionInfo {
  *
  * Is meant to be filled with Cory::Builder
  */
-class Framegraph : NoCopy, NoMove {
+class Framegraph : NoCopy {
   public:
     explicit Framegraph(Context &ctx);
     ~Framegraph();
 
+    Framegraph(Framegraph &&);
+    Framegraph &operator=(Framegraph &&);
+
+    /**
+     * @brief record the commands from all render tasks into the given command buffer
+     *
+     * Note that this can be only called once. It will cause all relevant render tasks to execute.
+     */
     ExecutionInfo record(Magnum::Vk::CommandBuffer &cmdBuffer);
 
+    /**
+     * @brief immediately retire all resources allocated by the framegraph
+     *
+     * should be called only when it can be ensured that all resources are no longer in use, e.g.
+     * for example when the next frame with the same swapchain image has been rendered.
+     */
     void retireImmediate();
 
+    /// declare a new render task
     Builder declareTask(std::string_view name);
 
     /// to be called from Builder
@@ -93,20 +105,19 @@ class Framegraph : NoCopy, NoMove {
      */
     std::pair<TextureInfo, TextureState> declareOutput(TransientTextureHandle handle);
 
+    [[nodiscard]] const TextureResourceManager &resources() const;
+    [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
+    [[nodiscard]] const std::vector<TransientTextureHandle> &outputs() const;
+
     [[nodiscard]] std::string dump(const ExecutionInfo &info);
 
   private: /* member functions */
-    RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info)
-    {
-        return renderTasks_.emplace(info);
-    }
+    RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info);
 
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
     /// coroHandle
-    void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle)
-    {
-        renderTasks_[passHandle].coroHandle = coroHandle;
-    }
+    void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle);
+    TextureResourceManager &resources();
 
     /**
      * @brief resolve which render tasks need to be executed for requested resources
@@ -129,13 +140,7 @@ class Framegraph : NoCopy, NoMove {
     friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
     friend FramegraphVisualizer;       // accesses all the internals
 
-    Context *ctx_;
-    TextureResourceManager resources_;
-    std::vector<TransientTextureHandle> externalInputs_;
-    std::vector<TransientTextureHandle> outputs_;
-
-    SlotMap<RenderTaskInfo> renderTasks_;
-    CommandList *commandListInProgress_{};
+    std::unique_ptr<struct FramegraphPrivate> data_;
 };
 
 } // namespace Cory

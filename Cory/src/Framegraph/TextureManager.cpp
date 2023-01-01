@@ -34,6 +34,8 @@ TextureResourceManager::TextureResourceManager(Context &ctx)
 }
 
 TextureResourceManager::~TextureResourceManager() = default;
+TextureResourceManager::TextureResourceManager(TextureResourceManager &&) = default;
+TextureResourceManager &TextureResourceManager::operator=(TextureResourceManager &&) = default;
 
 TextureHandle TextureResourceManager::declareTexture(TextureInfo info)
 {

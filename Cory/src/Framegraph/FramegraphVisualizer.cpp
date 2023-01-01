@@ -51,7 +51,7 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
         index.tasks[taskHandle].executed = ranges::contains(executionInfo.tasks, taskHandle);
 
         for (const RenderTaskInfo::Dependency &dependency : passInfo.dependencies) {
-            auto info = graph_.resources_.info(dependency.handle.texture);
+            auto info = graph_.resources().info(dependency.handle.texture);
 
             index.textures[dependency.handle].handle = dependency.handle;
             index.textures[dependency.handle].info = info;
@@ -70,21 +70,21 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
         }
     }
     // mark all external inputs
-    for (auto externalInput : graph_.externalInputs_) {
+    for (auto externalInput : graph_.externalInputs()) {
         if (index.textures.contains(externalInput)) {
             index.textures.at(externalInput).external = true;
         }
         else {
-            auto inputInfo = graph_.resources_.info(externalInput.texture);
+            auto inputInfo = graph_.resources().info(externalInput.texture);
             index.textures.insert(std::make_pair(
                 externalInput,
                 Index::TextureData{.handle = externalInput,
-                                   .info = graph_.resources_.info(externalInput.texture),
+                                   .info = graph_.resources().info(externalInput.texture),
                                    .external = true}));
         }
     }
     // mark all output resources
-    for (auto externalOutput : graph_.outputs_) {
+    for (auto externalOutput : graph_.outputs()) {
         index.textures.at(externalOutput).output = true;
     }
     // mark all texture entries that refer to an allocated resource as allocated

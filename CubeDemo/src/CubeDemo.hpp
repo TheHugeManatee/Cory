@@ -41,12 +41,19 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
 
     struct PassOutputs {
         Cory::TransientTextureHandle colorOut;
+        Cory::TransientTextureHandle depthOut;
     };
     Cory::RenderTaskDeclaration<PassOutputs>
     mainCubeRenderTask(Cory::Builder builder,
                        Cory::TransientTextureHandle colorTarget,
                        Cory::TransientTextureHandle depthTarget,
-                       const Cory::FrameContext &ctx);
+                       const Cory::FrameContext &frameCtx);
+
+    Cory::RenderTaskDeclaration<PassOutputs>
+    depthDebugTask(Cory::Builder builder,
+                   Cory::TransientTextureHandle depthTarget,
+                   const Cory::FrameContext &frameCtx);
+
     Cory::RenderTaskDeclaration<PassOutputs>
     imguiRenderTask(Cory::Builder builder,
                     Cory::TransientTextureHandle colorTarget,
@@ -66,6 +73,8 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
 
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
+    Cory::ShaderHandle fullscreenTriShader_;
+    Cory::ShaderHandle depthDebugShader_;
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 

@@ -154,6 +154,10 @@ void CubeDemoApplication::createShaders()
     const Cory::ScopeTimer st{"Init/Shaders"};
     vertexShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.vert"));
     fragmentShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.frag"));
+    fullscreenTriShader_ =
+        ctx_->resources().createShader(Cory::ResourceLocator::locate("fullscreenTri.vert"));
+    depthDebugShader_ =
+        ctx_->resources().createShader(Cory::ResourceLocator::locate("depthDebug.frag"));
 }
 
 void CubeDemoApplication::createUBO()
@@ -248,8 +252,12 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto mainPass = mainCubeRenderTask(
         framegraph.declareTask("Cube Render Pass"), windowColorTarget, windowDepthTarget, frameCtx);
 
-    auto imguiPass =
-        imguiRenderTask(framegraph.declareTask("ImGui"), mainPass.output().colorOut, frameCtx);
+    auto depthDebugPass = depthDebugTask(framegraph.declareTask("Depth Debug Pass"),
+                                         windowDepthTarget /*mainPass.output().depthOut*/,
+                                         frameCtx);
+
+    auto imguiPass = imguiRenderTask(
+        framegraph.declareTask("ImGui"), depthDebugPass.output().colorOut, frameCtx);
 
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
@@ -266,7 +274,8 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Builder builder,
 
     auto [writtenColorHandle, colorInfo] =
         builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
-    builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
+    auto [writtenDepthHandle, depthInfo] =
+        builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
     auto cubePass = builder.declareRenderPass("Cubes")
                         .shaders({vertexShader_, fragmentShader_})
@@ -280,7 +289,7 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Builder builder,
                                      clearDepth)
                         .finish();
 
-    co_yield PassOutputs{.colorOut = writtenColorHandle};
+    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
@@ -333,6 +342,60 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Builder builder,
         renderApi.cmd->handle().draw(*mesh_);
     }
 
+    cubePass.end(*renderApi.cmd);
+}
+
+Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
+CubeDemoApplication::depthDebugTask(Cory::Builder builder,
+                                    Cory::TransientTextureHandle depthTarget,
+                                    const Cory::FrameContext &frameCtx)
+{
+    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    float clearDepth = 1.0f;
+
+    auto depthInfo = builder.read(
+        depthTarget, Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto colorTarget = builder.create("DebugDebug",
+                                      depthInfo.size,
+                                      window_->colorFormat(),
+                                      Cory::Sync::AccessType::ColorAttachmentWrite);
+
+    auto cubePass = builder.declareRenderPass("DepthDebug")
+                        .shaders({fullscreenTriShader_, depthDebugShader_})
+                        .attach(colorTarget,
+                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
+                                VK_ATTACHMENT_STORE_OP_STORE,
+                                clearColor)
+                        .disableMeshInput()
+                        .finish();
+
+    co_yield PassOutputs{.colorOut = colorTarget, .depthOut = {}};
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+
+    ////////////
+
+    // update the uniform buffer
+    CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
+
+    globalUbo_->flush(frameCtx.index);
+
+    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
+    ctx_->device()->CmdBindDescriptorSets(
+        renderApi.cmd->handle(),
+        VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+        // TODO make lyaout accessible through TransientRenderPass instead
+        ctx_->defaultPipelineLayout(),
+        0,
+        gsl::narrow<uint32_t>(sets.size()),
+        sets.data(),
+        0,
+        nullptr);
+
+    ////////////
+
+    cubePass.begin(*renderApi.cmd);
+
+    ctx_->device()->CmdDraw(*frameCtx.commandBuffer, 3, 1, 0, 0);
     cubePass.end(*renderApi.cmd);
 }
 

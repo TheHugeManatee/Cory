@@ -9,6 +9,7 @@
 #include <Magnum/Vk/Image.h>
 #include <Magnum/Vk/ImageView.h>
 #include <Magnum/Vk/Instance.h>
+#include <Magnum/Vk/Pipeline.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/Shader.h>
 
@@ -66,6 +67,9 @@ void nameRawVulkanObject(DeviceHandle &device, VulkanObjectHandle handle, std::s
     if constexpr (std::is_same_v<VulkanObjectHandle, VkShaderModule>) {
         objectNameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
     }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkPipeline>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE;
+    }
 
     device->SetDebugUtilsObjectNameEXT(device, &objectNameInfo);
 }
@@ -97,6 +101,7 @@ INSTANTIATE_WRAPPED(Magnum::Vk::Fence);
 INSTANTIATE_WRAPPED(Magnum::Vk::CommandBuffer);
 INSTANTIATE(VkImage);
 INSTANTIATE_WRAPPED(Magnum::Vk::Image);
+INSTANTIATE_WRAPPED(Magnum::Vk::Pipeline);
 INSTANTIATE_WRAPPED(Magnum::Vk::ImageView);
 INSTANTIATE_WRAPPED(Magnum::Vk::Shader);
 

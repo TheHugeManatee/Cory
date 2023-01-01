@@ -34,6 +34,7 @@ struct PipelineDescriptor {
     std::vector<VkFormat> colorFormats;
     VkFormat depthFormat;
     VkFormat stencilFormat;
+    bool hasMeshInput;
     std::size_t hash() const
     {
         return hashCompose(0, shaders, sampleCount, colorFormats, depthFormat, stencilFormat);
@@ -65,7 +66,12 @@ class PipelineCache {
         }
 
         Vk::RasterizationPipelineCreateInfo pipelineCreateInfo{
-            shaderSet, ctx.defaultMeshLayout(), ctx.defaultPipelineLayout(), VK_NULL_HANDLE, 0, 1};
+            shaderSet,
+            ctx.defaultMeshLayout(!info.hasMeshInput),
+            ctx.defaultPipelineLayout(),
+            VK_NULL_HANDLE,
+            0,
+            1};
 
         // configure dynamic states
         pipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
@@ -157,8 +163,8 @@ void TransientRenderPass::begin(CommandList &cmd)
         .colorFormats =
             colorAttachments_ | ranges::views::transform(getColorFormat) | ranges::to<std::vector>,
         .depthFormat = depthAttachment_.transform(getColorFormat).value_or(VK_FORMAT_UNDEFINED),
-        .stencilFormat =
-            stencilAttachment_.transform(getColorFormat).value_or(VK_FORMAT_UNDEFINED)};
+        .stencilFormat = stencilAttachment_.transform(getColorFormat).value_or(VK_FORMAT_UNDEFINED),
+        .hasMeshInput = hasMeshInput_};
 
     // todo need to move this out of here, statics SUCK
     static PipelineCache cache;
@@ -291,6 +297,12 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attachStencil(TransientT
     renderPass_.stencilAttachment_ = std::make_pair(
         handle.texture,
         AttachmentKind{loadOp, storeOp, {.depthStencil = {.depth = 1.0f, .stencil = clearValue}}});
+    return *this;
+}
+
+TransientRenderPassBuilder &TransientRenderPassBuilder::disableMeshInput()
+{
+    renderPass_.hasMeshInput_ = false;
     return *this;
 }
 

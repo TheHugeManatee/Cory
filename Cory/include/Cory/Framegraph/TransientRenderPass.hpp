@@ -57,6 +57,7 @@ class TransientRenderPass : NoCopy {
     std::optional<std::pair<TextureHandle, AttachmentKind>> stencilAttachment_;
 
     DynamicStates dynamicStates_;
+    bool hasMeshInput_{true}; // by default, uses the default mesh layout
 
     PipelineHandle handle_;
     bool hasBegun_{false}; ///< only needed for diagnostics
@@ -85,6 +86,9 @@ class TransientRenderPassBuilder : NoCopy, NoMove {
                                               VkAttachmentLoadOp loadOp,
                                               VkAttachmentStoreOp storeOp,
                                               uint32_t clearValue);
+
+    /// create a render pass that does not expect any mesh to be attached
+    TransientRenderPassBuilder & disableMeshInput();
 
     TransientRenderPass finish();
 

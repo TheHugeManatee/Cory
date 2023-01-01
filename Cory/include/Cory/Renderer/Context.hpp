@@ -59,7 +59,9 @@ class Context : NoCopy {
     /// register a callback that gets called on vulkan validation messages etc.
     void onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo &)> callback);
 
-    const Magnum::Vk::MeshLayout &defaultMeshLayout() const;
+    // get the default mesh layout. if empty is true, will return an empty layout with zero
+    // attachments
+    const Magnum::Vk::MeshLayout &defaultMeshLayout(bool empty = false) const;
     // non-const only to allow casting to VkPipelineLayout
     Magnum::Vk::PipelineLayout &defaultPipelineLayout();
     // non-const only to allow casting to VkDescriptorSetLayotu

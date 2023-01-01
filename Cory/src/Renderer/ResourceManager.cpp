@@ -52,11 +52,16 @@ Shader &ResourceManager::operator[](ShaderHandle shaderHandle)
     return data_->shaders[shaderHandle];
 }
 
-void ResourceManager::release(ShaderHandle shaderHandle) { data_->shaders.release(shaderHandle); }
+void ResourceManager::release(ShaderHandle shaderHandle)
+{
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    data_->shaders.release(shaderHandle);
+}
 
 BufferHandle
 ResourceManager::createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags)
 {
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     return data_->buffers.emplace(
         std::ref(data_->ctx->device()),
         Vk::BufferCreateInfo{Vk::BufferUsage{usage.underlying_bits()}, bufferSizeInBytes},
@@ -71,6 +76,7 @@ Vk::Buffer &ResourceManager::operator[](BufferHandle bufferHandle)
 
 void ResourceManager::release(BufferHandle bufferHandle)
 {
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     data_->buffers.release(bufferHandle.handle_);
 }
 
@@ -78,9 +84,10 @@ PipelineHandle
 ResourceManager::createPipeline(std::string_view name,
                                 const Vk::RasterizationPipelineCreateInfo &createInfo)
 {
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     auto handle = data_->pipelines.emplace(std::ref(data_->ctx->device()), std::ref(createInfo));
 
-    // TODO: nameVulkanObject()
+    nameVulkanObject(data_->ctx->device(), data_->pipelines[handle], name);
 
     return handle;
 }
@@ -93,6 +100,7 @@ Vk::Pipeline &ResourceManager::operator[](PipelineHandle pipelineHandle)
 
 void ResourceManager::release(PipelineHandle pipelineHandle)
 {
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     data_->pipelines.release(pipelineHandle);
 }
 

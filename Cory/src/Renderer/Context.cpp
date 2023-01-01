@@ -52,6 +52,7 @@ struct ContextPrivate {
     Magnum::Vk::DescriptorSetLayout defaultDescriptorLayout{Corrade::NoCreate};
     Magnum::Vk::PipelineLayout defaultPipelineLayout{Corrade::NoCreate};
     Magnum::Vk::MeshLayout defaultMeshLayout{Corrade::NoInit};
+    Magnum::Vk::MeshLayout emptyMeshLayout{Corrade::NoInit};
 
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
                                   DebugMessageType messageType,
@@ -177,6 +178,7 @@ Context::Context()
     data_->resources.setContext(*this);
 
     data_->defaultMeshLayout = createDefaultMeshLayout();
+    data_->emptyMeshLayout = Magnum::Vk::MeshLayout{Vk::MeshPrimitive::Triangles};
     data_->defaultDescriptorLayout = createDefaultDescriptorSetLayout(*this);
     data_->defaultPipelineLayout =
         createDefaultPipelineLayout(*this, data_->defaultDescriptorLayout);
@@ -268,9 +270,9 @@ void Context::onVulkanDebugMessageReceived(std::function<void(const DebugMessage
     data_->onVulkanDebugMessageReceived(std::move(callback));
 }
 
-const Magnum::Vk::MeshLayout &Context::defaultMeshLayout() const
+const Magnum::Vk::MeshLayout &Context::defaultMeshLayout(bool empty) const
 {
-    return data_->defaultMeshLayout;
+    return empty ? data_->emptyMeshLayout : data_->defaultMeshLayout;
 }
 
 Magnum::Vk::PipelineLayout &Context::defaultPipelineLayout()

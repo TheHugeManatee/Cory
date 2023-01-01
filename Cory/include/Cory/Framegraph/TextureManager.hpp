@@ -10,8 +10,19 @@
 
 namespace Cory {
 
-// handles the transient resources created/destroyed during a frame - tightly coupled with the
-// Framegraph and Builder classes, not intended to be used directly
+/**
+ * @brief handles the transient resources created/destroyed during a frame
+ *
+ * This class is tightly coupled with the @a Framegraph and @a Builder, not
+ * intended to be used directly.
+ *
+ * Implementation Notes:
+ *  - Currently always creates an Image and corresponding ImageView, even
+ *    though technically creating an ImageView and sampler could be avoided
+ *    by having the knowledge from the framegraph how the texture will be used
+ *  - Currently, allocates each Image separately - technically, could use an
+ *    GPU arena for this
+ */
 class TextureResourceManager {
   public:
     explicit TextureResourceManager(Context &ctx);
@@ -26,7 +37,15 @@ class TextureResourceManager {
 
     void allocate(const std::vector<TextureHandle> &handles);
 
-    // emit a synchronization to sync subsequent reads with the last write access. will store the new
+    /**
+     * @brief create a synchronization barrier object to sync subsequent reads
+     * @param handle the handle to synchronize
+     * @param access the access type
+     * @param contentsMode whether the previous contents should be retained or discarded when
+     *        accessing the texture - choose ImageContents::Discard if you overwrite the contents
+     *
+     * Will store the given @a access to sync subsequent accesses to the texture
+     */
     Sync::ImageBarrier synchronizeTexture(TextureHandle handle,
                                           Sync::AccessType access,
                                           ImageContents contentsMode);

@@ -235,7 +235,7 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
 
     auto windowColorTarget =
-        framegraph.declareInput({.name = "Window Color Texture",
+        framegraph.declareInput({.name = "Tex_SwCh_Color",
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.colorImage->format(),
                                  .sampleCount = window_->sampleCount()},
@@ -244,7 +244,7 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                 *frameCtx.colorImageView);
 
     auto windowDepthTarget =
-        framegraph.declareInput({.name = "Window Depth Texture",
+        framegraph.declareInput({.name = "Tex_SwCh_Depth",
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.depthImage->format(),
                                  .sampleCount = window_->sampleCount()},
@@ -252,26 +252,25 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                 *frameCtx.depthImage,
                                 *frameCtx.depthImageView);
 
-    // auto mainPass = mainCubeRenderTask(
-    //     framegraph.declareTask("Cube Render Pass"), windowColorTarget, windowDepthTarget,
-    //     frameCtx);
-    //
-    auto depthDebugPass = depthDebugTask(framegraph.declareTask("Depth Debug Pass"),
-                                         windowColorTarget,
-                                         windowDepthTarget /*mainPass.output().depthOut*/,
+    auto mainPass = cubeRenderTask(
+        framegraph.declareTask("RP_Cubes"), windowColorTarget, windowDepthTarget, frameCtx);
+
+    auto depthDebugPass = depthDebugTask(framegraph.declareTask("RP_DepthDebug"),
+                                         mainPass.output().colorOut,
+                                         mainPass.output().depthOut,
                                          frameCtx);
 
     auto imguiPass = imguiRenderTask(
-        framegraph.declareTask("ImGui"), depthDebugPass.output().colorOut, frameCtx);
+        framegraph.declareTask("RP_ImGui"), depthDebugPass.output().colorOut, frameCtx);
 
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::mainCubeRenderTask(Cory::Builder builder,
-                                        Cory::TransientTextureHandle colorTarget,
-                                        Cory::TransientTextureHandle depthTarget,
-                                        const Cory::FrameContext &frameCtx)
+CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
+                                    Cory::TransientTextureHandle colorTarget,
+                                    Cory::TransientTextureHandle depthTarget,
+                                    const Cory::FrameContext &frameCtx)
 {
 
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
@@ -282,7 +281,7 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Builder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto cubePass = builder.declareRenderPass("Cubes")
+    auto cubePass = builder.declareRenderPass("Pass_Cubes")
                         .shaders({vertexShader_, fragmentShader_})
                         .attach(colorTarget,
                                 VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -361,16 +360,14 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
 
     auto [writtenColorHandle, colorInfo] =
         builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
-
-    //    auto depthInfo = builder.read(
-    //        depthTarget,
-    //        Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto depthInfo = builder.read(
+        depthTarget, Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
     //    auto colorTarget = builder.create("DebugDebug",
     //                                      depthInfo.size,
     //                                      window_->colorFormat(),
     //                                      Cory::Sync::AccessType::ColorAttachmentWrite);
 
-    auto cubePass = builder.declareRenderPass("DepthDebug")
+    auto cubePass = builder.declareRenderPass("Pass_DepthDebug")
                         .shaders({fullscreenTriShader_, depthDebugShader_})
                         .attach(colorTarget,
                                 VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,

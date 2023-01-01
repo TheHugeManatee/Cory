@@ -44,13 +44,14 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
         Cory::TransientTextureHandle depthOut;
     };
     Cory::RenderTaskDeclaration<PassOutputs>
-    mainCubeRenderTask(Cory::Builder builder,
-                       Cory::TransientTextureHandle colorTarget,
-                       Cory::TransientTextureHandle depthTarget,
-                       const Cory::FrameContext &frameCtx);
+    cubeRenderTask(Cory::Builder builder,
+                   Cory::TransientTextureHandle colorTarget,
+                   Cory::TransientTextureHandle depthTarget,
+                   const Cory::FrameContext &frameCtx);
 
     Cory::RenderTaskDeclaration<PassOutputs>
-    depthDebugTask(Cory::Builder builder,Cory::TransientTextureHandle colorTarget,
+    depthDebugTask(Cory::Builder builder,
+                   Cory::TransientTextureHandle colorTarget,
                    Cory::TransientTextureHandle depthTarget,
                    const Cory::FrameContext &frameCtx);
 

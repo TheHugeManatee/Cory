@@ -15,8 +15,7 @@ struct RenderTaskInfo {
         Sync::AccessType access;
     };
     std::string name;
-    std::vector<Dependency> inputs;
-    std::vector<Dependency> outputs;
+    std::vector<Dependency> dependencies;
 
     // framegraph internal stuff
     cppcoro::coroutine_handle<> coroHandle;
@@ -35,6 +34,7 @@ class Builder : NoCopy {
     Builder(Framegraph &framegraph, std::string_view passName);
     ~Builder();
 
+    /// move-constructible because it is intended to be provided by-value to the pass coroutine
     Builder(Builder &&) = default;
 
     /// declare that a render pass creates a certain texture
@@ -69,6 +69,9 @@ class Builder : NoCopy {
      * of the render pass are not needed, the coroutine will never be resumed.
      */
     RenderTaskExecutionAwaiter finishDeclaration();
+
+    /// the name of the render task that is being created
+    const std::string &name() const { return info_.name; }
 
   private:
     RenderTaskInfo info_;

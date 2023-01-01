@@ -50,8 +50,7 @@ struct RenderTaskExecutionAwaiter {
 
 struct ExecutionInfo {
     struct TransitionInfo {
-        enum class Direction { ResourceToTask, TaskToResource };
-        Direction direction;
+        TaskDependencyKind kind;
         RenderTaskHandle task;
         TransientTextureHandle resource;
         Sync::AccessType stateBefore;

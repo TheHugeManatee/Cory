@@ -143,34 +143,35 @@ struct MainOut {
     FG::TransientTextureHandle color;
     FG::TransientTextureHandle normal;
 };
-FG::RenderTaskDeclaration<MainOut> mainPass(FG::Framegraph &graph,
+FG::RenderTaskDeclaration<MainOut> mainPass(FG::Builder builder,
+                                            FG::TransientTextureHandle colorInput,
+                                            FG::TransientTextureHandle normalInput,
                                             FG::TransientTextureHandle depthInput)
 {
-    FG::Builder builder = graph.declareTask("MainPass");
+    auto depthInfo = builder.read(depthInput, Sync::AccessType::DepthStencilAttachmentRead);
 
-    auto depthInfo = builder.read(
-        depthInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto colorOut =
+        colorInput
+            ? builder.readWrite(colorInput, Cory::Sync::AccessType::ColorAttachmentReadWrite).first
+            : builder.create("colorTexture",
+                             depthInfo.size,
+                             PixelFormat::RGBA8Srgb,
+                             Sync::AccessType::ColorAttachmentWrite);
+    auto normalOut = [&]() {
+        if (normalInput) {
+            return builder.readWrite(normalInput, Cory::Sync::AccessType::ColorAttachmentReadWrite)
+                .first;
+        }
+        return builder.create("normalTexture",
+                              depthInfo.size,
+                              PixelFormat::RGBA8Unorm,
+                              Sync::AccessType::ColorAttachmentWrite);
+    }();
 
-    auto color = builder.create("colorTexture",
-                                depthInfo.size,
-                                PixelFormat::RGBA8Srgb,
-                                Sync::AccessType::ColorAttachmentWrite);
-    auto normal = builder.create("normalTexture",
-                                 depthInfo.size,
-                                 PixelFormat::RGBA8Unorm,
-                                 Sync::AccessType::ColorAttachmentWrite);
-
-    co_yield MainOut{color, normal};
+    co_yield MainOut{colorOut, normalOut};
     FG::RenderInput render = co_await builder.finishDeclaration();
 
-    // render portion
-    //    struct PassTextures {
-    //        FG::Texture color;
-    //        FG::Texture depth;
-    //        FG::Texture normal;
-    //    };
-
-    CO_APP_INFO("[MainPass] Pass render commands are executed");
+    CO_APP_INFO("{} Pass render commands are executed", builder.name());
 }
 
 struct PostProcessOut {
@@ -221,14 +222,20 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
         prevFrameView);
 
     auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("depthPrepass"), {800, 600, 1});
-    auto mainPass = passes::mainPass(graph, depthPass.output().depthTexture);
+    auto depthTex = depthPass.output().depthTexture;
+    auto mainPass = passes::mainPass(graph.declareTask("MainPass"), {}, {}, depthTex);
+
+    auto addMainPass = passes::mainPass(graph.declareTask("Main Lines"),
+                                        mainPass.output().color,
+                                        mainPass.output().normal,
+                                        depthTex);
 
     auto depthDebugPass = passes::depthDebug(graph, depthPass.output().depthTexture);
     auto normalDebugPass = passes::normalDebug(graph, mainPass.output().normal);
     auto debugCombinePass = passes::debugGeneral(
         graph, {depthDebugPass.output().debugColor, normalDebugPass.output().debugColor}, 0);
 
-    auto postProcess = passes::postProcess(graph, mainPass.output().color, prevFrameColor);
+    auto postProcess = passes::postProcess(graph, addMainPass.output().color, prevFrameColor);
 
     // provoke the coroutines to run so we have some stuff to cull in the graph - otherwise
     // they won't even, that's how neat using coroutines is :)

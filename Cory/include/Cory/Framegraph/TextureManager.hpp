@@ -26,10 +26,10 @@ class TextureResourceManager {
 
     void allocate(const std::vector<TextureHandle> &handles);
 
-    // emit a synchronization to sync subsequent reads with the last write access
-    Sync::ImageBarrier synchronizeTexture(Magnum::Vk::CommandBuffer &cmdBuffer,
-                     TextureHandle handle,
-                     Sync::AccessType readAccess, ImageContents contentsMode);
+    // emit a synchronization to sync subsequent reads with the last write access. will store the new
+    Sync::ImageBarrier synchronizeTexture(TextureHandle handle,
+                                          Sync::AccessType access,
+                                          ImageContents contentsMode);
 
     [[nodiscard]] const TextureInfo &info(TextureHandle handle) const;
     Magnum::Vk::Image &image(TextureHandle handle);

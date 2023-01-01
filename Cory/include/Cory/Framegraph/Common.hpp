@@ -67,8 +67,9 @@ struct TextureState {
 using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureResourceManager>;
 struct TransientTextureHandle {
     TextureHandle texture{};
-    uint32_t version{0};
+    uint32_t version{0xFFFFFFFF};
     auto operator<=>(const TransientTextureHandle &) const = default;
+    explicit operator bool() const { return texture.valid() && version != 0xFFFFFFFF; }
 };
 using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
 

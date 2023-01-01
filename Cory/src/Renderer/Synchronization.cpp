@@ -373,7 +373,7 @@ VkImageLayout GetVkImageLayout(AccessType access)
     return AccessMap[static_cast<uint32_t>(access)].imageLayout;
 }
 
-void GetAccessInfo(std::span<AccessType> accesses,
+void GetAccessInfo(std::span<const AccessType> accesses,
                    VkPipelineStageFlags *pStageMask,
                    VkAccessFlags *pAccessMask,
                    VkImageLayout *pImageLayout,
@@ -669,8 +669,8 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
 void CmdPipelineBarrier(Magnum::Vk::Device &device,
                         VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
-                        std::span<BufferBarrier> bufferBarriers,
-                        std::span<ImageBarrier> imageBarriers)
+                        std::span<const BufferBarrier> bufferBarriers,
+                        std::span<const ImageBarrier> imageBarriers)
 {
     VkMemoryBarrier memoryBarrier;
     // Vulkan pipeline barrier command parameters
@@ -742,7 +742,7 @@ void CmdPipelineBarrier(Magnum::Vk::Device &device,
 void CmdSetEvent(Magnum::Vk::Device &device,
                  VkCommandBuffer commandBuffer,
                  VkEvent event,
-                 std::span<AccessType> prevAccesses)
+                 std::span<const AccessType> prevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
@@ -764,7 +764,7 @@ void CmdSetEvent(Magnum::Vk::Device &device,
 void CmdResetEvent(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
                    VkEvent event,
-                   std::span<AccessType> prevAccesses)
+                   std::span<const AccessType> prevAccesses)
 {
     VkPipelineStageFlags stageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
@@ -785,10 +785,10 @@ void CmdResetEvent(Magnum::Vk::Device &device,
 
 void CmdWaitEvents(Magnum::Vk::Device &device,
                    VkCommandBuffer commandBuffer,
-                   std::span<VkEvent> events,
+                   std::span<const VkEvent> events,
                    const GlobalBarrier *pGlobalBarrier,
-                   std::span<BufferBarrier> bufferBarriers,
-                   std::span<ImageBarrier> imageBarriers)
+                   std::span<const BufferBarrier> bufferBarriers,
+                   std::span<const ImageBarrier> imageBarriers)
 {
     VkMemoryBarrier memoryBarrier;
     // Vulkan pipeline barrier command parameters

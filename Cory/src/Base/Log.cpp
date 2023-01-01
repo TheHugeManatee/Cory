@@ -22,7 +22,6 @@ void Log::Init()
 
 void Log::Shutdown()
 {
-    CO_CORE_TRACE("Log shutting down.");
     spdlog::shutdown();
 }
 } // namespace Cory

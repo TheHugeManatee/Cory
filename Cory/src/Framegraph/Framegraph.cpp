@@ -71,7 +71,7 @@ void Framegraph::retireImmediate()
     externalInputs_.clear();
     outputs_.clear();
 
-    for (RenderTaskInfo &info : renderTasks_) {
+    for (RenderTaskInfo &info : renderTasks_) { // NOLINT (false positive)
         info.coroHandle.destroy();
     }
     renderTasks_.clear();
@@ -85,10 +85,10 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
-    std::vector<Sync::ImageBarrier> imageBarriers;
+
     auto emitBarrier = [&](const RenderTaskInfo::Dependency &resourceInfo) {
         transitions.push_back(ExecutionInfo::TransitionInfo{
-            .direction = ExecutionInfo::TransitionInfo::Direction::ResourceToTask,
+            .kind = resourceInfo.kind,
             .task = handle,
             .resource = resourceInfo.handle,
             .stateBefore = resources_.state(resourceInfo.handle.texture).lastAccess,
@@ -98,13 +98,13 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
                                       ? ImageContents::Retain
                                       : ImageContents::Discard;
 
-        imageBarriers.push_back(resources_.synchronizeTexture(
-            cmd.handle(), resourceInfo.handle.texture, resourceInfo.access, contentsMode));
+        return resources_.synchronizeTexture(
+            resourceInfo.handle.texture, resourceInfo.access, contentsMode);
     };
 
     // fill the barriers from the inputs and outputs
-    ranges::for_each(rpInfo.inputs, emitBarrier);
-    ranges::for_each(rpInfo.outputs, emitBarrier);
+    const std::vector<Sync::ImageBarrier> imageBarriers =
+        rpInfo.dependencies | ranges::views::transform(emitBarrier) | ranges::to<std::vector>;
 
     Sync::CmdPipelineBarrier(ctx_->device(), cmd.handle(), nullptr, {}, imageBarriers);
 
@@ -167,13 +167,14 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskInputs;
     std::unordered_map<TransientTextureHandle, TextureInfo> textures;
     for (const auto &[taskHandle, taskInfo] : renderTasks_.items()) {
-        for (const RenderTaskInfo::Dependency &input : taskInfo.inputs) {
-            taskInputs.insert({taskHandle, input.handle});
-            textures[input.handle] = resources_.info(input.handle.texture);
-        }
-        for (const RenderTaskInfo::Dependency &output : taskInfo.outputs) {
-            resourceToTask[output.handle] = taskHandle;
-            textures[output.handle] = resources_.info(output.handle.texture);
+        for (const RenderTaskInfo::Dependency &dependency : taskInfo.dependencies) {
+            if (dependency.kind.is_set(TaskDependencyKindBits::Read)) {
+                taskInputs.insert({taskHandle, dependency.handle});
+            }
+            if (dependency.kind.is_set(TaskDependencyKindBits::Write)) {
+                resourceToTask[dependency.handle] = taskHandle;
+            }
+            textures[dependency.handle] = resources_.info(dependency.handle.texture);
         }
     }
 
@@ -211,9 +212,10 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
 
         // mark the resources created by the task as required
         for (const RenderTaskInfo::Dependency &created :
-             renderTasks_[writingTask].outputs | ranges::views::filter([](const auto &outputDesc) {
-                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-             })) {
+             renderTasks_[writingTask].dependencies |
+                 ranges::views::filter([](const auto &outputDesc) {
+                     return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+                 })) {
             requiredResources.push_back(created.handle.texture);
         }
 

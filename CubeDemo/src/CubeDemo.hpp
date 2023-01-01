@@ -50,7 +50,7 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
                        const Cory::FrameContext &frameCtx);
 
     Cory::RenderTaskDeclaration<PassOutputs>
-    depthDebugTask(Cory::Builder builder,
+    depthDebugTask(Cory::Builder builder,Cory::TransientTextureHandle colorTarget,
                    Cory::TransientTextureHandle depthTarget,
                    const Cory::FrameContext &frameCtx);
 

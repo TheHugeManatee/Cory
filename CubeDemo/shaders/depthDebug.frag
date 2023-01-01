@@ -10,6 +10,8 @@ layout (set = 0, binding = 0) uniform CubeUBO {
     float dummy;
 } globals;
 
+layout (location = 0) in vec2 inTex;
+
 void main() {
-    outColor = vec4(gl_FragCoord.xyz, 0.0);
+    outColor = vec4(inTex.xy, 0.0, 1.0);
 }

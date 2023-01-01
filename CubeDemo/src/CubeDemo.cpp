@@ -186,17 +186,16 @@ void CubeDemoApplication::createUBO()
 
 CubeDemoApplication::~CubeDemoApplication()
 {
-    // wait until last frame is finished rendering
-    ctx_->device()->DeviceWaitIdle(ctx_->device());
-
     imguiLayer_->deinit(*ctx_);
     CO_APP_TRACE("Destroying CubeDemoApplication");
 }
 
 void CubeDemoApplication::run()
 {
-
-    Cory::Framegraph fg(*ctx_);
+    std::vector<Cory::Framegraph> framegraphs;
+    std::generate_n(std::back_inserter(framegraphs),
+                    window_->swapchain().maxFramesInFlight(),
+                    [&]() { return Cory::Framegraph(*ctx_); });
 
     while (!window_->shouldClose()) {
         glfwPollEvents();
@@ -205,6 +204,9 @@ void CubeDemoApplication::run()
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
         drawImguiControls();
+
+        Cory::Framegraph &fg = framegraphs[frameCtx.index];
+        fg.retireImmediate(); // retire old resources from the last time this index was rendered
 
         defineRenderPasses(fg, frameCtx);
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
@@ -219,11 +221,12 @@ void CubeDemoApplication::run()
             dumpNextFramegraph_ = false;
         }
 
-        fg.retireImmediate(); // TODO need to retire much later..
-
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
     }
+
+    // wait until last frame is finished rendering
+    ctx_->device()->DeviceWaitIdle(ctx_->device());
 }
 
 void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
@@ -249,10 +252,12 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                 *frameCtx.depthImage,
                                 *frameCtx.depthImageView);
 
-    auto mainPass = mainCubeRenderTask(
-        framegraph.declareTask("Cube Render Pass"), windowColorTarget, windowDepthTarget, frameCtx);
-
+    // auto mainPass = mainCubeRenderTask(
+    //     framegraph.declareTask("Cube Render Pass"), windowColorTarget, windowDepthTarget,
+    //     frameCtx);
+    //
     auto depthDebugPass = depthDebugTask(framegraph.declareTask("Depth Debug Pass"),
+                                         windowColorTarget,
                                          windowDepthTarget /*mainPass.output().depthOut*/,
                                          frameCtx);
 
@@ -347,18 +352,23 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Builder builder,
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
 CubeDemoApplication::depthDebugTask(Cory::Builder builder,
+                                    Cory::TransientTextureHandle colorTarget,
                                     Cory::TransientTextureHandle depthTarget,
                                     const Cory::FrameContext &frameCtx)
 {
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     float clearDepth = 1.0f;
 
-    auto depthInfo = builder.read(
-        depthTarget, Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
-    auto colorTarget = builder.create("DebugDebug",
-                                      depthInfo.size,
-                                      window_->colorFormat(),
-                                      Cory::Sync::AccessType::ColorAttachmentWrite);
+    auto [writtenColorHandle, colorInfo] =
+        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
+
+    //    auto depthInfo = builder.read(
+    //        depthTarget,
+    //        Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    //    auto colorTarget = builder.create("DebugDebug",
+    //                                      depthInfo.size,
+    //                                      window_->colorFormat(),
+    //                                      Cory::Sync::AccessType::ColorAttachmentWrite);
 
     auto cubePass = builder.declareRenderPass("DepthDebug")
                         .shaders({fullscreenTriShader_, depthDebugShader_})
@@ -369,7 +379,7 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
                         .disableMeshInput()
                         .finish();
 
-    co_yield PassOutputs{.colorOut = colorTarget, .depthOut = {}};
+    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = {}};
     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
 
     ////////////

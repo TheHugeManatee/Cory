@@ -118,8 +118,8 @@ Sync::ImageBarrier TextureResourceManager::synchronizeTexture(TextureHandle hand
     auto &state = data_->textureResources_[handle].state;
 
     const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
-    Sync::ImageBarrier barrier{.prevAccesses{},
-                               .nextAccesses{},
+    Sync::ImageBarrier barrier{.prevAccesses{state.lastAccess},
+                               .nextAccesses{access},
                                .prevLayout = Sync::ImageLayout::Optimal,
                                .nextLayout = Sync::ImageLayout::Optimal,
                                .discardContents = discard,
@@ -135,10 +135,11 @@ Sync::ImageBarrier TextureResourceManager::synchronizeTexture(TextureHandle hand
                                    .layerCount = 1,
                                }};
 
-    CO_CORE_TRACE("BARRIER synchronizing data written to '{}' as {} to be read as {}",
+    CO_CORE_TRACE("BARRIER '{}' written as {}, read as {}, content {}",
                   info.name,
                   state.lastAccess,
-                  access);
+                  access,
+                  contentsMode);
 
     state.lastAccess = access;
     return barrier;

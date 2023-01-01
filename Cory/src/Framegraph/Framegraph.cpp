@@ -115,6 +115,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
             .stateBefore = data_->resources.state(resourceInfo.handle.texture).lastAccess,
             .stateAfter = resourceInfo.access});
 
+        // only discard if it is not a read/write dependency
         const auto contentsMode = resourceInfo.kind.is_set(TaskDependencyKindBits::Read)
                                       ? ImageContents::Retain
                                       : ImageContents::Discard;
@@ -211,10 +212,13 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     std::unordered_map<TransientTextureHandle, TextureInfo> textures;
     for (const auto &[taskHandle, taskInfo] : data_->renderTasks.items()) {
         for (const RenderTaskInfo::Dependency &dependency : taskInfo.dependencies) {
-            if (dependency.kind.is_set(TaskDependencyKindBits::Read)) {
+            const auto kind = dependency.kind;
+            // only counts as input if it is a 'pure' read dependency, not read/write
+            if (kind.is_set(TaskDependencyKindBits::Read) &&
+                !kind.is_set(TaskDependencyKindBits::Write)) {
                 taskInputs.insert({taskHandle, dependency.handle});
             }
-            if (dependency.kind.is_set(TaskDependencyKindBits::Write)) {
+            if (kind.is_set(TaskDependencyKindBits::Write)) {
                 resourceToTask[dependency.handle] = taskHandle;
             }
             textures[dependency.handle] = data_->resources.info(dependency.handle.texture);

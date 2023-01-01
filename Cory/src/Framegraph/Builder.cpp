@@ -80,7 +80,7 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextu
         TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
 
     info_.dependencies.push_back({
-        .kind = TaskDependencyKindBits::Write,
+        .kind = TaskDependencyKindBits::ReadWrite,
         .handle = outputHandle,
         .access = readWriteAccess,
     });

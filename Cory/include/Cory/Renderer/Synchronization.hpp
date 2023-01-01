@@ -7,7 +7,7 @@
 //   - Remove the THSVS prefix from functions and structures in favor of a namespace
 //   - remove (comment out) many enum values for which my vulkan header did not have the right enum
 //     values
-//   - C++ify the interface, replacing count+pointer with std::span where applicable
+//   - C++ify the interface, replacing count+pointer with std::vector where applicable
 //   - Rename enum values to avoid SCREAMING_SNAKE_CASE in favor of CamelCase + scoped enums
 
 // The library is originally under the MIT license:
@@ -202,6 +202,7 @@ ISSUES
 #include <Magnum/Vk/Vulkan.h>
 
 #include <cstdint>
+#include <vector>
 #include <span>
 
 namespace Cory::Sync {
@@ -412,8 +413,8 @@ layouts) then a global barrier should be preferred.
 Simply define the previous and next access types of resources affected.
 */
 struct GlobalBarrier {
-    std::span<const AccessType> prevAccesses;
-    std::span<const AccessType> nextAccesses;
+    std::vector<AccessType> prevAccesses;
+    std::vector<AccessType> nextAccesses;
 };
 
 /**
@@ -432,8 +433,8 @@ queue in the destination queue family, with a semaphore guaranteeing
 execution order between them.
 */
 struct BufferBarrier {
-    std::span<const AccessType> prevAccesses;
-    std::span<const AccessType> nextAccesses;
+    std::vector<AccessType> prevAccesses;
+    std::vector<AccessType> nextAccesses;
     uint32_t srcQueueFamilyIndex;
     uint32_t dstQueueFamilyIndex;
     VkBuffer buffer;
@@ -468,8 +469,8 @@ going to be immediately overwritten. A good example of when to use this is
 when an application re-uses a presented image after vkAcquireNextImageKHR.
 */
 struct ImageBarrier {
-    std::span<const AccessType> prevAccesses;
-    std::span<const AccessType> nextAccesses;
+    std::vector<AccessType> prevAccesses;
+    std::vector<AccessType> nextAccesses;
     ImageLayout prevLayout;
     ImageLayout nextLayout;
     VkBool32 discardContents;

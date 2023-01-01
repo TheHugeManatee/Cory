@@ -6,8 +6,6 @@
 
 #include <Magnum/Vk/Image.h>
 
-namespace Vk = Magnum::Vk;
-
 namespace Cory {
 
 Builder::Builder(Context &ctx, Framegraph &framegraph, std::string_view passName)

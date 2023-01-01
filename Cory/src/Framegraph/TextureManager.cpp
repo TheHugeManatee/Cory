@@ -135,11 +135,11 @@ Sync::ImageBarrier TextureResourceManager::synchronizeTexture(TextureHandle hand
                                    .layerCount = 1,
                                }};
 
-    CO_CORE_TRACE("BARRIER '{}' written as {}, read as {}, content {}",
+    CO_CORE_TRACE("BARRIER '{}' written as {} ({}), read as {}",
                   info.name,
                   state.lastAccess,
-                  access,
-                  contentsMode);
+                  contentsMode,
+                  access);
 
     state.lastAccess = access;
     return barrier;

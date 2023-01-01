@@ -1,5 +1,6 @@
 #include <Cory/Application/Window.hpp>
 
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/APIConversion.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -21,6 +22,8 @@
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/range/conversion.hpp>
+#include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <thread>
@@ -206,35 +209,45 @@ void Window::createColorAndDepthResources()
     const Magnum::Vector2i size(extent.x, extent.y);
     const int levels = 1;
 
-    // color image
-    colorImage_ = Vk::Image{
-        ctx_.device(),
-        // TransferSource is needed to be able to resolve from the image
-        Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::TransferSource,
-                              colorFormat_,
-                              size,
-                              levels,
-                              sampleCount_},
-        Vk::MemoryFlag::DeviceLocal};
+    // COLOR image - only one for now because we don't need more (so far)
+    // ImageUsage::TransferSource is needed to be able to resolve from the image
+    // ImageUsage::Sampled so it can be use it in debug views and so we can use in subsequent frames
+    const auto colorImgUsage =
+        Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::TransferSource | Vk::ImageUsage::Sampled;
+    colorImage_ =
+        Vk::Image{ctx_.device(),
+                  Vk::ImageCreateInfo2D{colorImgUsage, colorFormat_, size, levels, sampleCount_},
+                  Vk::MemoryFlag::DeviceLocal};
+    nameVulkanObject(ctx_.device(), colorImage_, fmt::format("Wnd_Col {}", extent));
 
     colorImageView_ = Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage_}};
+    nameVulkanObject(ctx_.device(), colorImageView_, fmt::format("Wnd_Col {}", extent));
 
-    // depth
+    // DEPTH images
     depthImages_ =
-        swapchain().images() | ranges::views::transform([&](const Vk::Image &) {
-            auto usage = Vk::ImageUsage::DepthStencilAttachment;
-            return Vk::Image{ctx_.device(),
-                             Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},
-                             Vk::MemoryFlag::DeviceLocal};
+        ranges::views::indices(swapchain().images().size()) |
+        ranges::views::transform([&](auto idx) {
+            // ImageUsage::Sampled so we can create debug views
+            auto usage = Vk::ImageUsage::DepthStencilAttachment | Vk::ImageUsage::Sampled;
+            Vk::Image img{ctx_.device(),
+                          Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},
+                          Vk::MemoryFlag::DeviceLocal};
+
+            nameVulkanObject(ctx_.device(), img, fmt::format("Wnd_Depth[{}] {}", idx, extent));
+            return img;
         }) |
         ranges::to<std::vector<Vk::Image>>;
 
     depthImageViews_ =
-        depthImages_ | ranges::views::transform([&](Vk::Image &depthImage) {
-            return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
+        ranges::views::enumerate(depthImages_) | ranges::views::transform([&](auto it) {
+            auto [idx, depthImage] = it;
+            Vk::ImageView view{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
+            nameVulkanObject(ctx_.device(), view, fmt::format("Wnd_Depth[{}] {}", idx, extent));
+            return view;
         }) |
         ranges::to<std::vector<Vk::ImageView>>;
 
+    // transition the images to ATTACHMENT_OPTIMAL
     {
         SingleShotCommandBuffer setInitialLayoutCmds{ctx_};
         { // color image

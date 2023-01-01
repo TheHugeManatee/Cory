@@ -17,7 +17,7 @@
 #include <string_view>
 #include <unordered_map>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 /**
  * passed to the render pass coroutines when they actually execute.
@@ -64,7 +64,7 @@ struct ExecutionInfo {
 /**
  * The framegraph.
  *
- * Is meant to be filled with Cory::Framegraph::Builder
+ * Is meant to be filled with Cory::Builder
  */
 class Framegraph : NoCopy, NoMove {
   public:
@@ -138,4 +138,4 @@ class Framegraph : NoCopy, NoMove {
     CommandList *commandListInProgress_{};
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

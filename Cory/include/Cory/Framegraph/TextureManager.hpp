@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <string>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 // handles the transient resources created/destroyed during a frame - tightly coupled with the
 // Framegraph and Builder classes, not intended to be used directly
@@ -43,4 +43,4 @@ class TextureResourceManager {
     std::unique_ptr<struct TextureManagerPrivate> data_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

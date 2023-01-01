@@ -8,7 +8,7 @@
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/Pipeline.h>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 namespace /* detail */ {
 
@@ -114,4 +114,4 @@ CommandList &CommandList::endPass()
     return *this;
 }
 
-} // namespace Cory::Framegraph
+} // namespace Cory

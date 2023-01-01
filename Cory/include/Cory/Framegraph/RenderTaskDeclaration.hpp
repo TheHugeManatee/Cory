@@ -7,7 +7,7 @@
 
 #include <type_traits>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 /**
  * An async render task declaration awaitable that shall be used as a return type to declare a
@@ -26,7 +26,7 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
             try {
                 std::rethrow_exception(std::current_exception());
             }
-            catch (const std::exception &e) {
+            catch ([[maybe_unused]] const std::exception &e) {
                 CO_CORE_TRACE("Unhandled exception in coroutine: {}", e.what());
             }
             exception_ = std::current_exception();
@@ -87,4 +87,4 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
     Handle coroHandle_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

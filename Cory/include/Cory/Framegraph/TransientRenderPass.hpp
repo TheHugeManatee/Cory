@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct TransientRenderPassInfo {
     int32_t sampleCount;
@@ -92,4 +92,4 @@ class TransientRenderPassBuilder : NoCopy, NoMove {
     TransientRenderPass renderPass_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

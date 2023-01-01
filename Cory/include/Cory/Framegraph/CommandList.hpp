@@ -2,7 +2,7 @@
 
 #include <Cory/Framegraph/Common.hpp>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 class CommandList : NoCopy {
   public:
@@ -24,4 +24,4 @@ class CommandList : NoCopy {
     Magnum::Vk::CommandBuffer *cmdBuffer_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

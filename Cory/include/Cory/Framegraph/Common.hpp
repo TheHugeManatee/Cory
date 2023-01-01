@@ -6,7 +6,7 @@
 
 #include <functional>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct RenderTaskInfo;
 struct RenderTaskExecutionAwaiter;
@@ -73,11 +73,11 @@ struct TransientTextureHandle {
 };
 using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
 
-} // namespace Cory::Framegraph
+} // namespace Cory
 
 /// make SlotMapHandle hashable
-template <> struct std::hash<Cory::Framegraph::TransientTextureHandle> {
-    std::size_t operator()(const Cory::Framegraph::TransientTextureHandle &s) const noexcept
+template <> struct std::hash<Cory::TransientTextureHandle> {
+    std::size_t operator()(const Cory::TransientTextureHandle &s) const noexcept
     {
         return Cory::hashCompose(s.version, s.texture);
     }

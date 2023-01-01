@@ -6,7 +6,7 @@
 #include <cppcoro/coroutine.hpp>
 #include <string_view>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct RenderTaskInfo {
     struct Dependency {
@@ -78,4 +78,4 @@ class Builder : NoCopy {
     Framegraph &framegraph_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

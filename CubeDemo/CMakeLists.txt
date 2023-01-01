@@ -10,8 +10,7 @@ add_executable(${TARGET_NAME}
         src/main.cpp
         src/CubeDemo.cpp
         src/CubeDemo.hpp
-        src/CubePipeline.cpp
-        src/CubePipeline.hpp)
+        )
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)

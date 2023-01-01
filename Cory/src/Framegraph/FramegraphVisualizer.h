@@ -6,7 +6,7 @@
 
 #include <string>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 class FramegraphVisualizer {
   public:
@@ -23,4 +23,4 @@ class FramegraphVisualizer {
     const Framegraph &graph_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

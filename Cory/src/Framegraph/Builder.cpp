@@ -7,7 +7,7 @@
 
 namespace Vk = Magnum::Vk;
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 Builder::Builder(Framegraph &framegraph, std::string_view passName)
     : info_{}
@@ -92,4 +92,4 @@ TransientRenderPassBuilder Builder::declareRenderPass(std::string_view name)
         *framegraph_.ctx_, name.empty() ? info_.name : name, framegraph_.resources_};
 }
 
-} // namespace Cory::Framegraph
+} // namespace Cory

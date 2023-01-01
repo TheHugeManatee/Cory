@@ -1,7 +1,5 @@
 #include "CubeDemo.hpp"
 
-#include "CubePipeline.hpp"
-
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/Window.hpp>
@@ -138,7 +136,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     auto recreateSizedResources = [&](glm::i32vec2) { /* nothing? */ };
 
     createGeometry();
-    createPipeline();
+    createShaders();
     recreateSizedResources(window_->dimensions());
     window_->onSwapchainResized.connect(recreateSizedResources);
 
@@ -151,7 +149,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     createUBO();
 }
 
-void CubeDemoApplication::createPipeline()
+void CubeDemoApplication::createShaders()
 {
     const Cory::ScopeTimer st{"Init/Shaders"};
     vertexShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.vert"));
@@ -194,7 +192,7 @@ CubeDemoApplication::~CubeDemoApplication()
 void CubeDemoApplication::run()
 {
 
-    Cory::Framegraph::Framegraph fg(*ctx_);
+    Cory::Framegraph fg(*ctx_);
 
     while (!window_->shouldClose()) {
         glfwPollEvents();
@@ -224,7 +222,7 @@ void CubeDemoApplication::run()
     }
 }
 
-void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
+void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                              const Cory::FrameContext &frameCtx)
 {
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
@@ -256,10 +254,10 @@ void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
 
-Cory::Framegraph::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
-                                        TransientTextureHandle colorTarget,
-                                        TransientTextureHandle depthTarget,
+Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
+CubeDemoApplication::mainCubeRenderTask(Cory::Builder builder,
+                                        Cory::TransientTextureHandle colorTarget,
+                                        Cory::TransientTextureHandle depthTarget,
                                         const Cory::FrameContext &frameCtx)
 {
 
@@ -283,7 +281,7 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
                         .finish();
 
     co_yield PassOutputs{.colorOut = writtenColorHandle};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
 
@@ -338,16 +336,16 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
     cubePass.end(*renderApi.cmd);
 }
 
-Cory::Framegraph::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::imguiRenderTask(Cory::Framegraph::Builder builder,
-                                     TransientTextureHandle colorTarget,
+Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
+CubeDemoApplication::imguiRenderTask(Cory::Builder builder,
+                                     Cory::TransientTextureHandle colorTarget,
                                      const Cory::FrameContext &frameCtx)
 {
     auto [writtenColorHandle, colorInfo] =
         builder.readWrite(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
 
     co_yield PassOutputs{.colorOut = writtenColorHandle};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
 
     // note - currently, we're letting imgui handle the final resolve and transition to
     // present_layout

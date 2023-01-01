@@ -21,16 +21,15 @@
 #include <gsl/gsl>
 
 using namespace Cory;
-namespace FG = Cory::Framegraph;
+
 namespace Vk = Magnum::Vk;
 
 namespace passes {
 
 struct DepthPassOutputs {
-    FG::TransientTextureHandle depthTexture;
+    TransientTextureHandle depthTexture;
 };
-FG::RenderTaskDeclaration<DepthPassOutputs>
-depthPass(Context &ctx, FG::Builder builder, glm::u32vec3 size)
+RenderTaskDeclaration<DepthPassOutputs> depthPass(Context &ctx, Builder builder, glm::u32vec3 size)
 {
     auto depth = builder.create(
         "depthTexture", size, PixelFormat::Depth32F, Sync::AccessType::DepthStencilAttachmentWrite);
@@ -65,7 +64,7 @@ void main() {
             .finish();
 
     co_yield outputs;
-    FG::RenderInput render = co_await builder.finishDeclaration();
+    RenderInput render = co_await builder.finishDeclaration();
     CO_CORE_ASSERT(render.cmd != nullptr, "Uh-oh");
     depthPass.begin(*render.cmd);
     CO_APP_INFO("[DepthPrepass] render commands executing");
@@ -73,12 +72,12 @@ void main() {
 }
 
 struct DepthDebugOut {
-    FG::TransientTextureHandle debugColor;
+    TransientTextureHandle debugColor;
 };
-FG::RenderTaskDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
-                                                    FG::TransientTextureHandle depthInput)
+RenderTaskDeclaration<DepthDebugOut> depthDebug(Framegraph &graph,
+                                                TransientTextureHandle depthInput)
 {
-    FG::Builder builder = graph.declareTask("DepthDebug");
+    Builder builder = graph.declareTask("DepthDebug");
 
     auto depthInfo = builder.read(
         depthInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
@@ -89,18 +88,18 @@ FG::RenderTaskDeclaration<DepthDebugOut> depthDebug(FG::Framegraph &graph,
                                    Sync::AccessType::ColorAttachmentWrite);
 
     co_yield DepthDebugOut{depthVis};
-    FG::RenderInput render = co_await builder.finishDeclaration();
+    RenderInput render = co_await builder.finishDeclaration();
 
     CO_APP_INFO("[DepthDebug] Pass render commands are executed");
 }
 
 struct NormalDebugOut {
-    FG::TransientTextureHandle debugColor;
+    TransientTextureHandle debugColor;
 };
-FG::RenderTaskDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
-                                                      FG::TransientTextureHandle normalInput)
+RenderTaskDeclaration<NormalDebugOut> normalDebug(Framegraph &graph,
+                                                  TransientTextureHandle normalInput)
 {
-    FG::Builder builder = graph.declareTask("NormalDebug");
+    Builder builder = graph.declareTask("NormalDebug");
 
     auto normalInfo = builder.read(
         normalInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
@@ -111,20 +110,19 @@ FG::RenderTaskDeclaration<NormalDebugOut> normalDebug(FG::Framegraph &graph,
                                     Sync::AccessType::ColorAttachmentWrite);
 
     co_yield NormalDebugOut{normalVis};
-    FG::RenderInput render = co_await builder.finishDeclaration();
+    RenderInput render = co_await builder.finishDeclaration();
 
     CO_APP_INFO("[NormalDebug] Pass render commands are executed");
 }
 
 struct DebugOut {
-    FG::TransientTextureHandle debugColor;
+    TransientTextureHandle debugColor;
 };
-FG::RenderTaskDeclaration<DebugOut>
-debugGeneral(FG::Framegraph &graph,
-             std::vector<FG::TransientTextureHandle> debugTextures,
-             gsl::index debugViewIndex)
+RenderTaskDeclaration<DebugOut> debugGeneral(Framegraph &graph,
+                                             std::vector<TransientTextureHandle> debugTextures,
+                                             gsl::index debugViewIndex)
 {
-    FG::Builder builder = graph.declareTask("GeneralDebug");
+    Builder builder = graph.declareTask("GeneralDebug");
 
     auto &textureToDebug = debugTextures[debugViewIndex];
     auto dbgInfo = builder.read(
@@ -134,19 +132,19 @@ debugGeneral(FG::Framegraph &graph,
         "debugVis", dbgInfo.size, PixelFormat::RGBA8Srgb, Sync::AccessType::ColorAttachmentWrite);
 
     co_yield DebugOut{depthVis};
-    FG::RenderInput render = co_await builder.finishDeclaration();
+    RenderInput render = co_await builder.finishDeclaration();
 
     CO_APP_INFO("[Debug] Pass render commands are executed");
 }
 
 struct MainOut {
-    FG::TransientTextureHandle color;
-    FG::TransientTextureHandle normal;
+    TransientTextureHandle color;
+    TransientTextureHandle normal;
 };
-FG::RenderTaskDeclaration<MainOut> mainPass(FG::Builder builder,
-                                            FG::TransientTextureHandle colorInput,
-                                            FG::TransientTextureHandle normalInput,
-                                            FG::TransientTextureHandle depthInput)
+RenderTaskDeclaration<MainOut> mainPass(Builder builder,
+                                        TransientTextureHandle colorInput,
+                                        TransientTextureHandle normalInput,
+                                        TransientTextureHandle depthInput)
 {
     auto depthInfo = builder.read(depthInput, Sync::AccessType::DepthStencilAttachmentRead);
 
@@ -169,19 +167,19 @@ FG::RenderTaskDeclaration<MainOut> mainPass(FG::Builder builder,
     }();
 
     co_yield MainOut{colorOut, normalOut};
-    FG::RenderInput render = co_await builder.finishDeclaration();
+    RenderInput render = co_await builder.finishDeclaration();
 
     CO_APP_INFO("{} Pass render commands are executed", builder.name());
 }
 
 struct PostProcessOut {
-    FG::TransientTextureHandle color;
+    TransientTextureHandle color;
 };
-FG::RenderTaskDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
-                                                      FG::TransientTextureHandle currentColorInput,
-                                                      FG::TransientTextureHandle previousColorInput)
+RenderTaskDeclaration<PostProcessOut> postProcess(Framegraph &graph,
+                                                  TransientTextureHandle currentColorInput,
+                                                  TransientTextureHandle previousColorInput)
 {
-    FG::Builder builder = graph.declareTask("Postprocess");
+    Builder builder = graph.declareTask("Postprocess");
 
     auto curColorInfo = builder.read(
         currentColorInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
@@ -194,7 +192,7 @@ FG::RenderTaskDeclaration<PostProcessOut> postProcess(FG::Framegraph &graph,
                                 Sync::AccessType::ColorAttachmentWrite);
 
     co_yield PostProcessOut{color};
-    FG::RenderInput render = co_await builder.finishDeclaration();
+    RenderInput render = co_await builder.finishDeclaration();
 
     CO_APP_INFO("[Postprocess] Pass render commands are executed");
 }
@@ -206,7 +204,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 
     namespace Vk = Magnum::Vk;
 
-    FG::Framegraph graph(t.ctx());
+    Framegraph graph(t.ctx());
     Vk::Image prevFrame{t.ctx().device(),
                         Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment,
                                               Vk::PixelFormat::RGBA8Srgb,
@@ -215,7 +213,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
                         Vk::MemoryFlag::DeviceLocal};
     Vk::ImageView prevFrameView{t.ctx().device(), Vk::ImageViewCreateInfo2D{prevFrame}};
 
-    const FG::TransientTextureHandle prevFrameColor = graph.declareInput(
+    const TransientTextureHandle prevFrameColor = graph.declareInput(
         {"previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
         Sync::AccessType::None,
         prevFrame,

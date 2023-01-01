@@ -6,7 +6,7 @@
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/view/enumerate.hpp>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct Index {
     struct TextureData {
@@ -199,4 +199,4 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     return out;
 }
 
-} // namespace Cory::Framegraph
+} // namespace Cory

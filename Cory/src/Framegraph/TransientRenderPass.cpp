@@ -26,7 +26,7 @@
 
 namespace Vk = Magnum::Vk;
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct PipelineDescriptor {
     std::vector<ShaderHandle> shaders;
@@ -296,4 +296,4 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attachStencil(TransientT
 
 TransientRenderPass TransientRenderPassBuilder::finish() { return std::move(renderPass_); }
 
-} // namespace Cory::Framegraph
+} // namespace Cory

@@ -13,7 +13,7 @@
 
 namespace Vk = Magnum::Vk;
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct TextureResource {
     TextureInfo info;
@@ -164,4 +164,4 @@ TextureState TextureResourceManager::state(TextureHandle handle) const
 
 void TextureResourceManager::clear() { data_->textureResources_.clear(); }
 
-} // namespace Cory::Framegraph
+} // namespace Cory

@@ -22,7 +22,7 @@
 
 namespace Vk = Magnum::Vk;
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 Builder Framegraph::Framegraph::declareTask(std::string_view name)
 {
@@ -286,4 +286,4 @@ void RenderTaskExecutionAwaiter::await_suspend(
     fg.enqueueRenderPass(passHandle, coroHandle);
 }
 
-} // namespace Cory::Framegraph
+} // namespace Cory

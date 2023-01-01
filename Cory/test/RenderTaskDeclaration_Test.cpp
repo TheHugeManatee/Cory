@@ -6,8 +6,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-namespace FG = Cory::Framegraph;
-
 struct TheMightyScheduler {
     auto theSign()
     {
@@ -34,7 +32,7 @@ struct TestOutput {
 
 enum class CoroState { NotStarted, BeforeYield, BeforeAwait, AfterAwait };
 
-FG::RenderTaskDeclaration<TestOutput>
+Cory::RenderTaskDeclaration<TestOutput>
 testCoro(TheMightyScheduler &ol, CoroState &coroState, int &coroValue)
 {
     coroState = CoroState::BeforeYield;
@@ -66,7 +64,7 @@ TEST_CASE("Regular pingpong between coroutine and scheduler")
     CHECK(coroValue == 666);
 }
 
-FG::RenderTaskDeclaration<TestOutput> errorCoro(bool throwBeforeYield)
+Cory::RenderTaskDeclaration<TestOutput> errorCoro(bool throwBeforeYield)
 {
     if (throwBeforeYield) { throw std::runtime_error{"Ohno :("}; }
 

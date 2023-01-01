@@ -25,8 +25,6 @@ struct CubeUBO {
     glm::vec3 lightPosition;
 };
 
-using namespace Cory::Framegraph;
-
 class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove {
   public:
     CubeDemoApplication(int argc, char **argv);
@@ -38,20 +36,20 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     // create the mesh to be rendered
     void createGeometry();
     void createUBO();
-    void createPipeline();
-    void defineRenderPasses(Framegraph &framegraph, const Cory::FrameContext &frameCtx);
+    void createShaders();
+    void defineRenderPasses(Cory::Framegraph &framegraph, const Cory::FrameContext &frameCtx);
 
     struct PassOutputs {
-        Cory::Framegraph::TransientTextureHandle colorOut;
+        Cory::TransientTextureHandle colorOut;
     };
-    Cory::Framegraph::RenderTaskDeclaration<PassOutputs>
-    mainCubeRenderTask(Cory::Framegraph::Builder builder,
-                       Cory::Framegraph::TransientTextureHandle colorTarget,
-                       Cory::Framegraph::TransientTextureHandle depthTarget,
+    Cory::RenderTaskDeclaration<PassOutputs>
+    mainCubeRenderTask(Cory::Builder builder,
+                       Cory::TransientTextureHandle colorTarget,
+                       Cory::TransientTextureHandle depthTarget,
                        const Cory::FrameContext &ctx);
-    Cory::Framegraph::RenderTaskDeclaration<PassOutputs>
-    imguiRenderTask(Cory::Framegraph::Builder builder,
-                    Cory::Framegraph::TransientTextureHandle colorTarget,
+    Cory::RenderTaskDeclaration<PassOutputs>
+    imguiRenderTask(Cory::Builder builder,
+                    Cory::TransientTextureHandle colorTarget,
                     const Cory::FrameContext &ctx);
 
     static double now();

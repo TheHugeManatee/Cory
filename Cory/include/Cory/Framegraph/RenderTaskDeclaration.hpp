@@ -27,7 +27,7 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
                 std::rethrow_exception(std::current_exception());
             }
             catch (const std::exception &e) {
-                CO_CORE_ERROR("Unhandled exception in coroutine: {}", e.what());
+                CO_CORE_TRACE("Unhandled exception in coroutine: {}", e.what());
             }
             exception_ = std::current_exception();
         }
@@ -68,12 +68,14 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
 
     const RenderTaskOutput &output()
     {
-        if (auto ex = coroHandle_.promise().exception_; ex != nullptr) {
-            std::rethrow_exception(ex);
-        }
         // only resume the coroutine if it did not yet yield an output
         if (!coroHandle_.promise().outputsProvided_ && !coroHandle_.done()) {
             coroHandle_.resume();
+        }
+
+        // if necessary, rethrow the exception raised by the coroutine
+        if (auto ex = coroHandle_.promise().exception_; ex != nullptr) {
+            std::rethrow_exception(ex);
         }
         CO_CORE_ASSERT(coroHandle_.promise().outputsProvided_,
                        "Render pass coroutine did not yield an outputs struct!");

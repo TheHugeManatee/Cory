@@ -93,7 +93,7 @@ void TextureResourceManager::allocate(TextureHandle handle)
     {
         const Vk::ImageViewCreateInfo2D createInfo{res.image};
         res.view = Vk::ImageView{data_->ctx_->device(), createInfo};
-        nameVulkanObject(data_->ctx_->device(), res.image, res.info.name);
+        nameVulkanObject(data_->ctx_->device(), res.view, res.info.name);
     }
     res.state.status = TextureMemoryStatus::Allocated;
 }

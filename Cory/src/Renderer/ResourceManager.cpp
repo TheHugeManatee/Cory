@@ -7,6 +7,7 @@
 #include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
+#include <Magnum/Vk/SamplerCreateInfo.h>
 
 namespace Cory {
 
@@ -14,9 +15,10 @@ namespace Vk = Magnum::Vk;
 
 struct ResourceManagerPrivate {
     Context *ctx;
-    SlotMap<Shader> shaders;
     SlotMap<Vk::Buffer> buffers;
+    SlotMap<Shader> shaders;
     SlotMap<Vk::Pipeline> pipelines;
+    SlotMap<Vk::Sampler> samplers;
 };
 
 ResourceManager::ResourceManager()
@@ -30,6 +32,16 @@ void ResourceManager::setContext(Context &ctx)
 {
     CO_CORE_ASSERT(data_->ctx == nullptr, "Context already initialized!");
     data_->ctx = &ctx;
+}
+
+std::unordered_map<ResourceType, size_t> ResourceManager::resourcesInUse() const
+{
+    return {
+        {ResourceType::Buffer, data_->buffers.size()},
+        {ResourceType::Shader, data_->shaders.size()},
+        {ResourceType::Pipeline, data_->pipelines.size()},
+        {ResourceType::Sampler, data_->samplers.size()},
+    };
 }
 
 ShaderHandle ResourceManager::createShader(std::filesystem::path filePath, ShaderType type)
@@ -104,9 +116,25 @@ void ResourceManager::release(PipelineHandle pipelineHandle)
     data_->pipelines.release(pipelineHandle);
 }
 
-std::unordered_map<ResourceType, size_t> ResourceManager::resourcesInUse() const
+
+SamplerHandle ResourceManager::createSampler(std::string_view name,
+                                             const Vk::SamplerCreateInfo &createInfo)
 {
-    return {{ResourceType::Buffer, data_->buffers.size()},
-            {ResourceType::Shader, data_->shaders.size()}};
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    auto handle = data_->samplers.emplace(std::ref(data_->ctx->device()), std::ref(createInfo));
+
+    nameVulkanObject(data_->ctx->device(), data_->samplers[handle], name);
+
+    return handle;
+}
+Magnum::Vk::Sampler &ResourceManager::operator[](SamplerHandle samplerHandle)
+{
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    return data_->samplers[samplerHandle];
+}
+void ResourceManager::release(SamplerHandle samplerHandle)
+{
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    data_->samplers.release(samplerHandle);
 }
 } // namespace Cory

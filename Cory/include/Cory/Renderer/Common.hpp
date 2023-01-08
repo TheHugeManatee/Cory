@@ -84,6 +84,7 @@ using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
 using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
 using PipelineHandle = PrivateTypedHandle<Magnum::Vk::Pipeline, ResourceManager>;
+using SamplerHandle = PrivateTypedHandle<Magnum::Vk::Sampler, ResourceManager>;
 
 } // namespace Cory
 

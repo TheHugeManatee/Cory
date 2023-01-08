@@ -9,20 +9,26 @@
 
 namespace Cory {
 
-enum class ResourceType { Buffer, Shader };
+enum class ResourceType { Buffer, Shader, Pipeline, Sampler };
 
 /**
- * Central resource manager that manages all vulkan-related resources.
+ * Central resource manager that manages all (low-level) vulkan-related resources.
  *
- * It it exclusively deals in handles.
- * Handle types are declared in RenderCommon.hpp to reduce compile times
- * Currently:
+ * At the public interface, it exclusively deals provides and uses handles (essentially,
+ * type-safe SlotMap indices).
+ *
+ * The available Handle types are declared in RenderCommon.hpp to reduce compile times.
+ *
+ * Currently, manages:
+ *  - Buffers
  *  - Shaders
- * Eventually:
- *  - Textures and Buffers
  *  - Pipelines
- *  - RenderPasses
- *  - Descriptors etc.
+ *  - Samplers
+ *
+ * Eventually also:
+ *  - Textures and Buffers?
+ *  - RenderPasses?
+ *  - Descriptors? etc
  */
 class ResourceManager : NoCopy {
   public:
@@ -35,6 +41,14 @@ class ResourceManager : NoCopy {
     // set up the context to be used - must be called exactly once, before any resources are created
     void setContext(Context &ctx);
 
+    /// query the number of resources in use
+    std::unordered_map<ResourceType, size_t> resourcesInUse() const;
+
+
+    /**
+     * @name Shaders
+     */
+    ///@{
     /// @see ShaderSource::ShaderSource(std::filesystem::path, ShaderType)
     [[nodiscard]] ShaderHandle createShader(std::filesystem::path filePath,
                                             ShaderType type = ShaderType::eUnknown);
@@ -44,19 +58,36 @@ class ResourceManager : NoCopy {
     /// dereference a shader handle to access the shader. may throw!
     [[nodiscard]] Shader &operator[](ShaderHandle shaderHandle);
     void release(ShaderHandle shaderHandle);
+    ///@}
 
-    // buffers
+    /**
+     * @name Buffers
+     */
+    ///@{
     BufferHandle createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags);
     [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
     void release(BufferHandle bufferHandle);
+    ///@}
 
-    // pipelines
+    /**
+     * @name Pipelines
+     */
+    ///@{
     PipelineHandle createPipeline(std::string_view name,
                                   const Magnum::Vk::RasterizationPipelineCreateInfo &createInfo);
     Magnum::Vk::Pipeline &operator[](PipelineHandle pipelineHandle);
     void release(PipelineHandle pipelineHandle);
+    ///@}
 
-    std::unordered_map<ResourceType, size_t> resourcesInUse() const;
+    /**
+     * @name Samplers
+     */
+    ///@{
+    SamplerHandle createSampler(std::string_view name,
+                                 const Magnum::Vk::SamplerCreateInfo &createInfo);
+    Magnum::Vk::Sampler &operator[](SamplerHandle samplerHandle);
+    void release(SamplerHandle samplerHandle);
+    ///@}
 
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;

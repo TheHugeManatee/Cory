@@ -7,20 +7,32 @@
 #include <memory>
 #include <string_view>
 
-// copied definition to avoid vulkan header
+/// copied definition to avoid vulkan header
 typedef struct VkDevice_T *VkDevice;
 
-// detects a vulkan object handle (Magnum::Vk or BasicVkObjectWrapper)
+/// detects a vulkan object handle (Magnum::Vk or BasicVkObjectWrapper)
 template <typename T>
 concept isMagnumVulkanHandle = requires(T v) { v.handle(); };
 
 namespace Cory {
-//// set an object name on a "raw" vulkan handle
+/**
+ * @brief set an object name on a "raw" vulkan handle
+ *
+ * "raw" in this case implies a direct vulkan API handle like VkDevice, VkImage, VkBuffer etc.
+ *
+ * See also @a nameVulkanObject()
+ */
 template <typename DeviceHandle, typename VulkanObjectHandle>
 void nameRawVulkanObject(DeviceHandle &device, VulkanObjectHandle handle, std::string_view name);
 
-// set an object name on a magnum vulkan handle (magnum vulkan handles always have a .handle()
-// function)
+/**
+ * @brief set an object name on a magnum vulkan handle
+ *
+ * assumes that the @a DeviceHAndle has a .handle() function.
+ * If you get linker errors around this function, it is because the object type
+ * is not explicitly supported yet. You will need to extend VulkanUtils.cpp with
+ * an explicit template instantiation for your type.
+ */
 template <typename DeviceHandle, typename MagnumVulkanObjectHandle>
 void nameVulkanObject(DeviceHandle &device,
                       MagnumVulkanObjectHandle &handle,

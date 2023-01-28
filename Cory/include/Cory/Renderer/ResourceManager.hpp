@@ -24,6 +24,7 @@ enum class ResourceType { Buffer, Shader, Pipeline, Sampler };
  *  - Shaders
  *  - Pipelines
  *  - Samplers
+ *  - descriptor layouts
  *
  * Eventually also:
  *  - Textures and Buffers?
@@ -65,8 +66,8 @@ class ResourceManager : NoCopy {
      */
     ///@{
     BufferHandle createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags);
-    [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle bufferHandle);
-    void release(BufferHandle bufferHandle);
+    [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle handle);
+    void release(BufferHandle handle);
     ///@}
 
     /**
@@ -75,8 +76,8 @@ class ResourceManager : NoCopy {
     ///@{
     PipelineHandle createPipeline(std::string_view name,
                                   const Magnum::Vk::RasterizationPipelineCreateInfo &createInfo);
-    Magnum::Vk::Pipeline &operator[](PipelineHandle pipelineHandle);
-    void release(PipelineHandle pipelineHandle);
+    Magnum::Vk::Pipeline &operator[](PipelineHandle handle);
+    void release(PipelineHandle handle);
     ///@}
 
     /**
@@ -85,8 +86,18 @@ class ResourceManager : NoCopy {
     ///@{
     SamplerHandle createSampler(std::string_view name,
                                  const Magnum::Vk::SamplerCreateInfo &createInfo);
-    Magnum::Vk::Sampler &operator[](SamplerHandle samplerHandle);
-    void release(SamplerHandle samplerHandle);
+    Magnum::Vk::Sampler &operator[](SamplerHandle handle);
+    void release(SamplerHandle handle);
+    ///@}
+
+    /**
+     * @name Descriptor layouts
+     */
+    ///@{
+    DescriptorSetLayoutHandle createDescriptorLayout(std::string_view name,
+                                const Magnum::Vk::DescriptorSetLayoutCreateInfo &createInfo);
+    Magnum::Vk::DescriptorSetLayout &operator[](DescriptorSetLayoutHandle handle);
+    void release(DescriptorSetLayoutHandle handle);
     ///@}
 
   private:

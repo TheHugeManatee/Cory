@@ -54,7 +54,7 @@ class UniformBufferObject : public UniformBufferObjectBase {
     {
     }
 
-    // moveable
+    // movable
     UniformBufferObject(UniformBufferObject &&) = default;
     UniformBufferObject &operator=(UniformBufferObject &&) = default;
 

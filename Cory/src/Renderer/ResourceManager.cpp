@@ -5,6 +5,7 @@
 #include <Cory/Renderer/Shader.hpp>
 
 #include <Magnum/Vk/BufferCreateInfo.h>
+#include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
 #include <Magnum/Vk/SamplerCreateInfo.h>
@@ -19,6 +20,7 @@ struct ResourceManagerPrivate {
     SlotMap<Shader> shaders;
     SlotMap<Vk::Pipeline> pipelines;
     SlotMap<Vk::Sampler> samplers;
+    SlotMap<Vk::DescriptorSetLayout> descriptorSetLayouts;
 };
 
 ResourceManager::ResourceManager()
@@ -116,7 +118,6 @@ void ResourceManager::release(PipelineHandle pipelineHandle)
     data_->pipelines.release(pipelineHandle);
 }
 
-
 SamplerHandle ResourceManager::createSampler(std::string_view name,
                                              const Vk::SamplerCreateInfo &createInfo)
 {
@@ -136,5 +137,28 @@ void ResourceManager::release(SamplerHandle samplerHandle)
 {
     CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     data_->samplers.release(samplerHandle);
+}
+
+DescriptorSetLayoutHandle
+ResourceManager::createDescriptorLayout(std::string_view name,
+                                        const Vk::DescriptorSetLayoutCreateInfo &createInfo)
+{
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    auto handle =
+        data_->descriptorSetLayouts.emplace(std::ref(data_->ctx->device()), std::ref(createInfo));
+
+    nameVulkanObject(data_->ctx->device(), data_->descriptorSetLayouts[handle], name);
+
+    return handle;
+}
+Magnum::Vk::DescriptorSetLayout &ResourceManager::operator[](DescriptorSetLayoutHandle handle)
+{
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    return data_->descriptorSetLayouts[handle];
+}
+void ResourceManager::release(DescriptorSetLayoutHandle handle)
+{
+    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    data_->descriptorSetLayouts.release(handle);
 }
 } // namespace Cory

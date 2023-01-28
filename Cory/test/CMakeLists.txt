@@ -26,7 +26,7 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         Callback_Test.cpp
         FrameGraph_Test.cpp
         CoroutinePlayground.cpp
-        ResourceManager_Test.cpp TestUtils.cpp TestUtils.hpp FmtUtils_Test.cpp RenderTaskDeclaration_Test.cpp)
+        ResourceManager_Test.cpp TestUtils.cpp TestUtils.hpp FmtUtils_Test.cpp RenderTaskDeclaration_Test.cpp DescriptorSetManager_Test.cpp)
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(${TARGET_NAME}_TestLib PRIVATE Cory::project_options)
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Cory::${TARGET_NAME})

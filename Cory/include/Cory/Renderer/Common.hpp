@@ -29,6 +29,7 @@ class Swapchain;
 template <typename BufferStruct>
     requires std::is_trivial_v<BufferStruct>
 class UniformBufferObject;
+class DescriptorSetManager;
 
 using PixelFormat = Magnum::Vk::PixelFormat;
 bool isColorFormat(PixelFormat format);
@@ -85,6 +86,8 @@ static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
 using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
 using PipelineHandle = PrivateTypedHandle<Magnum::Vk::Pipeline, ResourceManager>;
 using SamplerHandle = PrivateTypedHandle<Magnum::Vk::Sampler, ResourceManager>;
+using DescriptorSetLayoutHandle =
+    PrivateTypedHandle<Magnum::Vk::DescriptorSetLayout, ResourceManager>;
 
 } // namespace Cory
 

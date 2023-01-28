@@ -84,7 +84,7 @@ class Framegraph : NoCopy {
      * should be called only when it can be ensured that all resources are no longer in use, e.g.
      * for example when the next frame with the same swapchain image has been rendered.
      */
-    void retireImmediate();
+    void reset();
 
     /// declare a new render task
     Builder declareTask(std::string_view name);

@@ -56,7 +56,7 @@ Framegraph::~Framegraph()
     // if data_ is empty, object is moved-from
     if (data_) {
         try {
-            retireImmediate();
+            reset();
         }
         catch (const std::exception &e) {
             CO_APP_ERROR("Uncaught exception in destructor: {}", e.what());
@@ -86,7 +86,7 @@ ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
     return executionInfo;
 }
 
-void Framegraph::retireImmediate()
+void Framegraph::reset()
 {
     data_->resources.clear();
     data_->externalInputs.clear();

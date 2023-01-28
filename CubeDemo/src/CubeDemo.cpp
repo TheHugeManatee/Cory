@@ -12,6 +12,7 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/DescriptorSetManager.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
@@ -167,7 +168,8 @@ void CubeDemoApplication::createUBO()
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
         *ctx_, window_->swapchain().maxFramesInFlight());
     for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
-        auto set = ctx_->descriptorPool().allocate(ctx_->defaultDescriptorSetLayout());
+        auto &set =
+            ctx_->descriptorSetManager().get(Cory::DescriptorSetManager::SetType::Static, i);
 
         auto bufferInfo = globalUbo_->descriptorInfo(i);
         const VkWriteDescriptorSet write{
@@ -192,6 +194,7 @@ CubeDemoApplication::~CubeDemoApplication()
 
 void CubeDemoApplication::run()
 {
+    // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
     std::generate_n(std::back_inserter(framegraphs),
                     window_->swapchain().maxFramesInFlight(),
@@ -206,7 +209,10 @@ void CubeDemoApplication::run()
         drawImguiControls();
 
         Cory::Framegraph &fg = framegraphs[frameCtx.index];
-        fg.retireImmediate(); // retire old resources from the last time this index was rendered
+        // retire old resources from the last time this framegraph was
+        // used - our frame synchronization ensures that the resources
+        // are no longer in use
+        fg.reset();
 
         defineRenderPasses(fg, frameCtx);
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
@@ -235,7 +241,7 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
 
     auto windowColorTarget =
-        framegraph.declareInput({.name = "Tex_SwCh_Color",
+        framegraph.declareInput({.name = "Tex_SwapCh_Color",
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.colorImage->format(),
                                  .sampleCount = window_->sampleCount()},
@@ -244,7 +250,7 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                 *frameCtx.colorImageView);
 
     auto windowDepthTarget =
-        framegraph.declareInput({.name = "Tex_SwCh_Depth",
+        framegraph.declareInput({.name = "Tex_SwapCh_Depth",
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.depthImage->format(),
                                  .sampleCount = window_->sampleCount()},

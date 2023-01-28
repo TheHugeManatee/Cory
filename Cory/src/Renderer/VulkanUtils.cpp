@@ -4,6 +4,7 @@
 
 #include <Magnum/Vk/Buffer.h>
 #include <Magnum/Vk/CommandBuffer.h>
+#include <Magnum/Vk/DescriptorSetLayout.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/Fence.h>
 #include <Magnum/Vk/Image.h>
@@ -74,6 +75,9 @@ void nameRawVulkanObject(DeviceHandle &device, VulkanObjectHandle handle, std::s
     if constexpr (std::is_same_v<VulkanObjectHandle, VkSampler>) {
         objectNameInfo.objectType = VK_OBJECT_TYPE_SAMPLER;
     }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSetLayout>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT;
+    }
 
     device->SetDebugUtilsObjectNameEXT(device, &objectNameInfo);
 }
@@ -109,5 +113,6 @@ INSTANTIATE_WRAPPED(Magnum::Vk::Pipeline);
 INSTANTIATE_WRAPPED(Magnum::Vk::ImageView);
 INSTANTIATE_WRAPPED(Magnum::Vk::Shader);
 INSTANTIATE_WRAPPED(Magnum::Vk::Sampler);
+INSTANTIATE_WRAPPED(Magnum::Vk::DescriptorSetLayout);
 
 } // namespace Cory

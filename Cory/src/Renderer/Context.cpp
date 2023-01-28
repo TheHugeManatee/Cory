@@ -2,6 +2,7 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Renderer/DescriptorSetManager.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
@@ -33,7 +34,7 @@ struct ContextPrivate {
     std::string name;
     bool isHeadless{false};
     Vk::Instance instance{Corrade::NoCreate};
-    VkDebugUtilsMessengerEXT debugMessenger{};
+    BasicVkObjectWrapper<VkDebugUtilsMessengerEXT> debugMessenger{};
     Vk::DeviceProperties physicalDevice{Corrade::NoCreate};
     Vk::Device device{Corrade::NoCreate};
 
@@ -42,16 +43,17 @@ struct ContextPrivate {
     Vk::Queue computeQueue{Corrade::NoCreate};
     uint32_t computeQueueFamily{};
 
-    Vk::DescriptorPool descriptorPool{Corrade::NoCreate};
     Vk::CommandPool commandPool{Corrade::NoCreate};
 
     ResourceManager resources;
 
     Callback<const DebugMessageInfo &> onVulkanDebugMessageReceived;
 
-    Magnum::Vk::DescriptorSetLayout defaultDescriptorLayout{Corrade::NoCreate};
+    DescriptorSetManager descriptorSetManager;
+    /// todo pipeline layout should probably belong to the framegraph instead of the context
     Magnum::Vk::PipelineLayout defaultPipelineLayout{Corrade::NoCreate};
     Magnum::Vk::MeshLayout defaultMeshLayout{Corrade::NoInit};
+    /// mesh layout with no bindings, to implement dynamic vertex generation/pulling
     Magnum::Vk::MeshLayout emptyMeshLayout{Corrade::NoInit};
 
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
@@ -69,16 +71,6 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
                                           static_cast<DebugMessageType>(messageType),
                                           pCallbackData);
     return VK_TRUE;
-}
-
-Magnum::Vk::DescriptorSetLayout createDefaultDescriptorSetLayout(Context &ctx)
-{
-    // default layout currently only has a single uniform buffer
-    return Vk::DescriptorSetLayout(ctx.device(),
-                                   Vk::DescriptorSetLayoutCreateInfo{
-                                       {{0, Vk::DescriptorType::UniformBuffer}},
-                                       //{{0, Vk::DescriptorType::UniformBuffer}},
-                                   });
 }
 
 Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
@@ -165,23 +157,27 @@ Context::Context()
 
     setupDebugMessenger();
 
-    data_->descriptorPool = Vk::DescriptorPool{
-        data_->device,
-        Vk::DescriptorPoolCreateInfo{8, // max descriptor sets
-                                     {
-                                         {Vk::DescriptorType::UniformBuffer, 24},       //
-                                         {Vk::DescriptorType::CombinedImageSampler, 16} //
-                                     }}};
     data_->commandPool =
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
 
     data_->resources.setContext(*this);
 
+    // TODO descriptorsetmanager should move to more frontend-facing object like swapchain, window,
+    // or application base class
+    // default layout currently only has a single uniform buffer and eight images and buffers
+    Vk::DescriptorSetLayoutCreateInfo defaultLayout{
+        {{0, Vk::DescriptorType::UniformBuffer}},
+        {{1, Vk::DescriptorType::CombinedImageSampler, 8}},
+        {{2, Vk::DescriptorType::StorageBuffer, 8}}};
+    static constexpr uint32_t FRAMES_IN_FLIGHT = 4;
+
+    data_->descriptorSetManager.init(
+        data_->device, data_->resources, std::move(defaultLayout), FRAMES_IN_FLIGHT);
+
     data_->defaultMeshLayout = createDefaultMeshLayout();
     data_->emptyMeshLayout = Magnum::Vk::MeshLayout{Vk::MeshPrimitive::Triangles};
-    data_->defaultDescriptorLayout = createDefaultDescriptorSetLayout(*this);
     data_->defaultPipelineLayout =
-        createDefaultPipelineLayout(*this, data_->defaultDescriptorLayout);
+        createDefaultPipelineLayout(*this, resources()[data_->descriptorSetManager.layout()]);
 }
 
 Context::Context(Context &&rhs) { std::swap(rhs.data_, data_); }
@@ -193,10 +189,7 @@ Context &Context::operator=(Context &&rhs)
 
 Context::~Context()
 {
-    if (data_) {
-        instance()->DestroyDebugUtilsMessengerEXT(data_->instance, data_->debugMessenger, nullptr);
-        CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
-    }
+    if (data_) { CO_CORE_TRACE("Destroying Cory::Context {}", data_->name); }
 }
 
 void Context::setupDebugMessenger()
@@ -215,9 +208,12 @@ void Context::setupDebugMessenger()
         .pfnUserCallback = debugUtilsMessengerCallback,
         .pUserData = data_.get()};
 
+    VkDebugUtilsMessengerEXT messenger;
     instance()->CreateDebugUtilsMessengerEXT(
-        data_->instance, &dbgMessengerCreateInfo, nullptr, &data_->debugMessenger);
-
+        data_->instance, &dbgMessengerCreateInfo, nullptr, &messenger);
+    data_->debugMessenger.wrap(messenger, [this](auto *messenger) {
+        data_->instance->DestroyDebugUtilsMessengerEXT(data_->instance, messenger, nullptr);
+    });
     // this seems to crash - not sure if driver or implementation bug...
     // nameRawVulkanObject(
     //    data->device.handle(), debugMessenger, fmt::format("{} Debug Messenger", data->name));
@@ -256,7 +252,7 @@ bool Context::isHeadless() const { return data_->isHeadless; }
 Vk::Instance &Context::instance() { return data_->instance; }
 Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data_->physicalDevice; }
 Vk::Device &Context::device() { return data_->device; }
-Magnum::Vk::DescriptorPool &Context::descriptorPool() { return data_->descriptorPool; }
+DescriptorSetManager &Context::descriptorSetManager() { return data_->descriptorSetManager; }
 Vk::CommandPool &Context::commandPool() { return data_->commandPool; }
 Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
 uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }
@@ -278,11 +274,6 @@ const Magnum::Vk::MeshLayout &Context::defaultMeshLayout(bool empty) const
 Magnum::Vk::PipelineLayout &Context::defaultPipelineLayout()
 {
     return data_->defaultPipelineLayout;
-}
-
-Magnum::Vk::DescriptorSetLayout &Context::defaultDescriptorSetLayout()
-{
-    return data_->defaultDescriptorLayout;
 }
 
 void ContextPrivate::receiveDebugUtilsMessage(

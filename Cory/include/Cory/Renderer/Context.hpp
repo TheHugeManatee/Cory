@@ -45,7 +45,7 @@ class Context : NoCopy {
     Magnum::Vk::Instance &instance();
     Magnum::Vk::DeviceProperties &physicalDevice();
     Magnum::Vk::Device &device();
-    Magnum::Vk::DescriptorPool &descriptorPool();
+    DescriptorSetManager& descriptorSetManager();
     Magnum::Vk::CommandPool &commandPool();
 
     Magnum::Vk::Queue &graphicsQueue();

@@ -12,7 +12,7 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSetManager.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
@@ -169,8 +169,8 @@ void CubeDemoApplication::createUBO()
         *ctx_, window_->swapchain().maxFramesInFlight());
 
     for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
-        ctx_->descriptorSetManager()
-            .write(Cory::DescriptorSetManager::SetType::Static, i, *globalUbo_)
+        ctx_->descriptorSets()
+            .write(Cory::DescriptorSets::SetType::Static, i, *globalUbo_)
             .flushWrites();
     }
 }
@@ -311,8 +311,8 @@ CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.index);
 
-    ctx_->descriptorSetManager().bind(renderApi.cmd->handle(), frameCtx.index,
-                                      ctx_->defaultPipelineLayout());
+    ctx_->descriptorSets().bind(
+        renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
@@ -367,8 +367,8 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
     ////////////
 
     globalUbo_->flush(frameCtx.index);
-    ctx_->descriptorSetManager().bind(renderApi.cmd->handle(), frameCtx.index,
-                                      ctx_->defaultPipelineLayout());
+    ctx_->descriptorSets().bind(
+        renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
 
     ////////////
 

@@ -1,4 +1,4 @@
-#include "DescriptorSetManager.hpp"
+#include "DescriptorSets.hpp"
 
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -38,14 +38,14 @@ struct DescriptorSetManagerPrivate {
 };
 
 // defaulted - nothing to be done here
-DescriptorSetManager::DescriptorSetManager() = default;
+DescriptorSets::DescriptorSets() = default;
 
-DescriptorSetManager::~DescriptorSetManager()
+DescriptorSets::~DescriptorSets()
 {
     data_->resourceManager->release(data_->layoutHandle);
 }
 
-void DescriptorSetManager::init(Magnum::Vk::Device &device,
+void DescriptorSets::init(Magnum::Vk::Device &device,
                                 ResourceManager &resourceManager,
                                 Magnum::Vk::DescriptorSetLayoutCreateInfo defaultLayout,
                                 uint32_t instances)
@@ -78,14 +78,14 @@ void DescriptorSetManager::init(Magnum::Vk::Device &device,
     std::generate_n(std::back_inserter(data_->userDescriptorSets), instances, allocate_set);
 }
 
-DescriptorSetLayoutHandle DescriptorSetManager::layout() { return data_->layoutHandle; }
+DescriptorSetLayoutHandle DescriptorSets::layout() { return data_->layoutHandle; }
 
-uint32_t DescriptorSetManager::instances() const
+uint32_t DescriptorSets::instances() const
 {
     return gsl::narrow_cast<uint32_t>(data_->staticDescriptorSets.size());
 }
 
-Magnum::Vk::DescriptorSet &DescriptorSetManager::get(DescriptorSetManager::SetType type,
+Magnum::Vk::DescriptorSet &DescriptorSets::get(DescriptorSets::SetType type,
                                                      gsl::index setIndex)
 {
     CO_CORE_ASSERT(setIndex < instances(), "Set index out of bounds");
@@ -102,11 +102,11 @@ Magnum::Vk::DescriptorSet &DescriptorSetManager::get(DescriptorSetManager::SetTy
     throw std::invalid_argument("Invalid SetType specified");
 }
 
-DescriptorSetManager &DescriptorSetManager::write(DescriptorSetManager::SetType type,
+DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
                                                   gsl::index instanceIndex,
                                                   const UniformBufferObjectBase &ubo)
 {
-    auto &set = get(Cory::DescriptorSetManager::SetType::Static, instanceIndex);
+    auto &set = get(Cory::DescriptorSets::SetType::Static, instanceIndex);
 
     data_->storedWriteBufferInfos.push_back(ubo.descriptorInfo(instanceIndex));
 
@@ -122,7 +122,7 @@ DescriptorSetManager &DescriptorSetManager::write(DescriptorSetManager::SetType 
     return *this;
 }
 
-void DescriptorSetManager::flushWrites()
+void DescriptorSets::flushWrites()
 {
     auto &device = *data_->device;
 
@@ -136,7 +136,7 @@ void DescriptorSetManager::flushWrites()
     data_->storedWriteBufferInfos.clear();
 }
 
-void DescriptorSetManager::bind(Magnum::Vk::CommandBuffer &cmd,
+void DescriptorSets::bind(Magnum::Vk::CommandBuffer &cmd,
                                 gsl::index instanceIndex,
                                 Magnum::Vk::PipelineLayout &pipelineLayout)
 {

@@ -20,7 +20,7 @@ namespace Cory {
  * A bindless design would be relatively complicated for us here because we do not have a fixed
  * material model.
  */
-class DescriptorSetManager {
+class DescriptorSets {
   public:
     enum class SetType {
         /// data that updates only occasionally based e.g. on user input, static textures
@@ -34,9 +34,9 @@ class DescriptorSetManager {
     };
 
     /// by default constructs an uninitialized object - needs an init() call to initialize!
-    DescriptorSetManager();
+    DescriptorSets();
 
-    ~DescriptorSetManager();
+    ~DescriptorSets();
 
     /**
      * Initialize the descriptor set manager
@@ -65,7 +65,7 @@ class DescriptorSetManager {
      *
      * @note This write will not be issued until @b flushWrites() is called.
      */
-    DescriptorSetManager &
+    DescriptorSets &
     write(SetType type, gsl::index instanceIndex, const UniformBufferObjectBase &ubo);
 
     /**

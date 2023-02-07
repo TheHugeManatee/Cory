@@ -1,4 +1,4 @@
-#include <Cory/Renderer/DescriptorSetManager.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 
 #include "TestUtils.hpp"
 
@@ -15,7 +15,7 @@ TEST_CASE("Basic Usage")
 
     testing::VulkanTester t;
 
-    Cory::DescriptorSetManager descriptorSetManager;
+    Cory::DescriptorSets descriptorSetManager;
 
     GIVEN("An existing descriptor pool and layout")
     {

@@ -30,7 +30,7 @@ class UniformBufferObjectBase;
 template <typename BufferStruct>
     requires std::is_trivial_v<BufferStruct>
 class UniformBufferObject;
-class DescriptorSetManager;
+class DescriptorSets;
 
 using PixelFormat = Magnum::Vk::PixelFormat;
 bool isColorFormat(PixelFormat format);

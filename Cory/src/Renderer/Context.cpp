@@ -2,7 +2,7 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Renderer/DescriptorSetManager.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
@@ -49,7 +49,7 @@ struct ContextPrivate {
 
     Callback<const DebugMessageInfo &> onVulkanDebugMessageReceived;
 
-    DescriptorSetManager descriptorSetManager;
+    DescriptorSets descriptorSetManager;
     /// todo pipeline layout should probably belong to the framegraph instead of the context
     Magnum::Vk::PipelineLayout defaultPipelineLayout{Corrade::NoCreate};
     Magnum::Vk::MeshLayout defaultMeshLayout{Corrade::NoInit};
@@ -253,7 +253,7 @@ bool Context::isHeadless() const { return data_->isHeadless; }
 Vk::Instance &Context::instance() { return data_->instance; }
 Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data_->physicalDevice; }
 Vk::Device &Context::device() { return data_->device; }
-DescriptorSetManager &Context::descriptorSetManager() { return data_->descriptorSetManager; }
+DescriptorSets &Context::descriptorSets() { return data_->descriptorSetManager; }
 Vk::CommandPool &Context::commandPool() { return data_->commandPool; }
 Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
 uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }

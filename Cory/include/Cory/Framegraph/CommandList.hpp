@@ -4,6 +4,9 @@
 
 namespace Cory {
 
+/**
+ * Effectively a wrapper over a Command Buffer, but it understands operations on more high-level objects such as PipelineHandles, DescriptorSetManagers etc
+ */
 class CommandList : NoCopy {
   public:
     CommandList(Context &ctx, Magnum::Vk::CommandBuffer &cmdBuffer);

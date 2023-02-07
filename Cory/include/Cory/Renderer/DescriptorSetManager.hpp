@@ -52,21 +52,33 @@ class DescriptorSetManager {
               Magnum::Vk::DescriptorSetLayoutCreateInfo defaultLayout,
               uint32_t instances);
 
-    /**
-     * flush all updates, calling vkUpdateDescriptorSets as appropriate
-     * @param device        the device
-     * @param modifiedType  the lowest modified type
-     * @param instanceIndex the index of the modified set instances
-     * This will update all descriptor sets "higher" than the @a modifiedType
-     */
-    void update(Magnum::Vk::Device &device, SetType modifiedType, gsl::index instanceIndex);
-
     [[nodiscard]] DescriptorSetLayoutHandle layout();
 
     /// the number of instances available
     [[nodiscard]] uint32_t instances() const;
 
-    [[nodiscard]] Magnum::Vk::DescriptorSet& get(SetType type, gsl::index instanceIndex);
+    /**
+     * Record a descriptor write
+     * @param type
+     * @param instanceIndex
+     * @param ubo
+     *
+     * @note This write will not be issued until @b flushWrites() is called.
+     */
+    DescriptorSetManager &
+    write(SetType type, gsl::index instanceIndex, const UniformBufferObjectBase &ubo);
+
+    /**
+     * @brief flush all updates, calling vkUpdateDescriptorSets with the previously recorded writes
+     */
+    void flushWrites();
+
+    [[nodiscard]] Magnum::Vk::DescriptorSet &get(SetType type, gsl::index instanceIndex);
+
+    /// bind the given instance index
+    void bind(Magnum::Vk::CommandBuffer &cmd,
+              gsl::index instanceIndex,
+              Magnum::Vk::PipelineLayout &pipelineLayout);
 
   private:
     std::unique_ptr<struct DescriptorSetManagerPrivate> data_;

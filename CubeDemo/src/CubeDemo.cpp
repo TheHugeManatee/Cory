@@ -167,22 +167,11 @@ void CubeDemoApplication::createUBO()
     const Cory::ScopeTimer st{"Init/UBO"};
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
         *ctx_, window_->swapchain().maxFramesInFlight());
+
     for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
-        auto &set =
-            ctx_->descriptorSetManager().get(Cory::DescriptorSetManager::SetType::Static, i);
-
-        auto bufferInfo = globalUbo_->descriptorInfo(i);
-        const VkWriteDescriptorSet write{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = set,
-            .dstBinding = 0, // TODO?
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &bufferInfo,
-        };
-        ctx_->device()->UpdateDescriptorSets(ctx_->device(), 1, &write, 0, nullptr);
-
-        descriptorSets_.push_back(std::move(set));
+        ctx_->descriptorSetManager()
+            .write(Cory::DescriptorSetManager::SetType::Static, i, *globalUbo_)
+            .flushWrites();
     }
 }
 
@@ -266,8 +255,8 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                          mainPass.output().depthOut,
                                          frameCtx);
 
-    auto imguiPass = imguiRenderTask(
-        framegraph.declareTask("RP_ImGui"), depthDebugPass.output().colorOut, frameCtx);
+    auto imguiPass =
+        imguiRenderTask(framegraph.declareTask("RP_ImGui"), mainPass.output().colorOut, frameCtx);
 
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
@@ -322,17 +311,8 @@ CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.index);
 
-    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
-    ctx_->device()->CmdBindDescriptorSets(
-        renderApi.cmd->handle(),
-        VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-        // TODO make lyaout accessible through TransientRenderPass instead
-        ctx_->defaultPipelineLayout(),
-        0,
-        gsl::narrow<uint32_t>(sets.size()),
-        sets.data(),
-        0,
-        nullptr);
+    ctx_->descriptorSetManager().bind(renderApi.cmd->handle(), frameCtx.index,
+                                      ctx_->defaultPipelineLayout());
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
@@ -362,7 +342,6 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
                                     const Cory::FrameContext &frameCtx)
 {
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-    float clearDepth = 1.0f;
 
     auto [writtenColorHandle, colorInfo] =
         builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
@@ -387,22 +366,9 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
 
     ////////////
 
-    // update the uniform buffer
-    CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
-
     globalUbo_->flush(frameCtx.index);
-
-    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
-    ctx_->device()->CmdBindDescriptorSets(
-        renderApi.cmd->handle(),
-        VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-        // TODO make lyaout accessible through TransientRenderPass instead
-        ctx_->defaultPipelineLayout(),
-        0,
-        gsl::narrow<uint32_t>(sets.size()),
-        sets.data(),
-        0,
-        nullptr);
+    ctx_->descriptorSetManager().bind(renderApi.cmd->handle(), frameCtx.index,
+                                      ctx_->defaultPipelineLayout());
 
     ////////////
 

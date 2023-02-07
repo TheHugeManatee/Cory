@@ -3,13 +3,17 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
+#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/ArrayViewStl.h>
+#include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/DescriptorPoolCreateInfo.h>
 #include <Magnum/Vk/DescriptorSet.h>
 #include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
 #include <Magnum/Vk/DescriptorType.h>
+#include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/PipelineLayout.h>
 
 #include <tuple>
 #include <vector>
@@ -28,6 +32,9 @@ struct DescriptorSetManagerPrivate {
     std::vector<Vk::DescriptorSet> frameDescriptorSets;
     std::vector<Vk::DescriptorSet> passDescriptorSets;
     std::vector<Vk::DescriptorSet> userDescriptorSets;
+
+    std::vector<VkWriteDescriptorSet> storedWrites;
+    std::vector<VkDescriptorBufferInfo> storedWriteBufferInfos;
 };
 
 // defaulted - nothing to be done here
@@ -71,13 +78,6 @@ void DescriptorSetManager::init(Magnum::Vk::Device &device,
     std::generate_n(std::back_inserter(data_->userDescriptorSets), instances, allocate_set);
 }
 
-void DescriptorSetManager::update(Vk::Device &device,
-                                  SetType modifiedType,
-                                  gsl::index instanceIndex)
-{
-    // todo
-}
-
 DescriptorSetLayoutHandle DescriptorSetManager::layout() { return data_->layoutHandle; }
 
 uint32_t DescriptorSetManager::instances() const
@@ -101,4 +101,60 @@ Magnum::Vk::DescriptorSet &DescriptorSetManager::get(DescriptorSetManager::SetTy
     }
     throw std::invalid_argument("Invalid SetType specified");
 }
+
+DescriptorSetManager &DescriptorSetManager::write(DescriptorSetManager::SetType type,
+                                                  gsl::index instanceIndex,
+                                                  const UniformBufferObjectBase &ubo)
+{
+    auto &set = get(Cory::DescriptorSetManager::SetType::Static, instanceIndex);
+
+    data_->storedWriteBufferInfos.push_back(ubo.descriptorInfo(instanceIndex));
+
+    data_->storedWrites.emplace_back(VkWriteDescriptorSet{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = set,
+        .dstBinding = 0, // TODO?
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo = &data_->storedWriteBufferInfos.back(),
+    });
+
+    return *this;
+}
+
+void DescriptorSetManager::flushWrites()
+{
+    auto &device = *data_->device;
+
+    device->UpdateDescriptorSets(device,
+                                 static_cast<uint32_t>(data_->storedWrites.size()),
+                                 data_->storedWrites.data(),
+                                 0,
+                                 nullptr);
+
+    data_->storedWrites.clear();
+    data_->storedWriteBufferInfos.clear();
+}
+
+void DescriptorSetManager::bind(Magnum::Vk::CommandBuffer &cmd,
+                                gsl::index instanceIndex,
+                                Magnum::Vk::PipelineLayout &pipelineLayout)
+{
+    auto &device = *data_->device;
+
+    const std::vector sets{data_->staticDescriptorSets[instanceIndex].handle(),
+                           data_->frameDescriptorSets[instanceIndex].handle(),
+                           data_->passDescriptorSets[instanceIndex].handle(),
+                           data_->userDescriptorSets[instanceIndex].handle()};
+
+    device->CmdBindDescriptorSets(cmd,
+                                  VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  pipelineLayout,
+                                  0,
+                                  gsl::narrow<uint32_t>(sets.size()),
+                                  sets.data(),
+                                  0,
+                                  nullptr);
+}
+
 } // namespace Cory

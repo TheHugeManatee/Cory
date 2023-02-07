@@ -81,7 +81,8 @@ Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
         .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
 
     // create pipeline layout
-    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{descriptorSetLayout};
+    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{
+        descriptorSetLayout, descriptorSetLayout, descriptorSetLayout, descriptorSetLayout};
     pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
     pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
     return Vk::PipelineLayout(ctx.device(), pipelineLayoutCreateInfo);

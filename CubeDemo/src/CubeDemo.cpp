@@ -354,11 +354,11 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
 
     auto cubePass = builder.declareRenderPass("Pass_DepthDebug")
                         .shaders({fullscreenTriShader_, depthDebugShader_})
+                        .disableMeshInput() // fullscreen triangle pass
                         .attach(colorTarget,
                                 VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
                                 VK_ATTACHMENT_STORE_OP_STORE,
                                 clearColor)
-                        .disableMeshInput()
                         .finish();
 
     co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = {}};

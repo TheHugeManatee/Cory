@@ -13,7 +13,13 @@
 #include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
 #include <Magnum/Vk/DescriptorType.h>
 #include <Magnum/Vk/Device.h>
+#include <Magnum/Vk/ImageView.h>
 #include <Magnum/Vk/PipelineLayout.h>
+#include <Magnum/Vk/Sampler.h>
+
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/transform.hpp>
+#include <range/v3/view/zip.hpp>
 
 #include <tuple>
 #include <vector>
@@ -35,20 +41,18 @@ struct DescriptorSetManagerPrivate {
 
     std::vector<VkWriteDescriptorSet> storedWrites;
     std::vector<VkDescriptorBufferInfo> storedWriteBufferInfos;
+    std::vector<std::vector<VkDescriptorImageInfo>> storedWriteImageInfos;
 };
 
 // defaulted - nothing to be done here
 DescriptorSets::DescriptorSets() = default;
 
-DescriptorSets::~DescriptorSets()
-{
-    data_->resourceManager->release(data_->layoutHandle);
-}
+DescriptorSets::~DescriptorSets() { data_->resourceManager->release(data_->layoutHandle); }
 
 void DescriptorSets::init(Magnum::Vk::Device &device,
-                                ResourceManager &resourceManager,
-                                Magnum::Vk::DescriptorSetLayoutCreateInfo defaultLayout,
-                                uint32_t instances)
+                          ResourceManager &resourceManager,
+                          Magnum::Vk::DescriptorSetLayoutCreateInfo defaultLayout,
+                          uint32_t instances)
 {
     CO_CORE_ASSERT(data_ == nullptr, "Object already initialized!");
     data_ = std::make_unique<DescriptorSetManagerPrivate>();
@@ -85,8 +89,7 @@ uint32_t DescriptorSets::instances() const
     return gsl::narrow_cast<uint32_t>(data_->staticDescriptorSets.size());
 }
 
-Magnum::Vk::DescriptorSet &DescriptorSets::get(DescriptorSets::SetType type,
-                                                     gsl::index setIndex)
+Magnum::Vk::DescriptorSet &DescriptorSets::get(DescriptorSets::SetType type, gsl::index setIndex)
 {
     CO_CORE_ASSERT(setIndex < instances(), "Set index out of bounds");
     switch (type) {
@@ -103,8 +106,8 @@ Magnum::Vk::DescriptorSet &DescriptorSets::get(DescriptorSets::SetType type,
 }
 
 DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
-                                                  gsl::index instanceIndex,
-                                                  const UniformBufferObjectBase &ubo)
+                                      gsl::index instanceIndex,
+                                      const UniformBufferObjectBase &ubo)
 {
     auto &set = get(Cory::DescriptorSets::SetType::Static, instanceIndex);
 
@@ -113,11 +116,40 @@ DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
     data_->storedWrites.emplace_back(VkWriteDescriptorSet{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = set,
-        .dstBinding = 0, // TODO?
+        .dstBinding = static_cast<uint32_t>(BindPoints::UniformBufferObject),
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &data_->storedWriteBufferInfos.back(),
     });
+
+    return *this;
+}
+
+DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
+                                      gsl::index instanceIndex,
+                                      gsl::span<VkImageLayout> layouts,
+                                      gsl::span<Magnum::Vk::ImageView> images,
+                                      gsl::span<Magnum::Vk::Sampler> samplers)
+{
+    auto &set = get(Cory::DescriptorSets::SetType::Static, instanceIndex);
+
+    std::vector<VkDescriptorImageInfo> imageInfos =
+        ranges::views::zip(layouts, images, samplers) | ranges::views::transform([](const auto &e) {
+            return VkDescriptorImageInfo{.sampler = std::get<2>(e),
+                                         .imageView = std::get<1>(e),
+                                         .imageLayout = std::get<0>(e)};
+        }) |
+        ranges::to<std::vector>;
+
+    data_->storedWriteImageInfos.push_back(imageInfos);
+
+    data_->storedWrites.emplace_back(
+        VkWriteDescriptorSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                             .dstSet = set,
+                             .dstBinding = static_cast<uint32_t>(BindPoints::CombinedImageSampler),
+                             .descriptorCount = 1,
+                             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                             .pImageInfo = data_->storedWriteImageInfos.back().data()});
 
     return *this;
 }
@@ -132,13 +164,15 @@ void DescriptorSets::flushWrites()
                                  0,
                                  nullptr);
 
+    // clear all information about stored writes so the next write starts cleanly
     data_->storedWrites.clear();
     data_->storedWriteBufferInfos.clear();
+    data_->storedWriteImageInfos.clear();
 }
 
 void DescriptorSets::bind(Magnum::Vk::CommandBuffer &cmd,
-                                gsl::index instanceIndex,
-                                Magnum::Vk::PipelineLayout &pipelineLayout)
+                          gsl::index instanceIndex,
+                          Magnum::Vk::PipelineLayout &pipelineLayout)
 {
     auto &device = *data_->device;
 

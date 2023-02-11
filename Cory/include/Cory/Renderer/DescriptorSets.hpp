@@ -19,6 +19,9 @@ namespace Cory {
  *
  * A bindless design would be relatively complicated for us here because we do not have a fixed
  * material model.
+ *
+ * Consistently uses the bind points defined in @b DescriptorSets::BindPoints to bind the different
+ * object types.
  */
 class DescriptorSets {
   public:
@@ -31,6 +34,12 @@ class DescriptorSets {
         Pass = 2,
         /// free for user-defined usage
         User = 3,
+    };
+
+    enum class BindPoints : uint32_t {
+        UniformBufferObject = 0,
+        CombinedImageSampler = 1,
+        StorageBuffer = 2
     };
 
     /// by default constructs an uninitialized object - needs an init() call to initialize!
@@ -58,7 +67,7 @@ class DescriptorSets {
     [[nodiscard]] uint32_t instances() const;
 
     /**
-     * Record a descriptor write
+     * Record a descriptor write for updating an UBO reference
      * @param type
      * @param instanceIndex
      * @param ubo
@@ -68,7 +77,23 @@ class DescriptorSets {
     DescriptorSets &
     write(SetType type, gsl::index instanceIndex, const UniformBufferObjectBase &ubo);
 
-    // TODO implement a write for CombinedImageSamplers
+    /**
+     * Record a descriptor write for updating image references
+     * @param type
+     * @param instanceIndex
+     * @param textures      the textures to update
+     *
+     * TODO: refactor TextureManager such that we can pass span of handles here and look them up
+     *       in the ResourceManager, instead of having to do the lookup beforehand
+     *
+     * @note This write will not be issued until @b flushWrites() is called.
+     */
+    DescriptorSets &write(DescriptorSets::SetType type,
+                          gsl::index instanceIndex,
+                          gsl::span<VkImageLayout> layouts,
+                          gsl::span<Magnum::Vk::ImageView> images,
+                          gsl::span<Magnum::Vk::Sampler> samplers);
+
     // TODO implement a write for the Buffers
 
     /**

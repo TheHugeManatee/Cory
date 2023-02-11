@@ -56,8 +56,6 @@ class TextureResourceManager : NoCopy {
     Magnum::Vk::Image &image(TextureHandle handle);
     Magnum::Vk::ImageView &imageView(TextureHandle handle);
     [[nodiscard]] TextureState state(TextureHandle handle) const;
-    Magnum::Vk::Sampler &sampler(TextureHandle handle);
-    const Magnum::Vk::Sampler &sampler(TextureHandle handle) const;
 
     void clear();
 

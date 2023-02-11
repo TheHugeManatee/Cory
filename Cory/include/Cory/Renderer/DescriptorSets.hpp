@@ -68,6 +68,9 @@ class DescriptorSets {
     DescriptorSets &
     write(SetType type, gsl::index instanceIndex, const UniformBufferObjectBase &ubo);
 
+    // TODO implement a write for CombinedImageSamplers
+    // TODO implement a write for the Buffers
+
     /**
      * @brief flush all updates, calling vkUpdateDescriptorSets with the previously recorded writes
      */

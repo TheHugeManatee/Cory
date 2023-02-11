@@ -15,6 +15,7 @@ template <typename T> using Span = gsl::span<T>;
 // forward declarations
 template <typename StoredType> class SlotMap;
 template <int64_t RECORD_HISTORY_SIZE = 64> class ProfilerRecord;
+
 class Profiler;
 class ScopeTimer;
 class LapTimer;

@@ -72,6 +72,7 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
 
+    Cory::SamplerHandle defaultSampler_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     Cory::ShaderHandle fullscreenTriShader_;

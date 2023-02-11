@@ -7,6 +7,12 @@
 #include <cstdint>
 
 namespace Cory {
+
+/// the equivalent of std::nullptr_t and nullptr
+struct NullHandle_t {};
+/// used to explicitly convey creating/passing an invalid handle
+static NullHandle_t NullHandle;
+
 /**
  * @brief a handle type that encodes an index and a version.
  *
@@ -20,6 +26,7 @@ class SlotMapHandle {
 
     /// default-constructed handle has invalid version and index
     SlotMapHandle();
+    /* implicit */ SlotMapHandle(NullHandle_t);
     /// construct a handle with given index and version
     SlotMapHandle(uint32_t index, uint32_t version = 0, bool free = false);
     [[nodiscard]] uint32_t index() const noexcept { return index_; }
@@ -54,6 +61,9 @@ template <typename T, typename Friend> class PrivateTypedHandle {
   public:
     /// default initialization creates an invalid handle
     PrivateTypedHandle() = default;
+    /// constructing with a NullHandle type constructs an invalid handle
+    /* implicit */ PrivateTypedHandle(NullHandle_t)
+        : PrivateTypedHandle(){};
     auto operator<=>(const PrivateTypedHandle &rhs) const = default;
 
     /**
@@ -82,6 +92,10 @@ inline SlotMapHandle::SlotMapHandle()
     : free_{1}
     , version_{0}
     , index_{INVALID_INDEX}
+{
+}
+inline SlotMapHandle::SlotMapHandle(NullHandle_t)
+    : SlotMapHandle() // equivalent to default construction
 {
 }
 inline SlotMapHandle::SlotMapHandle(uint32_t index, uint32_t version, bool free)

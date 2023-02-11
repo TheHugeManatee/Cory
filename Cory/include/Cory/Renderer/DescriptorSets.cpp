@@ -1,5 +1,6 @@
 #include "DescriptorSets.hpp"
 
+#include "Cory/Framegraph/TextureManager.hpp"
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
@@ -74,12 +75,18 @@ void DescriptorSets::init(Magnum::Vk::Device &device,
 
     // create descriptor sets
     auto &layout = resourceManager[data_->layoutHandle];
-    const auto allocate_set = [&]() { return data_->descriptorPool.allocate(layout); };
+    const auto allocate_set = [&](std::string_view name, gsl::index i) {
+        auto set = data_->descriptorPool.allocate(layout);
+        nameVulkanObject(*data_->device, set, fmt::format("{} [{}]", name, i));
+        return set;
+    };
     // allocate one descriptor set for each type and frame in flight
-    std::generate_n(std::back_inserter(data_->staticDescriptorSets), instances, allocate_set);
-    std::generate_n(std::back_inserter(data_->frameDescriptorSets), instances, allocate_set);
-    std::generate_n(std::back_inserter(data_->passDescriptorSets), instances, allocate_set);
-    std::generate_n(std::back_inserter(data_->userDescriptorSets), instances, allocate_set);
+    for (gsl::index i = 0; i < instances; ++i) {
+        data_->staticDescriptorSets.push_back(allocate_set("Static", i));
+        data_->frameDescriptorSets.push_back(allocate_set("Frame", i));
+        data_->passDescriptorSets.push_back(allocate_set("Pass", i));
+        data_->userDescriptorSets.push_back(allocate_set("User", i));
+    }
 }
 
 DescriptorSetLayoutHandle DescriptorSets::layout() { return data_->layoutHandle; }
@@ -128,15 +135,18 @@ DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
 DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
                                       gsl::index instanceIndex,
                                       gsl::span<VkImageLayout> layouts,
-                                      gsl::span<Magnum::Vk::ImageView> images,
-                                      gsl::span<Magnum::Vk::Sampler> samplers)
+                                      gsl::span<ImageViewHandle> images,
+                                      gsl::span<SamplerHandle> samplers)
 {
     auto &set = get(Cory::DescriptorSets::SetType::Static, instanceIndex);
 
-    std::vector<VkDescriptorImageInfo> imageInfos =
-        ranges::views::zip(layouts, images, samplers) | ranges::views::transform([](const auto &e) {
-            return VkDescriptorImageInfo{.sampler = std::get<2>(e),
-                                         .imageView = std::get<1>(e),
+    auto &resources = *data_->resourceManager;
+
+    const std::vector<VkDescriptorImageInfo> imageInfos =
+        ranges::views::zip(layouts, images, samplers) |
+        ranges::views::transform([&resources](const auto &e) {
+            return VkDescriptorImageInfo{.sampler = resources[std::get<2>(e)],
+                                         .imageView = resources[std::get<1>(e)],
                                          .imageLayout = std::get<0>(e)};
         }) |
         ranges::to<std::vector>;

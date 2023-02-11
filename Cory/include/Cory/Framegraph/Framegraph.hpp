@@ -16,6 +16,11 @@
 
 namespace Cory {
 
+// provides access to the framegraph resources and metadata
+struct RenderContext {
+    // TBD
+};
+
 /**
  * passed to the render pass coroutines when they actually execute.
  *
@@ -25,8 +30,9 @@ namespace Cory {
  * member.
  */
 struct RenderInput {
-    struct RenderPassResources *resources{};
-    struct RenderContext *context{};
+    struct TextureManager *resources{};
+    RenderContext *context{};
+    // eventually, add accessors modify descriptors, push constants etc
     CommandList *cmd{};
 };
 
@@ -105,7 +111,7 @@ class Framegraph : NoCopy {
      */
     std::pair<TextureInfo, TextureState> declareOutput(TransientTextureHandle handle);
 
-    [[nodiscard]] const TextureResourceManager &resources() const;
+    [[nodiscard]] const TextureManager &resources() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &outputs() const;
 
@@ -117,7 +123,7 @@ class Framegraph : NoCopy {
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
     /// coroHandle
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle);
-    TextureResourceManager &resources();
+    TextureManager &resources();
 
     /**
      * @brief resolve which render tasks need to be executed for requested resources

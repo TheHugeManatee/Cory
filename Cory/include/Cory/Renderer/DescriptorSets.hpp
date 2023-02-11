@@ -83,16 +83,13 @@ class DescriptorSets {
      * @param instanceIndex
      * @param textures      the textures to update
      *
-     * TODO: refactor TextureManager such that we can pass span of handles here and look them up
-     *       in the ResourceManager, instead of having to do the lookup beforehand
-     *
      * @note This write will not be issued until @b flushWrites() is called.
      */
     DescriptorSets &write(DescriptorSets::SetType type,
                           gsl::index instanceIndex,
                           gsl::span<VkImageLayout> layouts,
-                          gsl::span<Magnum::Vk::ImageView> images,
-                          gsl::span<Magnum::Vk::Sampler> samplers);
+                          gsl::span<ImageViewHandle> images,
+                          gsl::span<SamplerHandle> samplers);
 
     // TODO implement a write for the Buffers
 

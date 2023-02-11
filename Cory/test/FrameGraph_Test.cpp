@@ -154,7 +154,7 @@ RenderTaskDeclaration<MainOut> mainPass(Builder builder,
             : builder.create("colorTexture",
                              depthInfo.size,
                              PixelFormat::RGBA8Srgb,
-                             Sync::AccessType::ColorAttachmentWrite);
+                             Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
     auto normalOut = [&]() {
         if (normalInput) {
             return builder.readWrite(normalInput, Cory::Sync::AccessType::ColorAttachmentReadWrite)
@@ -221,7 +221,8 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 
     auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("depthPrepass"), {800, 600, 1});
     auto depthTex = depthPass.output().depthTexture;
-    auto mainPass = passes::mainPass(graph.declareTask("MainPass"), {}, {}, depthTex);
+    auto mainPass =
+        passes::mainPass(graph.declareTask("MainPass"), NullHandle, NullHandle, depthTex);
 
     auto addMainPass = passes::mainPass(graph.declareTask("Main Lines"),
                                         mainPass.output().color,

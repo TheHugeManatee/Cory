@@ -1,8 +1,8 @@
 #include <Cory/Framegraph/TransientRenderPass.hpp>
 
+#include "Cory/Framegraph/TextureManager.hpp"
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
@@ -127,7 +127,7 @@ class PipelineCache {
 
 TransientRenderPass::TransientRenderPass(Context &ctx,
                                          std::string_view name,
-                                         TextureResourceManager &textures)
+                                         TextureManager &textures)
     : ctx_{&ctx}
     , name_{name}
     , textures_{&textures}
@@ -212,7 +212,7 @@ VkRenderingAttachmentInfo TransientRenderPass::makeAttachmentInfo(TextureHandle 
 {
     return VkRenderingAttachmentInfo{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = textures_->imageView(handle),
+        .imageView = ctx_->resources()[textures_->imageView(handle)],
         .imageLayout = Sync::GetVkImageLayout(textures_->state(handle).lastAccess),
         .loadOp = attachmentKind.loadOp,
         .storeOp = attachmentKind.storeOp,
@@ -254,7 +254,7 @@ VkRect2D TransientRenderPass::determineRenderArea()
 
 TransientRenderPassBuilder::TransientRenderPassBuilder(Context &ctx,
                                                        std::string_view name,
-                                                       TextureResourceManager &textures)
+                                                       TextureManager &textures)
     : renderPass_{ctx, name, textures}
 {
 }
@@ -273,7 +273,7 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attach(TransientTextureH
                                                                VkClearColorValue clearValue)
 {
     renderPass_.colorAttachments_.emplace_back(
-        handle.texture, AttachmentKind{loadOp, storeOp, {.color = clearValue}});
+        handle, AttachmentKind{loadOp, storeOp, {.color = clearValue}});
     return *this;
 }
 
@@ -284,7 +284,7 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attachDepth(TransientTex
 {
 
     renderPass_.depthAttachment_ = std::make_pair(
-        handle.texture,
+        handle,
         AttachmentKind{loadOp, storeOp, {.depthStencil = {.depth = clearValue, .stencil = 0}}});
     return *this;
 }
@@ -295,7 +295,7 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attachStencil(TransientT
                                                                       uint32_t clearValue)
 {
     renderPass_.stencilAttachment_ = std::make_pair(
-        handle.texture,
+        handle,
         AttachmentKind{loadOp, storeOp, {.depthStencil = {.depth = 1.0f, .stencil = clearValue}}});
     return *this;
 }

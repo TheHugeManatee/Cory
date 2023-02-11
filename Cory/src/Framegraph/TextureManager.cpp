@@ -1,8 +1,9 @@
-#include <Cory/Framegraph/TextureManager.hpp>
+#include "Cory/Framegraph/TextureManager.hpp"
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 #include <Magnum/Vk/Device.h>
@@ -18,8 +19,8 @@ namespace Cory {
 struct TextureResource {
     TextureInfo info;
     TextureState state;
-    Vk::Image image{Corrade::NoCreate};
-    Vk::ImageView view{Corrade::NoCreate};
+    ImageHandle image;
+    ImageViewHandle view;
 };
 
 struct TextureManagerPrivate {
@@ -27,51 +28,55 @@ struct TextureManagerPrivate {
     SlotMap<TextureResource> textureResources_;
 };
 
-TextureResourceManager::TextureResourceManager(Context &ctx)
+TextureManager::TextureManager(Context &ctx)
     : data_{std::make_unique<TextureManagerPrivate>()}
 {
     data_->ctx_ = &ctx;
 }
 
-TextureResourceManager::~TextureResourceManager() = default;
-TextureResourceManager::TextureResourceManager(TextureResourceManager &&) = default;
-TextureResourceManager &TextureResourceManager::operator=(TextureResourceManager &&) = default;
+TextureManager::~TextureManager() = default;
+TextureManager::TextureManager(TextureManager &&) = default;
+TextureManager &TextureManager::operator=(TextureManager &&) = default;
 
-TextureHandle TextureResourceManager::declareTexture(TextureInfo info)
+TextureHandle TextureManager::declareTexture(TextureInfo info)
 {
     CO_CORE_DEBUG("Declaring '{}' of {} ({}, {} samples)",
                   info.name,
                   info.size,
                   info.format,
                   info.sampleCount);
+
     auto handle = data_->textureResources_.emplace(TextureResource{
         info,
         TextureState{.lastAccess = Sync::AccessType::None, .status = TextureMemoryStatus::Virtual},
-        Vk::Image{Corrade::NoCreate},
-        Vk::ImageView{Corrade::NoCreate}});
+        NullHandle,
+        NullHandle});
     return handle;
 }
 
-TextureHandle TextureResourceManager::registerExternal(TextureInfo info,
-                                                       Sync::AccessType lastWriteAccess,
-                                                       Magnum::Vk::Image &resource,
-                                                       Magnum::Vk::ImageView &resourceView)
+TextureHandle TextureManager::registerExternal(TextureInfo info,
+                                               Sync::AccessType lastWriteAccess,
+                                               Magnum::Vk::Image &resource,
+                                               Magnum::Vk::ImageView &resourceView)
 {
-    auto handle = data_->textureResources_.emplace(TextureResource{
-        std::move(info),
-        TextureState{.lastAccess = lastWriteAccess, .status = TextureMemoryStatus::External},
-        Vk::Image::wrap(data_->ctx_->device(), resource, resource.format()),
-        Vk::ImageView::wrap(data_->ctx_->device(), resourceView)});
+    auto &resources = data_->ctx_->resources();
+    auto handle = data_->textureResources_.emplace(
+        TextureResource{.info = std::move(info),
+                        .state = TextureState{.lastAccess = lastWriteAccess,
+                                              .status = TextureMemoryStatus::External},
+                        .image = resources.wrapImage(info.name, resource),
+                        .view = resources.wrapImageView(info.name, resourceView)});
 
     return handle;
 }
 
-void TextureResourceManager::allocate(TextureHandle handle)
+void TextureManager::allocate(TextureHandle handle)
 {
     TextureResource &res = data_->textureResources_[handle];
+    auto &resources = data_->ctx_->resources();
     CO_CORE_DEBUG("Allocating '{}' of {} ({})", res.info.name, res.info.size, res.info.format);
-    // TODO allocate from a big buffer instead of individual allocations
 
+    // TODO allocate from a big buffer instead of individual allocations
     {
         const auto size = Magnum::Vector2i{gsl::narrow<int32_t>(res.info.size.x),
                                            gsl::narrow<int32_t>(res.info.size.y)};
@@ -85,20 +90,17 @@ void TextureResourceManager::allocate(TextureHandle handle)
             usage, res.info.format, size, levels, res.info.sampleCount, initialLayout};
 
         // todo eventually want to externalize these memory flags
-        res.image = Vk::Image{data_->ctx_->device(), createInfo, Vk::MemoryFlag::DeviceLocal};
-
-        nameVulkanObject(data_->ctx_->device(), res.image, res.info.name);
+        res.image = resources.createImage(res.info.name, createInfo, Vk::MemoryFlag::DeviceLocal);
     }
 
     {
-        const Vk::ImageViewCreateInfo2D createInfo{res.image};
-        res.view = Vk::ImageView{data_->ctx_->device(), createInfo};
-        nameVulkanObject(data_->ctx_->device(), res.view, res.info.name);
+        const Vk::ImageViewCreateInfo2D createInfo{resources[res.image]};
+        res.view = resources.createImageView(res.info.name, createInfo);
     }
     res.state.status = TextureMemoryStatus::Allocated;
 }
 
-void TextureResourceManager::allocate(const std::vector<TextureHandle> &handles)
+void TextureManager::allocate(const std::vector<TextureHandle> &handles)
 {
     for (const auto &handle : handles) {
         auto &res = data_->textureResources_[handle];
@@ -109,9 +111,9 @@ void TextureResourceManager::allocate(const std::vector<TextureHandle> &handles)
     }
 }
 
-Sync::ImageBarrier TextureResourceManager::synchronizeTexture(TextureHandle handle,
-                                                              Sync::AccessType access,
-                                                              ImageContents contentsMode)
+Sync::ImageBarrier TextureManager::synchronizeTexture(TextureHandle handle,
+                                                      Sync::AccessType access,
+                                                      ImageContents contentsMode)
 {
     const auto &info = data_->textureResources_[handle].info;
     auto aspectMask = VkImageAspectFlags(imageAspectsFor(info.format));
@@ -126,7 +128,7 @@ Sync::ImageBarrier TextureResourceManager::synchronizeTexture(TextureHandle hand
                                // todo: we should get family somewhere else and not from the context
                                .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
                                .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
-                               .image = image(handle),
+                               .image = data_->ctx_->resources()[image(handle)],
                                .subresourceRange = {
                                    .aspectMask = aspectMask,
                                    .baseMipLevel = 0,
@@ -145,26 +147,26 @@ Sync::ImageBarrier TextureResourceManager::synchronizeTexture(TextureHandle hand
     return barrier;
 }
 
-const TextureInfo &TextureResourceManager::info(TextureHandle handle) const
+const TextureInfo &TextureManager::info(TextureHandle handle) const
 {
     return data_->textureResources_[handle].info;
 }
 
-Magnum::Vk::Image &TextureResourceManager::image(TextureHandle handle)
+ImageHandle TextureManager::image(TextureHandle handle) const
 {
     return data_->textureResources_[handle].image;
 }
 
-Magnum::Vk::ImageView &TextureResourceManager::imageView(TextureHandle handle)
+ImageViewHandle TextureManager::imageView(TextureHandle handle) const
 {
     return data_->textureResources_[handle].view;
 }
 
-TextureState TextureResourceManager::state(TextureHandle handle) const
+TextureState TextureManager::state(TextureHandle handle) const
 {
     return data_->textureResources_[handle].state;
 }
 
-void TextureResourceManager::clear() { data_->textureResources_.clear(); }
+void TextureManager::clear() { data_->textureResources_.clear(); }
 
 } // namespace Cory

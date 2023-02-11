@@ -45,7 +45,6 @@ class ResourceManager : NoCopy {
     /// query the number of resources in use
     std::unordered_map<ResourceType, size_t> resourcesInUse() const;
 
-
     /**
      * @name Shaders
      */
@@ -81,11 +80,34 @@ class ResourceManager : NoCopy {
     ///@}
 
     /**
+     * @name Images
+     */
+    ///@{
+    ImageHandle createImage(std::string_view name,
+                            const Magnum::Vk::ImageCreateInfo &createInfo,
+                            Magnum::Vk::MemoryFlags memoryFlags);
+    ImageHandle wrapImage(std::string_view name, Magnum::Vk::Image &resource);
+    Magnum::Vk::Image &operator[](ImageHandle handle);
+    void release(ImageHandle handle);
+    ///@}
+
+    /**
+     * @name ImageViews
+     */
+    ///@{
+    ImageViewHandle createImageView(std::string_view name,
+                                    const Magnum::Vk::ImageViewCreateInfo &createInfo);
+    ImageViewHandle wrapImageView(std::string_view name, Magnum::Vk::ImageView &resource);
+    Magnum::Vk::ImageView &operator[](ImageViewHandle handle);
+    void release(ImageViewHandle handle);
+    ///@}
+
+    /**
      * @name Samplers
      */
     ///@{
     SamplerHandle createSampler(std::string_view name,
-                                 const Magnum::Vk::SamplerCreateInfo &createInfo);
+                                const Magnum::Vk::SamplerCreateInfo &createInfo);
     Magnum::Vk::Sampler &operator[](SamplerHandle handle);
     void release(SamplerHandle handle);
     ///@}
@@ -94,8 +116,9 @@ class ResourceManager : NoCopy {
      * @name Descriptor layouts
      */
     ///@{
-    DescriptorSetLayoutHandle createDescriptorLayout(std::string_view name,
-                                const Magnum::Vk::DescriptorSetLayoutCreateInfo &createInfo);
+    DescriptorSetLayoutHandle
+    createDescriptorLayout(std::string_view name,
+                           const Magnum::Vk::DescriptorSetLayoutCreateInfo &createInfo);
     Magnum::Vk::DescriptorSetLayout &operator[](DescriptorSetLayoutHandle handle);
     void release(DescriptorSetLayoutHandle handle);
     ///@}

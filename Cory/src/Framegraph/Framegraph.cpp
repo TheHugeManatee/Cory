@@ -32,7 +32,7 @@ struct FramegraphPrivate {
     }
 
     Context *ctx;
-    TextureResourceManager resources;
+    TextureManager resources;
     std::vector<TransientTextureHandle> externalInputs;
     std::vector<TransientTextureHandle> outputs;
 
@@ -112,7 +112,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
             .kind = resourceInfo.kind,
             .task = handle,
             .resource = resourceInfo.handle,
-            .stateBefore = data_->resources.state(resourceInfo.handle.texture).lastAccess,
+            .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
             .stateAfter = resourceInfo.access});
 
         // only discard if it is not a read/write dependency
@@ -121,7 +121,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
                                       : ImageContents::Discard;
 
         return data_->resources.synchronizeTexture(
-            resourceInfo.handle.texture, resourceInfo.access, contentsMode);
+            resourceInfo.handle, resourceInfo.access, contentsMode);
     };
 
     // fill the barriers from the inputs and outputs
@@ -150,7 +150,7 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
     auto handle =
         data_->resources.registerExternal(std::move(info), lastWriteAccess, image, imageView);
 
-    TransientTextureHandle thandle{.texture = handle, .version = 0};
+    TransientTextureHandle thandle{handle};
 
     data_->externalInputs.push_back(thandle);
     return thandle;
@@ -159,7 +159,7 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
 std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureHandle handle)
 {
     data_->outputs.push_back(handle);
-    return {data_->resources.info(handle.texture), data_->resources.state(handle.texture)};
+    return {data_->resources.info(handle), data_->resources.state(handle)};
 }
 
 ExecutionInfo Framegraph::compile()
@@ -191,8 +191,8 @@ void Framegraph::enqueueRenderPass(RenderTaskHandle passHandle,
     data_->renderTasks[passHandle].coroHandle = coroHandle;
 }
 
-TextureResourceManager &Framegraph::resources() { return data_->resources; }
-const TextureResourceManager &Framegraph::resources() const { return data_->resources; }
+TextureManager &Framegraph::resources() { return data_->resources; }
+const TextureManager &Framegraph::resources() const { return data_->resources; }
 const std::vector<TransientTextureHandle> &Framegraph::externalInputs() const
 {
     return data_->externalInputs;
@@ -221,7 +221,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
             if (kind.is_set(TaskDependencyKindBits::Write)) {
                 resourceToTask[dependency.handle] = taskHandle;
             }
-            textures[dependency.handle] = data_->resources.info(dependency.handle.texture);
+            textures[dependency.handle] = data_->resources.info(dependency.handle);
         }
     }
 
@@ -233,7 +233,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     while (!nextResourcesToResolve.empty()) {
         auto nextResource = nextResourcesToResolve.front();
         nextResourcesToResolve.pop_front();
-        requiredResources.push_back(nextResource.texture);
+        requiredResources.push_back(nextResource);
 
         // determine the task that writes/creates the resource
         auto writingTaskIt = resourceToTask.find(nextResource);
@@ -245,15 +245,15 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                 "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not created "
                 "by any render task",
                 textures[nextResource].name,
-                nextResource.version,
-                nextResource.texture);
+                nextResource.version(),
+                nextResource.texture());
             return {};
         }
 
         const RenderTaskHandle writingTask = writingTaskIt->second;
         CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render task '{}'",
                       textures[nextResource].name,
-                      nextResource.version,
+                      nextResource.version(),
                       data_->renderTasks[writingTask].name);
         data_->renderTasks[writingTask].executionPriority = ++executionPrio;
 
@@ -263,7 +263,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                  ranges::views::filter([](const auto &outputDesc) {
                      return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
                  })) {
-            requiredResources.push_back(created.handle.texture);
+            requiredResources.push_back(created.handle);
         }
 
         // enqueue the inputs of the task for resolution
@@ -273,7 +273,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                 CO_CORE_TRACE("Requesting input resource for {}: '{} v{}'",
                               data_->renderTasks[writingTask].name,
                               textures[it.second].name,
-                              it.second.version);
+                              it.second.version());
                 return it.second;
             });
     }
@@ -306,7 +306,7 @@ RenderInput Framegraph::renderInput(RenderTaskHandle passHandle)
 {
     CO_CORE_ASSERT(data_->commandListInProgress, "No command list recording in progress!");
     return {
-        .resources = nullptr,
+        .resources = &data_->resources,
         .context = nullptr,
         .cmd = data_->commandListInProgress,
     };

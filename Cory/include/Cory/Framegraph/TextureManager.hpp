@@ -16,6 +16,9 @@ namespace Cory {
  * This class is tightly coupled with the @a Framegraph and @a Builder, not
  * intended to be used directly.
  *
+ * It is intended to capture all transient resources for one frame, and is expected to be cleared
+ * fully after the frame has been rendered.
+ *
  * Implementation Notes:
  *  - Currently always creates an Image and corresponding ImageView, even
  *    though technically creating an ImageView and sampler could be avoided
@@ -23,13 +26,13 @@ namespace Cory {
  *  - Currently, allocates each Image separately - technically, could use an
  *    GPU arena for this
  */
-class TextureResourceManager : NoCopy {
+class TextureManager : NoCopy {
   public:
-    explicit TextureResourceManager(Context &ctx);
-    ~TextureResourceManager();
+    explicit TextureManager(Context &ctx);
+    ~TextureManager();
 
-    TextureResourceManager(TextureResourceManager &&);
-    TextureResourceManager &operator=(TextureResourceManager &&);
+    TextureManager(TextureManager &&);
+    TextureManager &operator=(TextureManager &&);
 
     TextureHandle declareTexture(TextureInfo info);
 
@@ -53,8 +56,8 @@ class TextureResourceManager : NoCopy {
     synchronizeTexture(TextureHandle handle, Sync::AccessType access, ImageContents contentsMode);
 
     [[nodiscard]] const TextureInfo &info(TextureHandle handle) const;
-    Magnum::Vk::Image &image(TextureHandle handle);
-    Magnum::Vk::ImageView &imageView(TextureHandle handle);
+    [[nodiscard]] ImageHandle image(TextureHandle handle) const;
+    [[nodiscard]] ImageViewHandle imageView(TextureHandle handle) const;
     [[nodiscard]] TextureState state(TextureHandle handle) const;
 
     void clear();

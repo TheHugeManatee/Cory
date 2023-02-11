@@ -12,7 +12,7 @@ struct RenderTaskInfo;
 struct RenderTaskExecutionAwaiter;
 class Framegraph;
 class Builder;
-class TextureResourceManager;
+class TextureManager;
 class CommandList;
 class FramegraphVisualizer;
 
@@ -64,14 +64,40 @@ struct TextureState {
     TextureMemoryStatus status{TextureMemoryStatus::Virtual};
 };
 
-using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureResourceManager>;
-struct TransientTextureHandle {
-    TextureHandle texture{};
-    uint32_t version{0xFFFFFFFF};
+using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureManager>;
+class TransientTextureHandle {
+  public:
+    TransientTextureHandle() = default;
+    /* implicit */ TransientTextureHandle(NullHandle_t null)
+        : texture_{null}
+    {
+    }
+    TransientTextureHandle(TextureHandle texture)
+        : texture_{texture}
+        , version_{0} {};
+
+    TransientTextureHandle operator+(uint32_t inc)
+    {
+        return TransientTextureHandle{texture_, version_ + inc};
+    }
+
+    // implicit conversion to the handle it wraps
+    operator TextureHandle() const { return texture_; }
+
+    TextureHandle texture() const { return texture_; }
+    uint32_t version() const { return version_; }
+
     auto operator<=>(const TransientTextureHandle &) const = default;
-    explicit operator bool() const { return texture.valid() && version != 0xFFFFFFFF; }
+    explicit operator bool() const { return texture_.valid() && version_ != 0xFFFFFFFF; }
+
+  private:
+    TransientTextureHandle(TextureHandle texture, uint32_t version)
+        : texture_{texture}
+        , version_{version} {};
+    TextureHandle texture_{};
+    uint32_t version_{0xFFFFFFFF};
 };
-using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
+using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureManager>;
 
 } // namespace Cory
 
@@ -79,6 +105,6 @@ using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceMana
 template <> struct std::hash<Cory::TransientTextureHandle> {
     std::size_t operator()(const Cory::TransientTextureHandle &s) const noexcept
     {
-        return Cory::hashCompose(s.version, s.texture);
+        return Cory::hashCompose(s.version(), s.texture());
     }
 };

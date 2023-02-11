@@ -161,6 +161,7 @@ Context::Context()
     data_->commandPool =
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
 
+    // delayed-init of the resource manager
     data_->resources.setContext(*this);
 
     // TODO descriptorsetmanager should move to more frontend-facing object like swapchain, window,

@@ -1,6 +1,6 @@
 #include "FramegraphVisualizer.h"
 
-#include <Cory/Framegraph/TextureManager.hpp>
+#include "Cory/Framegraph/TextureManager.hpp"
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find_if.hpp>
@@ -51,7 +51,7 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
         index.tasks[taskHandle].executed = ranges::contains(executionInfo.tasks, taskHandle);
 
         for (const RenderTaskInfo::Dependency &dependency : passInfo.dependencies) {
-            auto info = graph_.resources().info(dependency.handle.texture);
+            auto info = graph_.resources().info(dependency.handle);
 
             index.textures[dependency.handle].handle = dependency.handle;
             index.textures[dependency.handle].info = info;
@@ -75,12 +75,12 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
             index.textures.at(externalInput).external = true;
         }
         else {
-            auto inputInfo = graph_.resources().info(externalInput.texture);
-            index.textures.insert(std::make_pair(
-                externalInput,
-                Index::TextureData{.handle = externalInput,
-                                   .info = graph_.resources().info(externalInput.texture),
-                                   .external = true}));
+            auto inputInfo = graph_.resources().info(externalInput);
+            index.textures.insert(
+                std::make_pair(externalInput,
+                               Index::TextureData{.handle = externalInput,
+                                                  .info = graph_.resources().info(externalInput),
+                                                  .external = true}));
         }
     }
     // mark all output resources
@@ -90,7 +90,7 @@ void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInf
     // mark all texture entries that refer to an allocated resource as allocated
     for (auto allocated : executionInfo.resources) {
         for (auto &[h, data] : index.textures) {
-            if (data.handle.texture == allocated) { data.allocated = true; }
+            if (data.handle.texture() == allocated) { data.allocated = true; }
         }
     }
 }
@@ -110,7 +110,7 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     auto make_label = [](const auto &thing) -> std::string {
         using ThingType = std::decay_t<decltype(thing)>;
         if constexpr (std::is_same_v<ThingType, Index::TextureData>) {
-            return fmt::format("{} v{}", thing.info.name, thing.handle.version);
+            return fmt::format("{} v{}", thing.info.name, thing.handle.version());
         }
         else if constexpr (std::is_same_v<ThingType, Index::TaskData>) {
             return thing.info.name;

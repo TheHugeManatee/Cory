@@ -1,8 +1,8 @@
 #include <Cory/Framegraph/Builder.hpp>
 
+#include "Cory/Framegraph/TextureManager.hpp"
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
 
 #include <Magnum/Vk/Image.h>
 
@@ -31,8 +31,7 @@ TransientTextureHandle Builder::create(std::string name,
 {
     const TextureInfo info{.name = std::move(name), .size = size, .format = format};
 
-    auto handle = TransientTextureHandle{.texture = framegraph_.resources().declareTexture(info),
-                                         .version = 0};
+    auto handle = TransientTextureHandle{framegraph_.resources().declareTexture(info)};
 
     info_.dependencies.push_back(RenderTaskInfo::Dependency{
         .kind = TaskDependencyKindBits::CreateWrite,
@@ -46,22 +45,21 @@ TextureInfo Builder::read(TransientTextureHandle &handle, Sync::AccessType readA
 {
     info_.dependencies.push_back(RenderTaskInfo::Dependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
-    return framegraph_.resources().info(handle.texture);
+    return framegraph_.resources().info(handle.texture());
 }
 
 std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHandle handle,
                                                               Sync::AccessType writeAccess)
 {
     // increase the version of the texture handle to record the modification
-    auto outputHandle =
-        TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
+    auto outputHandle = handle + 1;
     info_.dependencies.push_back({
         .kind = TaskDependencyKindBits::Write,
         .handle = outputHandle,
         .access = writeAccess,
     });
 
-    return {outputHandle, framegraph_.resources().info(handle.texture)};
+    return {outputHandle, framegraph_.resources().info(outputHandle.texture())};
 }
 
 std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextureHandle handle,
@@ -74,8 +72,7 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextu
     });
 
     // increase the version of the texture handle to record the modification
-    auto outputHandle =
-        TransientTextureHandle{.texture = handle.texture, .version = handle.version + 1};
+    auto outputHandle = handle + 1;
 
     info_.dependencies.push_back({
         .kind = TaskDependencyKindBits::ReadWrite,
@@ -83,7 +80,7 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextu
         .access = readWriteAccess,
     });
 
-    return {outputHandle, framegraph_.resources().info(handle.texture)};
+    return {outputHandle, framegraph_.resources().info(handle.texture())};
 }
 
 TransientRenderPassBuilder Builder::declareRenderPass(std::string_view name)

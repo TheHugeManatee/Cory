@@ -41,7 +41,7 @@ class TransientRenderPass : NoCopy {
 
   private:
     friend class TransientRenderPassBuilder;
-    TransientRenderPass(Context &ctx, std::string_view name, TextureResourceManager &textures);
+    TransientRenderPass(Context &ctx, std::string_view name, TextureManager &textures);
 
     int32_t determineSampleCount() const;
     VkRenderingAttachmentInfo makeAttachmentInfo(TextureHandle handle,
@@ -49,7 +49,7 @@ class TransientRenderPass : NoCopy {
 
     Context* ctx_;
     std::string_view name_;
-    TextureResourceManager *textures_;
+    TextureManager *textures_;
 
     std::vector<ShaderHandle> shaders_;
     std::vector<std::pair<TextureHandle, AttachmentKind>> colorAttachments_;
@@ -67,8 +67,7 @@ class TransientRenderPass : NoCopy {
 class TransientRenderPassBuilder : NoCopy, NoMove {
   public:
     TransientRenderPassBuilder(Context &ctx,
-                               std::string_view name,
-                               TextureResourceManager &textures);
+                               std::string_view name, TextureManager &textures);
 
     ~TransientRenderPassBuilder();
 

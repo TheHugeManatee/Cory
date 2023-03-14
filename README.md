@@ -25,12 +25,16 @@ As such, it uses features that are only supported in rather modern compilers.
 - descriptor set/shader uniforms abstraction
     - [x] basics demo done
     - [ ] manage descriptors and sets via ResourceManager
+      - [x] Images, Samplers, Buffers, DescriptorSets all managed
     - [ ] define a global descriptor set 0 that is managed by cory itself
 - Render Graphs/Frame Graphs
     - [x] basic coroutine-based API and render pass resolution via graph search
     - [x] automatically create render passes and layouts
     - [x] perform automatic resource transitions
     - [x] actually execute render pass code that renders stuff
+    - [x] implement a multi-pass example that reads from a texture
+    - [x] vulkan object debug names set up
+    - [ ] extend multi-pass to dynamic uniforms & interactivity
     - [ ] proper allocation of transient textures from arena
     - [ ] create AccessInfo templates for most common usages
     - [ ] automatically figure out required image usage for a transient image
@@ -40,17 +44,24 @@ As such, it uses features that are only supported in rather modern compilers.
     - [x] basic mouse and kb event forwarding
     - [ ] better abstraction/encapsulation
     - [ ] design simple coroutine-based event system for "game" logic
+- Application-level memory management
+    - [ ] Use std::pmr more consistently to improve memory allocations
+    - [ ] introduce per-frame memory arena into `FrameContext`
+    - [ ] use std::pmr based allocator for Vulkan API calls
 
 #### Mid Term
 
 - GameObject system (Entities + Components, not ECS)
 - Implement a simple Volume Raymarcher
 - Extend usage of c++20 coroutines where meaningful
+  - [x] use coroutines for framegraph execution
+  - [ ] use coroutines for "game" logic
 - Multithreading?!
     - Multithreaded framegraph recording?
     - Offload resource creation (shaders/pipelines) to another thread (pool)
     - explicit sync with queues where necessary
-- C++ Modules (if possible)
+    - texture uploads etc.
+- C++ Modules (whenever cmake and compiler support actually catches up)
 
 #### Long Term
 

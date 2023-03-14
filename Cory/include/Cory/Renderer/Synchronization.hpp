@@ -7,7 +7,7 @@
 //   - Remove the THSVS prefix from functions and structures in favor of a namespace
 //   - remove (comment out) many enum values for which my vulkan header did not have the right enum
 //     values
-//   - C++ify the interface, replacing count+pointer with std::vector where applicable
+//   - C++ify the interface, replacing count+pointer with std::vector/span where applicable
 //   - Rename enum values to avoid SCREAMING_SNAKE_CASE in favor of CamelCase + scoped enums
 
 // The library is originally under the MIT license:

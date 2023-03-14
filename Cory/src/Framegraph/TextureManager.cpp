@@ -1,4 +1,4 @@
-#include "Cory/Framegraph/TextureManager.hpp"
+#include <Cory/Framegraph/TextureManager.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
@@ -10,7 +10,6 @@
 #include <Magnum/Vk/ImageCreateInfo.h>
 #include <Magnum/Vk/ImageViewCreateInfo.h>
 #include <gsl/narrow>
-#include <utility>
 
 namespace Vk = Magnum::Vk;
 
@@ -83,19 +82,21 @@ void TextureManager::allocate(TextureHandle handle)
         static const int32_t levels = 1;
         static const Magnum::Vk::ImageLayout initialLayout{Magnum::Vk::ImageLayout::Undefined};
 
-        auto usage = isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
-                                                    : Vk::ImageUsage::ColorAttachment;
+        Vk::ImageUsages usage {isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
+                                                    : Vk::ImageUsage::ColorAttachment};
+        usage |= Vk::ImageUsage::Sampled;
+        usage |= Vk::ImageUsage::InputAttachment;
 
         const Vk::ImageCreateInfo2D createInfo{
             usage, res.info.format, size, levels, res.info.sampleCount, initialLayout};
 
         // todo eventually want to externalize these memory flags
-        res.image = resources.createImage(res.info.name, createInfo, Vk::MemoryFlag::DeviceLocal);
+        res.image = resources.createImage(fmt::format("{} (IMG)", res.info.name), createInfo, Vk::MemoryFlag::DeviceLocal);
     }
 
     {
         const Vk::ImageViewCreateInfo2D createInfo{resources[res.image]};
-        res.view = resources.createImageView(res.info.name, createInfo);
+        res.view = resources.createImageView(fmt::format("{} (VIEW)", res.info.name), createInfo);
     }
     res.state.status = TextureMemoryStatus::Allocated;
 }
@@ -125,9 +126,9 @@ Sync::ImageBarrier TextureManager::synchronizeTexture(TextureHandle handle,
                                .prevLayout = Sync::ImageLayout::Optimal,
                                .nextLayout = Sync::ImageLayout::Optimal,
                                .discardContents = discard,
-                               // todo: we should get family somewhere else and not from the context
-                               .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
-                               .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamily(),
+                               // todo: probably problematic once we actually use more queues
+                               .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                               .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                .image = data_->ctx_->resources()[image(handle)],
                                .subresourceRange = {
                                    .aspectMask = aspectMask,

@@ -32,7 +32,7 @@ struct DepthPassOutputs {
 RenderTaskDeclaration<DepthPassOutputs> depthPass(Context &ctx, Builder builder, glm::u32vec3 size)
 {
     auto depth = builder.create(
-        "depthTexture", size, PixelFormat::Depth32F, Sync::AccessType::DepthStencilAttachmentWrite);
+        "TEX_depth", size, PixelFormat::Depth32F, Sync::AccessType::DepthStencilAttachmentWrite);
     DepthPassOutputs outputs{depth};
 
     static ShaderHandle vertexShader = ctx.resources().createShader(
@@ -77,12 +77,12 @@ struct DepthDebugOut {
 RenderTaskDeclaration<DepthDebugOut> depthDebug(Framegraph &graph,
                                                 TransientTextureHandle depthInput)
 {
-    Builder builder = graph.declareTask("DepthDebug");
+    Builder builder = graph.declareTask("TASK_DepthDebug");
 
     auto depthInfo = builder.read(
         depthInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
-    auto depthVis = builder.create("depthDebugVis",
+    auto depthVis = builder.create("TEX_depthDebugVis",
                                    depthInfo.size,
                                    PixelFormat::RGBA8Srgb,
                                    Sync::AccessType::ColorAttachmentWrite);
@@ -99,12 +99,12 @@ struct NormalDebugOut {
 RenderTaskDeclaration<NormalDebugOut> normalDebug(Framegraph &graph,
                                                   TransientTextureHandle normalInput)
 {
-    Builder builder = graph.declareTask("NormalDebug");
+    Builder builder = graph.declareTask("TASK_NormalDebug");
 
     auto normalInfo = builder.read(
         normalInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
-    auto normalVis = builder.create("normalDebugVis",
+    auto normalVis = builder.create("TEX_normalDebugVis",
                                     normalInfo.size,
                                     PixelFormat::RGBA8Srgb,
                                     Sync::AccessType::ColorAttachmentWrite);
@@ -122,14 +122,16 @@ RenderTaskDeclaration<DebugOut> debugGeneral(Framegraph &graph,
                                              std::vector<TransientTextureHandle> debugTextures,
                                              gsl::index debugViewIndex)
 {
-    Builder builder = graph.declareTask("GeneralDebug");
+    Builder builder = graph.declareTask("TASK_GeneralDebug");
 
     auto &textureToDebug = debugTextures[debugViewIndex];
     auto dbgInfo = builder.read(
         textureToDebug, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
-    auto depthVis = builder.create(
-        "debugVis", dbgInfo.size, PixelFormat::RGBA8Srgb, Sync::AccessType::ColorAttachmentWrite);
+    auto depthVis = builder.create("TEX_debugVis",
+                                   dbgInfo.size,
+                                   PixelFormat::RGBA8Srgb,
+                                   Sync::AccessType::ColorAttachmentWrite);
 
     co_yield DebugOut{depthVis};
     RenderInput render = co_await builder.finishDeclaration();
@@ -151,7 +153,7 @@ RenderTaskDeclaration<MainOut> mainPass(Builder builder,
     auto colorOut =
         colorInput
             ? builder.readWrite(colorInput, Cory::Sync::AccessType::ColorAttachmentReadWrite).first
-            : builder.create("colorTexture",
+            : builder.create("TEX_color",
                              depthInfo.size,
                              PixelFormat::RGBA8Srgb,
                              Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
@@ -160,7 +162,7 @@ RenderTaskDeclaration<MainOut> mainPass(Builder builder,
             return builder.readWrite(normalInput, Cory::Sync::AccessType::ColorAttachmentReadWrite)
                 .first;
         }
-        return builder.create("normalTexture",
+        return builder.create("TEX_normal",
                               depthInfo.size,
                               PixelFormat::RGBA8Unorm,
                               Sync::AccessType::ColorAttachmentWrite);
@@ -175,18 +177,16 @@ RenderTaskDeclaration<MainOut> mainPass(Builder builder,
 struct PostProcessOut {
     TransientTextureHandle color;
 };
-RenderTaskDeclaration<PostProcessOut> postProcess(Framegraph &graph,
+RenderTaskDeclaration<PostProcessOut> postProcess(Builder builder,
                                                   TransientTextureHandle currentColorInput,
                                                   TransientTextureHandle previousColorInput)
 {
-    Builder builder = graph.declareTask("Postprocess");
-
     auto curColorInfo = builder.read(
         currentColorInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
     auto prevColorInfo = builder.read(
         previousColorInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
-    auto color = builder.create("postprocessTexture",
+    auto color = builder.create("TEX_postprocess",
                                 curColorInfo.size,
                                 PixelFormat::RGBA8Srgb,
                                 Sync::AccessType::ColorAttachmentWrite);
@@ -205,26 +205,29 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     namespace Vk = Magnum::Vk;
 
     Framegraph graph(t.ctx());
-    Vk::Image prevFrame{t.ctx().device(),
-                        Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment,
-                                              Vk::PixelFormat::RGBA8Srgb,
-                                              Magnum::Vector2i{1024, 768},
-                                              1},
-                        Vk::MemoryFlag::DeviceLocal};
+    Vk::Image prevFrame{
+        t.ctx().device(),
+        Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::Sampled,
+                              Vk::PixelFormat::RGBA8Srgb,
+                              Magnum::Vector2i{1024, 768},
+                              1},
+        Vk::MemoryFlag::DeviceLocal};
+    nameVulkanObject(t.ctx().device(), prevFrame, "TEX_previousFrameColor (IMG)");
     Vk::ImageView prevFrameView{t.ctx().device(), Vk::ImageViewCreateInfo2D{prevFrame}};
+    nameVulkanObject(t.ctx().device(), prevFrameView, "TEX_previousFrameColor (VIEW)");
 
     const TransientTextureHandle prevFrameColor = graph.declareInput(
-        {"previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
+        {"TEX_previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
         Sync::AccessType::None,
         prevFrame,
         prevFrameView);
 
-    auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("depthPrepass"), {800, 600, 1});
+    auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("PASS_DepthPre"), {800, 600, 1});
     auto depthTex = depthPass.output().depthTexture;
     auto mainPass =
-        passes::mainPass(graph.declareTask("MainPass"), NullHandle, NullHandle, depthTex);
+        passes::mainPass(graph.declareTask("PASS_Main"), NullHandle, NullHandle, depthTex);
 
-    auto addMainPass = passes::mainPass(graph.declareTask("Main Lines"),
+    auto addMainPass = passes::mainPass(graph.declareTask("PASS_Main_Lines"),
                                         mainPass.output().color,
                                         mainPass.output().normal,
                                         depthTex);
@@ -234,7 +237,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     auto debugCombinePass = passes::debugGeneral(
         graph, {depthDebugPass.output().debugColor, normalDebugPass.output().debugColor}, 0);
 
-    auto postProcess = passes::postProcess(graph, addMainPass.output().color, prevFrameColor);
+    auto postProcess = passes::postProcess(graph.declareTask("TASK_Postprocess"), addMainPass.output().color, prevFrameColor);
 
     // provoke the coroutines to run so we have some stuff to cull in the graph - otherwise
     // they won't even, that's how neat using coroutines is :)
@@ -252,7 +255,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
                 resultInfo.size.z);
 
     Magnum::Vk::CommandBuffer buffer = t.ctx().commandPool().allocate();
-    nameVulkanObject(t.ctx().device(), buffer, "Framegraph Test");
+    nameVulkanObject(t.ctx().device(), buffer, "CMD_FramegraphTest");
 
     buffer.begin();
 

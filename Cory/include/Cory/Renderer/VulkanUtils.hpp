@@ -1,9 +1,12 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
+#include <Cory/Base/Log.hpp>
 
 #include <fmt/format.h>
 
+#include <any>
+#include <array>
 #include <memory>
 #include <string_view>
 
@@ -84,6 +87,37 @@ template <typename WrappedVkType> class BasicVkObjectWrapper : NoCopy {
 
   protected:
     VkSharedPtr vkResourcePtr_;
+};
+
+/// a type-erased container to keep vulkan structs alive and link up a pnext chain
+template <size_t MAX_CHAIN_SIZE = 10> class PNextChain : NoCopy {
+  public:
+    PNextChain() = default;
+    PNextChain(PNextChain &&) = default;
+    PNextChain &operator=(PNextChain &&) = default;
+
+    auto &prepend(auto next_struct)
+    {
+        CO_CORE_ASSERT(current_ < MAX_CHAIN_SIZE, "PNextChain is full");
+        data_[current_] = next_struct;
+
+        using StructRef = decltype(next_struct) &;
+        auto &next = any_cast<StructRef>(data_[current_]);
+
+        next.pNext = std::exchange(head_, &next);
+        current_++;
+
+        return next;
+    };
+
+    [[nodiscard]] void *head() const { return head_; };
+
+    [[nodiscard]] size_t size() const { return current_; };
+
+  private:
+    std::array<std::any, MAX_CHAIN_SIZE> data_;
+    gsl::index current_{};
+    void *head_{};
 };
 
 } // namespace Cory

@@ -124,7 +124,7 @@ TEST_CASE("BitField", "[Cory/Base]")
         Cory::BitField<BitValues> bitfield;
 
         auto formatted_empty = fmt::format("{}", bitfield);
-        CHECK(formatted_empty == "");
+        CHECK(formatted_empty == "0 (0x0)");
 
         bitfield.set(BitValues::First).set(BitValues::Third).set(BitValues::Highest);
         auto formatted_set_bits = fmt::format("{}", bitfield);

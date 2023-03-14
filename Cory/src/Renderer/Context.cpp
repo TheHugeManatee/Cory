@@ -2,6 +2,7 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
@@ -13,6 +14,7 @@
 #include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
 #include <Magnum/Vk/DescriptorType.h>
 #include <Magnum/Vk/DeviceCreateInfo.h>
+#include <Magnum/Vk/DeviceFeatures.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/ExtensionProperties.h>
 #include <Magnum/Vk/Extensions.h>
@@ -33,7 +35,7 @@ struct ContextPrivate {
     std::string name;
     bool isHeadless{false};
     Vk::Instance instance{Corrade::NoCreate};
-    VkDebugUtilsMessengerEXT debugMessenger{};
+    BasicVkObjectWrapper<VkDebugUtilsMessengerEXT> debugMessenger{};
     Vk::DeviceProperties physicalDevice{Corrade::NoCreate};
     Vk::Device device{Corrade::NoCreate};
 
@@ -42,67 +44,34 @@ struct ContextPrivate {
     Vk::Queue computeQueue{Corrade::NoCreate};
     uint32_t computeQueueFamily{};
 
-    Vk::DescriptorPool descriptorPool{Corrade::NoCreate};
     Vk::CommandPool commandPool{Corrade::NoCreate};
 
     ResourceManager resources;
 
     Callback<const DebugMessageInfo &> onVulkanDebugMessageReceived;
 
-    Magnum::Vk::DescriptorSetLayout defaultDescriptorLayout{Corrade::NoCreate};
+    DescriptorSets descriptorSetManager;
+    /// todo pipeline layout should probably belong to the framegraph instead of the context
     Magnum::Vk::PipelineLayout defaultPipelineLayout{Corrade::NoCreate};
     Magnum::Vk::MeshLayout defaultMeshLayout{Corrade::NoInit};
+    /// mesh layout with no bindings, to implement dynamic vertex generation/pulling
+    Magnum::Vk::MeshLayout emptyMeshLayout{Corrade::NoInit};
 
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
                                   DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 };
 
+namespace detail {
+PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPrivate &data);
+Magnum::Vk::PipelineLayout
+createDefaultPipelineLayout(Context &ctx, Vk::DescriptorSetLayout &descriptorSetLayout);
+Magnum::Vk::MeshLayout createDefaultMeshLayout();
 VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                      VkDebugUtilsMessageTypeFlagsEXT messageType,
                                      const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                                     void *pUserData)
-{
-    ContextPrivate *contextData = static_cast<ContextPrivate *>(pUserData);
-    contextData->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
-                                          static_cast<DebugMessageType>(messageType),
-                                          pCallbackData);
-    return VK_TRUE;
-}
-
-Magnum::Vk::DescriptorSetLayout createDefaultDescriptorSetLayout(Context &ctx)
-{
-    // default layout currently only has a single uniform buffer
-    return Vk::DescriptorSetLayout(ctx.device(),
-                                   Vk::DescriptorSetLayoutCreateInfo{
-                                       {{0, Vk::DescriptorType::UniformBuffer}},
-                                       //{{0, Vk::DescriptorType::UniformBuffer}},
-                                   });
-}
-
-Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
-                                                       Vk::DescriptorSetLayout &descriptorSetLayout)
-{
-    // use max guaranteed memory of 128 bytes, for all shaders
-    VkPushConstantRange pushConstantRange{
-        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
-
-    // create pipeline layout
-    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{descriptorSetLayout};
-    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
-    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
-    return Vk::PipelineLayout(ctx.device(), pipelineLayoutCreateInfo);
-}
-
-Magnum::Vk::MeshLayout createDefaultMeshLayout()
-{
-    static constexpr uint32_t binding{0};
-    return Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
-        .addBinding(binding, 10 * sizeof(float))
-        .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
-        .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
-        .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float));
-}
+                                     void *pUserData);
+} // namespace detail
 
 Context::Context()
     : data_{std::make_unique<ContextPrivate>()}
@@ -129,9 +98,12 @@ Context::Context()
     data_->physicalDevice = Vk::pickDevice(data_->instance);
     CO_APP_INFO("Using device {}", data_->physicalDevice.name());
 
-    Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
+    const Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
     Vk::DeviceCreateInfo info{data_->physicalDevice, &extensions};
-    info.addEnabledExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_dynamic_rendering"});
+    info.addEnabledExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                               VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+                               "VK_KHR_fragment_shading_rate",
+                               "VK_KHR_dynamic_rendering"});
 
     // configure a Graphics and a Compute queue - assumes that there is a family that
     // supports both graphics and compute, which is probably not universal
@@ -139,15 +111,9 @@ Context::Context()
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
     info.addQueues(data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
 
-    VkPhysicalDeviceSynchronization2Features synchronization2Features{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .synchronization2 = VK_TRUE};
-    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-        .pNext = &synchronization2Features,
-        .dynamicRendering = VK_TRUE,
-    };
-    info->pNext = &dynamicRenderingFeatures;
+    // set up the required features
+    auto pnext_chain = detail::setupRequiredDeviceFeatures(info, *data_);
+    info->pNext = pnext_chain.head();
 
     Vk::Result deviceCreateResult = data_->device.tryCreate(data_->instance, std::move(info));
     if (deviceCreateResult != Vk::Result::Success) {
@@ -156,30 +122,50 @@ Context::Context()
     }
     data_->device.populateGlobalFunctionPointers();
     // set a debug name for the logical device and queues
-    nameVulkanObject(data_->device, data_->device, fmt::format("[{}] Logical Device", data_->name));
+    nameVulkanObject(data_->device, data_->device, fmt::format("DEV_{}", data_->name));
     nameVulkanObject(
-        data_->device, data_->graphicsQueue, fmt::format("[{}] Graphics", data_->name));
-    // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("[{}] Compute",
+        data_->device, data_->graphicsQueue, fmt::format("QUE_Gfx_{}", data_->name));
+    // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("QUE_Comp_{}",
     // data_->name));
 
     setupDebugMessenger();
 
-    data_->descriptorPool = Vk::DescriptorPool{
-        data_->device,
-        Vk::DescriptorPoolCreateInfo{8, // max descriptor sets
-                                     {
-                                         {Vk::DescriptorType::UniformBuffer, 24},       //
-                                         {Vk::DescriptorType::CombinedImageSampler, 16} //
-                                     }}};
     data_->commandPool =
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
 
+    // delayed-init of the resource manager
     data_->resources.setContext(*this);
 
-    data_->defaultMeshLayout = createDefaultMeshLayout();
-    data_->defaultDescriptorLayout = createDefaultDescriptorSetLayout(*this);
-    data_->defaultPipelineLayout =
-        createDefaultPipelineLayout(*this, data_->defaultDescriptorLayout);
+    // TODO descriptorsetmanager should move to more frontend-facing object like swapchain, window,
+    // or application base class
+    // default layout currently only has a single uniform buffer and eight images and buffers
+    Vk::DescriptorSetLayoutBinding::Flags bindless_flags{};
+    bindless_flags |= Vk::DescriptorSetLayoutBinding::Flag::PartiallyBound;
+    bindless_flags |= Vk::DescriptorSetLayoutBinding::Flag::UpdateAfterBind;
+
+    // static cast is needed because Magnum does not know about this flag yet
+    Vk::DescriptorSetLayoutCreateInfo::Flags layout_flags(
+        static_cast<Vk::DescriptorSetLayoutCreateInfo::Flag>(
+            VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT));
+
+    auto all_graphics = Vk::ShaderStage{VK_SHADER_STAGE_ALL_GRAPHICS};
+
+    Vk::DescriptorSetLayoutCreateInfo defaultLayout{
+        {
+            {{0, Vk::DescriptorType::UniformBuffer, 1, all_graphics, bindless_flags}},
+            {{1, Vk::DescriptorType::CombinedImageSampler, 8, all_graphics, bindless_flags}},
+            {{2, Vk::DescriptorType::StorageBuffer, 8, all_graphics, bindless_flags}},
+        },
+        layout_flags};
+    static constexpr uint32_t FRAMES_IN_FLIGHT = 4;
+
+    data_->descriptorSetManager.init(
+        data_->device, data_->resources, std::move(defaultLayout), FRAMES_IN_FLIGHT);
+
+    data_->defaultMeshLayout = detail::createDefaultMeshLayout();
+    data_->emptyMeshLayout = Magnum::Vk::MeshLayout{Vk::MeshPrimitive::Triangles};
+    data_->defaultPipelineLayout = detail::createDefaultPipelineLayout(
+        *this, resources()[data_->descriptorSetManager.layout()]);
 }
 
 Context::Context(Context &&rhs) { std::swap(rhs.data_, data_); }
@@ -191,10 +177,7 @@ Context &Context::operator=(Context &&rhs)
 
 Context::~Context()
 {
-    if (data_) {
-        instance()->DestroyDebugUtilsMessengerEXT(data_->instance, data_->debugMessenger, nullptr);
-        CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
-    }
+    if (data_) { CO_CORE_TRACE("Destroying Cory::Context {}", data_->name); }
 }
 
 void Context::setupDebugMessenger()
@@ -210,12 +193,15 @@ void Context::setupDebugMessenger()
         .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-        .pfnUserCallback = debugUtilsMessengerCallback,
+        .pfnUserCallback = detail::debugUtilsMessengerCallback,
         .pUserData = data_.get()};
 
+    VkDebugUtilsMessengerEXT messenger;
     instance()->CreateDebugUtilsMessengerEXT(
-        data_->instance, &dbgMessengerCreateInfo, nullptr, &data_->debugMessenger);
-
+        data_->instance, &dbgMessengerCreateInfo, nullptr, &messenger);
+    data_->debugMessenger.wrap(messenger, [this](auto *messenger) {
+        data_->instance->DestroyDebugUtilsMessengerEXT(data_->instance, messenger, nullptr);
+    });
     // this seems to crash - not sure if driver or implementation bug...
     // nameRawVulkanObject(
     //    data->device.handle(), debugMessenger, fmt::format("{} Debug Messenger", data->name));
@@ -254,7 +240,7 @@ bool Context::isHeadless() const { return data_->isHeadless; }
 Vk::Instance &Context::instance() { return data_->instance; }
 Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data_->physicalDevice; }
 Vk::Device &Context::device() { return data_->device; }
-Magnum::Vk::DescriptorPool &Context::descriptorPool() { return data_->descriptorPool; }
+DescriptorSets &Context::descriptorSets() { return data_->descriptorSetManager; }
 Vk::CommandPool &Context::commandPool() { return data_->commandPool; }
 Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
 uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }
@@ -268,19 +254,14 @@ void Context::onVulkanDebugMessageReceived(std::function<void(const DebugMessage
     data_->onVulkanDebugMessageReceived(std::move(callback));
 }
 
-const Magnum::Vk::MeshLayout &Context::defaultMeshLayout() const
+const Magnum::Vk::MeshLayout &Context::defaultMeshLayout(bool empty) const
 {
-    return data_->defaultMeshLayout;
+    return empty ? data_->emptyMeshLayout : data_->defaultMeshLayout;
 }
 
 Magnum::Vk::PipelineLayout &Context::defaultPipelineLayout()
 {
     return data_->defaultPipelineLayout;
-}
-
-Magnum::Vk::DescriptorSetLayout &Context::defaultDescriptorSetLayout()
-{
-    return data_->defaultDescriptorLayout;
 }
 
 void ContextPrivate::receiveDebugUtilsMessage(
@@ -308,5 +289,85 @@ void ContextPrivate::receiveDebugUtilsMessage(
                                          .message = callbackData->pMessage});
     Log::GetCoreLogger()->log(level, "[VulkanDebugMsg:{}] {}", messageType, callbackData->pMessage);
 }
+
+namespace detail {
+
+PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPrivate &data)
+{
+    PNextChain chain;
+
+    //    VkPhysicalDeviceFeatures2 deviceFeatures{.sType =
+    //    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+    //                                             .pNext = nullptr};
+    //    data.instance->GetPhysicalDeviceFeatures2(data.physicalDevice, &deviceFeatures);
+
+    // general enabled features
+    auto &enabled_features = chain.insert(VkPhysicalDeviceFeatures{
+        // sample rate shading to be able to work with multisampling properly
+        .sampleRateShading = VK_TRUE,
+    });
+    info->pEnabledFeatures = &enabled_features;
+
+    // synchronization2
+    chain.prepend(VkPhysicalDeviceSynchronization2Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+        .synchronization2 = VK_TRUE});
+
+    // dynamic_rendering
+    chain.prepend(VkPhysicalDeviceDynamicRenderingFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+        .dynamicRendering = VK_TRUE,
+    });
+
+    // indexing_features (required for bindless)
+    chain.prepend(VkPhysicalDeviceDescriptorIndexingFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+        .descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE,
+        .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+        .descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE,
+        .descriptorBindingPartiallyBound = VK_TRUE,
+        .runtimeDescriptorArray = VK_TRUE});
+
+    return chain;
+}
+
+VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                                     void *pUserData)
+{
+    ContextPrivate *contextData = static_cast<ContextPrivate *>(pUserData);
+    contextData->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
+                                          static_cast<DebugMessageType>(messageType),
+                                          pCallbackData);
+    return VK_TRUE;
+}
+
+Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
+                                                       Vk::DescriptorSetLayout &descriptorSetLayout)
+{
+    // use max guaranteed memory of 128 bytes, for all shaders
+    VkPushConstantRange pushConstantRange{
+        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
+
+    // create pipeline layout
+    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{
+        descriptorSetLayout, descriptorSetLayout, descriptorSetLayout, descriptorSetLayout};
+    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
+    return Vk::PipelineLayout(ctx.device(), pipelineLayoutCreateInfo);
+}
+
+Magnum::Vk::MeshLayout createDefaultMeshLayout()
+{
+    static constexpr uint32_t binding{0};
+    return Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
+        .addBinding(binding, 10 * sizeof(float))
+        .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
+        .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
+        .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float));
+}
+
+} // namespace detail
 
 } // namespace Cory

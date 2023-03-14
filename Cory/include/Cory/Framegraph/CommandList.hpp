@@ -2,8 +2,11 @@
 
 #include <Cory/Framegraph/Common.hpp>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
+/**
+ * Effectively a wrapper over a Command Buffer, but it understands operations on more high-level objects such as PipelineHandles, DescriptorSetManagers etc
+ */
 class CommandList : NoCopy {
   public:
     CommandList(Context &ctx, Magnum::Vk::CommandBuffer &cmdBuffer);
@@ -24,4 +27,4 @@ class CommandList : NoCopy {
     Magnum::Vk::CommandBuffer *cmdBuffer_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

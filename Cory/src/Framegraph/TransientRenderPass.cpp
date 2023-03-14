@@ -1,8 +1,8 @@
 #include <Cory/Framegraph/TransientRenderPass.hpp>
 
+#include "Cory/Framegraph/TextureManager.hpp"
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
@@ -26,7 +26,7 @@
 
 namespace Vk = Magnum::Vk;
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct PipelineDescriptor {
     std::vector<ShaderHandle> shaders;
@@ -34,6 +34,7 @@ struct PipelineDescriptor {
     std::vector<VkFormat> colorFormats;
     VkFormat depthFormat;
     VkFormat stencilFormat;
+    bool hasMeshInput;
     std::size_t hash() const
     {
         return hashCompose(0, shaders, sampleCount, colorFormats, depthFormat, stencilFormat);
@@ -65,7 +66,12 @@ class PipelineCache {
         }
 
         Vk::RasterizationPipelineCreateInfo pipelineCreateInfo{
-            shaderSet, ctx.defaultMeshLayout(), ctx.defaultPipelineLayout(), VK_NULL_HANDLE, 0, 1};
+            shaderSet,
+            ctx.defaultMeshLayout(!info.hasMeshInput),
+            ctx.defaultPipelineLayout(),
+            VK_NULL_HANDLE,
+            0,
+            1};
 
         // configure dynamic states
         pipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
@@ -86,7 +92,7 @@ class PipelineCache {
         const VkPipelineMultisampleStateCreateInfo multisampling{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
             .rasterizationSamples = (VkSampleCountFlagBits)info.sampleCount,
-            .sampleShadingEnable = VK_FALSE,
+            .sampleShadingEnable = VK_TRUE,
         };
 
         // note: depth setup is ignored and actually overridden the dynamic states, only stencil and
@@ -121,7 +127,7 @@ class PipelineCache {
 
 TransientRenderPass::TransientRenderPass(Context &ctx,
                                          std::string_view name,
-                                         TextureResourceManager &textures)
+                                         TextureManager &textures)
     : ctx_{&ctx}
     , name_{name}
     , textures_{&textures}
@@ -157,8 +163,8 @@ void TransientRenderPass::begin(CommandList &cmd)
         .colorFormats =
             colorAttachments_ | ranges::views::transform(getColorFormat) | ranges::to<std::vector>,
         .depthFormat = depthAttachment_.transform(getColorFormat).value_or(VK_FORMAT_UNDEFINED),
-        .stencilFormat =
-            stencilAttachment_.transform(getColorFormat).value_or(VK_FORMAT_UNDEFINED)};
+        .stencilFormat = stencilAttachment_.transform(getColorFormat).value_or(VK_FORMAT_UNDEFINED),
+        .hasMeshInput = hasMeshInput_};
 
     // todo need to move this out of here, statics SUCK
     static PipelineCache cache;
@@ -204,13 +210,13 @@ void TransientRenderPass::end(CommandList &cmd)
 VkRenderingAttachmentInfo TransientRenderPass::makeAttachmentInfo(TextureHandle handle,
                                                                   AttachmentKind attachmentKind)
 {
-    return VkRenderingAttachmentInfo{.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-                                     .imageView = textures_->imageView(handle),
-                                     .imageLayout =
-                                         toVkImageLayout(textures_->state(handle).layout),
-                                     .loadOp = attachmentKind.loadOp,
-                                     .storeOp = attachmentKind.storeOp,
-                                     .clearValue = attachmentKind.clearValue};
+    return VkRenderingAttachmentInfo{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = ctx_->resources()[textures_->imageView(handle)],
+        .imageLayout = Sync::GetVkImageLayout(textures_->state(handle).lastAccess),
+        .loadOp = attachmentKind.loadOp,
+        .storeOp = attachmentKind.storeOp,
+        .clearValue = attachmentKind.clearValue};
 }
 
 int32_t TransientRenderPass::determineSampleCount() const
@@ -248,7 +254,7 @@ VkRect2D TransientRenderPass::determineRenderArea()
 
 TransientRenderPassBuilder::TransientRenderPassBuilder(Context &ctx,
                                                        std::string_view name,
-                                                       TextureResourceManager &textures)
+                                                       TextureManager &textures)
     : renderPass_{ctx, name, textures}
 {
 }
@@ -267,7 +273,7 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attach(TransientTextureH
                                                                VkClearColorValue clearValue)
 {
     renderPass_.colorAttachments_.emplace_back(
-        handle.texture, AttachmentKind{loadOp, storeOp, {.color = clearValue}});
+        handle, AttachmentKind{loadOp, storeOp, {.color = clearValue}});
     return *this;
 }
 
@@ -278,7 +284,7 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attachDepth(TransientTex
 {
 
     renderPass_.depthAttachment_ = std::make_pair(
-        handle.texture,
+        handle,
         AttachmentKind{loadOp, storeOp, {.depthStencil = {.depth = clearValue, .stencil = 0}}});
     return *this;
 }
@@ -289,11 +295,17 @@ TransientRenderPassBuilder &TransientRenderPassBuilder::attachStencil(TransientT
                                                                       uint32_t clearValue)
 {
     renderPass_.stencilAttachment_ = std::make_pair(
-        handle.texture,
+        handle,
         AttachmentKind{loadOp, storeOp, {.depthStencil = {.depth = 1.0f, .stencil = clearValue}}});
+    return *this;
+}
+
+TransientRenderPassBuilder &TransientRenderPassBuilder::disableMeshInput()
+{
+    renderPass_.hasMeshInput_ = false;
     return *this;
 }
 
 TransientRenderPass TransientRenderPassBuilder::finish() { return std::move(renderPass_); }
 
-} // namespace Cory::Framegraph
+} // namespace Cory

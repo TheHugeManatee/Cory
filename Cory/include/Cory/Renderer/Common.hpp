@@ -9,6 +9,7 @@
 #include <Magnum/Vk/Vk.h> // forward declaration header
 #include <Magnum/Vk/Vulkan.h>
 
+#include <Cory/Renderer/Synchronization.hpp>
 #include <Cory/Renderer/flextVkExt.h> // extensions
 
 #include <cstdint>
@@ -25,9 +26,11 @@ class SingleShotCommandBuffer;
 struct SwapchainSupportDetails;
 struct FrameContext;
 class Swapchain;
+class UniformBufferObjectBase;
 template <typename BufferStruct>
     requires std::is_trivial_v<BufferStruct>
 class UniformBufferObject;
+class DescriptorSets;
 
 using PixelFormat = Magnum::Vk::PixelFormat;
 bool isColorFormat(PixelFormat format);
@@ -83,6 +86,11 @@ using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
 using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
 using PipelineHandle = PrivateTypedHandle<Magnum::Vk::Pipeline, ResourceManager>;
+using ImageHandle = PrivateTypedHandle<Magnum::Vk::Image, ResourceManager>;
+using ImageViewHandle = PrivateTypedHandle<Magnum::Vk::ImageView, ResourceManager>;
+using SamplerHandle = PrivateTypedHandle<Magnum::Vk::Sampler, ResourceManager>;
+using DescriptorSetLayoutHandle =
+    PrivateTypedHandle<Magnum::Vk::DescriptorSetLayout, ResourceManager>;
 
 } // namespace Cory
 

@@ -11,7 +11,8 @@ class UniformBufferObjectBase : NoCopy {
   public:
     BufferHandle handle() const noexcept { return buffer_; }
     size_t instances() const noexcept { return instances_; }
-    VkDescriptorBufferInfo descriptorInfo(gsl::index instance);
+    /// access the descriptor info for the respective index
+    VkDescriptorBufferInfo descriptorInfo(gsl::index instance) const;
 
   protected:
     UniformBufferObjectBase(Context &ctx, size_t instances, size_t instanceSize);
@@ -54,7 +55,7 @@ class UniformBufferObject : public UniformBufferObjectBase {
     {
     }
 
-    // moveable
+    // movable
     UniformBufferObject(UniformBufferObject &&) = default;
     UniformBufferObject &operator=(UniformBufferObject &&) = default;
 

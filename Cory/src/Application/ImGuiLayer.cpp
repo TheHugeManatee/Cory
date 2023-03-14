@@ -248,7 +248,6 @@ void ImGuiLayer::recordFrameCommands(Context &ctx,
 {
     ImGui::Render();
 
-    // TODO: VK_SUBPASS_CONTENTS_INLINE?
     cmdBuffer.beginRenderPass(
         Vk::RenderPassBeginInfo{data_->renderPass, data_->framebuffers[frameIdx]}
             .clearColor(0, data_->clearValue)

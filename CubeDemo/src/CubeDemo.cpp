@@ -1,7 +1,6 @@
 #include "CubeDemo.hpp"
 
-#include "CubePipeline.hpp"
-
+#include "Cory/Framegraph/TextureManager.hpp"
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/Window.hpp>
@@ -14,6 +13,7 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
@@ -33,6 +33,7 @@
 #include <Magnum/Vk/PipelineLayout.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/RenderPass.h>
+#include <Magnum/Vk/SamplerCreateInfo.h>
 #include <Magnum/Vk/VertexFormat.h>
 
 #include <CLI/App.hpp>
@@ -137,8 +138,9 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 
     auto recreateSizedResources = [&](glm::i32vec2) { /* nothing? */ };
 
+    defaultSampler_ = ctx_->resources().createSampler("SMPL_Default", Vk::SamplerCreateInfo{});
     createGeometry();
-    createPipeline();
+    createShaders();
     recreateSizedResources(window_->dimensions());
     window_->onSwapchainResized.connect(recreateSizedResources);
 
@@ -151,11 +153,15 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     createUBO();
 }
 
-void CubeDemoApplication::createPipeline()
+void CubeDemoApplication::createShaders()
 {
     const Cory::ScopeTimer st{"Init/Shaders"};
     vertexShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.vert"));
     fragmentShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.frag"));
+    fullscreenTriShader_ =
+        ctx_->resources().createShader(Cory::ResourceLocator::locate("fullscreenTri.vert"));
+    depthDebugShader_ =
+        ctx_->resources().createShader(Cory::ResourceLocator::locate("depthDebug.frag"));
 }
 
 void CubeDemoApplication::createUBO()
@@ -164,34 +170,34 @@ void CubeDemoApplication::createUBO()
     const Cory::ScopeTimer st{"Init/UBO"};
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
         *ctx_, window_->swapchain().maxFramesInFlight());
+
     for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
-        auto set = ctx_->descriptorPool().allocate(ctx_->defaultDescriptorSetLayout());
-
-        auto bufferInfo = globalUbo_->descriptorInfo(i);
-        const VkWriteDescriptorSet write{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = set,
-            .dstBinding = 0, // TODO?
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &bufferInfo,
-        };
-        ctx_->device()->UpdateDescriptorSets(ctx_->device(), 1, &write, 0, nullptr);
-
-        descriptorSets_.push_back(std::move(set));
+        ctx_->descriptorSets()
+            .write(Cory::DescriptorSets::SetType::Static, i, *globalUbo_)
+            .flushWrites();
     }
 }
 
 CubeDemoApplication::~CubeDemoApplication()
 {
+    auto &resources = ctx_->resources();
+    resources.release(vertexShader_);
+    resources.release(fragmentShader_);
+    resources.release(fullscreenTriShader_);
+    resources.release(depthDebugShader_);
+    resources.release(defaultSampler_);
+
     imguiLayer_->deinit(*ctx_);
     CO_APP_TRACE("Destroying CubeDemoApplication");
 }
 
 void CubeDemoApplication::run()
 {
-
-    Cory::Framegraph::Framegraph fg(*ctx_);
+    // one framegraph for each frame in flight
+    std::vector<Cory::Framegraph> framegraphs;
+    std::generate_n(std::back_inserter(framegraphs),
+                    window_->swapchain().maxFramesInFlight(),
+                    [&]() { return Cory::Framegraph(*ctx_); });
 
     while (!window_->shouldClose()) {
         glfwPollEvents();
@@ -199,19 +205,26 @@ void CubeDemoApplication::run()
         // TODO process events?
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
-        ImGui::ShowDemoWindow();
-
         drawImguiControls();
+
+        Cory::Framegraph &fg = framegraphs[frameCtx.index];
+        // retire old resources from the last time this framegraph was
+        // used - our frame synchronization ensures that the resources
+        // are no longer in use
+        fg.resetForNextFrame();
 
         defineRenderPasses(fg, frameCtx);
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
-        fg.execute(*frameCtx.commandBuffer);
+        auto execInfo = fg.record(*frameCtx.commandBuffer);
 
         frameCtx.commandBuffer->end();
 
         window_->submitAndPresent(frameCtx);
 
-        fg.retireImmediate(); // TODO need to retire much later..
+        if (dumpNextFramegraph_) {
+            CO_APP_INFO(fg.dump(execInfo));
+            dumpNextFramegraph_ = false;
+        }
 
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
@@ -221,65 +234,59 @@ void CubeDemoApplication::run()
     ctx_->device()->DeviceWaitIdle(ctx_->device());
 }
 
-void CubeDemoApplication::defineRenderPasses(Framegraph &framegraph,
+void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                              const Cory::FrameContext &frameCtx)
 {
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
 
     auto windowColorTarget =
-        framegraph.declareInput({.name = "Window Color Texture",
+        framegraph.declareInput({.name = "TEX_SwapCh_Color",
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.colorImage->format(),
                                  .sampleCount = window_->sampleCount()},
-                                Cory::Framegraph::Layout::Attachment,
-                                VK_ACCESS_2_NONE,
-                                VK_PIPELINE_STAGE_2_NONE,
+                                Cory::Sync::AccessType::None,
                                 *frameCtx.colorImage,
                                 *frameCtx.colorImageView);
 
     auto windowDepthTarget =
-        framegraph.declareInput({.name = "Window Depth Texture",
+        framegraph.declareInput({.name = "TEX_SwapCh_Depth",
                                  .size = glm::u32vec3{window_->dimensions(), 1},
                                  .format = frameCtx.depthImage->format(),
                                  .sampleCount = window_->sampleCount()},
-                                Cory::Framegraph::Layout::Attachment,
-                                VK_ACCESS_2_NONE,
-                                VK_PIPELINE_STAGE_2_NONE,
+                                Cory::Sync::AccessType::None,
                                 *frameCtx.depthImage,
                                 *frameCtx.depthImageView);
 
-    auto mainPass = mainCubeRenderTask(
-        framegraph.declareTask("Cube Render Pass"), windowColorTarget, windowDepthTarget, frameCtx);
+    auto mainPass = cubeRenderTask(
+        framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget, frameCtx);
 
-    auto imguiPass =
-        imguiRenderTask(framegraph.declareTask("ImGui"), mainPass.output().colorOut, frameCtx);
+    auto depthDebugPass = depthDebugTask(framegraph.declareTask("TASK_DepthDebug"),
+                                         mainPass.output().colorOut,
+                                         mainPass.output().depthOut,
+                                         frameCtx);
+
+    auto imguiPass = imguiRenderTask(
+        framegraph.declareTask("TASK_ImGui"), depthDebugPass.output().colorOut, frameCtx);
 
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
 
-Cory::Framegraph::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
-                                        TransientTextureHandle colorTarget,
-                                        TransientTextureHandle depthTarget,
-                                        const Cory::FrameContext &frameCtx)
+Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
+CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
+                                    Cory::TransientTextureHandle colorTarget,
+                                    Cory::TransientTextureHandle depthTarget,
+                                    Cory::FrameContext frameCtx)
 {
 
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     float clearDepth = 1.0f;
 
     auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget,
-                      {.layout = Cory::Framegraph::Layout::Attachment,
-                       .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                       .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                       .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
-    builder.write(depthTarget,
-                  {.layout = Cory::Framegraph::Layout::Attachment,
-                   .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                   .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                   .imageAspect = VK_IMAGE_ASPECT_DEPTH_BIT});
+        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
+    auto [writtenDepthHandle, depthInfo] =
+        builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto cubePass = builder.declareRenderPass("Cubes")
+    auto cubePass = builder.declareRenderPass("PASS_Cubes")
                         .shaders({vertexShader_, fragmentShader_})
                         .attach(colorTarget,
                                 VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -291,8 +298,11 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
                                      clearDepth)
                         .finish();
 
-    co_yield PassOutputs{.colorOut = writtenColorHandle};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
+
+    /// ^^^^     DECLARATION      ^^^^
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+    /// vvvv  RENDERING COMMANDS  vvvv
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
 
@@ -314,17 +324,8 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.index);
 
-    const std::vector sets{descriptorSets_[frameCtx.index].handle()};
-    ctx_->device()->CmdBindDescriptorSets(
-        renderApi.cmd->handle(),
-        VkPipelineBindPoint::VK_PIPELINE_BIND_POINT_GRAPHICS,
-        // TODO make lyaout accessible through TransientRenderPass instead
-        ctx_->defaultPipelineLayout(),
-        0,
-        gsl::narrow<uint32_t>(sets.size()),
-        sets.data(),
-        0,
-        nullptr);
+    ctx_->descriptorSets().bind(
+        renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
@@ -347,26 +348,71 @@ CubeDemoApplication::mainCubeRenderTask(Cory::Framegraph::Builder builder,
     cubePass.end(*renderApi.cmd);
 }
 
-Cory::Framegraph::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::imguiRenderTask(Cory::Framegraph::Builder builder,
-                                     TransientTextureHandle colorTarget,
-                                     const Cory::FrameContext &frameCtx)
+Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
+CubeDemoApplication::depthDebugTask(Cory::Builder builder,
+                                    Cory::TransientTextureHandle colorTarget,
+                                    Cory::TransientTextureHandle depthTarget,
+                                    Cory::FrameContext frameCtx)
+{
+    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+
+    auto [writtenColorHandle, colorInfo] =
+        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
+    auto depthInfo = builder.read(
+        depthTarget, Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    //    auto colorTarget = builder.create("DebugDebug",
+    //                                      depthInfo.size,
+    //                                      window_->colorFormat(),
+    //                                      Cory::Sync::AccessType::ColorAttachmentWrite);
+
+    auto cubePass = builder.declareRenderPass("PASS_DepthDebug")
+                        .shaders({fullscreenTriShader_, depthDebugShader_})
+                        .disableMeshInput() // fullscreen triangle pass
+                        .attach(colorTarget,
+                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD,
+                                VK_ATTACHMENT_STORE_OP_STORE,
+                                clearColor)
+                        .finish();
+
+    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = {}};
+
+    /// ^^^^     DECLARATION      ^^^^
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+    /// vvvv  RENDERING COMMANDS  vvvv
+
+    ////////////
+
+    globalUbo_->flush(frameCtx.index);
+
+    Cory::TextureManager &resources = *renderApi.resources;
+
+
+    // TODO get layout from texturemanager!
+    std::array layouts{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    std::array textures{resources.imageView(depthTarget)};
+    std::array samplers{defaultSampler_};
+
+    ctx_->descriptorSets().write(
+        Cory::DescriptorSets::SetType::Static, frameCtx.index, layouts, textures, samplers);
+    ctx_->descriptorSets().flushWrites();
+    ctx_->descriptorSets().bind(
+        renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
+    ////////////
+
+    cubePass.begin(*renderApi.cmd);
+
+    ctx_->device()->CmdDraw(renderApi.cmd->handle(), 3, 1, 0, 0);
+    cubePass.end(*renderApi.cmd);
+}
+
+Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs> CubeDemoApplication::imguiRenderTask(
+    Cory::Builder builder, Cory::TransientTextureHandle colorTarget, Cory::FrameContext frameCtx)
 {
     auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(colorTarget,
-                          // read
-                          {.layout = Cory::Framegraph::Layout::Attachment,
-                           .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           .access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-                           .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT},
-                          // write
-                          {.layout = Cory::Framegraph::Layout::Attachment,
-                           .stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                           .imageAspect = VK_IMAGE_ASPECT_COLOR_BIT});
+        builder.readWrite(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
 
     co_yield PassOutputs{.colorOut = writtenColorHandle};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
 
     // note - currently, we're letting imgui handle the final resolve and transition to
     // present_layout
@@ -392,6 +438,7 @@ void CubeDemoApplication::drawImguiControls()
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
     if (ImGui::Begin("Animation Params")) {
+        if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
         if (ImGui::Button("Restart")) { startupTime_ = now(); }
 
         CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);

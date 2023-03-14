@@ -4,12 +4,16 @@
 
 #include <Magnum/Vk/Buffer.h>
 #include <Magnum/Vk/CommandBuffer.h>
+#include <Magnum/Vk/DescriptorSet.h>
+#include <Magnum/Vk/DescriptorSetLayout.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/Fence.h>
 #include <Magnum/Vk/Image.h>
 #include <Magnum/Vk/ImageView.h>
 #include <Magnum/Vk/Instance.h>
+#include <Magnum/Vk/Pipeline.h>
 #include <Magnum/Vk/Queue.h>
+#include <Magnum/Vk/Sampler.h>
 #include <Magnum/Vk/Shader.h>
 
 #include <type_traits>
@@ -66,6 +70,18 @@ void nameRawVulkanObject(DeviceHandle &device, VulkanObjectHandle handle, std::s
     if constexpr (std::is_same_v<VulkanObjectHandle, VkShaderModule>) {
         objectNameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
     }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkPipeline>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkSampler>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_SAMPLER;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSetLayout>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSet>) {
+        objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET;
+    }
 
     device->SetDebugUtilsObjectNameEXT(device, &objectNameInfo);
 }
@@ -97,7 +113,11 @@ INSTANTIATE_WRAPPED(Magnum::Vk::Fence);
 INSTANTIATE_WRAPPED(Magnum::Vk::CommandBuffer);
 INSTANTIATE(VkImage);
 INSTANTIATE_WRAPPED(Magnum::Vk::Image);
+INSTANTIATE_WRAPPED(Magnum::Vk::Pipeline);
 INSTANTIATE_WRAPPED(Magnum::Vk::ImageView);
 INSTANTIATE_WRAPPED(Magnum::Vk::Shader);
+INSTANTIATE_WRAPPED(Magnum::Vk::Sampler);
+INSTANTIATE_WRAPPED(Magnum::Vk::DescriptorSetLayout);
+INSTANTIATE_WRAPPED(Magnum::Vk::DescriptorSet);
 
 } // namespace Cory

@@ -6,14 +6,15 @@
 
 #include <functional>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct RenderTaskInfo;
 struct RenderTaskExecutionAwaiter;
 class Framegraph;
 class Builder;
-class TextureResourceManager;
+class TextureManager;
 class CommandList;
+class FramegraphVisualizer;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
 enum class DepthTest {
@@ -37,11 +38,15 @@ struct DynamicStates {
     DepthWrite depthWrite{DepthWrite::Enabled};
 };
 
-enum class TaskOutputKind { Create, Write };
-enum class Layout { Undefined, Attachment, ReadOnly, TransferSource, TransferDest, PresentSource };
-using PipelineStages = BitField<VkPipelineStageFlagBits2>;
-using ImageAspects = BitField<VkImageAspectFlagBits>;
-using AccessFlags = BitField<VkAccessFlagBits2>;
+enum class TaskDependencyKindBits {
+    Create = 1 << 0,
+    Read = 1 << 1,
+    Write = 1 << 2,
+    ReadWrite = Read | Write,
+    CreateWrite = Create | Write
+};
+using TaskDependencyKind = BitField<TaskDependencyKindBits>;
+enum class ImageContents { Retain, Discard };
 
 using RenderTaskHandle = PrivateTypedHandle<RenderTaskInfo, Framegraph>;
 
@@ -55,52 +60,51 @@ struct TextureInfo {
 };
 
 struct TextureState {
-    Layout layout{Layout::Undefined};
-    AccessFlags lastWriteAccess{VK_ACCESS_NONE};
-    PipelineStages lastWriteStage{VK_PIPELINE_STAGE_NONE};
+    Sync::AccessType lastAccess{Sync::AccessType::None};
     TextureMemoryStatus status{TextureMemoryStatus::Virtual};
 };
 
-/// describes information about the intended access (read or write) for a texture resource
-struct TextureAccessInfo {
-    Layout layout;
-    PipelineStages stage;
-    AccessFlags access;
-    ImageAspects imageAspect;
-};
-
-using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureResourceManager>;
-struct TransientTextureHandle {
-    TextureHandle texture{};
-    uint32_t version{0};
-    auto operator<=>(const TransientTextureHandle &) const = default;
-};
-using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureResourceManager>;
-
-constexpr VkImageLayout toVkImageLayout(Layout layout)
-{
-    switch (layout) {
-    case Layout::Undefined:
-        return VK_IMAGE_LAYOUT_UNDEFINED;
-    case Layout::Attachment:
-        return VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
-    case Layout::ReadOnly:
-        return VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
-    case Layout::TransferSource:
-        return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    case Layout::TransferDest:
-        return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    case Layout::PresentSource:
-        return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+using TextureHandle = PrivateTypedHandle<TextureInfo, const TextureManager>;
+class TransientTextureHandle {
+  public:
+    TransientTextureHandle() = default;
+    /* implicit */ TransientTextureHandle(NullHandle_t null)
+        : texture_{null}
+    {
     }
-    throw std::runtime_error{"Unknown Layout"};
-}
-} // namespace Cory::Framegraph
+    TransientTextureHandle(TextureHandle texture)
+        : texture_{texture}
+        , version_{0} {};
+
+    TransientTextureHandle operator+(uint32_t inc)
+    {
+        return TransientTextureHandle{texture_, version_ + inc};
+    }
+
+    // implicit conversion to the handle it wraps
+    operator TextureHandle() const { return texture_; }
+
+    TextureHandle texture() const { return texture_; }
+    uint32_t version() const { return version_; }
+
+    auto operator<=>(const TransientTextureHandle &) const = default;
+    explicit operator bool() const { return texture_.valid() && version_ != 0xFFFFFFFF; }
+
+  private:
+    TransientTextureHandle(TextureHandle texture, uint32_t version)
+        : texture_{texture}
+        , version_{version} {};
+    TextureHandle texture_{};
+    uint32_t version_{0xFFFFFFFF};
+};
+using MutableTextureHandle = PrivateTypedHandle<TextureInfo, TextureManager>;
+
+} // namespace Cory
 
 /// make SlotMapHandle hashable
-template <> struct std::hash<Cory::Framegraph::TransientTextureHandle> {
-    std::size_t operator()(const Cory::Framegraph::TransientTextureHandle &s) const noexcept
+template <> struct std::hash<Cory::TransientTextureHandle> {
+    std::size_t operator()(const Cory::TransientTextureHandle &s) const noexcept
     {
-        return Cory::hashCompose(s.version, s.texture);
+        return Cory::hashCompose(s.version(), s.texture());
     }
 };

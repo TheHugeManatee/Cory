@@ -1,5 +1,6 @@
 #include <Cory/Application/Window.hpp>
 
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/APIConversion.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -21,6 +22,8 @@
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/range/conversion.hpp>
+#include <range/v3/view/enumerate.hpp>
+#include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <thread>
@@ -75,7 +78,7 @@ BasicVkObjectWrapper<VkSurfaceKHR> Window::createSurface()
         }};
 
     CO_CORE_ASSERT(ret == VK_SUCCESS, "Could not create surface!");
-    nameVulkanObject(ctx_.device(), surface, "Main Window Surface");
+    nameVulkanObject(ctx_.device(), surface, fmt::format("SURF_{}", windowName_));
 
     return surface;
 }
@@ -128,6 +131,7 @@ std::unique_ptr<Swapchain> Window::createSwapchain()
 
 FrameContext Window::nextSwapchainImage()
 {
+    const Cory::ScopeTimer s{"Window/NextSwapchainImage"};
     FrameContext frameCtx = swapchain_->nextImage();
 
     // if the swapchain needs resizing, we wait for
@@ -166,21 +170,27 @@ FrameContext Window::nextSwapchainImage()
 }
 void Window::submitAndPresent(FrameContext &frameCtx)
 {
-    std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
-    std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
+    {
+        const Cory::ScopeTimer s{"Window/Submit"};
 
-    Magnum::Vk::SubmitInfo submitInfo{};
-    submitInfo.setCommandBuffers({*frameCtx.commandBuffer});
-    submitInfo->pWaitSemaphores = waitSemaphores.data();
-    submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-    submitInfo->pWaitDstStageMask = waitStages.data();
-    submitInfo->pSignalSemaphores = signalSemaphores.data();
-    submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
+        std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
+        std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
 
-    ctx_.graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
+        Magnum::Vk::SubmitInfo submitInfo{};
+        submitInfo.setCommandBuffers({*frameCtx.commandBuffer});
+        submitInfo->pWaitSemaphores = waitSemaphores.data();
+        submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
+        submitInfo->pWaitDstStageMask = waitStages.data();
+        submitInfo->pSignalSemaphores = signalSemaphores.data();
+        submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
 
-    swapchain_->present(frameCtx);
+        ctx_.graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
+    }
+    {
+        const Cory::ScopeTimer s{"Window/Present"};
+        swapchain_->present(frameCtx);
+    }
 
     if (fpsCounter_.lap()) {
         auto s = fpsCounter_.stats();
@@ -199,35 +209,47 @@ void Window::createColorAndDepthResources()
     const Magnum::Vector2i size(extent.x, extent.y);
     const int levels = 1;
 
-    // color image
-    colorImage_ = Vk::Image{
-        ctx_.device(),
-        // TransferSource is needed to be able to resolve from the image
-        Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::TransferSource,
-                              colorFormat_,
-                              size,
-                              levels,
-                              sampleCount_},
-        Vk::MemoryFlag::DeviceLocal};
+    // COLOR image - only one for now because we don't need more (so far)
+    // ImageUsage::TransferSource is needed to be able to resolve from the image
+    // ImageUsage::Sampled so it can be use it in debug views and so we can use in subsequent frames
+    const auto colorImgUsage =
+        Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::TransferSource | Vk::ImageUsage::Sampled;
+    colorImage_ =
+        Vk::Image{ctx_.device(),
+                  Vk::ImageCreateInfo2D{colorImgUsage, colorFormat_, size, levels, sampleCount_},
+                  Vk::MemoryFlag::DeviceLocal};
+    nameVulkanObject(ctx_.device(), colorImage_, fmt::format("TEX_WndCol {} (IMG)", extent));
 
     colorImageView_ = Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage_}};
+    nameVulkanObject(ctx_.device(), colorImageView_, fmt::format("TEX_WndCol {} (VIEW)", extent));
 
-    // depth
+    // DEPTH images
     depthImages_ =
-        swapchain().images() | ranges::views::transform([&](const Vk::Image &colorImage) {
-            auto usage = Vk::ImageUsage::DepthStencilAttachment;
-            return Vk::Image{ctx_.device(),
-                             Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},
-                             Vk::MemoryFlag::DeviceLocal};
+        ranges::views::indices(swapchain().images().size()) |
+        ranges::views::transform([&](auto idx) {
+            // ImageUsage::Sampled so we can create debug views
+            auto usage = Vk::ImageUsage::DepthStencilAttachment | Vk::ImageUsage::Sampled;
+            Vk::Image img{ctx_.device(),
+                          Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},
+                          Vk::MemoryFlag::DeviceLocal};
+
+            nameVulkanObject(
+                ctx_.device(), img, fmt::format("TEX_WndDepth[{}] {} (IMG)", idx, extent));
+            return img;
         }) |
         ranges::to<std::vector<Vk::Image>>;
 
     depthImageViews_ =
-        depthImages_ | ranges::views::transform([&](Vk::Image &depthImage) {
-            return Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
+        ranges::views::enumerate(depthImages_) | ranges::views::transform([&](auto it) {
+            auto [idx, depthImage] = it;
+            Vk::ImageView view{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
+            nameVulkanObject(
+                ctx_.device(), view, fmt::format("TEX_WndDepth[{}] {} (VIEW)", idx, extent));
+            return view;
         }) |
         ranges::to<std::vector<Vk::ImageView>>;
 
+    // transition the images to ATTACHMENT_OPTIMAL
     {
         SingleShotCommandBuffer setInitialLayoutCmds{ctx_};
         { // color image

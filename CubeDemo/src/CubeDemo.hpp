@@ -25,8 +25,6 @@ struct CubeUBO {
     glm::vec3 lightPosition;
 };
 
-using namespace Cory::Framegraph;
-
 class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove {
   public:
     CubeDemoApplication(int argc, char **argv);
@@ -38,21 +36,27 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     // create the mesh to be rendered
     void createGeometry();
     void createUBO();
-    void createPipeline();
-    void defineRenderPasses(Framegraph &framegraph, const Cory::FrameContext &frameCtx);
+    void createShaders();
+    void defineRenderPasses(Cory::Framegraph &framegraph, const Cory::FrameContext &frameCtx);
 
     struct PassOutputs {
-        Cory::Framegraph::TransientTextureHandle colorOut;
+        Cory::TransientTextureHandle colorOut;
+        Cory::TransientTextureHandle depthOut;
     };
-    Cory::Framegraph::RenderTaskDeclaration<PassOutputs>
-    mainCubeRenderTask(Cory::Framegraph::Builder builder,
-                       Cory::Framegraph::TransientTextureHandle colorTarget,
-                       Cory::Framegraph::TransientTextureHandle depthTarget,
-                       const Cory::FrameContext &ctx);
-    Cory::Framegraph::RenderTaskDeclaration<PassOutputs>
-    imguiRenderTask(Cory::Framegraph::Builder builder,
-                    Cory::Framegraph::TransientTextureHandle colorTarget,
-                    const Cory::FrameContext &ctx);
+    Cory::RenderTaskDeclaration<PassOutputs>
+    cubeRenderTask(Cory::Builder builder,
+                   Cory::TransientTextureHandle colorTarget,
+                   Cory::TransientTextureHandle depthTarget,
+                   Cory::FrameContext frameCtx);
+
+    Cory::RenderTaskDeclaration<PassOutputs>
+    depthDebugTask(Cory::Builder builder,
+                   Cory::TransientTextureHandle colorTarget,
+                   Cory::TransientTextureHandle depthTarget,
+                   Cory::FrameContext frameCtx);
+
+    Cory::RenderTaskDeclaration<PassOutputs> imguiRenderTask(
+        Cory::Builder builder, Cory::TransientTextureHandle colorTarget, Cory::FrameContext ctx);
 
     static double now();
     [[nodiscard]] double getElapsedTimeSeconds() const;
@@ -66,14 +70,18 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
 
+    Cory::SamplerHandle defaultSampler_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
+    Cory::ShaderHandle fullscreenTriShader_;
+    Cory::ShaderHandle depthDebugShader_;
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     std::vector<Magnum::Vk::DescriptorSet> descriptorSets_;
     double startupTime_;
+    bool dumpNextFramegraph_{false};
 
     Cory::CameraManipulator camera_;
 };

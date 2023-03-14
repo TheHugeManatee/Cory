@@ -148,7 +148,8 @@ Shader::Shader(Context &ctx, ShaderSource source)
 
     module_ = std::make_shared<Magnum::Vk::Shader>(ctx.device(), info);
     size_ = spirvBinary.size() * sizeof(uint32_t);
-    nameVulkanObject(ctx_->device(), *module_, source.filePath().filename().string());
+    nameVulkanObject(
+        ctx_->device(), *module_, fmt::format("SHDR_{}", source.filePath().filename().string()));
 }
 
 // vk::PipelineShaderStageCreateInfo Shader::stageCreateInfo()

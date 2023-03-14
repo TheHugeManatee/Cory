@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 struct TransientRenderPassInfo {
     int32_t sampleCount;
@@ -41,7 +41,7 @@ class TransientRenderPass : NoCopy {
 
   private:
     friend class TransientRenderPassBuilder;
-    TransientRenderPass(Context &ctx, std::string_view name, TextureResourceManager &textures);
+    TransientRenderPass(Context &ctx, std::string_view name, TextureManager &textures);
 
     int32_t determineSampleCount() const;
     VkRenderingAttachmentInfo makeAttachmentInfo(TextureHandle handle,
@@ -49,7 +49,7 @@ class TransientRenderPass : NoCopy {
 
     Context* ctx_;
     std::string_view name_;
-    TextureResourceManager *textures_;
+    TextureManager *textures_;
 
     std::vector<ShaderHandle> shaders_;
     std::vector<std::pair<TextureHandle, AttachmentKind>> colorAttachments_;
@@ -57,6 +57,7 @@ class TransientRenderPass : NoCopy {
     std::optional<std::pair<TextureHandle, AttachmentKind>> stencilAttachment_;
 
     DynamicStates dynamicStates_;
+    bool hasMeshInput_{true}; // by default, uses the default mesh layout
 
     PipelineHandle handle_;
     bool hasBegun_{false}; ///< only needed for diagnostics
@@ -66,8 +67,7 @@ class TransientRenderPass : NoCopy {
 class TransientRenderPassBuilder : NoCopy, NoMove {
   public:
     TransientRenderPassBuilder(Context &ctx,
-                               std::string_view name,
-                               TextureResourceManager &textures);
+                               std::string_view name, TextureManager &textures);
 
     ~TransientRenderPassBuilder();
 
@@ -86,10 +86,13 @@ class TransientRenderPassBuilder : NoCopy, NoMove {
                                               VkAttachmentStoreOp storeOp,
                                               uint32_t clearValue);
 
+    /// create a render pass that does not expect any mesh to be attached
+    TransientRenderPassBuilder & disableMeshInput();
+
     TransientRenderPass finish();
 
   private:
     TransientRenderPass renderPass_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

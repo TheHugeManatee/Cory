@@ -7,7 +7,7 @@
 
 #include <type_traits>
 
-namespace Cory::Framegraph {
+namespace Cory {
 
 /**
  * An async render task declaration awaitable that shall be used as a return type to declare a
@@ -21,7 +21,16 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
         RenderTaskDeclaration get_return_object() { return RenderTaskDeclaration{this}; }
 
         cppcoro::suspend_always final_suspend() noexcept { return {}; }
-        void unhandled_exception() {}
+        void unhandled_exception()
+        {
+            try {
+                std::rethrow_exception(std::current_exception());
+            }
+            catch ([[maybe_unused]] const std::exception &e) {
+                CO_CORE_TRACE("Unhandled exception in coroutine: {}", e.what());
+            }
+            exception_ = std::current_exception();
+        }
 
         cppcoro::suspend_never yield_value(RenderTaskOutput output)
         {
@@ -33,7 +42,9 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
         }
         void return_void() {}
 
+        // todo: this could easily be a std::variant
         RenderTaskOutput output_;
+        std::exception_ptr exception_{nullptr};
         bool outputsProvided_{false};
     };
 
@@ -61,6 +72,11 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
         if (!coroHandle_.promise().outputsProvided_ && !coroHandle_.done()) {
             coroHandle_.resume();
         }
+
+        // if necessary, rethrow the exception raised by the coroutine
+        if (auto ex = coroHandle_.promise().exception_; ex != nullptr) {
+            std::rethrow_exception(ex);
+        }
         CO_CORE_ASSERT(coroHandle_.promise().outputsProvided_,
                        "Render pass coroutine did not yield an outputs struct!");
 
@@ -71,4 +87,4 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
     Handle coroHandle_;
 };
 
-} // namespace Cory::Framegraph
+} // namespace Cory

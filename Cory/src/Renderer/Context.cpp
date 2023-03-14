@@ -14,6 +14,7 @@
 #include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
 #include <Magnum/Vk/DescriptorType.h>
 #include <Magnum/Vk/DeviceCreateInfo.h>
+#include <Magnum/Vk/DeviceFeatures.h>
 #include <Magnum/Vk/DeviceProperties.h>
 #include <Magnum/Vk/ExtensionProperties.h>
 #include <Magnum/Vk/Extensions.h>
@@ -61,42 +62,16 @@ struct ContextPrivate {
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 };
 
+namespace detail {
+PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPrivate &data);
+Magnum::Vk::PipelineLayout
+createDefaultPipelineLayout(Context &ctx, Vk::DescriptorSetLayout &descriptorSetLayout);
+Magnum::Vk::MeshLayout createDefaultMeshLayout();
 VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                      VkDebugUtilsMessageTypeFlagsEXT messageType,
                                      const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                                     void *pUserData)
-{
-    ContextPrivate *contextData = static_cast<ContextPrivate *>(pUserData);
-    contextData->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
-                                          static_cast<DebugMessageType>(messageType),
-                                          pCallbackData);
-    return VK_TRUE;
-}
-
-Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
-                                                       Vk::DescriptorSetLayout &descriptorSetLayout)
-{
-    // use max guaranteed memory of 128 bytes, for all shaders
-    VkPushConstantRange pushConstantRange{
-        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
-
-    // create pipeline layout
-    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{
-        descriptorSetLayout, descriptorSetLayout, descriptorSetLayout, descriptorSetLayout};
-    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
-    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
-    return Vk::PipelineLayout(ctx.device(), pipelineLayoutCreateInfo);
-}
-
-Magnum::Vk::MeshLayout createDefaultMeshLayout()
-{
-    static constexpr uint32_t binding{0};
-    return Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
-        .addBinding(binding, 10 * sizeof(float))
-        .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
-        .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
-        .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float));
-}
+                                     void *pUserData);
+} // namespace detail
 
 Context::Context()
     : data_{std::make_unique<ContextPrivate>()}
@@ -123,7 +98,7 @@ Context::Context()
     data_->physicalDevice = Vk::pickDevice(data_->instance);
     CO_APP_INFO("Using device {}", data_->physicalDevice.name());
 
-    Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
+    const Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
     Vk::DeviceCreateInfo info{data_->physicalDevice, &extensions};
     info.addEnabledExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_dynamic_rendering"});
 
@@ -133,15 +108,9 @@ Context::Context()
         Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
     info.addQueues(data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
 
-    VkPhysicalDeviceSynchronization2Features synchronization2Features{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .synchronization2 = VK_TRUE};
-    VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-        .pNext = &synchronization2Features,
-        .dynamicRendering = VK_TRUE,
-    };
-    info->pNext = &dynamicRenderingFeatures;
+    // set up the required features
+    auto pnext_chain = detail::setupRequiredDeviceFeatures(info, *data_);
+    info->pNext = pnext_chain.head();
 
     Vk::Result deviceCreateResult = data_->device.tryCreate(data_->instance, std::move(info));
     if (deviceCreateResult != Vk::Result::Success) {
@@ -168,7 +137,7 @@ Context::Context()
     // or application base class
     // default layout currently only has a single uniform buffer and eight images and buffers
     Vk::DescriptorSetLayoutCreateInfo defaultLayout{
-        {{0, Vk::DescriptorType::UniformBuffer}},
+        {{0, Vk::DescriptorType::UniformBuffer, 1}},
         {{1, Vk::DescriptorType::CombinedImageSampler, 8}},
         {{2, Vk::DescriptorType::StorageBuffer, 8}}};
     static constexpr uint32_t FRAMES_IN_FLIGHT = 4;
@@ -176,10 +145,10 @@ Context::Context()
     data_->descriptorSetManager.init(
         data_->device, data_->resources, std::move(defaultLayout), FRAMES_IN_FLIGHT);
 
-    data_->defaultMeshLayout = createDefaultMeshLayout();
+    data_->defaultMeshLayout = detail::createDefaultMeshLayout();
     data_->emptyMeshLayout = Magnum::Vk::MeshLayout{Vk::MeshPrimitive::Triangles};
-    data_->defaultPipelineLayout =
-        createDefaultPipelineLayout(*this, resources()[data_->descriptorSetManager.layout()]);
+    data_->defaultPipelineLayout = detail::createDefaultPipelineLayout(
+        *this, resources()[data_->descriptorSetManager.layout()]);
 }
 
 Context::Context(Context &&rhs) { std::swap(rhs.data_, data_); }
@@ -207,7 +176,7 @@ void Context::setupDebugMessenger()
         .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
                        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
                        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-        .pfnUserCallback = debugUtilsMessengerCallback,
+        .pfnUserCallback = detail::debugUtilsMessengerCallback,
         .pUserData = data_.get()};
 
     VkDebugUtilsMessengerEXT messenger;
@@ -303,5 +272,75 @@ void ContextPrivate::receiveDebugUtilsMessage(
                                          .message = callbackData->pMessage});
     Log::GetCoreLogger()->log(level, "[VulkanDebugMsg:{}] {}", messageType, callbackData->pMessage);
 }
+
+namespace detail {
+
+PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPrivate &data)
+{
+    PNextChain chain;
+
+    //    VkPhysicalDeviceFeatures2 deviceFeatures{.sType =
+    //    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+    //                                             .pNext = nullptr};
+    //    data.instance->GetPhysicalDeviceFeatures2(data.physicalDevice, &deviceFeatures);
+
+    // synchronization2
+    chain.prepend(VkPhysicalDeviceSynchronization2Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+        .synchronization2 = VK_TRUE});
+
+    // dynamic_rendering
+    chain.prepend(VkPhysicalDeviceDynamicRenderingFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+        .dynamicRendering = VK_TRUE,
+    });
+
+    // indexing_features (required for bindless)
+    chain.prepend(VkPhysicalDeviceDescriptorIndexingFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+        .descriptorBindingPartiallyBound = VK_TRUE,
+        .runtimeDescriptorArray = VK_TRUE});
+
+    return chain;
+}
+
+VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
+                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                                     void *pUserData)
+{
+    ContextPrivate *contextData = static_cast<ContextPrivate *>(pUserData);
+    contextData->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
+                                          static_cast<DebugMessageType>(messageType),
+                                          pCallbackData);
+    return VK_TRUE;
+}
+
+Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
+                                                       Vk::DescriptorSetLayout &descriptorSetLayout)
+{
+    // use max guaranteed memory of 128 bytes, for all shaders
+    VkPushConstantRange pushConstantRange{
+        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
+
+    // create pipeline layout
+    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{
+        descriptorSetLayout, descriptorSetLayout, descriptorSetLayout, descriptorSetLayout};
+    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
+    return Vk::PipelineLayout(ctx.device(), pipelineLayoutCreateInfo);
+}
+
+Magnum::Vk::MeshLayout createDefaultMeshLayout()
+{
+    static constexpr uint32_t binding{0};
+    return Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
+        .addBinding(binding, 10 * sizeof(float))
+        .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
+        .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
+        .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float));
+}
+
+} // namespace detail
 
 } // namespace Cory

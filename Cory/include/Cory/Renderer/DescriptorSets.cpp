@@ -56,6 +56,7 @@ void DescriptorSets::init(Magnum::Vk::Device &device,
                           uint32_t instances)
 {
     CO_CORE_ASSERT(data_ == nullptr, "Object already initialized!");
+
     data_ = std::make_unique<DescriptorSetManagerPrivate>();
     data_->device = &device;
     data_->resourceManager = &resourceManager;
@@ -132,22 +133,22 @@ DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
     return *this;
 }
 
-DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
+DescriptorSets &DescriptorSets::write(SetType type,
                                       gsl::index instanceIndex,
                                       gsl::span<VkImageLayout> layouts,
                                       gsl::span<ImageViewHandle> images,
                                       gsl::span<SamplerHandle> samplers)
 {
-    auto &set = get(Cory::DescriptorSets::SetType::Static, instanceIndex);
+    auto &set = get(SetType::Static, instanceIndex);
 
     auto &resources = *data_->resourceManager;
 
     const std::vector<VkDescriptorImageInfo> imageInfos =
-        ranges::views::zip(layouts, images, samplers) |
+        ranges::views::zip(samplers, images, layouts) |
         ranges::views::transform([&resources](const auto &e) {
-            return VkDescriptorImageInfo{.sampler = resources[std::get<2>(e)],
+            return VkDescriptorImageInfo{.sampler = resources[std::get<0>(e)],
                                          .imageView = resources[std::get<1>(e)],
-                                         .imageLayout = std::get<0>(e)};
+                                         .imageLayout = std::get<2>(e)};
         }) |
         ranges::to<std::vector>;
 

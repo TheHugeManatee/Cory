@@ -172,8 +172,6 @@ FrameContext Swapchain::nextImage()
                    "failed to acquire swap chain image: {}",
                    result);
 
-    // advance the image index
-    ++nextFrameNumber_;
     fc.frameNumber = nextFrameNumber_;
     fc.shouldRecreateSwapchain = false;
 
@@ -200,6 +198,8 @@ FrameContext Swapchain::nextImage()
     fc.commandBuffer = &commandBuffers_[nextFrameIndex];
     nameVulkanObject(ctx_->device(), *fc.commandBuffer, fmt::format("Frame[{}]", fc.frameNumber));
 
+    // advance the image index
+    ++nextFrameNumber_;
     return fc;
 }
 

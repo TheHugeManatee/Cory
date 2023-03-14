@@ -275,7 +275,7 @@ Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
 CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
                                     Cory::TransientTextureHandle colorTarget,
                                     Cory::TransientTextureHandle depthTarget,
-                                    const Cory::FrameContext &frameCtx)
+                                    Cory::FrameContext frameCtx)
 {
 
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
@@ -352,7 +352,7 @@ Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
 CubeDemoApplication::depthDebugTask(Cory::Builder builder,
                                     Cory::TransientTextureHandle colorTarget,
                                     Cory::TransientTextureHandle depthTarget,
-                                    const Cory::FrameContext &frameCtx)
+                                    Cory::FrameContext frameCtx)
 {
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
 
@@ -385,10 +385,12 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
     globalUbo_->flush(frameCtx.index);
 
     Cory::TextureManager &resources = *renderApi.resources;
+    // textureManager_.
+
     // TODO get layout from texturemanager!
-    VkImageLayout layouts[] = {VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    Cory::ImageViewHandle textures[] = {resources.imageView(depthTarget)};
-    Cory::SamplerHandle samplers[] = {defaultSampler_};
+    std::array layouts{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    std::array textures{resources.imageView(depthTarget)};
+    std::array samplers{defaultSampler_};
 
     ctx_->descriptorSets().write(
         Cory::DescriptorSets::SetType::Static, frameCtx.index, layouts, textures, samplers);
@@ -403,10 +405,8 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
     cubePass.end(*renderApi.cmd);
 }
 
-Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::imguiRenderTask(Cory::Builder builder,
-                                     Cory::TransientTextureHandle colorTarget,
-                                     const Cory::FrameContext &frameCtx)
+Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs> CubeDemoApplication::imguiRenderTask(
+    Cory::Builder builder, Cory::TransientTextureHandle colorTarget, Cory::FrameContext frameCtx)
 {
     auto [writtenColorHandle, colorInfo] =
         builder.readWrite(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);

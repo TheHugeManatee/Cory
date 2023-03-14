@@ -47,18 +47,16 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     cubeRenderTask(Cory::Builder builder,
                    Cory::TransientTextureHandle colorTarget,
                    Cory::TransientTextureHandle depthTarget,
-                   const Cory::FrameContext &frameCtx);
+                   Cory::FrameContext frameCtx);
 
     Cory::RenderTaskDeclaration<PassOutputs>
     depthDebugTask(Cory::Builder builder,
                    Cory::TransientTextureHandle colorTarget,
                    Cory::TransientTextureHandle depthTarget,
-                   const Cory::FrameContext &frameCtx);
+                   Cory::FrameContext frameCtx);
 
-    Cory::RenderTaskDeclaration<PassOutputs>
-    imguiRenderTask(Cory::Builder builder,
-                    Cory::TransientTextureHandle colorTarget,
-                    const Cory::FrameContext &ctx);
+    Cory::RenderTaskDeclaration<PassOutputs> imguiRenderTask(
+        Cory::Builder builder, Cory::TransientTextureHandle colorTarget, Cory::FrameContext ctx);
 
     static double now();
     [[nodiscard]] double getElapsedTimeSeconds() const;

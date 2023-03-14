@@ -101,14 +101,25 @@ template <size_t MAX_CHAIN_SIZE = 10> class PNextChain : NoCopy {
         CO_CORE_ASSERT(current_ < MAX_CHAIN_SIZE, "PNextChain is full");
         data_[current_] = next_struct;
 
-        using StructRef = decltype(next_struct) &;
-        auto &next = any_cast<StructRef>(data_[current_]);
+        auto &next = any_cast<decltype(next_struct) &>(data_[current_]);
 
         next.pNext = std::exchange(head_, &next);
         current_++;
 
         return next;
-    };
+    }
+
+    /// insert something into the storage without appending it into the chain
+    auto &insert(auto aux_struct)
+    {
+        CO_CORE_ASSERT(current_ < MAX_CHAIN_SIZE, "PNextChain is full");
+        data_[current_] = aux_struct;
+
+        auto &next = any_cast<decltype(aux_struct) &>(data_[current_]);
+        current_++;
+
+        return next;
+    }
 
     [[nodiscard]] void *head() const { return head_; };
 

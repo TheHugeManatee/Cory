@@ -100,7 +100,10 @@ Context::Context()
 
     const Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
     Vk::DeviceCreateInfo info{data_->physicalDevice, &extensions};
-    info.addEnabledExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_dynamic_rendering"});
+    info.addEnabledExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                               VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+                               "VK_KHR_fragment_shading_rate",
+                               "VK_KHR_dynamic_rendering"});
 
     // configure a Graphics and a Compute queue - assumes that there is a family that
     // supports both graphics and compute, which is probably not universal
@@ -136,10 +139,24 @@ Context::Context()
     // TODO descriptorsetmanager should move to more frontend-facing object like swapchain, window,
     // or application base class
     // default layout currently only has a single uniform buffer and eight images and buffers
+    Vk::DescriptorSetLayoutBinding::Flags bindless_flags{};
+    bindless_flags |= Vk::DescriptorSetLayoutBinding::Flag::PartiallyBound;
+    bindless_flags |= Vk::DescriptorSetLayoutBinding::Flag::UpdateAfterBind;
+
+    // static cast is needed because Magnum does not know about this flag yet
+    Vk::DescriptorSetLayoutCreateInfo::Flags layout_flags(
+        static_cast<Vk::DescriptorSetLayoutCreateInfo::Flag>(
+            VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT));
+
+    auto all_graphics = Vk::ShaderStage{VK_SHADER_STAGE_ALL_GRAPHICS};
+
     Vk::DescriptorSetLayoutCreateInfo defaultLayout{
-        {{0, Vk::DescriptorType::UniformBuffer, 1}},
-        {{1, Vk::DescriptorType::CombinedImageSampler, 8}},
-        {{2, Vk::DescriptorType::StorageBuffer, 8}}};
+        {
+            {{0, Vk::DescriptorType::UniformBuffer, 1, all_graphics, bindless_flags}},
+            {{1, Vk::DescriptorType::CombinedImageSampler, 8, all_graphics, bindless_flags}},
+            {{2, Vk::DescriptorType::StorageBuffer, 8, all_graphics, bindless_flags}},
+        },
+        layout_flags};
     static constexpr uint32_t FRAMES_IN_FLIGHT = 4;
 
     data_->descriptorSetManager.init(
@@ -284,6 +301,13 @@ PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPriv
     //                                             .pNext = nullptr};
     //    data.instance->GetPhysicalDeviceFeatures2(data.physicalDevice, &deviceFeatures);
 
+    // general enabled features
+    auto &enabled_features = chain.insert(VkPhysicalDeviceFeatures{
+        // sample rate shading to be able to work with multisampling properly
+        .sampleRateShading = VK_TRUE,
+    });
+    info->pEnabledFeatures = &enabled_features;
+
     // synchronization2
     chain.prepend(VkPhysicalDeviceSynchronization2Features{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
@@ -298,6 +322,9 @@ PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPriv
     // indexing_features (required for bindless)
     chain.prepend(VkPhysicalDeviceDescriptorIndexingFeatures{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+        .descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE,
+        .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+        .descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE,
         .descriptorBindingPartiallyBound = VK_TRUE,
         .runtimeDescriptorArray = VK_TRUE});
 

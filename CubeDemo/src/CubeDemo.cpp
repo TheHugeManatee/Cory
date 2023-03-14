@@ -369,7 +369,7 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
                         .shaders({fullscreenTriShader_, depthDebugShader_})
                         .disableMeshInput() // fullscreen triangle pass
                         .attach(colorTarget,
-                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
+                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD,
                                 VK_ATTACHMENT_STORE_OP_STORE,
                                 clearColor)
                         .finish();
@@ -394,7 +394,7 @@ CubeDemoApplication::depthDebugTask(Cory::Builder builder,
 
     ctx_->descriptorSets().write(
         Cory::DescriptorSets::SetType::Static, frameCtx.index, layouts, textures, samplers);
-    //ctx_->descriptorSets().flushWrites();
+    ctx_->descriptorSets().flushWrites();
     ctx_->descriptorSets().bind(
         renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
     ////////////

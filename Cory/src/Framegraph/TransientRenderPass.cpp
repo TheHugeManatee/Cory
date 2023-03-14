@@ -92,7 +92,7 @@ class PipelineCache {
         const VkPipelineMultisampleStateCreateInfo multisampling{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
             .rasterizationSamples = (VkSampleCountFlagBits)info.sampleCount,
-            .sampleShadingEnable = VK_FALSE,
+            .sampleShadingEnable = VK_TRUE,
         };
 
         // note: depth setup is ignored and actually overridden the dynamic states, only stencil and

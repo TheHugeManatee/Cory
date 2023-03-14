@@ -71,8 +71,10 @@ void DescriptorSets::init(Magnum::Vk::Device &device,
         bindings[bindingIdx].second =
             defaultLayout->pBindings[bindingIdx].descriptorCount * instances;
     }
-    data_->descriptorPool =
-        Vk::DescriptorPool{device, Vk::DescriptorPoolCreateInfo{instances * 4, bindings}};
+    data_->descriptorPool = Vk::DescriptorPool{
+        device,
+        Vk::DescriptorPoolCreateInfo{
+            instances * 4, bindings, Vk::DescriptorPoolCreateInfo::Flag::UpdateAfterBind}};
 
     // create descriptor sets
     auto &layout = resourceManager[data_->layoutHandle];

@@ -23,7 +23,7 @@ struct RenderTaskInfo {
 };
 
 /**
- * a builder that allows a render pass to declare specific dependencies (inputs and outputs).
+ * a builder that allows a render task to declare specific dependencies (inputs and outputs).
  *
  * For defaults, see default values in RenderTaskInfo.
  *
@@ -31,7 +31,7 @@ struct RenderTaskInfo {
  */
 class Builder : NoCopy {
   public:
-    Builder(Context &ctx, Framegraph &framegraph, std::string_view passName);
+    Builder(Context &ctx, Framegraph &framegraph, std::string_view taskName);
     ~Builder();
 
     /// move-constructible because it is intended to be provided by-value to the pass coroutine

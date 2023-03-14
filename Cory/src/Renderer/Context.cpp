@@ -122,10 +122,10 @@ Context::Context()
     }
     data_->device.populateGlobalFunctionPointers();
     // set a debug name for the logical device and queues
-    nameVulkanObject(data_->device, data_->device, fmt::format("[{}] Logical Device", data_->name));
+    nameVulkanObject(data_->device, data_->device, fmt::format("DEV_{}", data_->name));
     nameVulkanObject(
-        data_->device, data_->graphicsQueue, fmt::format("[{}] Graphics", data_->name));
-    // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("[{}] Compute",
+        data_->device, data_->graphicsQueue, fmt::format("QUE_Gfx_{}", data_->name));
+    // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("QUE_Comp_{}",
     // data_->name));
 
     setupDebugMessenger();

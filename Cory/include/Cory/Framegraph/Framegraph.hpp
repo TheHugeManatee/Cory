@@ -74,8 +74,8 @@ class Framegraph : NoCopy {
     explicit Framegraph(Context &ctx);
     ~Framegraph();
 
-    Framegraph(Framegraph &&);
-    Framegraph &operator=(Framegraph &&);
+    Framegraph(Framegraph &&) noexcept;
+    Framegraph &operator=(Framegraph &&) noexcept;
 
     /**
      * @brief record the commands from all render tasks into the given command buffer
@@ -90,19 +90,16 @@ class Framegraph : NoCopy {
      * should be called only when it can be ensured that all resources are no longer in use, e.g.
      * for example when the next frame with the same swapchain image has been rendered.
      */
-    void reset();
+    void resetForNextFrame();
 
     /// declare a new render task
     Builder declareTask(std::string_view name);
 
-    /// to be called from Builder
-    RenderInput renderInput(RenderTaskHandle passHandle);
-
     /// declare an external texture as an input
-    TransientTextureHandle declareInput(TextureInfo info,
-                                        Sync::AccessType lastWriteAccess,
-                                        Magnum::Vk::Image &image,
-                                        Magnum::Vk::ImageView &imageView);
+    [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
+                                                      Sync::AccessType lastWriteAccess,
+                                                      Magnum::Vk::Image &image,
+                                                      Magnum::Vk::ImageView &imageView);
 
     /**
      * declare that a resource is to be read afterwards. returns general
@@ -118,12 +115,15 @@ class Framegraph : NoCopy {
     [[nodiscard]] std::string dump(const ExecutionInfo &info);
 
   private: /* member functions */
-    RenderTaskHandle finishPassDeclaration(RenderTaskInfo &&info);
+    RenderTaskHandle finishTaskDeclaration(RenderTaskInfo &&info);
 
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
     /// coroHandle
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle);
     TextureManager &resources();
+
+    /// to be called from Builder
+    RenderInput renderInput(RenderTaskHandle taskHandle);
 
     /**
      * @brief resolve which render tasks need to be executed for requested resources
@@ -139,10 +139,11 @@ class Framegraph : NoCopy {
     [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandList &cmd,
                                                                          RenderTaskHandle handle);
 
-    cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>> renderTasks() const;
+    [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
+    renderTasks() const;
 
   private:                             /* members */
-    friend Builder;                    // convenience so it can call finishPassDeclaration
+    friend Builder;                    // convenience so it can call finishTaskDeclaration
     friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
     friend FramegraphVisualizer;       // accesses all the internals
 

@@ -8,19 +8,19 @@
 
 namespace Cory {
 
-Builder::Builder(Context &ctx, Framegraph &framegraph, std::string_view passName)
+Builder::Builder(Context &ctx, Framegraph &framegraph, std::string_view taskName)
     : ctx_{ctx}
     , info_{}
     , framegraph_{framegraph}
 {
-    info_.name = passName;
+    info_.name = taskName;
     CO_CORE_TRACE("Pass {}: declaration started", info_.name);
 }
 Builder::~Builder() {}
 
 RenderTaskExecutionAwaiter Builder::finishDeclaration()
 {
-    const RenderTaskHandle passHandle = framegraph_.finishPassDeclaration(std::move(info_));
+    const RenderTaskHandle passHandle = framegraph_.finishTaskDeclaration(std::move(info_));
     return RenderTaskExecutionAwaiter{passHandle, framegraph_};
 }
 

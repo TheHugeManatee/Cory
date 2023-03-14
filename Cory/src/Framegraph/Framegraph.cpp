@@ -56,7 +56,7 @@ Framegraph::~Framegraph()
     // if data_ is empty, object is moved-from
     if (data_) {
         try {
-            reset();
+            resetForNextFrame();
         }
         catch (const std::exception &e) {
             CO_APP_ERROR("Uncaught exception in destructor: {}", e.what());
@@ -64,8 +64,8 @@ Framegraph::~Framegraph()
     }
 }
 
-Framegraph::Framegraph(Framegraph &&) = default;
-Framegraph &Framegraph::operator=(Framegraph &&) = default;
+Framegraph::Framegraph(Framegraph &&) noexcept = default;
+Framegraph &Framegraph::operator=(Framegraph &&) noexcept = default;
 
 ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
 {
@@ -86,7 +86,7 @@ ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
     return executionInfo;
 }
 
-void Framegraph::reset()
+void Framegraph::resetForNextFrame()
 {
     data_->resources.clear();
     data_->externalInputs.clear();
@@ -137,7 +137,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     CO_CORE_ASSERT(coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
                    "points! A render task should only have a single co_yield and should wait on "
-                   "the builder's finishPassDeclaration() exactly once!");
+                   "the builder's finishTaskDeclaration() exactly once!");
 
     return transitions;
 }
@@ -178,7 +178,7 @@ std::string Framegraph::dump(const ExecutionInfo &executionInfo)
     return visualizer.generateDotGraph(executionInfo);
 }
 
-RenderTaskHandle Framegraph::finishPassDeclaration(RenderTaskInfo &&info)
+RenderTaskHandle Framegraph::finishTaskDeclaration(RenderTaskInfo &&info)
 {
     return data_->renderTasks.emplace(info);
 }
@@ -302,7 +302,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         .tasks = std::move(tasks), .resources = std::move(requiredResources), .transitions = {}};
 }
 
-RenderInput Framegraph::renderInput(RenderTaskHandle passHandle)
+RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
 {
     CO_CORE_ASSERT(data_->commandListInProgress, "No command list recording in progress!");
     return {

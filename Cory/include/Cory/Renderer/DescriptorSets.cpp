@@ -80,7 +80,7 @@ void DescriptorSets::init(Magnum::Vk::Device &device,
     auto &layout = resourceManager[data_->layoutHandle];
     const auto allocate_set = [&](std::string_view name, gsl::index i) {
         auto set = data_->descriptorPool.allocate(layout);
-        nameVulkanObject(*data_->device, set, fmt::format("{} [{}]", name, i));
+        nameVulkanObject(*data_->device, set, fmt::format("DESC_{} [{}]", name, i));
         return set;
     };
     // allocate one descriptor set for each type and frame in flight

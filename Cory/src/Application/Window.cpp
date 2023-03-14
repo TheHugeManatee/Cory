@@ -78,7 +78,7 @@ BasicVkObjectWrapper<VkSurfaceKHR> Window::createSurface()
         }};
 
     CO_CORE_ASSERT(ret == VK_SUCCESS, "Could not create surface!");
-    nameVulkanObject(ctx_.device(), surface, "Main Window Surface");
+    nameVulkanObject(ctx_.device(), surface, fmt::format("SURF_{}", windowName_));
 
     return surface;
 }
@@ -218,10 +218,10 @@ void Window::createColorAndDepthResources()
         Vk::Image{ctx_.device(),
                   Vk::ImageCreateInfo2D{colorImgUsage, colorFormat_, size, levels, sampleCount_},
                   Vk::MemoryFlag::DeviceLocal};
-    nameVulkanObject(ctx_.device(), colorImage_, fmt::format("Wnd_Col {}", extent));
+    nameVulkanObject(ctx_.device(), colorImage_, fmt::format("TEX_WndCol {} (IMG)", extent));
 
     colorImageView_ = Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage_}};
-    nameVulkanObject(ctx_.device(), colorImageView_, fmt::format("Wnd_Col {}", extent));
+    nameVulkanObject(ctx_.device(), colorImageView_, fmt::format("TEX_WndCol {} (VIEW)", extent));
 
     // DEPTH images
     depthImages_ =
@@ -233,7 +233,8 @@ void Window::createColorAndDepthResources()
                           Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},
                           Vk::MemoryFlag::DeviceLocal};
 
-            nameVulkanObject(ctx_.device(), img, fmt::format("Wnd_Depth[{}] {}", idx, extent));
+            nameVulkanObject(
+                ctx_.device(), img, fmt::format("TEX_WndDepth[{}] {} (IMG)", idx, extent));
             return img;
         }) |
         ranges::to<std::vector<Vk::Image>>;
@@ -242,7 +243,8 @@ void Window::createColorAndDepthResources()
         ranges::views::enumerate(depthImages_) | ranges::views::transform([&](auto it) {
             auto [idx, depthImage] = it;
             Vk::ImageView view{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
-            nameVulkanObject(ctx_.device(), view, fmt::format("Wnd_Depth[{}] {}", idx, extent));
+            nameVulkanObject(
+                ctx_.device(), view, fmt::format("TEX_WndDepth[{}] {} (VIEW)", idx, extent));
             return view;
         }) |
         ranges::to<std::vector<Vk::ImageView>>;

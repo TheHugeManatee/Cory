@@ -211,7 +211,7 @@ void CubeDemoApplication::run()
         // retire old resources from the last time this framegraph was
         // used - our frame synchronization ensures that the resources
         // are no longer in use
-        fg.reset();
+        fg.resetForNextFrame();
 
         defineRenderPasses(fg, frameCtx);
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});

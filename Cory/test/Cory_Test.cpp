@@ -5,5 +5,6 @@
 
 TEST_CASE("Library Function works", "[Cory]")
 {
-  fmt::print("Vulkan version: {}", Cory::queryVulkanInstanceVersion());
+    // dump instance info
+    Cory::dumpInstanceInformation();
 }

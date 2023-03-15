@@ -10,8 +10,14 @@ namespace Cory {
      *
      */
     void Init();
-    std::string queryVulkanInstanceVersion();
 
-    // temporary main function for prototyping
-    void playground_main();
+    /**
+     * Deinitialize the library.
+     *
+     * Mostly takes care of deinitializing all static (global) objects.
+     */
+    void Deinit();
+
+    // dumps a bunch of information onto the console
+    void dumpInstanceInformation();
 }

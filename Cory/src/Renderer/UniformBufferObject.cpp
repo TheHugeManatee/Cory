@@ -46,13 +46,38 @@ UniformBufferObjectBase::UniformBufferObjectBase(Context &ctx,
     THROW_ON_ERROR(r, "Mapping memory for uniform buffer failed");
 }
 
+void swap(UniformBufferObjectBase &lhs, UniformBufferObjectBase &rhs) noexcept
+{
+    using std::swap;
+    swap(lhs.ctx_, rhs.ctx_);
+    swap(lhs.buffer_, rhs.buffer_);
+    swap(lhs.mappedMemory_, rhs.mappedMemory_);
+    swap(lhs.instanceSize_, rhs.instanceSize_);
+    swap(lhs.alignedInstanceSize_, rhs.alignedInstanceSize_);
+    swap(lhs.instances_, rhs.instances_);
+}
+
+UniformBufferObjectBase::UniformBufferObjectBase(UniformBufferObjectBase &&rhs) noexcept
+    : UniformBufferObjectBase()
+{
+    swap(*this, rhs);
+}
+
+UniformBufferObjectBase &UniformBufferObjectBase::operator=(UniformBufferObjectBase &&rhs) noexcept
+{
+    swap(*this, rhs);
+    return *this;
+}
+
 UniformBufferObjectBase::~UniformBufferObjectBase()
 {
-    // unmap memory
-    VkDeviceMemory memory = ctx_->resources()[buffer_].dedicatedMemory();
-    ctx_->device()->UnmapMemory(ctx_->device(), memory);
-    // release buffer
-    ctx_->resources().release(buffer_);
+    if (buffer_.valid()) {
+        // unmap memory
+        VkDeviceMemory memory = ctx_->resources()[buffer_].dedicatedMemory();
+        ctx_->device()->UnmapMemory(ctx_->device(), memory);
+        // release buffer
+        ctx_->resources().release(buffer_);
+    }
 }
 
 void UniformBufferObjectBase::flushInternal()
@@ -88,5 +113,4 @@ VkDescriptorBufferInfo UniformBufferObjectBase::descriptorInfo(gsl::index instan
                                   .offset = instance * alignedInstanceSize_,
                                   .range = alignedInstanceSize_};
 }
-
 } // namespace Cory

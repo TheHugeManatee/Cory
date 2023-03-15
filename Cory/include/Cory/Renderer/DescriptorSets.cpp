@@ -119,7 +119,7 @@ DescriptorSets &DescriptorSets::write(DescriptorSets::SetType type,
                                       gsl::index instanceIndex,
                                       const UniformBufferObjectBase &ubo)
 {
-    auto &set = get(Cory::DescriptorSets::SetType::Static, instanceIndex);
+    auto &set = get(type, instanceIndex);
 
     data_->storedWriteBufferInfos.push_back(ubo.descriptorInfo(instanceIndex));
 
@@ -141,7 +141,7 @@ DescriptorSets &DescriptorSets::write(SetType type,
                                       gsl::span<ImageViewHandle> images,
                                       gsl::span<SamplerHandle> samplers)
 {
-    auto &set = get(SetType::Static, instanceIndex);
+    auto &set = get(type, instanceIndex);
 
     auto &resources = *data_->resourceManager;
 
@@ -167,7 +167,7 @@ DescriptorSets &DescriptorSets::write(SetType type,
     return *this;
 }
 
-DescriptorSets& DescriptorSets::flushWrites()
+DescriptorSets &DescriptorSets::flushWrites()
 {
     auto &device = *data_->device;
 
@@ -185,9 +185,9 @@ DescriptorSets& DescriptorSets::flushWrites()
     return *this;
 }
 
-DescriptorSets& DescriptorSets::bind(Magnum::Vk::CommandBuffer &cmd,
-                          gsl::index instanceIndex,
-                          Magnum::Vk::PipelineLayout &pipelineLayout)
+DescriptorSets &DescriptorSets::bind(Magnum::Vk::CommandBuffer &cmd,
+                                     gsl::index instanceIndex,
+                                     Magnum::Vk::PipelineLayout &pipelineLayout)
 {
     auto &device = *data_->device;
 

@@ -1,29 +1,31 @@
 #pragma once
 
 #include <Cory/Application/ApplicationLayer.hpp>
+#include <Cory/Application/Common.hpp>
+
+#include <kdbindings/property.h>
 
 namespace Cory {
 
 class DepthDebugLayer : public ApplicationLayer {
   public:
-    DepthDebugLayer()
-        : ApplicationLayer("DepthDebug")
-    {
-    }
+    DepthDebugLayer();
 
-    ~DepthDebugLayer() override = default;
+    ~DepthDebugLayer() override;
 
-    void onAttach(Context &ctx) override;
+    void onAttach(Context &ctx, LayerAttachInfo info) override;
     void onDetach(Context &ctx) override;
-    void onEvent() override;
-    void onUpdate() override;
 
     RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
                                                        LayerPassOutputs previousLayer) override;
 
+    kdb::Property<glm::vec2> center{glm::vec2(0.5f, 0.5f)};
+    kdb::Property<glm::vec2> size{glm::vec2(0.5f, 0.5f)};
+    kdb::Property<glm::vec2> window{glm::vec2(0.9f, 1.0f)};
+
   private:
-    Cory::ShaderHandle fullscreenTriShader_;
-    Cory::ShaderHandle depthDebugShader_;
+    struct State;
+    std::unique_ptr<State> state_;
 };
 
 } // namespace Cory

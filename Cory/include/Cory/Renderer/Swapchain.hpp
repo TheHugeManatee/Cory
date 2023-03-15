@@ -45,7 +45,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
     [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
     [[nodiscard]] size_t size() const noexcept { return images_.size(); }
-    [[nodiscard]] size_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
+    [[nodiscard]] uint32_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying

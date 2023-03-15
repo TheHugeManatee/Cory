@@ -146,7 +146,9 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     window_->onSwapchainResized.connect(recreateSizedResources);
 
     imguiLayer_->init(*window_, *ctx_);
-    depthDebugLayer_->onAttach(*ctx_);
+    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
+                                              window_->swapchain().maxFramesInFlight()};
+    depthDebugLayer_->onAttach(*ctx_, layerAttachInfo);
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
     camera_.setWindowSize(window_->dimensions());
@@ -168,12 +170,6 @@ void CubeDemoApplication::createUBO()
     const Cory::ScopeTimer st{"Init/UBO"};
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
         *ctx_, window_->swapchain().maxFramesInFlight());
-
-    for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
-        ctx_->descriptorSets()
-            .write(Cory::DescriptorSets::SetType::Static, i, *globalUbo_)
-            .flushWrites();
-    }
 }
 
 CubeDemoApplication::~CubeDemoApplication()
@@ -320,8 +316,10 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.index);
 
-    ctx_->descriptorSets().bind(
-        renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
+    ctx_->descriptorSets()
+        .write(Cory::DescriptorSets::SetType::Static, frameCtx.index, *globalUbo_)
+        .flushWrites()
+        .bind(renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1

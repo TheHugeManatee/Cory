@@ -53,7 +53,7 @@ ResourceManager::~ResourceManager()
                 CO_CORE_WARN("  - {}, allocated here: \n    {}:{}",
                              storage.name,
                              storage.loc.file_name(),
-                             storage.loc.line();
+                             storage.loc.line());
                 if (++counter == 10) {
                     CO_CORE_WARN("  - {} more...", slotMap.size() - counter);
                     break;
@@ -64,7 +64,9 @@ ResourceManager::~ResourceManager()
 
     check_empty("buffer", data_->buffers);
     check_empty("shader", data_->shaders);
-    check_empty("pipeline", data_->pipelines);
+    // TODO we currently can't actually free the pipelines in the cache because our cache
+    // is so bare-bones. need to reinstate this when the cache is more sophisticated
+    // check_empty("pipeline", data_->pipelines);
     check_empty("image", data_->images);
     check_empty("imageView", data_->imageViews);
     check_empty("sampler", data_->samplers);

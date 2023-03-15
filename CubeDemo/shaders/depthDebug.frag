@@ -6,13 +6,20 @@ layout (push_constant) uniform PushConstants {
     float dummy;
 } push;
 
-layout (set = 0, binding = 0) uniform CubeUBO {
-    float dummy;
+
+#define SET_Static  0
+#define SET_Frame   1
+#define SET_Pass    2
+#define SET_User    3
+
+
+layout (set = SET_Frame, binding = 0) uniform Uniforms {
+    vec2 center;
+    vec2 size;
+    vec2 window;
 } globals;
 
-
-layout (set = 0, binding = 1) uniform sampler2DMS textures[8];
-
+layout (set = SET_Frame, binding = 1) uniform sampler2DMS textures[8];
 
 layout (location = 0) in vec2 inTex;
 
@@ -21,12 +28,15 @@ vec4 colorMap(float t) {
 }
 
 void main() {
-    if (inTex.x > 0.5) {
+    vec2 start = globals.center - globals.size / 2.0;
+    vec2 end = globals.center + globals.size / 2.0;
+
+    if (inTex.x < start.x || inTex.x > end.x || inTex.y < start.y || inTex.y > end.y) {
         discard;
     }
 
     vec4 texColor = texelFetch(textures[0], ivec2(gl_FragCoord.xy), gl_SampleID);
-    float depthNorm = (texColor.r - 0.9) / 0.1;
+    float depthNorm = (texColor.r - globals.window.x) / (globals.window.y - globals.window.x);
 
     outColor = colorMap(depthNorm);
 }

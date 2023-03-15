@@ -37,7 +37,7 @@ UniformBufferObjectBase::UniformBufferObjectBase(Context &ctx,
 {
     size_t size = instances_ * alignedInstanceSize_;
     buffer_ = ctx_->resources().createBuffer(
-        size, BufferUsageBits::UniformBuffer, MemoryFlagBits::HostVisible);
+        "Uniform Buffer", size, BufferUsageBits::UniformBuffer, MemoryFlagBits::HostVisible);
 
     // map the memory
     VkDeviceMemory memory = ctx_->resources()[buffer_].dedicatedMemory();

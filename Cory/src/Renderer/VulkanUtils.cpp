@@ -61,7 +61,6 @@ template <typename VulkanObjectHandle> VkObjectType getVulkanObjectType()
     if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSet>) {
         return VK_OBJECT_TYPE_DESCRIPTOR_SET;
     }
-    return VK_OBJECT_TYPE_UNKNOWN;
 }
 
 template <typename DeviceHandle, typename VulkanObjectHandle>
@@ -82,28 +81,6 @@ template <typename DeviceHandle, typename MagnumVulkanObjectHandle>
 void nameVulkanObject(DeviceHandle &device, MagnumVulkanObjectHandle &handle, std::string_view name)
 {
     nameRawVulkanObject(device, handle.handle(), name);
-}
-
-template <typename DeviceHandle, typename VulkanObjectHandle>
-void getVulkanObjectName(DeviceHandle &device, VulkanObjectHandle handle, std::string_view name)
-{
-    VkDebugUtilsObjectNameInfoEXT objectNameInfo{
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .pNext = nullptr,
-        .objectType = getVulkanObjectType<VulkanObjectHandle>(),
-        .objectHandle = (uint64_t)(handle),
-        .pObjectName = nullptr,
-    };
-
-    device->SetDebugUtilsObjectNameEXT(device, &objectNameInfo);
-
-    
-}
-
-template <typename DeviceHandle, typename MagnumVulkanObjectHandle>
-void getVulkanObjectName(DeviceHandle &device, MagnumVulkanObjectHandle &handle, std::string_view name)
-{
-    getVulkanObjectName(device, handle.handle(), name);
 }
 
 // explicitly instantiate for known types

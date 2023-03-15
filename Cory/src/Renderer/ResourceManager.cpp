@@ -32,7 +32,21 @@ ResourceManager::ResourceManager()
 {
 }
 
-ResourceManager::~ResourceManager() = default;
+ResourceManager::~ResourceManager()
+{
+    auto check_empty = [](std::string_view name, auto &slotMap) {
+        if (!slotMap.empty()) {
+            CO_CORE_WARN("ResourceManager: {} still has {} elements in use!", name, slotMap.size());
+        }
+    };
+    check_empty("buffers", data_->buffers);
+    check_empty("shaders", data_->shaders);
+    check_empty("pipelines", data_->pipelines);
+    check_empty("images", data_->images);
+    check_empty("imageViews", data_->imageViews);
+    check_empty("samplers", data_->samplers);
+    check_empty("descriptorSetLayouts", data_->descriptorSetLayouts);
+}
 
 void ResourceManager::setContext(Context &ctx)
 {

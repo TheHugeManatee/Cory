@@ -2,8 +2,8 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/FmtUtils.hpp>
-#include <Cory/Framegraph/Builder.hpp>
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 
 #include <glm/vec3.hpp>
 
@@ -15,41 +15,6 @@
 #include <unordered_map>
 
 namespace Cory {
-
-// provides access to the framegraph resources and metadata
-struct RenderContext {
-    // TBD
-};
-
-/**
- * passed to the render pass coroutines when they actually execute.
- *
- * A render pass coroutine obtains this object by with a `co_await builder.finishDeclaration()`.
- * It will be (potentially) resumed inside the Framegraph::execute() function,
- * after all resources have been resolved and can be queried through the @a resources
- * member.
- */
-struct RenderInput {
-    struct TextureManager *resources{};
-    RenderContext *context{};
-    // eventually, add accessors modify descriptors, push constants etc
-    CommandList *cmd{};
-};
-
-/**
- * an Awaitable that will enqueue the current coroutine for execution on the given framegraph
- * when the render pass gets scheduled.
- *
- * Note that the coroutine may never be resumed if the render pass identified by the @a passHandle
- * does not get scheduled.
- */
-struct RenderTaskExecutionAwaiter {
-    RenderTaskHandle passHandle;
-    Framegraph &fg;
-    [[nodiscard]] constexpr bool await_ready() const noexcept { return false; }
-    [[nodiscard]] RenderInput await_resume() const noexcept;
-    void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
-};
 
 struct ExecutionInfo {
     struct TransitionInfo {
@@ -67,7 +32,7 @@ struct ExecutionInfo {
 /**
  * The framegraph.
  *
- * Is meant to be filled with Cory::Builder
+ * Is meant to be filled with Cory::RenderTaskBuilder
  */
 class Framegraph : NoCopy {
   public:
@@ -82,7 +47,7 @@ class Framegraph : NoCopy {
      *
      * Note that this can be only called once. It will cause all relevant render tasks to execute.
      */
-    ExecutionInfo record(Magnum::Vk::CommandBuffer &cmdBuffer);
+    ExecutionInfo record(FrameContext& frameCtx);
 
     /**
      * @brief immediately retire all resources allocated by the framegraph
@@ -93,7 +58,7 @@ class Framegraph : NoCopy {
     void resetForNextFrame();
 
     /// declare a new render task
-    Builder declareTask(std::string_view name);
+    RenderTaskBuilder declareTask(std::string_view name);
 
     /// declare an external texture as an input
     [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
@@ -122,7 +87,7 @@ class Framegraph : NoCopy {
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle);
     TextureManager &resources();
 
-    /// to be called from Builder
+    /// to be called from RenderTaskBuilder
     RenderInput renderInput(RenderTaskHandle taskHandle);
 
     /**
@@ -143,7 +108,7 @@ class Framegraph : NoCopy {
     renderTasks() const;
 
   private:                             /* members */
-    friend Builder;                    // convenience so it can call finishTaskDeclaration
+    friend RenderTaskBuilder;                    // convenience so it can call finishTaskDeclaration
     friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
     friend FramegraphVisualizer;       // accesses all the internals
 

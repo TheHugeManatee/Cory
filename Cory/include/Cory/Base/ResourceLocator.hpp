@@ -20,12 +20,12 @@ class ResourceLocator {
     static void addSearchPath(std::filesystem::path path);
 
     /**
-     * locate a path/file by checking all resource search paths and returning the full path that
+     * Locate a path/file by checking all resource search paths and returning the full path that
      * matches the file. most recently added search paths will be checked first
      *
      * @throws ResourceNotFound if a resource cannot be located
      */
-    static std::filesystem::path locate(std::filesystem::path resourcePath);
+    static std::filesystem::path Locate(std::filesystem::path resourcePath);
 
   private:
     static std::vector<std::filesystem::path> searchPaths_;

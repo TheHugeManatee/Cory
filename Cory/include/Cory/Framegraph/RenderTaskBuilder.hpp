@@ -8,6 +8,39 @@
 
 namespace Cory {
 
+/**
+ * passed to the render task coroutines when they actually execute.
+ *
+ * A render pass coroutine obtains this object by with a `co_await builder.finishDeclaration()`.
+ * It will be (potentially) resumed inside the Framegraph::execute() function,
+ * after all resources have been resolved and can be queried through the @a resources
+ * member.
+ */
+struct RenderInput {
+    Context *ctx{};
+    FrameContext* frameCtx{};
+    TextureManager *resources{};
+    DescriptorSets * descriptors{};
+    // eventually, add accessors modify descriptors, push constants etc
+    CommandList *cmd{};
+};
+
+/**
+ * an Awaitable that will enqueue the current coroutine for execution on the given framegraph
+ * when the render task gets scheduled.
+ *
+ * Note that the coroutine may never be resumed if the render pass identified by the @a passHandle
+ * does not get scheduled.
+ */
+struct RenderTaskExecutionAwaiter {
+    RenderTaskHandle passHandle;
+    Framegraph &fg;
+    [[nodiscard]] constexpr bool await_ready() const noexcept { return false; }
+    [[nodiscard]] RenderInput await_resume() const noexcept;
+    void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
+};
+
+/// struct summarizing all info collected about a render task
 struct RenderTaskInfo {
     struct Dependency {
         TaskDependencyKind kind;
@@ -29,13 +62,13 @@ struct RenderTaskInfo {
  *
  * Meant to be used only locally, hence not copyable.
  */
-class Builder : NoCopy {
+class RenderTaskBuilder : NoCopy {
   public:
-    Builder(Context &ctx, Framegraph &framegraph, std::string_view taskName);
-    ~Builder();
+    RenderTaskBuilder(Context &ctx, Framegraph &framegraph, std::string_view taskName);
+    ~RenderTaskBuilder();
 
     /// move-constructible because it is intended to be provided by-value to the pass coroutine
-    Builder(Builder &&) = default;
+    RenderTaskBuilder(RenderTaskBuilder &&) = default;
 
     /// declare that a render pass creates a certain texture
     TransientTextureHandle

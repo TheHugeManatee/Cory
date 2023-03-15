@@ -18,6 +18,8 @@ namespace Cory {
      */
     void Deinit();
 
+    std::string queryVulkanInstanceVersion();
+
     // dumps a bunch of information onto the console
     void dumpInstanceInformation();
 }

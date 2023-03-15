@@ -15,7 +15,7 @@ void ResourceLocator::addSearchPath(std::filesystem::path path)
     searchPaths_.insert(searchPaths_.begin(), path);
 }
 
-std::filesystem::path ResourceLocator::locate(std::filesystem::path resourcePath)
+std::filesystem::path ResourceLocator::Locate(std::filesystem::path resourcePath)
 {
     for (const auto &searchPath : searchPaths_) {
         auto combined = searchPath / resourcePath;

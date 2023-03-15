@@ -10,6 +10,7 @@
 #include <Magnum/Vk/Vulkan.h>
 
 #include <Cory/Renderer/Synchronization.hpp>
+#include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
 #include <Cory/Renderer/flextVkExt.h> // extensions
 
 #include <cstdint>
@@ -91,6 +92,22 @@ using ImageViewHandle = PrivateTypedHandle<Magnum::Vk::ImageView, ResourceManage
 using SamplerHandle = PrivateTypedHandle<Magnum::Vk::Sampler, ResourceManager>;
 using DescriptorSetLayoutHandle =
     PrivateTypedHandle<Magnum::Vk::DescriptorSetLayout, ResourceManager>;
+
+struct FrameContext {
+    uint32_t index{};                    ///< the current swapchain image index
+    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
+    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
+    Magnum::Vk::Image *swapchainImage{};
+    Magnum::Vk::ImageView *swapchainImageView{};
+    Magnum::Vk::Image *colorImage{};
+    Magnum::Vk::ImageView *colorImageView{};
+    Magnum::Vk::Image *depthImage{};
+    Magnum::Vk::ImageView *depthImageView{};
+    Magnum::Vk::Fence *inFlight{};
+    Semaphore *acquired{};
+    Semaphore *rendered{};
+    Magnum::Vk::CommandBuffer *commandBuffer{};
+};
 
 } // namespace Cory
 

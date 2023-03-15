@@ -32,22 +32,6 @@ struct SwapchainSupportDetails {
     std::vector<uint32_t> presentFamilies;
 };
 
-struct FrameContext {
-    uint32_t index{};                    ///< the current swapchain image index
-    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
-    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
-    Magnum::Vk::Image *swapchainImage{};
-    Magnum::Vk::ImageView *swapchainImageView{};
-    Magnum::Vk::Image *colorImage{};
-    Magnum::Vk::ImageView *colorImageView{};
-    Magnum::Vk::Image *depthImage{};
-    Magnum::Vk::ImageView *depthImageView{};
-    Magnum::Vk::Fence *inFlight{};
-    Semaphore *acquired{};
-    Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer *commandBuffer{};
-};
-
 class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
     Swapchain(Context &ctx,

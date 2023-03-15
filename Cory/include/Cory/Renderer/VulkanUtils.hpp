@@ -41,6 +41,8 @@ void nameVulkanObject(DeviceHandle &device,
                       MagnumVulkanObjectHandle &handle,
                       std::string_view name);
 
+std::string getVulkanObjectName(void* vulkanObject);
+
 #define THROW_ON_ERROR(x, err)                                                                     \
     do {                                                                                           \
         if (auto code = (x); code != VK_SUCCESS) {                                                 \

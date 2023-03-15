@@ -13,7 +13,7 @@ namespace Cory {
 /**
  * @brief handles the transient resources created/destroyed during a frame
  *
- * This class is tightly coupled with the @a Framegraph and @a Builder, not
+ * This class is tightly coupled with the @a Framegraph and @a RenderTaskBuilder, not
  * intended to be used directly.
  *
  * It is intended to capture all transient resources for one frame, and is expected to be cleared

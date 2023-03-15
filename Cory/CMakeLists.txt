@@ -22,6 +22,7 @@ set(CORY_SOURCES
         include/Cory/Application/CameraManipulator.cpp
         include/Cory/Application/CameraManipulator.hpp
         include/Cory/Application/Common.hpp
+        include/Cory/Application/DepthDebugLayer.hpp
         include/Cory/Application/DynamicGeometry.hpp
         include/Cory/Application/ImGuiLayer.hpp
         include/Cory/Application/Window.hpp
@@ -36,9 +37,10 @@ set(CORY_SOURCES
         include/Cory/Base/ResourceLocator.hpp
         include/Cory/Base/SlotMap.hpp
         include/Cory/Base/SlotMapHandle.hpp
+        include/Cory/Base/Time.hpp
         include/Cory/Base/Utils.hpp
         include/Cory/Cory.hpp
-        include/Cory/Framegraph/Builder.hpp
+        include/Cory/Framegraph/RenderTaskBuilder.hpp
         include/Cory/Framegraph/CommandList.hpp
         include/Cory/Framegraph/Common.hpp
         include/Cory/Framegraph/Framegraph.hpp
@@ -49,26 +51,33 @@ set(CORY_SOURCES
         include/Cory/Renderer/APIConversion.hpp
         include/Cory/Renderer/Common.hpp
         include/Cory/Renderer/Context.hpp
+        include/Cory/Renderer/DescriptorSets.cpp
+        include/Cory/Renderer/DescriptorSets.hpp
         include/Cory/Renderer/ResourceManager.hpp
         include/Cory/Renderer/Semaphore.hpp
         include/Cory/Renderer/Shader.hpp
         include/Cory/Renderer/SingleShotCommandBuffer.hpp
         include/Cory/Renderer/Swapchain.hpp
+        include/Cory/Renderer/Synchronization.hpp
         include/Cory/Renderer/UniformBufferObject.hpp
         include/Cory/Renderer/VulkanUtils.hpp
         include/Cory/Renderer/flextVkExt.h
         src/Application/Application.cpp
+        src/Application/DepthDebugLayer.cpp
         src/Application/DynamicGeometry.cpp
         src/Application/ImGuiLayer.cpp
         src/Application/Window.cpp
         src/Base/Log.cpp
         src/Base/Profiling.cpp
         src/Base/ResourceLocator.cpp
+        src/Base/Time.cpp
         src/Base/Utils.cpp
         src/Cory.cpp
         src/Framegraph/Builder.cpp
         src/Framegraph/CommandList.cpp
         src/Framegraph/Framegraph.cpp
+        src/Framegraph/FramegraphVisualizer.cpp
+        src/Framegraph/FramegraphVisualizer.h
         src/Framegraph/TextureManager.cpp
         src/Framegraph/TransientRenderPass.cpp
         src/Renderer/Common.cpp
@@ -77,9 +86,10 @@ set(CORY_SOURCES
         src/Renderer/Shader.cpp
         src/Renderer/SingleShotCommandBuffer.cpp
         src/Renderer/Swapchain.cpp
+        src/Renderer/Synchronization.cpp
         src/Renderer/UniformBufferObject.cpp
         src/Renderer/VulkanUtils.cpp
-        src/Framegraph/FramegraphVisualizer.cpp src/Framegraph/FramegraphVisualizer.h src/Renderer/Synchronization.cpp include/Cory/Renderer/Synchronization.hpp include/Cory/Renderer/DescriptorSets.cpp include/Cory/Renderer/DescriptorSets.hpp)
+        include/Cory/Application/ApplicationLayer.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

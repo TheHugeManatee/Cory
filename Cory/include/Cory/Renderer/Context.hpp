@@ -67,6 +67,8 @@ class Context : NoCopy {
     // non-const only to allow casting to VkDescriptorSetLayotu
     Magnum::Vk::DescriptorSetLayout &defaultDescriptorSetLayout();
 
+    SamplerHandle defaultSampler() const;
+
   private:
     std::unique_ptr<struct ContextPrivate> data_;
     void setupDebugMessenger();

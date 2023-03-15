@@ -76,6 +76,9 @@ template <typename StoredType_> class SlotMap : NoCopy {
     /// get number of currently allocated slots
     [[nodiscard]] size_t capacity() const noexcept { return chunkTable_.size() * CHUNK_SIZE; }
 
+    /// query if the slot map is empty
+    [[nodiscard]] bool empty() const { return size() == 0;}
+
     /// check if a given handle is valid to dereference
     [[nodiscard]] bool isValid(SlotMapHandle id) const;
 

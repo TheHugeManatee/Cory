@@ -45,6 +45,7 @@ class ResourceManager : NoCopy {
     /// query the number of resources in use
     std::unordered_map<ResourceType, size_t> resourcesInUse() const;
 
+    // <editor-fold desc="Shaders">
     /**
      * @name Shaders
      */
@@ -59,7 +60,9 @@ class ResourceManager : NoCopy {
     [[nodiscard]] Shader &operator[](ShaderHandle shaderHandle);
     void release(ShaderHandle shaderHandle);
     ///@}
+    // </editor-fold>
 
+    // <editor-fold desc="Buffers">
     /**
      * @name Buffers
      */
@@ -68,7 +71,9 @@ class ResourceManager : NoCopy {
     [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle handle);
     void release(BufferHandle handle);
     ///@}
+    // </editor-fold>
 
+    // <editor-fold desc="Pipelines">
     /**
      * @name Pipelines
      */
@@ -78,7 +83,9 @@ class ResourceManager : NoCopy {
     Magnum::Vk::Pipeline &operator[](PipelineHandle handle);
     void release(PipelineHandle handle);
     ///@}
+    // </editor-fold>
 
+    // <editor-fold desc="Images">
     /**
      * @name Images
      */
@@ -90,7 +97,9 @@ class ResourceManager : NoCopy {
     Magnum::Vk::Image &operator[](ImageHandle handle);
     void release(ImageHandle handle);
     ///@}
+    // </editor-fold>
 
+    // <editor-fold desc="ImageViews">
     /**
      * @name ImageViews
      */
@@ -101,7 +110,9 @@ class ResourceManager : NoCopy {
     Magnum::Vk::ImageView &operator[](ImageViewHandle handle);
     void release(ImageViewHandle handle);
     ///@}
+    // </editor-fold>
 
+    // <editor-fold desc="Samplers">
     /**
      * @name Samplers
      */
@@ -111,7 +122,9 @@ class ResourceManager : NoCopy {
     Magnum::Vk::Sampler &operator[](SamplerHandle handle);
     void release(SamplerHandle handle);
     ///@}
+    // </editor-fold>
 
+    // <editor-fold desc="Descriptor layouts">
     /**
      * @name Descriptor layouts
      */
@@ -122,6 +135,7 @@ class ResourceManager : NoCopy {
     Magnum::Vk::DescriptorSetLayout &operator[](DescriptorSetLayoutHandle handle);
     void release(DescriptorSetLayoutHandle handle);
     ///@}
+    // </editor-fold>
 
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;

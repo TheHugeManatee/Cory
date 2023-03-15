@@ -30,7 +30,7 @@ class FileIncludeHandler : public shaderc::CompileOptions::IncluderInterface {
     {
         CO_CORE_DEBUG("Include file {} from {}", requested_source, requesting_source);
 
-        auto resolvedLocation = ResourceLocator::locate(requested_source);
+        auto resolvedLocation = ResourceLocator::Locate(requested_source);
 
         auto ir = new shaderc_include_result;
         IncludeData *id = new IncludeData;

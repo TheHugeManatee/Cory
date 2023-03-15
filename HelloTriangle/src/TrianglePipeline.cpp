@@ -40,9 +40,9 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
 {
     Cory::ResourceManager &resources = ctx_.resources();
     CO_APP_TRACE("Starting shader compilation");
-    vertexShader_ = resources.createShader(Cory::ResourceLocator::locate(vertFile));
+    vertexShader_ = resources.createShader(Cory::ResourceLocator::Locate(vertFile));
     CO_APP_TRACE("Vertex shader code size: {}", resources[vertexShader_].size());
-    fragmentShader_ = ctx_.resources().createShader(Cory::ResourceLocator::locate(fragFile));
+    fragmentShader_ = ctx_.resources().createShader(Cory::ResourceLocator::Locate(fragFile));
     CO_APP_TRACE("Fragment shader code size: {}", resources[fragmentShader_].size());
 
     Vk::ShaderSet shaderSet{};

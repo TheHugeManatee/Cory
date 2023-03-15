@@ -15,6 +15,7 @@ class DepthDebugLayer : public ApplicationLayer {
 
     void onAttach(Context &ctx, LayerAttachInfo info) override;
     void onDetach(Context &ctx) override;
+    void onUpdate() override;
 
     RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
                                                        LayerPassOutputs previousLayer) override;

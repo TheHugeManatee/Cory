@@ -16,7 +16,7 @@ namespace Cory::ImGui {
 namespace detail {
 static constexpr float LABEL_WIDTH{150.0f};
 
-float availableWidth() { return ::ImGui::GetContentRegionAvail().x; }
+inline float availableWidth() { return ::ImGui::GetContentRegionAvail().x; }
 
 } // namespace detail
 
@@ -75,6 +75,19 @@ auto Slider(std::string_view label, glm::vec<L, T> &value, Arguments... args)
     }
 }
 
+// template for KDBindings::Property
+template <typename Property, typename... Arguments>
+    requires kdb::Private::is_property<Property>::value
+auto Slider(std::string_view label, Property &property, Arguments... args)
+{
+    auto v = property.get();
+    if (Slider(label, v, args...)) {
+        property.set(v);
+        return true;
+    }
+    return false;
+}
+
 // template for double, float, int
 template <typename ValueType, typename... Arguments>
     requires std::same_as<ValueType, double> || std::same_as<ValueType, float> ||
@@ -126,6 +139,19 @@ auto Input(std::string_view label, glm::vec<L, T> &value, Arguments... args)
             return ::ImGui::InputInt4(internalLabel.c_str(), &value.x, args...);
         }
     }
+}
+
+// template for KDBindings::Property
+template <typename Property, typename... Arguments>
+    requires kdb::Private::is_property<Property>::value
+auto Input(std::string_view label, Property &property, Arguments... args)
+{
+    auto v = property.get();
+    if (Input(label, v, args...)) {
+        property.set(v);
+        return true;
+    }
+    return false;
 }
 
 } // namespace Cory::ImGui

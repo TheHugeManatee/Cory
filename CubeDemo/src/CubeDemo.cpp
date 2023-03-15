@@ -195,10 +195,12 @@ void CubeDemoApplication::run()
         glfwPollEvents();
         imguiLayer_->newFrame(*ctx_);
         // TODO process events?
-        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
         drawImguiControls();
+        depthDebugLayer_->onUpdate();
 
+
+        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.index];
         // retire old resources from the last time this framegraph was
         // used - our frame synchronization ensures that the resources

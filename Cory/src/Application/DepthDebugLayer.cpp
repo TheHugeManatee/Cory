@@ -4,6 +4,7 @@
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
@@ -53,6 +54,16 @@ void DepthDebugLayer::onDetach(Context &ctx)
     res.release(state_->depthDebugShader);
 
     state_.reset();
+}
+
+void DepthDebugLayer::onUpdate()
+{
+    if (::ImGui::Begin("DepthDebugLayer")) {
+        Cory::ImGui::Slider("center", center, 0.0f, 1.0f);
+        Cory::ImGui::Slider("size", size, 0.0f, 1.0f);
+        Cory::ImGui::Slider("window", window, 0.0f, 1.0f);
+    }
+    ::ImGui::End();
 }
 
 RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(Cory::RenderTaskBuilder builder,

@@ -72,7 +72,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(Cory::Render
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
 
     auto [writtenColorHandle, colorInfo] =
-        builder.write(previousLayer.color, Cory::Sync::AccessType::ColorAttachmentWrite);
+        builder.readWrite(previousLayer.color, Cory::Sync::AccessType::ColorAttachmentReadWrite);
     auto depthInfo =
         builder.read(previousLayer.depth,
                      Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
@@ -87,7 +87,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(Cory::Render
                         .finish();
 
     /// ^^^^     DECLARATION      ^^^^
-    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = {}};
+    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
     /// vvvv  RENDERING COMMANDS  vvvv
 
@@ -103,9 +103,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(Cory::Render
 
     Cory::TextureManager &resources = *renderApi.resources;
 
-    // TODO get layout from texturemanager!
-    // auto layout = Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess);
-    std::array layouts{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    std::array layouts{Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess)};
     std::array textures{resources.imageView(previousLayer.depth)};
     std::array samplers{ctx.defaultSampler()};
 

@@ -121,11 +121,13 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 
     CLI::App app{"CubeDemo"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
+    app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
     app.parse(argc, argv);
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
 
-    ctx_ = std::make_unique<Cory::Context>();
+    ctx_ = std::make_unique<Cory::Context>(disableValidation_ ? Cory::ValidationLayers::Disabled
+                                                              : Cory::ValidationLayers::Enabled);
     // determine msaa sample count to use - for simplicity, we use either 8 or one sample
     const auto &limits = ctx_->physicalDevice().properties().properties.limits;
     const VkSampleCountFlags counts =
@@ -198,7 +200,6 @@ void CubeDemoApplication::run()
 
         drawImguiControls();
         depthDebugLayer_->onUpdate();
-
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.index];

@@ -59,6 +59,7 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     void setupCameraCallbacks();
 
   private:
+    bool disableValidation_{false};
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;

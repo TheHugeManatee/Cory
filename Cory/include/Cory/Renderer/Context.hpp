@@ -22,12 +22,14 @@ struct DebugMessageInfo {
     std::string message;
 };
 
+enum class ValidationLayers { Enabled, Disabled };
+
 /**
  * The main context for cory (collects pretty much everything).
  */
 class Context : NoCopy {
   public:
-    Context();
+    Context(ValidationLayers validationLayers = ValidationLayers::Enabled);
     ~Context();
 
     // movable

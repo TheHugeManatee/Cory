@@ -82,9 +82,9 @@ void TextureManager::allocate(TextureHandle handle)
         static const int32_t levels = 1;
         static const Magnum::Vk::ImageLayout initialLayout{Magnum::Vk::ImageLayout::Undefined};
 
-        Vk::ImageUsages usage{isDepthFormat(res.info.format)
-                                  ? Vk::ImageUsage::DepthStencilAttachment
-                                  : Vk::ImageUsage::ColorAttachment};
+        Vk::ImageUsages usage{};
+        usage |= isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
+                                                : Vk::ImageUsage::ColorAttachment;
         usage |= Vk::ImageUsage::Sampled;
         usage |= Vk::ImageUsage::InputAttachment;
 

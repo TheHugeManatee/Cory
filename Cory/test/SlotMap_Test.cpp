@@ -356,13 +356,3 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
         CHECK(crh->bookkeep_ == VALID);
     }
 }
-
-TEST_CASE("bla")
-{
-    std::vector<int> test{1, 2, 3, 4, 2, 5, 6, 1};
-    std::ranges::sort(test, {}, [](int v) { return v % 2; });
-
-    for (const auto &v : test) {
-        CO_APP_INFO("element: {}", v);
-    }
-}

@@ -75,7 +75,7 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
                                      void *pUserData);
 } // namespace detail
 
-Context::Context()
+Context::Context(ValidationLayers validationLayers)
     : data_{std::make_unique<ContextPrivate>()}
 {
     data_->name = "CCtx";
@@ -86,15 +86,16 @@ Context::Context()
     //  - KHR_get_physical_device_properties2 instance extension
     //  - KHR_dynamic_rendering device extension
     //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
-
-    data_->instance.create(
-        Vk::InstanceCreateInfo{}
-            .setApplicationInfo(app_name, Vk::version(1, 0, 0))
-            .addEnabledLayers({"VK_LAYER_KHRONOS_validation"})
-            .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
-            .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,
-                                   "VK_KHR_win32_surface",
-                                   VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME}));
+    Vk::InstanceCreateInfo instanceCreateInfo{};
+    instanceCreateInfo.setApplicationInfo(app_name, Vk::version(1, 0, 0))
+        .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
+        .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,
+                               "VK_KHR_win32_surface",
+                               VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME});
+    if (validationLayers == ValidationLayers::Enabled) {
+        instanceCreateInfo.addEnabledLayers({"VK_LAYER_KHRONOS_validation"});
+    }
+    data_->instance.create(instanceCreateInfo);
     data_->instance.populateGlobalFunctionPointers();
 
     data_->physicalDevice = Vk::pickDevice(data_->instance);

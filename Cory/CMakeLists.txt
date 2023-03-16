@@ -89,7 +89,7 @@ set(CORY_SOURCES
         src/Renderer/Synchronization.cpp
         src/Renderer/UniformBufferObject.cpp
         src/Renderer/VulkanUtils.cpp
-        include/Cory/Application/ApplicationLayer.hpp)
+        include/Cory/Application/ApplicationLayer.hpp include/Cory/Application/Event.hpp)
 
 file(GLOB_RECURSE HEADERS "include/*.h")
 

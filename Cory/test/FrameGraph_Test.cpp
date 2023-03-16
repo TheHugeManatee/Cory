@@ -15,8 +15,6 @@
 #include <Magnum/Vk/ImageViewCreateInfo.h>
 
 #include <cppcoro/fmap.hpp>
-#include <cppcoro/sync_wait.hpp>
-#include <cppcoro/when_all.hpp>
 
 #include <gsl/gsl>
 

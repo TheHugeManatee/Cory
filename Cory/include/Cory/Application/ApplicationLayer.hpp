@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Cory/Application/Event.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 
@@ -36,7 +37,7 @@ class ApplicationLayer {
 
     virtual void onAttach(Context &ctx, LayerAttachInfo info) {}
     virtual void onDetach(Context &ctx) {}
-    virtual void onEvent() {}
+    virtual bool onEvent(Event event) { return false; }
     virtual void onUpdate() {}
     virtual RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
                                                                LayerPassOutputs previousLayer) = 0;

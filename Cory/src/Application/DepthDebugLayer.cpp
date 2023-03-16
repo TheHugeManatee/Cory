@@ -1,6 +1,7 @@
 #include <Cory/Application/DepthDebugLayer.hpp>
 
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Base/Utils.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
@@ -54,6 +55,16 @@ void DepthDebugLayer::onDetach(Context &ctx)
     res.release(state_->depthDebugShader);
 
     state_.reset();
+}
+
+bool DepthDebugLayer::onEvent(Event event)
+{
+    return std::visit(lambda_visitor{[this](const MouseMovedEvent &e) {
+                                         center = e.position;
+                                         return true;
+                                     },
+                                     [this](auto &&e) { return false; }},
+                      event);
 }
 
 void DepthDebugLayer::onUpdate()

@@ -140,12 +140,8 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "CubeDemo", msaaSamples);
 
-    auto recreateSizedResources = [&](glm::i32vec2) { /* nothing? */ };
-
     createGeometry();
     createShaders();
-    recreateSizedResources(window_->dimensions());
-    window_->onSwapchainResized.connect(recreateSizedResources);
 
     imguiLayer_->init(*window_, *ctx_);
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
@@ -465,39 +461,21 @@ void CubeDemoApplication::drawImguiControls()
 }
 void CubeDemoApplication::setupCameraCallbacks()
 {
-    window_->onSwapchainResized.connect([this](glm::i32vec2 size) { camera_.setWindowSize(size); });
+    window_->onSwapchainResized.connect(
+        [this](Cory::SwapchainResizedEvent event) { camera_.setWindowSize(event.size); });
 
-    window_->onMouseMoved.connect([this](glm::vec2 pos) {
+    window_->onMouseMoved.connect([this](Cory::MouseMovedEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        auto *const wnd = window_->handle();
-        const Cory::CameraManipulator::MouseButton mouseButton =
-            (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
-                ? Cory::CameraManipulator::MouseButton::Left
-            : (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
-                ? Cory::CameraManipulator::MouseButton::Middle
-            : (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-                ? Cory::CameraManipulator::MouseButton::Right
-                : Cory::CameraManipulator::MouseButton::None;
-        if (mouseButton != Cory::CameraManipulator::MouseButton::None) {
-            Cory::CameraManipulator::ModifierFlags modifiers;
-            if (glfwGetKey(wnd, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
-                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Alt);
-            }
-            if (glfwGetKey(wnd, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Ctrl);
-            }
-            if (glfwGetKey(wnd, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Shift);
-            }
 
-            camera_.mouseMove(glm::ivec2(pos), mouseButton, modifiers);
+        if (event.button != Cory::MouseButton::None) {
+            camera_.mouseMove(glm::ivec2(event.position), event.button, event.modifiers);
         }
     });
-    window_->onMouseButton.connect([this](Cory::Window::MouseButtonData data) {
+    window_->onMouseButton.connect([this](Cory::MouseButtonEvent data) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
         camera_.setMousePosition(data.position);
     });
-    window_->onMouseScrolled.connect([this](Cory::Window::ScrollData data) {
+    window_->onMouseScrolled.connect([this](Cory::ScrollEvent data) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
         camera_.wheel(static_cast<int32_t>(data.scrollDelta.y));
     });

@@ -17,6 +17,7 @@ struct LayerPassOutputs {
 /// data to be passed to a layer when it is attached
 struct LayerAttachInfo {
     uint32_t maxFramesInFlight;
+    glm::i32vec2 viewportDimensions;
 };
 
 /**

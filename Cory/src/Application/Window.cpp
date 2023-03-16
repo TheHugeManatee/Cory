@@ -355,8 +355,9 @@ void Window::createGlfwWindow()
         Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
-        self.onMouseScrolled.emit(
-            {.position = {mouseX, mouseY}, .scrollDelta = {xOffset, yOffset}});
+        self.onMouseScrolled.emit({.position = {mouseX, mouseY},
+                                   .scrollDelta = {xOffset, yOffset},
+                                   .modifiers = detail::getModifierState(window)});
     });
 
     glfwSetKeyCallback(

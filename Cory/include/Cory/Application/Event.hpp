@@ -34,6 +34,7 @@ struct MouseButtonEvent {
 struct ScrollEvent {
     glm::vec2 position;
     glm::vec2 scrollDelta;
+    ModifierFlags modifiers;
 };
 
 struct KeyEvent {

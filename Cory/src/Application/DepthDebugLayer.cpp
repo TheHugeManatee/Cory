@@ -1,5 +1,6 @@
 #include <Cory/Application/DepthDebugLayer.hpp>
 
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
@@ -25,6 +26,8 @@ struct DepthDebugLayer::State {
     Cory::ShaderHandle fullscreenTriShader;
     Cory::ShaderHandle depthDebugShader;
     Cory::UniformBufferObject<Uniforms> ubo;
+
+    glm::vec2 viewportDimensions{1.0f};
 };
 
 DepthDebugLayer::DepthDebugLayer()
@@ -42,10 +45,12 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
     CO_CORE_ASSERT(state_ == nullptr, "Layer was already attached!");
 
     auto &res = ctx.resources();
-    state_ = std::make_unique<State>(
-        State{.fullscreenTriShader{res.createShader(ResourceLocator::Locate("fullscreenTri.vert"))},
-              .depthDebugShader{res.createShader(ResourceLocator::Locate("depthDebug.frag"))},
-              .ubo{Cory::UniformBufferObject<Uniforms>(ctx, info.maxFramesInFlight)}});
+    state_ = std::make_unique<State>(State{
+        .fullscreenTriShader{res.createShader(ResourceLocator::Locate("fullscreenTri.vert"))},
+        .depthDebugShader{res.createShader(ResourceLocator::Locate("depthDebug.frag"))},
+        .ubo{Cory::UniformBufferObject<Uniforms>(ctx, info.maxFramesInFlight)},
+        .viewportDimensions = info.viewportDimensions,
+    });
 }
 
 void DepthDebugLayer::onDetach(Context &ctx)
@@ -59,11 +64,28 @@ void DepthDebugLayer::onDetach(Context &ctx)
 
 bool DepthDebugLayer::onEvent(Event event)
 {
-    return std::visit(lambda_visitor{[this](const MouseMovedEvent &e) {
-                                         center = e.position;
-                                         return true;
-                                     },
-                                     [this](auto &&e) { return false; }},
+    return std::visit(lambda_visitor{
+                          [](auto event) { return false; },
+                          [this](const SwapchainResizedEvent &event) {
+                              state_->viewportDimensions = event.size;
+                              return false;
+                          },
+                          [this](const ScrollEvent &event) {
+                              glm::vec2 size_delta{};
+                              if (event.modifiers.is_set(ModifierFlagBits::Shift)) {
+                                  size_delta.x = event.scrollDelta.y;
+                              }
+                              else {
+                                  size_delta.y = event.scrollDelta.y;
+                              }
+                              size = size.get() + size_delta * 0.03f;
+                              return true;
+                          },
+                          [this](const MouseMovedEvent &event) {
+                              center = event.position / state_->viewportDimensions;
+                              return true;
+                          },
+                      },
                       event);
 }
 

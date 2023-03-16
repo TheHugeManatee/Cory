@@ -145,7 +145,8 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 
     imguiLayer_->init(*window_, *ctx_);
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
-                                              window_->swapchain().maxFramesInFlight()};
+                                              window_->swapchain().maxFramesInFlight(),
+                                          .viewportDimensions = window_->dimensions()};
     depthDebugLayer_->onAttach(*ctx_, layerAttachInfo);
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
@@ -467,16 +468,19 @@ void CubeDemoApplication::setupCameraCallbacks()
     window_->onMouseMoved.connect([this](Cory::MouseMovedEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
 
+        if (depthDebugLayer_->onEvent(event)) { return; }
         if (event.button != Cory::MouseButton::None) {
             camera_.mouseMove(glm::ivec2(event.position), event.button, event.modifiers);
         }
     });
-    window_->onMouseButton.connect([this](Cory::MouseButtonEvent data) {
+    window_->onMouseButton.connect([this](Cory::MouseButtonEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        camera_.setMousePosition(data.position);
+        if (depthDebugLayer_->onEvent(event)) { return; }
+        camera_.setMousePosition(event.position);
     });
-    window_->onMouseScrolled.connect([this](Cory::ScrollEvent data) {
+    window_->onMouseScrolled.connect([this](Cory::ScrollEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        camera_.wheel(static_cast<int32_t>(data.scrollDelta.y));
+        if (depthDebugLayer_->onEvent(event)) { return; }
+        camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
     });
 }

@@ -64,6 +64,7 @@ void DepthDebugLayer::onDetach(Context &ctx)
 
 bool DepthDebugLayer::onEvent(Event event)
 {
+    if(!renderEnabled.get()) { return false; }
     return std::visit(lambda_visitor{
                           [](auto event) { return false; },
                           [this](const SwapchainResizedEvent &event) {
@@ -92,6 +93,9 @@ bool DepthDebugLayer::onEvent(Event event)
 void DepthDebugLayer::onUpdate()
 {
     if (::ImGui::Begin("DepthDebugLayer")) {
+        if (bool is_enabled = renderEnabled.get(); ::ImGui::Checkbox("Enabled", &is_enabled)) {
+            renderEnabled = is_enabled;
+        }
         Cory::ImGui::Slider("center", center, 0.0f, 1.0f);
         Cory::ImGui::Slider("size", size, 0.0f, 1.0f);
         Cory::ImGui::Slider("window", window, 0.0f, 1.0f);

@@ -21,9 +21,10 @@ class DepthDebugLayer : public ApplicationLayer {
     RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
                                                        LayerPassOutputs previousLayer) override;
 
+    kdb::Property<bool> renderEnabled{true};
     kdb::Property<glm::vec2> center{glm::vec2(0.5f, 0.5f)};
     kdb::Property<glm::vec2> size{glm::vec2(0.5f, 0.5f)};
-    kdb::Property<glm::vec2> window{glm::vec2(0.9f, 1.0f)};
+    kdb::Property<glm::vec2> window{glm::vec2(0.0f, 1.0f)};
 
   private:
     struct State;

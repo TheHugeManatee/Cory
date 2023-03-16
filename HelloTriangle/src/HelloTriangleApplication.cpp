@@ -123,7 +123,7 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
-    auto recreateSizedResources = [&](glm::i32vec2) { createFramebuffers(); };
+    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent) { createFramebuffers(); };
 
     createGeometry();
     pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
@@ -132,7 +132,7 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
     createFramebuffers();
-    recreateSizedResources(window_->dimensions());
+    recreateSizedResources({window_->dimensions()});
     window_->onSwapchainResized.connect(recreateSizedResources);
 
     imguiLayer_->init(*window_, *ctx_);

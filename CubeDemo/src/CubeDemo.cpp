@@ -8,6 +8,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Math.hpp>
 #include <Cory/Base/Profiling.hpp>
+#include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
@@ -66,26 +67,47 @@ static struct AnimationData {
     int num_cubes{200};
     float blend{0.8f};
 
-    float ti{1.5f};
-    float tsi{2.0f};
-    float tsf{100.0f};
-
-    float r0{0.0f};
-    float rt{-0.1f};
-    float ri{1.3f};
-    float rti{0.05f};
-
-    float s0{0.05f};
-    float st{0.0f};
-    float si{0.4f};
-
-    float c0{-0.75f};
-    float cf0{2.0f};
-    float cfi{-0.5f};
+    struct param {
+        float val;
+        float min;
+        float max;
+        operator float() const { return val; }
+    };
+    param ti{1.5f, 0.0f, 10.0f};
+    param tsi{2.0f, 0.0f, 3.0f};
+    param tsf{100.0f, 0.0f, 250.0f};
+    param r0{0.0f, -2.0f, 2.0f};
+    param rt{-0.1f, -2.0f, 2.0f};
+    param ri{1.3f, -2.0f, 2.0f};
+    param rti{0.05f, -2.0f, 2.0f};
+    param s0{0.05f, 0.0f, 1.0f};
+    param st{0.0f, -0.01f, 0.01f};
+    param si{0.4f, 0.0f, 2.0f};
+    param c0{-0.75f, -2.0f, 2.0f};
+    param cf0{2.0f, -10.0f, 10.0f};
+    param cfi{-0.5f, -2.0f, 2.0f};
 
     glm::vec3 translation{0.0, 0.0f, 2.5f};
     glm::vec3 rotation{0.0f};
 } ad;
+
+void randomize(AnimationData::param &p) { p.val = Cory::RNG::Uniform(p.min, p.max); }
+void randomize()
+{
+    randomize(ad.ti);
+    randomize(ad.tsi);
+    randomize(ad.tsf);
+    randomize(ad.r0);
+    randomize(ad.rt);
+    randomize(ad.ri);
+    randomize(ad.rti);
+    randomize(ad.s0);
+    randomize(ad.st);
+    randomize(ad.si);
+    randomize(ad.c0);
+    randomize(ad.cf0);
+    randomize(ad.cfi);
+}
 
 void animate(PushConstants &d, float t, float i)
 {
@@ -256,8 +278,11 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
         framegraph.declareTask("TASK_DepthDebug"),
         {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto imguiPass = imguiRenderTask(
-        framegraph.declareTask("TASK_ImGui"), depthDebugPass.output().color, frameCtx);
+    auto imguiPass =
+        imguiRenderTask(framegraph.declareTask("TASK_ImGui"),
+                        depthDebugLayer_->renderEnabled.get() ? depthDebugPass.output().color
+                                                              : mainPass.output().colorOut,
+                        frameCtx);
 
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
@@ -303,7 +328,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     float fovy = glm::radians(70.0f);
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
     glm::mat4 viewMatrix = camera_.getViewMatrix();
-    glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 0.1f, 10.0f);
+    glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 1.0f, 10.0f);
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
 
     Cory::FrameContext &frameCtx = *renderApi.frameCtx;
@@ -379,26 +404,26 @@ void CubeDemoApplication::drawImguiControls()
     if (ImGui::Begin("Animation Params")) {
         if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
         if (ImGui::Button("Restart")) { startupTime_ = now(); }
+        if (ImGui::Button("Randomize")) { randomize(); }
 
         CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);
         CoImGui::Slider("blend", ad.blend, 0.0f, 1.0f);
         CoImGui::Slider("translation", ad.translation, -3.0f, 3.0f);
         CoImGui::Slider("rotation", ad.rotation, -glm::pi<float>(), glm::pi<float>());
 
-        CoImGui::Slider("ti", ad.ti, 0.0f, 10.0f);
-        CoImGui::Slider("tsi", ad.tsi, 0.0f, 10.0f);
-        CoImGui::Slider("tsf", ad.tsf, 0.0f, 250.0f);
-
-        CoImGui::Slider("r0", ad.r0, -2.0f, 2.0f);
-        CoImGui::Slider("rt", ad.rt, -2.0f, 2.0f);
-        CoImGui::Slider("ri", ad.ri, -2.0f, 2.0f);
-        CoImGui::Slider("rti", ad.rti, -2.0f, 2.0f);
-        CoImGui::Slider("s0", ad.s0, 0.0f, 2.0f);
-        CoImGui::Slider("st", ad.st, -0.1f, 0.1f);
-        CoImGui::Slider("si", ad.si, 0.0f, 2.0f);
-        CoImGui::Slider("c0", ad.c0, -2.0f, 2.0f);
-        CoImGui::Slider("cf0", ad.cf0, -10.0f, 10.0f);
-        CoImGui::Slider("cfi", ad.cfi, -2.0f, 2.0f);
+        CoImGui::Slider("ti", ad.ti.val, ad.ti.min, ad.ti.max);
+        CoImGui::Slider("tsi", ad.tsi.val, ad.tsi.min, ad.tsi.max);
+        CoImGui::Slider("tsf", ad.tsf.val, ad.tsf.min, ad.tsf.max);
+        CoImGui::Slider("r0", ad.r0.val, ad.r0.min, ad.r0.max);
+        CoImGui::Slider("rt", ad.rt.val, ad.rt.min, ad.rt.max);
+        CoImGui::Slider("ri", ad.ri.val, ad.ri.min, ad.ri.max);
+        CoImGui::Slider("rti", ad.rti.val, ad.rti.min, ad.rti.max);
+        CoImGui::Slider("s0", ad.s0.val, ad.s0.min, ad.s0.max);
+        CoImGui::Slider("st", ad.st.val, ad.st.min, ad.st.max);
+        CoImGui::Slider("si", ad.si.val, ad.si.min, ad.si.max);
+        CoImGui::Slider("c0", ad.c0.val, ad.c0.min, ad.c0.max);
+        CoImGui::Slider("cf0", ad.cf0.val, ad.cf0.min, ad.cf0.max);
+        CoImGui::Slider("cfi", ad.cfi.val, ad.cfi.min, ad.cfi.max);
     }
     ImGui::End();
     if (ImGui::Begin("Camera")) {

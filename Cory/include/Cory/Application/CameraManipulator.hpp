@@ -17,6 +17,8 @@
 //
 #pragma once
 
+#include <Cory/Application/Event.hpp>
+
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -28,9 +30,6 @@ class CameraManipulator {
   public:
     enum class Action { None, Orbit, Dolly, Pan, LookAround };
     enum class Mode { Examine, Fly, Walk, Trackball };
-    enum class MouseButton { None, Left, Middle, Right };
-    enum class ModifierFlagBits : uint32_t { Shift = 1, Ctrl = 2, Alt = 4 };
-    using ModifierFlags = BitField<ModifierFlagBits>;
 
   public:
     CameraManipulator();
@@ -44,7 +43,8 @@ class CameraManipulator {
     float getSpeed() const;
     glm::vec3 const &getUpVector() const;
     glm::i32vec2 const &getWindowSize() const;
-    Action mouseMove(glm::i32vec2 const &position, MouseButton mouseButton, ModifierFlags &modifiers);
+    Action
+    mouseMove(glm::i32vec2 const &position, MouseButton mouseButton, ModifierFlags &modifiers);
     void setLookat(const glm::vec3 &cameraPosition,
                    const glm::vec3 &centerPosition,
                    const glm::vec3 &upVector);

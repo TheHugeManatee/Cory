@@ -22,12 +22,18 @@ struct DebugMessageInfo {
     std::string message;
 };
 
+
+enum class ValidationLayers { Enabled, Disabled };
+struct ContextCreationInfo {
+    ValidationLayers validation{ValidationLayers::Enabled};
+};
+
 /**
  * The main context for cory (collects pretty much everything).
  */
 class Context : NoCopy {
   public:
-    Context();
+    Context(ContextCreationInfo creationInfo = {});
     ~Context();
 
     // movable
@@ -66,6 +72,8 @@ class Context : NoCopy {
     Magnum::Vk::PipelineLayout &defaultPipelineLayout();
     // non-const only to allow casting to VkDescriptorSetLayotu
     Magnum::Vk::DescriptorSetLayout &defaultDescriptorSetLayout();
+
+    SamplerHandle defaultSampler() const;
 
   private:
     std::unique_ptr<struct ContextPrivate> data_;

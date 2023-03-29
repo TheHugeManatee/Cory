@@ -15,8 +15,6 @@
 #include <Magnum/Vk/ImageViewCreateInfo.h>
 
 #include <cppcoro/fmap.hpp>
-#include <cppcoro/sync_wait.hpp>
-#include <cppcoro/when_all.hpp>
 
 #include <gsl/gsl>
 
@@ -29,7 +27,8 @@ namespace passes {
 struct DepthPassOutputs {
     TransientTextureHandle depthTexture;
 };
-RenderTaskDeclaration<DepthPassOutputs> depthPass(Context &ctx, Builder builder, glm::u32vec3 size)
+RenderTaskDeclaration<DepthPassOutputs>
+depthPass(Context &ctx, RenderTaskBuilder builder, glm::u32vec3 size)
 {
     auto depth = builder.create(
         "TEX_depth", size, PixelFormat::Depth32F, Sync::AccessType::DepthStencilAttachmentWrite);
@@ -77,7 +76,7 @@ struct DepthDebugOut {
 RenderTaskDeclaration<DepthDebugOut> depthDebug(Framegraph &graph,
                                                 TransientTextureHandle depthInput)
 {
-    Builder builder = graph.declareTask("TASK_DepthDebug");
+    RenderTaskBuilder builder = graph.declareTask("TASK_DepthDebug");
 
     auto depthInfo = builder.read(
         depthInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
@@ -99,7 +98,7 @@ struct NormalDebugOut {
 RenderTaskDeclaration<NormalDebugOut> normalDebug(Framegraph &graph,
                                                   TransientTextureHandle normalInput)
 {
-    Builder builder = graph.declareTask("TASK_NormalDebug");
+    RenderTaskBuilder builder = graph.declareTask("TASK_NormalDebug");
 
     auto normalInfo = builder.read(
         normalInput, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
@@ -122,7 +121,7 @@ RenderTaskDeclaration<DebugOut> debugGeneral(Framegraph &graph,
                                              std::vector<TransientTextureHandle> debugTextures,
                                              gsl::index debugViewIndex)
 {
-    Builder builder = graph.declareTask("TASK_GeneralDebug");
+    RenderTaskBuilder builder = graph.declareTask("TASK_GeneralDebug");
 
     auto &textureToDebug = debugTextures[debugViewIndex];
     auto dbgInfo = builder.read(
@@ -143,7 +142,7 @@ struct MainOut {
     TransientTextureHandle color;
     TransientTextureHandle normal;
 };
-RenderTaskDeclaration<MainOut> mainPass(Builder builder,
+RenderTaskDeclaration<MainOut> mainPass(RenderTaskBuilder builder,
                                         TransientTextureHandle colorInput,
                                         TransientTextureHandle normalInput,
                                         TransientTextureHandle depthInput)
@@ -177,7 +176,7 @@ RenderTaskDeclaration<MainOut> mainPass(Builder builder,
 struct PostProcessOut {
     TransientTextureHandle color;
 };
-RenderTaskDeclaration<PostProcessOut> postProcess(Builder builder,
+RenderTaskDeclaration<PostProcessOut> postProcess(RenderTaskBuilder builder,
                                                   TransientTextureHandle currentColorInput,
                                                   TransientTextureHandle previousColorInput)
 {
@@ -237,7 +236,8 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     auto debugCombinePass = passes::debugGeneral(
         graph, {depthDebugPass.output().debugColor, normalDebugPass.output().debugColor}, 0);
 
-    auto postProcess = passes::postProcess(graph.declareTask("TASK_Postprocess"), addMainPass.output().color, prevFrameColor);
+    auto postProcess = passes::postProcess(
+        graph.declareTask("TASK_Postprocess"), addMainPass.output().color, prevFrameColor);
 
     // provoke the coroutines to run so we have some stuff to cull in the graph - otherwise
     // they won't even, that's how neat using coroutines is :)
@@ -259,7 +259,13 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 
     buffer.begin();
 
-    auto g = graph.record(buffer);
+    FrameContext frameCtx{
+        .index = 2,
+        .frameNumber = 42,
+        // rest not needed for the framegraph
+        .commandBuffer = &buffer,
+    };
+    auto g = graph.record(frameCtx);
     CO_APP_INFO(graph.dump(g));
 
     buffer.end();

@@ -38,12 +38,13 @@ struct FramegraphPrivate {
 
     SlotMap<RenderTaskInfo> renderTasks;
     CommandList *commandListInProgress{};
+    FrameContext *currentFrameCtx{};
 };
 
-Builder Framegraph::Framegraph::declareTask(std::string_view name)
+RenderTaskBuilder Framegraph::Framegraph::declareTask(std::string_view name)
 {
     //
-    return Builder{*data_->ctx, *this, name};
+    return RenderTaskBuilder{*data_->ctx, *this, name};
 }
 
 Framegraph::Framegraph(Context &ctx)
@@ -67,15 +68,17 @@ Framegraph::~Framegraph()
 Framegraph::Framegraph(Framegraph &&) noexcept = default;
 Framegraph &Framegraph::operator=(Framegraph &&) noexcept = default;
 
-ExecutionInfo Framegraph::record(Vk::CommandBuffer &cmdBuffer)
+ExecutionInfo Framegraph::record(FrameContext &frameCtx)
 {
     const Cory::ScopeTimer s1{"Framegraph/Execute"};
     auto executionInfo = compile();
 
     const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
-    CommandList cmd{*data_->ctx, cmdBuffer};
+    CommandList cmd{*data_->ctx, *frameCtx.commandBuffer};
 
     data_->commandListInProgress = &cmd;
+    data_->currentFrameCtx = &frameCtx;
+
     auto resetCmdList = gsl::finally([this]() { data_->commandListInProgress = nullptr; });
 
     for (const auto &handle : executionInfo.tasks) {
@@ -306,8 +309,10 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
 {
     CO_CORE_ASSERT(data_->commandListInProgress, "No command list recording in progress!");
     return {
+        .ctx = data_->ctx,
+        .frameCtx = data_->currentFrameCtx,
         .resources = &data_->resources,
-        .context = nullptr,
+        .descriptors = &data_->ctx->descriptorSets(),
         .cmd = data_->commandListInProgress,
     };
 }
@@ -318,19 +323,6 @@ Framegraph::renderTasks() const
     for (const auto &[passHandle, passInfo] : data_->renderTasks.items()) {
         co_yield std::make_pair(RenderTaskHandle{passHandle}, passInfo);
     }
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
-{
-    return fg.renderInput(passHandle);
-}
-
-void RenderTaskExecutionAwaiter::await_suspend(
-    cppcoro::coroutine_handle<> coroHandle) const noexcept
-{
-    fg.enqueueRenderPass(passHandle, coroHandle);
 }
 
 } // namespace Cory

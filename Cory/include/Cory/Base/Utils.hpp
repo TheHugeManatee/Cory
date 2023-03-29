@@ -18,7 +18,13 @@ std::string formatBytes(size_t bytes);
 /// read the whole contents of a file - no memory mapping etc. applied here!
 std::vector<char> readFile(const std::filesystem::path &filename);
 
-
+/// helper class to easily create a visitor from a bunch of lambdas. sometimes known as 'overloaded'
+template <class... Overloads> struct lambda_visitor : Overloads... {
+    using Overloads::operator()...;
+};
+// explicit deduction guide. cppreference.com says it's not needed
+// as of C++20 but MSVC at least still needs it.
+template <class... Ts> lambda_visitor(Ts...) -> lambda_visitor<Ts...>;
 
 struct stbi_image {
   public:

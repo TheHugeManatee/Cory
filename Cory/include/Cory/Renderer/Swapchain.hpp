@@ -32,22 +32,6 @@ struct SwapchainSupportDetails {
     std::vector<uint32_t> presentFamilies;
 };
 
-struct FrameContext {
-    uint32_t index{};                    ///< the current swapchain image index
-    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
-    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
-    Magnum::Vk::Image *swapchainImage{};
-    Magnum::Vk::ImageView *swapchainImageView{};
-    Magnum::Vk::Image *colorImage{};
-    Magnum::Vk::ImageView *colorImageView{};
-    Magnum::Vk::Image *depthImage{};
-    Magnum::Vk::ImageView *depthImageView{};
-    Magnum::Vk::Fence *inFlight{};
-    Semaphore *acquired{};
-    Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer *commandBuffer{};
-};
-
 class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
   public:
     Swapchain(Context &ctx,
@@ -61,7 +45,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
     [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
     [[nodiscard]] size_t size() const noexcept { return images_.size(); }
-    [[nodiscard]] size_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
+    [[nodiscard]] uint32_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying

@@ -96,14 +96,14 @@ class DescriptorSets {
     /**
      * @brief flush all updates, calling vkUpdateDescriptorSets with the previously recorded writes
      */
-    void flushWrites();
+    DescriptorSets &flushWrites();
 
     [[nodiscard]] Magnum::Vk::DescriptorSet &get(SetType type, gsl::index instanceIndex);
 
     /// bind the given instance index
-    void bind(Magnum::Vk::CommandBuffer &cmd,
-              gsl::index instanceIndex,
-              Magnum::Vk::PipelineLayout &pipelineLayout);
+    DescriptorSets &bind(Magnum::Vk::CommandBuffer &cmd,
+                         gsl::index instanceIndex,
+                         Magnum::Vk::PipelineLayout &pipelineLayout);
 
   private:
     std::unique_ptr<struct DescriptorSetManagerPrivate> data_;

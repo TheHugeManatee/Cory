@@ -18,9 +18,11 @@ class UniformBufferObjectBase : NoCopy {
     UniformBufferObjectBase(Context &ctx, size_t instances, size_t instanceSize);
     ~UniformBufferObjectBase();
 
-    // moveable
-    UniformBufferObjectBase(UniformBufferObjectBase &&) = default;
-    UniformBufferObjectBase &operator=(UniformBufferObjectBase &&) = default;
+    friend void swap(UniformBufferObjectBase &lhs, UniformBufferObjectBase &rhs) noexcept;
+
+    // movable
+    UniformBufferObjectBase(UniformBufferObjectBase &&) noexcept;
+    UniformBufferObjectBase &operator=(UniformBufferObjectBase &&) noexcept;
 
     // flush the whole buffer
     void flushInternal();
@@ -32,8 +34,9 @@ class UniformBufferObjectBase : NoCopy {
     std::byte *instanceAt(gsl::index instance);
 
   private:
-    Context *ctx_;
-    BufferHandle buffer_;
+    UniformBufferObjectBase() = default; // private, only used for swap
+    Context *ctx_{};
+    BufferHandle buffer_{NullHandle};
     std::byte *mappedMemory_{nullptr};
     size_t instanceSize_{};
     size_t alignedInstanceSize_{};

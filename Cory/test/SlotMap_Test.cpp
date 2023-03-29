@@ -43,8 +43,11 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
 {
     Cory::SlotMap<float> sm;
 
+    CHECK(sm.empty());
+
     auto h1 = sm.insert(1.0f);
     auto h2 = sm.insert(2.0f);
+    CHECK_FALSE(sm.empty());
     CHECK(sm[h1] == 1.0f);
     CHECK(sm[h2] == 2.0f);
     CHECK(h1 != h2);
@@ -111,6 +114,7 @@ TEST_CASE("SlotMap<float>", "[Cory/Base]")
         sm.clear();
 
         CHECK(sm.size() == 0);
+        CHECK(sm.empty());
         CHECK_THROWS(sm[h1]);
         CHECK_THROWS(sm[h2]);
 
@@ -154,11 +158,14 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
     SECTION("Correct construction and destruction of an object")
     {
         SlotMap<Foo> sm;
+
         ObjectState bookkeeper{UNINIT};
         auto h = sm.emplace(std::ref(bookkeeper));
         CHECK(bookkeeper == VALID);
+        CHECK_FALSE(sm.empty());
         sm.release(h);
         CHECK(bookkeeper == DEAD);
+        CHECK(sm.empty());
     }
 
     SECTION("Object constructor throws")
@@ -347,15 +354,5 @@ TEST_CASE("SlotMap<Foo>", "[Cory/Base]")
 
         const ResolvableHandle crh{rh};
         CHECK(crh->bookkeep_ == VALID);
-    }
-}
-
-TEST_CASE("bla")
-{
-    std::vector<int> test{1, 2, 3, 4, 2, 5, 6, 1};
-    std::ranges::sort(test, {}, [](int v) { return v % 2; });
-
-    for (const auto &v : test) {
-        CO_APP_INFO("element: {}", v);
     }
 }

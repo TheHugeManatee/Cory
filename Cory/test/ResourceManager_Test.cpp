@@ -37,8 +37,10 @@ TEST_CASE("ResourceManager", "[Cory/Renderer]")
 
     SECTION("Buffers")
     {
-        BufferHandle buffer = mgr.createBuffer(
-            1024, Cory::BufferUsageBits::StorageBuffer, MemoryFlagBits::HostCoherent);
+        BufferHandle buffer = mgr.createBuffer("Test Buffer",
+                                               1024,
+                                               Cory::BufferUsageBits::StorageBuffer,
+                                               MemoryFlagBits::HostCoherent);
         CHECK(mgr.resourcesInUse()[ResourceType::Buffer] == 1);
 
         CHECK(mgr[buffer].dedicatedMemory().size() == 1024);

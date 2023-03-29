@@ -151,7 +151,7 @@ void ImGuiLayer::init(Window &window, Context &ctx)
     data_->descriptorPool = createImguiDescriptorPool(ctx);
     data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
 
-    auto recreateSizedResources = [&](glm::i32vec2 s) {
+    auto recreateSizedResources = [&](SwapchainResizedEvent event) {
         data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
     };
     data_->handle = window.onSwapchainResized.connect(recreateSizedResources);

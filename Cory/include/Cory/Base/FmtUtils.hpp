@@ -2,11 +2,14 @@
 
 #include <fmt/format.h>
 
+#include <Cory/Base/Time.hpp>
+
 #include <Corrade/Containers/StringView.h>
-#include <magic_enum.hpp>
+#include <fmt/chrono.h>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+#include <magic_enum.hpp>
 
 #if !defined(MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT)
 #define MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT true
@@ -58,9 +61,7 @@ struct fmt::formatter<
 
 // formatter for Corrade::Containers::StringView
 template <> struct fmt::formatter<Corrade::Containers::StringView, char> {
-    constexpr auto parse(format_parse_context& ctx) -> decltype(ctx.begin()) {
-        return ctx.end();
-    }
+    constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) { return ctx.end(); }
     auto format(Corrade::Containers::StringView v, format_context &ctx) const
     {
         return fmt::format_to(ctx.out(), "{}", std::string_view{v.data(), v.size()});
@@ -93,5 +94,18 @@ struct fmt::formatter<glm::vec<L, ElementType>> : public fmt::formatter<ElementT
         *out = ')';
         ctx.advance_to(out);
         return out;
+    }
+};
+
+// formatter for Cory::Timepoint
+template <> struct fmt::formatter<Cory::Timepoint> {
+    constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) { return ctx.end(); }
+    auto format(Cory::Timepoint t, format_context &ctx) const
+    {
+        auto tp = Cory::AppClock::ToSystem(t);
+        // formats time point as e.g. "2023-01-23 12:34:56.789123"
+        auto micros = std::chrono::duration_cast<std::chrono::microseconds>(tp.time_since_epoch()) %
+                      std::chrono::seconds(1);
+        return fmt::format_to(ctx.out(), "{:%Y-%m-%d %H:%M:%S}.{:06}", tp, micros.count());
     }
 };

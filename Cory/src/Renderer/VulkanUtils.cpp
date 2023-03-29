@@ -20,68 +20,59 @@
 
 namespace Cory {
 
+template <typename VulkanObjectHandle> VkObjectType getVulkanObjectType()
+{
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkInstance>) {
+        return VK_OBJECT_TYPE_INSTANCE;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDebugUtilsMessengerEXT>) {
+        return VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDevice>) { return VK_OBJECT_TYPE_DEVICE; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkBuffer>) { return VK_OBJECT_TYPE_BUFFER; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkSurfaceKHR>) {
+        return VK_OBJECT_TYPE_SURFACE_KHR;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkSwapchainKHR>) {
+        return VK_OBJECT_TYPE_SWAPCHAIN_KHR;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkQueue>) { return VK_OBJECT_TYPE_QUEUE; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkSemaphore>) {
+        return VK_OBJECT_TYPE_SEMAPHORE;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkFence>) { return VK_OBJECT_TYPE_FENCE; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkCommandBuffer>) {
+        return VK_OBJECT_TYPE_COMMAND_BUFFER;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkImage>) { return VK_OBJECT_TYPE_IMAGE; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkImageView>) {
+        return VK_OBJECT_TYPE_IMAGE_VIEW;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkShaderModule>) {
+        return VK_OBJECT_TYPE_SHADER_MODULE;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkPipeline>) {
+        return VK_OBJECT_TYPE_PIPELINE;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkSampler>) { return VK_OBJECT_TYPE_SAMPLER; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSetLayout>) {
+        return VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSet>) {
+        return VK_OBJECT_TYPE_DESCRIPTOR_SET;
+    }
+}
+
 template <typename DeviceHandle, typename VulkanObjectHandle>
 void nameRawVulkanObject(DeviceHandle &device, VulkanObjectHandle handle, std::string_view name)
 {
     VkDebugUtilsObjectNameInfoEXT objectNameInfo{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .pNext = nullptr,
-        .objectType = VK_OBJECT_TYPE_UNKNOWN,
+        .objectType = getVulkanObjectType<VulkanObjectHandle>(),
         .objectHandle = (uint64_t)(handle),
         .pObjectName = name.data(),
     };
-
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkInstance>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_INSTANCE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkDebugUtilsMessengerEXT>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkDevice>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_DEVICE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkBuffer>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_BUFFER;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkSurfaceKHR>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_SURFACE_KHR;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkSwapchainKHR>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkQueue>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_QUEUE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkSemaphore>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_SEMAPHORE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkFence>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_FENCE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkCommandBuffer>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkImage>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkImageView>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkShaderModule>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkPipeline>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_PIPELINE;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkSampler>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_SAMPLER;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSetLayout>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT;
-    }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSet>) {
-        objectNameInfo.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET;
-    }
 
     device->SetDebugUtilsObjectNameEXT(device, &objectNameInfo);
 }

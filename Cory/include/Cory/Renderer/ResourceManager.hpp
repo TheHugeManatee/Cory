@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <source_location>
 #include <string_view>
 
 namespace Cory {
@@ -45,83 +46,94 @@ class ResourceManager : NoCopy {
     /// query the number of resources in use
     std::unordered_map<ResourceType, size_t> resourcesInUse() const;
 
-    /**
-     * @name Shaders
-     */
+    // <editor-fold desc="Shaders">
     ///@{
     /// @see ShaderSource::ShaderSource(std::filesystem::path, ShaderType)
-    [[nodiscard]] ShaderHandle createShader(std::filesystem::path filePath,
-                                            ShaderType type = ShaderType::eUnknown);
+    [[nodiscard]] ShaderHandle
+    createShader(std::filesystem::path filePath,
+                 ShaderType type = ShaderType::eUnknown,
+                 std::source_location loc = std::source_location::current());
     /// @see ShaderSource::ShaderSource(std::string, ShaderType, std::filesystem::path)
     [[nodiscard]] ShaderHandle
-    createShader(std::string source, ShaderType type, std::filesystem::path filePath = "Unknown");
+    createShader(std::string source,
+                 ShaderType type,
+                 std::filesystem::path filePath = "Unknown",
+                 std::source_location loc = std::source_location::current());
     /// dereference a shader handle to access the shader. may throw!
     [[nodiscard]] Shader &operator[](ShaderHandle shaderHandle);
     void release(ShaderHandle shaderHandle);
     ///@}
+    // </editor-fold>
 
-    /**
-     * @name Buffers
-     */
+    // <editor-fold desc="Buffers">
     ///@{
-    BufferHandle createBuffer(size_t bufferSizeInBytes, BufferUsage usage, MemoryFlags flags);
+    BufferHandle createBuffer(std::string_view name,
+                              size_t bufferSizeInBytes,
+                              BufferUsage usage,
+                              MemoryFlags flags,
+                              std::source_location loc = std::source_location::current());
     [[nodiscard]] Magnum::Vk::Buffer &operator[](BufferHandle handle);
     void release(BufferHandle handle);
     ///@}
+    // </editor-fold>
 
-    /**
-     * @name Pipelines
-     */
+    // <editor-fold desc="Pipelines">
     ///@{
     PipelineHandle createPipeline(std::string_view name,
-                                  const Magnum::Vk::RasterizationPipelineCreateInfo &createInfo);
+                                  const Magnum::Vk::RasterizationPipelineCreateInfo &createInfo,
+                                  std::source_location loc = std::source_location::current());
     Magnum::Vk::Pipeline &operator[](PipelineHandle handle);
     void release(PipelineHandle handle);
     ///@}
+    // </editor-fold>
 
-    /**
-     * @name Images
-     */
+    // <editor-fold desc="Images">
     ///@{
     ImageHandle createImage(std::string_view name,
                             const Magnum::Vk::ImageCreateInfo &createInfo,
-                            Magnum::Vk::MemoryFlags memoryFlags);
-    ImageHandle wrapImage(std::string_view name, Magnum::Vk::Image &resource);
+                            Magnum::Vk::MemoryFlags memoryFlags,
+                            std::source_location loc = std::source_location::current());
+    ImageHandle wrapImage(std::string_view name,
+                          Magnum::Vk::Image &resource,
+                          std::source_location loc = std::source_location::current());
     Magnum::Vk::Image &operator[](ImageHandle handle);
     void release(ImageHandle handle);
     ///@}
+    // </editor-fold>
 
-    /**
-     * @name ImageViews
-     */
+    // <editor-fold desc="ImageViews">
     ///@{
     ImageViewHandle createImageView(std::string_view name,
-                                    const Magnum::Vk::ImageViewCreateInfo &createInfo);
-    ImageViewHandle wrapImageView(std::string_view name, Magnum::Vk::ImageView &resource);
+                                    const Magnum::Vk::ImageViewCreateInfo &createInfo,
+                                    std::source_location loc = std::source_location::current());
+    ImageViewHandle wrapImageView(std::string_view name,
+                                  Magnum::Vk::ImageView &resource,
+                                  std::source_location loc = std::source_location::current());
     Magnum::Vk::ImageView &operator[](ImageViewHandle handle);
     void release(ImageViewHandle handle);
     ///@}
+    // </editor-fold>
 
-    /**
-     * @name Samplers
-     */
+    // <editor-fold desc="Samplers">
     ///@{
     SamplerHandle createSampler(std::string_view name,
-                                const Magnum::Vk::SamplerCreateInfo &createInfo);
+                                const Magnum::Vk::SamplerCreateInfo &createInfo,
+                                std::source_location loc = std::source_location::current());
     Magnum::Vk::Sampler &operator[](SamplerHandle handle);
     void release(SamplerHandle handle);
     ///@}
+    // </editor-fold>
 
-    /**
-     * @name Descriptor layouts
-     */
+    // <editor-fold desc="Descriptor layouts">
     ///@{
     DescriptorSetLayoutHandle
     createDescriptorLayout(std::string_view name,
-                           const Magnum::Vk::DescriptorSetLayoutCreateInfo &createInfo);
+                           const Magnum::Vk::DescriptorSetLayoutCreateInfo &createInfo,
+                           std::source_location loc = std::source_location::current());
     Magnum::Vk::DescriptorSetLayout &operator[](DescriptorSetLayoutHandle handle);
     void release(DescriptorSetLayoutHandle handle);
     ///@}
+    // </editor-fold>
 
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;

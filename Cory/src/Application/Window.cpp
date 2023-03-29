@@ -32,6 +32,11 @@ namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
+namespace detail {
+MouseButton getMouseButtonState(GLFWwindow *window);
+ModifierFlags getModifierState(GLFWwindow *window);
+} // namespace detail
+
 Window::Window(Context &context,
                glm::i32vec2 dimensions,
                std::string windowName,
@@ -155,7 +160,7 @@ FrameContext Window::nextSwapchainImage()
         swapchain_.reset();
         swapchain_ = createSwapchain();
         createColorAndDepthResources();
-        onSwapchainResized.emit(dimensions_);
+        onSwapchainResized.emit({.size{dimensions_}});
 
         // retry the whole thing
         return nextSwapchainImage();
@@ -168,6 +173,7 @@ FrameContext Window::nextSwapchainImage()
 
     return frameCtx;
 }
+
 void Window::submitAndPresent(FrameContext &frameCtx)
 {
     {
@@ -328,7 +334,9 @@ void Window::createGlfwWindow()
 
     glfwSetCursorPosCallback(window_.get(), [](GLFWwindow *window, double mouseX, double mouseY) {
         Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
-        self.onMouseMoved.emit({mouseX, mouseY});
+        self.onMouseMoved.emit({.position = {mouseX, mouseY},
+                                .button = detail::getMouseButtonState(window),
+                                .modifiers = detail::getModifierState(window)});
     });
 
     glfwSetMouseButtonCallback(
@@ -336,25 +344,57 @@ void Window::createGlfwWindow()
             Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
             double mouseX, mouseY;
             glfwGetCursorPos(window, &mouseX, &mouseY);
-            self.onMouseButton.emit(MouseButtonData{.position = glm::vec2{mouseX, mouseY},
-                                                    .button = button,
-                                                    .action = action,
-                                                    .modifiers = mods});
+            self.onMouseButton.emit(MouseButtonEvent{
+                .position = glm::vec2{mouseX, mouseY},
+                .button = detail::getMouseButtonState(window),
+                .action = action == GLFW_PRESS ? ButtonAction::Press : ButtonAction::Release,
+                .modifiers = detail::getModifierState(window)});
         });
 
     glfwSetScrollCallback(window_.get(), [](GLFWwindow *window, double xOffset, double yOffset) {
         Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
-        self.onMouseScrolled.emit({glm::vec2{mouseX, mouseY}, glm::vec2{xOffset, yOffset}});
+        self.onMouseScrolled.emit({.position = {mouseX, mouseY},
+                                   .scrollDelta = {xOffset, yOffset},
+                                   .modifiers = detail::getModifierState(window)});
     });
 
     glfwSetKeyCallback(
         window_.get(), [](GLFWwindow *window, int key, int scancode, int action, int mods) {
             Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
             self.onKeyCallback.emit(
-                KeyData{.key = key, .scanCode = scancode, .action = action, .modifiers = mods});
+                KeyEvent{.key = key, .scanCode = scancode, .action = action, .modifiers = mods});
         });
 }
+
+namespace detail {
+MouseButton getMouseButtonState(GLFWwindow *window)
+{
+    const Cory::MouseButton mouseButton =
+        (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) ? Cory::MouseButton::Left
+        : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
+            ? Cory::MouseButton::Middle
+        : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
+            ? Cory::MouseButton::Right
+            : Cory::MouseButton::None;
+    return mouseButton;
+}
+
+ModifierFlags getModifierState(GLFWwindow *window)
+{
+    Cory::ModifierFlags modifiers;
+    if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
+        modifiers.set(Cory::ModifierFlagBits::Alt);
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+        modifiers.set(Cory::ModifierFlagBits::Ctrl);
+    }
+    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+        modifiers.set(Cory::ModifierFlagBits::Shift);
+    }
+    return modifiers;
+}
+} // namespace detail
 
 } // namespace Cory

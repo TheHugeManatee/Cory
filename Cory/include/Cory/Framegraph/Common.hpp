@@ -11,7 +11,7 @@ namespace Cory {
 struct RenderTaskInfo;
 struct RenderTaskExecutionAwaiter;
 class Framegraph;
-class Builder;
+class RenderTaskBuilder;
 class TextureManager;
 class CommandList;
 class FramegraphVisualizer;

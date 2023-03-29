@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Cory/Application/Event.hpp>
 #include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Profiling.hpp>
@@ -63,34 +64,19 @@ class Window : NoCopy, NoMove {
      *
      * It is called from within `nextSwapchainImage()` if a swapchain resize event is detected.
      */
-    KDBindings::Signal<glm::i32vec2> onSwapchainResized;
+    KDBindings::Signal<SwapchainResizedEvent> onSwapchainResized;
 
     /// emitted when the mouse has moved over the window
-    KDBindings::Signal<glm::vec2> onMouseMoved;
+    KDBindings::Signal<MouseMovedEvent> onMouseMoved;
 
-    struct MouseButtonData {
-        glm::vec2 position;
-        int button; // todo: wrap these more nicely into enums
-        int action;
-        int modifiers;
-    };
     /// emitted when a mouse button is pressed or released
-    KDBindings::Signal<MouseButtonData> onMouseButton;
+    KDBindings::Signal<MouseButtonEvent> onMouseButton;
 
-    struct ScrollData {
-        glm::vec2 position;
-        glm::vec2 scrollDelta;
-    };
     /// emitted when the mouse is scrolling, providing
-    KDBindings::Signal<ScrollData> onMouseScrolled;
+    KDBindings::Signal<ScrollEvent> onMouseScrolled;
 
-    struct KeyData {
-        int key;
-        int scanCode;
-        int action;
-        int modifiers;
-    };
-    struct KDBindings::Signal<KeyData> onKeyCallback;
+    /// emitted when a keyboard key is called
+    struct KDBindings::Signal<KeyEvent> onKeyCallback;
 
   private:
     [[nodiscard]] BasicVkObjectWrapper<VkSurfaceKHR> createSurface();

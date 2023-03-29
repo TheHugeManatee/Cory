@@ -1,4 +1,4 @@
-#include <Cory/Framegraph/Builder.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 
 #include "Cory/Framegraph/TextureManager.hpp"
 #include <Cory/Base/Log.hpp>
@@ -8,7 +8,21 @@
 
 namespace Cory {
 
-Builder::Builder(Context &ctx, Framegraph &framegraph, std::string_view taskName)
+// <editor-fold desc="RenderTaskExecutionAwaiter">
+RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
+{
+    return fg.renderInput(passHandle);
+}
+
+void RenderTaskExecutionAwaiter::await_suspend(
+    cppcoro::coroutine_handle<> coroHandle) const noexcept
+{
+    fg.enqueueRenderPass(passHandle, coroHandle);
+}
+// </editor-fold>
+
+// <editor-fold desc="RenderTaskBuilder">
+RenderTaskBuilder::RenderTaskBuilder(Context &ctx, Framegraph &framegraph, std::string_view taskName)
     : ctx_{ctx}
     , info_{}
     , framegraph_{framegraph}
@@ -16,15 +30,15 @@ Builder::Builder(Context &ctx, Framegraph &framegraph, std::string_view taskName
     info_.name = taskName;
     CO_CORE_TRACE("Pass {}: declaration started", info_.name);
 }
-Builder::~Builder() {}
+RenderTaskBuilder::~RenderTaskBuilder() {}
 
-RenderTaskExecutionAwaiter Builder::finishDeclaration()
+RenderTaskExecutionAwaiter RenderTaskBuilder::finishDeclaration()
 {
     const RenderTaskHandle passHandle = framegraph_.finishTaskDeclaration(std::move(info_));
     return RenderTaskExecutionAwaiter{passHandle, framegraph_};
 }
 
-TransientTextureHandle Builder::create(std::string name,
+TransientTextureHandle RenderTaskBuilder::create(std::string name,
                                        glm::u32vec3 size,
                                        PixelFormat format,
                                        Sync::AccessType writeAccess)
@@ -41,14 +55,15 @@ TransientTextureHandle Builder::create(std::string name,
     return handle;
 }
 
-TextureInfo Builder::read(TransientTextureHandle &handle, Sync::AccessType readAccess)
+TextureInfo RenderTaskBuilder::read(TransientTextureHandle &handle, Sync::AccessType readAccess)
 {
     info_.dependencies.push_back(RenderTaskInfo::Dependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
     return framegraph_.resources().info(handle.texture());
 }
 
-std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHandle handle,
+std::pair<TransientTextureHandle, TextureInfo>
+RenderTaskBuilder::write(TransientTextureHandle handle,
                                                               Sync::AccessType writeAccess)
 {
     // increase the version of the texture handle to record the modification
@@ -62,7 +77,8 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::write(TransientTextureHa
     return {outputHandle, framegraph_.resources().info(outputHandle.texture())};
 }
 
-std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextureHandle handle,
+std::pair<TransientTextureHandle, TextureInfo>
+RenderTaskBuilder::readWrite(TransientTextureHandle handle,
                                                                   Sync::AccessType readWriteAccess)
 {
     info_.dependencies.push_back({
@@ -83,10 +99,10 @@ std::pair<TransientTextureHandle, TextureInfo> Builder::readWrite(TransientTextu
     return {outputHandle, framegraph_.resources().info(handle.texture())};
 }
 
-TransientRenderPassBuilder Builder::declareRenderPass(std::string_view name)
+TransientRenderPassBuilder RenderTaskBuilder::declareRenderPass(std::string_view name)
 {
     return TransientRenderPassBuilder{
         ctx_, name.empty() ? info_.name : name, framegraph_.resources()};
 }
-
+// </editor-fold>
 } // namespace Cory

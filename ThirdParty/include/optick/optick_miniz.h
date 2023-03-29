@@ -83,7 +83,7 @@
 
      int mz_zip_reader_locate_file(mz_zip_archive *pZip, const char *pName, const char *pComment, mz_uint flags);
 
-     The locate operation can optionally check file comments too, which (as one example) can be used to identify
+     The Locate operation can optionally check file comments too, which (as one example) can be used to identify
      multiple versions of the same file in an archive. This function uses a simple linear search through the central
      directory, so it's not very fast.
 

@@ -60,7 +60,7 @@ TextureHandle TextureManager::registerExternal(TextureInfo info,
 {
     auto &resources = data_->ctx_->resources();
     auto handle = data_->textureResources_.emplace(
-        TextureResource{.info = std::move(info),
+        TextureResource{.info = info,
                         .state = TextureState{.lastAccess = lastWriteAccess,
                                               .status = TextureMemoryStatus::External},
                         .image = resources.wrapImage(info.name, resource),
@@ -82,8 +82,9 @@ void TextureManager::allocate(TextureHandle handle)
         static const int32_t levels = 1;
         static const Magnum::Vk::ImageLayout initialLayout{Magnum::Vk::ImageLayout::Undefined};
 
-        Vk::ImageUsages usage {isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
-                                                    : Vk::ImageUsage::ColorAttachment};
+        Vk::ImageUsages usage{};
+        usage |= isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
+                                                : Vk::ImageUsage::ColorAttachment;
         usage |= Vk::ImageUsage::Sampled;
         usage |= Vk::ImageUsage::InputAttachment;
 
@@ -91,7 +92,8 @@ void TextureManager::allocate(TextureHandle handle)
             usage, res.info.format, size, levels, res.info.sampleCount, initialLayout};
 
         // todo eventually want to externalize these memory flags
-        res.image = resources.createImage(fmt::format("{} (IMG)", res.info.name), createInfo, Vk::MemoryFlag::DeviceLocal);
+        res.image = resources.createImage(
+            fmt::format("{} (IMG)", res.info.name), createInfo, Vk::MemoryFlag::DeviceLocal);
     }
 
     {
@@ -168,6 +170,13 @@ TextureState TextureManager::state(TextureHandle handle) const
     return data_->textureResources_[handle].state;
 }
 
-void TextureManager::clear() { data_->textureResources_.clear(); }
+void TextureManager::clear()
+{
+    for (auto &res : data_->textureResources_) {
+        data_->ctx_->resources().release(res.image);
+        data_->ctx_->resources().release(res.view);
+    }
+    data_->textureResources_.clear();
+}
 
 } // namespace Cory

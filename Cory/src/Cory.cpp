@@ -2,6 +2,7 @@
 
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include<Cory/Base/Time.hpp>
 
 #include <Corrade/Containers/StringView.h>
 #include <Magnum/Vk/DeviceProperties.h>
@@ -19,7 +20,12 @@ namespace Cory {
 
 void Init() {
     // initialize all static objects in the correct order
+    Cory::AppClock::Init();
     Cory::Log::Init();
+}
+
+void Deinit() {
+
 }
 
 std::string queryVulkanInstanceVersion()
@@ -47,11 +53,5 @@ void dumpInstanceInformation()
     }
 }
 
-void playground_main()
-{
-    dumpInstanceInformation();
-
-    Cory::Context context;
-}
 
 } // namespace Cory

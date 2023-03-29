@@ -16,8 +16,6 @@
 
 #include <memory>
 
-class CubePipeline;
-
 struct CubeUBO {
     glm::mat4 projection;
     glm::mat4 view;
@@ -44,19 +42,14 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
         Cory::TransientTextureHandle depthOut;
     };
     Cory::RenderTaskDeclaration<PassOutputs>
-    cubeRenderTask(Cory::Builder builder,
+    cubeRenderTask(Cory::RenderTaskBuilder builder,
                    Cory::TransientTextureHandle colorTarget,
-                   Cory::TransientTextureHandle depthTarget,
-                   Cory::FrameContext frameCtx);
+                   Cory::TransientTextureHandle depthTarget);
 
     Cory::RenderTaskDeclaration<PassOutputs>
-    depthDebugTask(Cory::Builder builder,
-                   Cory::TransientTextureHandle colorTarget,
-                   Cory::TransientTextureHandle depthTarget,
-                   Cory::FrameContext frameCtx);
-
-    Cory::RenderTaskDeclaration<PassOutputs> imguiRenderTask(
-        Cory::Builder builder, Cory::TransientTextureHandle colorTarget, Cory::FrameContext ctx);
+    imguiRenderTask(Cory::RenderTaskBuilder builder,
+                    Cory::TransientTextureHandle colorTarget,
+                    Cory::FrameContext ctx);
 
     static double now();
     [[nodiscard]] double getElapsedTimeSeconds() const;
@@ -66,6 +59,7 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     void setupCameraCallbacks();
 
   private:
+    bool disableValidation_{false};
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
@@ -73,9 +67,8 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
     Cory::SamplerHandle defaultSampler_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
-    Cory::ShaderHandle fullscreenTriShader_;
-    Cory::ShaderHandle depthDebugShader_;
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;
+    std::unique_ptr<Cory::DepthDebugLayer> depthDebugLayer_;
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;

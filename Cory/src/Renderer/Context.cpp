@@ -24,6 +24,7 @@
 #include <Magnum/Vk/PipelineLayoutCreateInfo.h>
 #include <Magnum/Vk/Queue.h>
 #include <Magnum/Vk/Result.h>
+#include <Magnum/Vk/SamplerCreateInfo.h>
 #include <Magnum/Vk/Version.h>
 #include <Magnum/Vk/VertexFormat.h>
 
@@ -56,6 +57,7 @@ struct ContextPrivate {
     Magnum::Vk::MeshLayout defaultMeshLayout{Corrade::NoInit};
     /// mesh layout with no bindings, to implement dynamic vertex generation/pulling
     Magnum::Vk::MeshLayout emptyMeshLayout{Corrade::NoInit};
+    SamplerHandle defaultSampler;
 
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
                                   DebugMessageType messageType,
@@ -73,7 +75,7 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
                                      void *pUserData);
 } // namespace detail
 
-Context::Context()
+Context::Context(ContextCreationInfo creationInfo)
     : data_{std::make_unique<ContextPrivate>()}
 {
     data_->name = "CCtx";
@@ -84,15 +86,16 @@ Context::Context()
     //  - KHR_get_physical_device_properties2 instance extension
     //  - KHR_dynamic_rendering device extension
     //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
-
-    data_->instance.create(
-        Vk::InstanceCreateInfo{}
-            .setApplicationInfo(app_name, Vk::version(1, 0, 0))
-            .addEnabledLayers({"VK_LAYER_KHRONOS_validation"})
-            .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
-            .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,
-                                   "VK_KHR_win32_surface",
-                                   VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME}));
+    Vk::InstanceCreateInfo instanceCreateInfo{};
+    instanceCreateInfo.setApplicationInfo(app_name, Vk::version(1, 0, 0))
+        .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
+        .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,
+                               "VK_KHR_win32_surface",
+                               VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME});
+    if (creationInfo.validation == ValidationLayers::Enabled) {
+        instanceCreateInfo.addEnabledLayers({"VK_LAYER_KHRONOS_validation"});
+    }
+    data_->instance.create(instanceCreateInfo);
     data_->instance.populateGlobalFunctionPointers();
 
     data_->physicalDevice = Vk::pickDevice(data_->instance);
@@ -123,8 +126,7 @@ Context::Context()
     data_->device.populateGlobalFunctionPointers();
     // set a debug name for the logical device and queues
     nameVulkanObject(data_->device, data_->device, fmt::format("DEV_{}", data_->name));
-    nameVulkanObject(
-        data_->device, data_->graphicsQueue, fmt::format("QUE_Gfx_{}", data_->name));
+    nameVulkanObject(data_->device, data_->graphicsQueue, fmt::format("QUE_Gfx_{}", data_->name));
     // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("QUE_Comp_{}",
     // data_->name));
 
@@ -134,7 +136,7 @@ Context::Context()
         Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
 
     // delayed-init of the resource manager
-    data_->resources.setContext(*this);
+    resources().setContext(*this);
 
     // TODO descriptorsetmanager should move to more frontend-facing object like swapchain, window,
     // or application base class
@@ -162,10 +164,12 @@ Context::Context()
     data_->descriptorSetManager.init(
         data_->device, data_->resources, std::move(defaultLayout), FRAMES_IN_FLIGHT);
 
+    // create default resources
     data_->defaultMeshLayout = detail::createDefaultMeshLayout();
     data_->emptyMeshLayout = Magnum::Vk::MeshLayout{Vk::MeshPrimitive::Triangles};
     data_->defaultPipelineLayout = detail::createDefaultPipelineLayout(
         *this, resources()[data_->descriptorSetManager.layout()]);
+    data_->defaultSampler = resources().createSampler("SMPL_Default", Vk::SamplerCreateInfo{});
 }
 
 Context::Context(Context &&rhs) { std::swap(rhs.data_, data_); }
@@ -177,7 +181,10 @@ Context &Context::operator=(Context &&rhs)
 
 Context::~Context()
 {
-    if (data_) { CO_CORE_TRACE("Destroying Cory::Context {}", data_->name); }
+    if (data_) {
+        data_->resources.release(data_->defaultSampler);
+        CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
+    }
 }
 
 void Context::setupDebugMessenger()
@@ -263,6 +270,7 @@ Magnum::Vk::PipelineLayout &Context::defaultPipelineLayout()
 {
     return data_->defaultPipelineLayout;
 }
+SamplerHandle Context::defaultSampler() const { return data_->defaultSampler; }
 
 void ContextPrivate::receiveDebugUtilsMessage(
     DebugMessageSeverity severity,

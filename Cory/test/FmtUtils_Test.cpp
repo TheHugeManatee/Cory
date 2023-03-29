@@ -34,3 +34,13 @@ TEST_CASE("Formatting glm::vec", "[Cory/Base/Formatting]")
         CHECK(fmt::format("{}", v2) == "(10,20,30,444)");
     }
 }
+
+TEST_CASE("Formatting Cory::Timepoint and Cory::Seconds") {
+    auto t1 = Cory::Timepoint{0.0_s};
+    auto t2 = Cory::Timepoint{0.2_s};
+
+    // timepoints and durations should be formattable
+    fmt::print("Started: {}\n", t1);
+    fmt::print("End:     {}\n", t2);
+    fmt::print("Elapsed: {}\n", t2 - t1);
+}

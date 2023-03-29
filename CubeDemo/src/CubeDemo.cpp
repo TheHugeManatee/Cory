@@ -1,12 +1,14 @@
 #include "CubeDemo.hpp"
 
 #include "Cory/Framegraph/TextureManager.hpp"
+#include <Cory/Application/DepthDebugLayer.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Math.hpp>
 #include <Cory/Base/Profiling.hpp>
+#include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Framegraph/CommandList.hpp>
@@ -65,26 +67,47 @@ static struct AnimationData {
     int num_cubes{200};
     float blend{0.8f};
 
-    float ti{1.5f};
-    float tsi{2.0f};
-    float tsf{100.0f};
-
-    float r0{0.0f};
-    float rt{-0.1f};
-    float ri{1.3f};
-    float rti{0.05f};
-
-    float s0{0.05f};
-    float st{0.0f};
-    float si{0.4f};
-
-    float c0{-0.75f};
-    float cf0{2.0f};
-    float cfi{-0.5f};
+    struct param {
+        float val;
+        float min;
+        float max;
+        operator float() const { return val; }
+    };
+    param ti{1.5f, 0.0f, 10.0f};
+    param tsi{2.0f, 0.0f, 3.0f};
+    param tsf{100.0f, 0.0f, 250.0f};
+    param r0{0.0f, -2.0f, 2.0f};
+    param rt{-0.1f, -2.0f, 2.0f};
+    param ri{1.3f, -2.0f, 2.0f};
+    param rti{0.05f, -2.0f, 2.0f};
+    param s0{0.05f, 0.0f, 1.0f};
+    param st{0.0f, -0.01f, 0.01f};
+    param si{0.4f, 0.0f, 2.0f};
+    param c0{-0.75f, -2.0f, 2.0f};
+    param cf0{2.0f, -10.0f, 10.0f};
+    param cfi{-0.5f, -2.0f, 2.0f};
 
     glm::vec3 translation{0.0, 0.0f, 2.5f};
     glm::vec3 rotation{0.0f};
 } ad;
+
+void randomize(AnimationData::param &p) { p.val = Cory::RNG::Uniform(p.min, p.max); }
+void randomize()
+{
+    randomize(ad.ti);
+    randomize(ad.tsi);
+    randomize(ad.tsf);
+    randomize(ad.r0);
+    randomize(ad.rt);
+    randomize(ad.ri);
+    randomize(ad.rti);
+    randomize(ad.s0);
+    randomize(ad.st);
+    randomize(ad.si);
+    randomize(ad.c0);
+    randomize(ad.cf0);
+    randomize(ad.cfi);
+}
 
 void animate(PushConstants &d, float t, float i)
 {
@@ -112,6 +135,7 @@ void animate(PushConstants &d, float t, float i)
 
 CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     : mesh_{}
+    , depthDebugLayer_{std::make_unique<Cory::DepthDebugLayer>()}
     , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
     , startupTime_{now()}
 {
@@ -119,11 +143,16 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 
     CLI::App app{"CubeDemo"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
+    app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
     app.parse(argc, argv);
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
 
-    ctx_ = std::make_unique<Cory::Context>();
+    Cory::ContextCreationInfo creationInfo{
+        .validation =
+            disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
+    };
+    ctx_ = std::make_unique<Cory::Context>(creationInfo);
     // determine msaa sample count to use - for simplicity, we use either 8 or one sample
     const auto &limits = ctx_->physicalDevice().properties().properties.limits;
     const VkSampleCountFlags counts =
@@ -136,15 +165,14 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "CubeDemo", msaaSamples);
 
-    auto recreateSizedResources = [&](glm::i32vec2) { /* nothing? */ };
-
-    defaultSampler_ = ctx_->resources().createSampler("SMPL_Default", Vk::SamplerCreateInfo{});
     createGeometry();
     createShaders();
-    recreateSizedResources(window_->dimensions());
-    window_->onSwapchainResized.connect(recreateSizedResources);
 
     imguiLayer_->init(*window_, *ctx_);
+    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
+                                              window_->swapchain().maxFramesInFlight(),
+                                          .viewportDimensions = window_->dimensions()};
+    depthDebugLayer_->onAttach(*ctx_, layerAttachInfo);
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
     camera_.setWindowSize(window_->dimensions());
@@ -156,12 +184,8 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 void CubeDemoApplication::createShaders()
 {
     const Cory::ScopeTimer st{"Init/Shaders"};
-    vertexShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.vert"));
-    fragmentShader_ = ctx_->resources().createShader(Cory::ResourceLocator::locate("cube.frag"));
-    fullscreenTriShader_ =
-        ctx_->resources().createShader(Cory::ResourceLocator::locate("fullscreenTri.vert"));
-    depthDebugShader_ =
-        ctx_->resources().createShader(Cory::ResourceLocator::locate("depthDebug.frag"));
+    vertexShader_ = ctx_->resources().createShader(Cory::ResourceLocator::Locate("cube.vert"));
+    fragmentShader_ = ctx_->resources().createShader(Cory::ResourceLocator::Locate("cube.frag"));
 }
 
 void CubeDemoApplication::createUBO()
@@ -170,12 +194,6 @@ void CubeDemoApplication::createUBO()
     const Cory::ScopeTimer st{"Init/UBO"};
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
         *ctx_, window_->swapchain().maxFramesInFlight());
-
-    for (gsl::index i = 0; i < globalUbo_->instances(); ++i) {
-        ctx_->descriptorSets()
-            .write(Cory::DescriptorSets::SetType::Static, i, *globalUbo_)
-            .flushWrites();
-    }
 }
 
 CubeDemoApplication::~CubeDemoApplication()
@@ -183,11 +201,9 @@ CubeDemoApplication::~CubeDemoApplication()
     auto &resources = ctx_->resources();
     resources.release(vertexShader_);
     resources.release(fragmentShader_);
-    resources.release(fullscreenTriShader_);
-    resources.release(depthDebugShader_);
-    resources.release(defaultSampler_);
 
     imguiLayer_->deinit(*ctx_);
+    depthDebugLayer_->onDetach(*ctx_);
     CO_APP_TRACE("Destroying CubeDemoApplication");
 }
 
@@ -203,10 +219,11 @@ void CubeDemoApplication::run()
         glfwPollEvents();
         imguiLayer_->newFrame(*ctx_);
         // TODO process events?
-        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
         drawImguiControls();
+        depthDebugLayer_->onUpdate();
 
+        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.index];
         // retire old resources from the last time this framegraph was
         // used - our frame synchronization ensures that the resources
@@ -215,7 +232,7 @@ void CubeDemoApplication::run()
 
         defineRenderPasses(fg, frameCtx);
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
-        auto execInfo = fg.record(*frameCtx.commandBuffer);
+        auto execInfo = fg.record(frameCtx);
 
         frameCtx.commandBuffer->end();
 
@@ -257,25 +274,26 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                 *frameCtx.depthImage,
                                 *frameCtx.depthImageView);
 
-    auto mainPass = cubeRenderTask(
-        framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget, frameCtx);
+    auto mainPass =
+        cubeRenderTask(framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget);
 
-    auto depthDebugPass = depthDebugTask(framegraph.declareTask("TASK_DepthDebug"),
-                                         mainPass.output().colorOut,
-                                         mainPass.output().depthOut,
-                                         frameCtx);
+    auto depthDebugPass = depthDebugLayer_->renderTask(
+        framegraph.declareTask("TASK_DepthDebug"),
+        {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto imguiPass = imguiRenderTask(
-        framegraph.declareTask("TASK_ImGui"), depthDebugPass.output().colorOut, frameCtx);
+    auto imguiPass =
+        imguiRenderTask(framegraph.declareTask("TASK_ImGui"),
+                        depthDebugLayer_->renderEnabled.get() ? depthDebugPass.output().color
+                                                              : mainPass.output().colorOut,
+                        frameCtx);
 
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
+CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle colorTarget,
-                                    Cory::TransientTextureHandle depthTarget,
-                                    Cory::FrameContext frameCtx)
+                                    Cory::TransientTextureHandle depthTarget)
 {
 
     VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
@@ -313,8 +331,10 @@ CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
     float fovy = glm::radians(70.0f);
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
     glm::mat4 viewMatrix = camera_.getViewMatrix();
-    glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 0.1f, 10.0f);
+    glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 1.0f, 10.0f);
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
+
+    Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
     // update the uniform buffer
     CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
@@ -324,8 +344,10 @@ CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.index);
 
-    ctx_->descriptorSets().bind(
-        renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
+    ctx_->descriptorSets()
+        .write(Cory::DescriptorSets::SetType::Static, frameCtx.index, *globalUbo_)
+        .flushWrites()
+        .bind(renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
@@ -349,64 +371,9 @@ CubeDemoApplication::cubeRenderTask(Cory::Builder builder,
 }
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::depthDebugTask(Cory::Builder builder,
-                                    Cory::TransientTextureHandle colorTarget,
-                                    Cory::TransientTextureHandle depthTarget,
-                                    Cory::FrameContext frameCtx)
-{
-    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-
-    auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
-    auto depthInfo = builder.read(
-        depthTarget, Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
-    //    auto colorTarget = builder.create("DebugDebug",
-    //                                      depthInfo.size,
-    //                                      window_->colorFormat(),
-    //                                      Cory::Sync::AccessType::ColorAttachmentWrite);
-
-    auto cubePass = builder.declareRenderPass("PASS_DepthDebug")
-                        .shaders({fullscreenTriShader_, depthDebugShader_})
-                        .disableMeshInput() // fullscreen triangle pass
-                        .attach(colorTarget,
-                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD,
-                                VK_ATTACHMENT_STORE_OP_STORE,
-                                clearColor)
-                        .finish();
-
-    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = {}};
-
-    /// ^^^^     DECLARATION      ^^^^
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
-    /// vvvv  RENDERING COMMANDS  vvvv
-
-    ////////////
-
-    globalUbo_->flush(frameCtx.index);
-
-    Cory::TextureManager &resources = *renderApi.resources;
-
-
-    // TODO get layout from texturemanager!
-    std::array layouts{VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    std::array textures{resources.imageView(depthTarget)};
-    std::array samplers{defaultSampler_};
-
-    ctx_->descriptorSets().write(
-        Cory::DescriptorSets::SetType::Static, frameCtx.index, layouts, textures, samplers);
-    ctx_->descriptorSets().flushWrites();
-    ctx_->descriptorSets().bind(
-        renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
-    ////////////
-
-    cubePass.begin(*renderApi.cmd);
-
-    ctx_->device()->CmdDraw(renderApi.cmd->handle(), 3, 1, 0, 0);
-    cubePass.end(*renderApi.cmd);
-}
-
-Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs> CubeDemoApplication::imguiRenderTask(
-    Cory::Builder builder, Cory::TransientTextureHandle colorTarget, Cory::FrameContext frameCtx)
+CubeDemoApplication::imguiRenderTask(Cory::RenderTaskBuilder builder,
+                                     Cory::TransientTextureHandle colorTarget,
+                                     Cory::FrameContext frameCtx)
 {
     auto [writtenColorHandle, colorInfo] =
         builder.readWrite(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
@@ -440,26 +407,26 @@ void CubeDemoApplication::drawImguiControls()
     if (ImGui::Begin("Animation Params")) {
         if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
         if (ImGui::Button("Restart")) { startupTime_ = now(); }
+        if (ImGui::Button("Randomize")) { randomize(); }
 
         CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);
         CoImGui::Slider("blend", ad.blend, 0.0f, 1.0f);
         CoImGui::Slider("translation", ad.translation, -3.0f, 3.0f);
         CoImGui::Slider("rotation", ad.rotation, -glm::pi<float>(), glm::pi<float>());
 
-        CoImGui::Slider("ti", ad.ti, 0.0f, 10.0f);
-        CoImGui::Slider("tsi", ad.tsi, 0.0f, 10.0f);
-        CoImGui::Slider("tsf", ad.tsf, 0.0f, 250.0f);
-
-        CoImGui::Slider("r0", ad.r0, -2.0f, 2.0f);
-        CoImGui::Slider("rt", ad.rt, -2.0f, 2.0f);
-        CoImGui::Slider("ri", ad.ri, -2.0f, 2.0f);
-        CoImGui::Slider("rti", ad.rti, -2.0f, 2.0f);
-        CoImGui::Slider("s0", ad.s0, 0.0f, 2.0f);
-        CoImGui::Slider("st", ad.st, -0.1f, 0.1f);
-        CoImGui::Slider("si", ad.si, 0.0f, 2.0f);
-        CoImGui::Slider("c0", ad.c0, -2.0f, 2.0f);
-        CoImGui::Slider("cf0", ad.cf0, -10.0f, 10.0f);
-        CoImGui::Slider("cfi", ad.cfi, -2.0f, 2.0f);
+        CoImGui::Slider("ti", ad.ti.val, ad.ti.min, ad.ti.max);
+        CoImGui::Slider("tsi", ad.tsi.val, ad.tsi.min, ad.tsi.max);
+        CoImGui::Slider("tsf", ad.tsf.val, ad.tsf.min, ad.tsf.max);
+        CoImGui::Slider("r0", ad.r0.val, ad.r0.min, ad.r0.max);
+        CoImGui::Slider("rt", ad.rt.val, ad.rt.min, ad.rt.max);
+        CoImGui::Slider("ri", ad.ri.val, ad.ri.min, ad.ri.max);
+        CoImGui::Slider("rti", ad.rti.val, ad.rti.min, ad.rti.max);
+        CoImGui::Slider("s0", ad.s0.val, ad.s0.min, ad.s0.max);
+        CoImGui::Slider("st", ad.st.val, ad.st.min, ad.st.max);
+        CoImGui::Slider("si", ad.si.val, ad.si.min, ad.si.max);
+        CoImGui::Slider("c0", ad.c0.val, ad.c0.min, ad.c0.max);
+        CoImGui::Slider("cf0", ad.cf0.val, ad.cf0.min, ad.cf0.max);
+        CoImGui::Slider("cfi", ad.cfi.val, ad.cfi.min, ad.cfi.max);
     }
     ImGui::End();
     if (ImGui::Begin("Camera")) {
@@ -523,40 +490,25 @@ void CubeDemoApplication::drawImguiControls()
 }
 void CubeDemoApplication::setupCameraCallbacks()
 {
-    window_->onSwapchainResized.connect([this](glm::i32vec2 size) { camera_.setWindowSize(size); });
+    window_->onSwapchainResized.connect(
+        [this](Cory::SwapchainResizedEvent event) { camera_.setWindowSize(event.size); });
 
-    window_->onMouseMoved.connect([this](glm::vec2 pos) {
+    window_->onMouseMoved.connect([this](Cory::MouseMovedEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        auto *const wnd = window_->handle();
-        const Cory::CameraManipulator::MouseButton mouseButton =
-            (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
-                ? Cory::CameraManipulator::MouseButton::Left
-            : (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
-                ? Cory::CameraManipulator::MouseButton::Middle
-            : (glfwGetMouseButton(wnd, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-                ? Cory::CameraManipulator::MouseButton::Right
-                : Cory::CameraManipulator::MouseButton::None;
-        if (mouseButton != Cory::CameraManipulator::MouseButton::None) {
-            Cory::CameraManipulator::ModifierFlags modifiers;
-            if (glfwGetKey(wnd, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
-                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Alt);
-            }
-            if (glfwGetKey(wnd, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Ctrl);
-            }
-            if (glfwGetKey(wnd, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-                modifiers.set(Cory::CameraManipulator::ModifierFlagBits::Shift);
-            }
 
-            camera_.mouseMove(glm::ivec2(pos), mouseButton, modifiers);
+        if (depthDebugLayer_->onEvent(event)) { return; }
+        if (event.button != Cory::MouseButton::None) {
+            camera_.mouseMove(glm::ivec2(event.position), event.button, event.modifiers);
         }
     });
-    window_->onMouseButton.connect([this](Cory::Window::MouseButtonData data) {
+    window_->onMouseButton.connect([this](Cory::MouseButtonEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        camera_.setMousePosition(data.position);
+        if (depthDebugLayer_->onEvent(event)) { return; }
+        camera_.setMousePosition(event.position);
     });
-    window_->onMouseScrolled.connect([this](Cory::Window::ScrollData data) {
+    window_->onMouseScrolled.connect([this](Cory::ScrollEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        camera_.wheel(static_cast<int32_t>(data.scrollDelta.y));
+        if (depthDebugLayer_->onEvent(event)) { return; }
+        camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
     });
 }

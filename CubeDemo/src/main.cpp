@@ -1,3 +1,5 @@
+#include <Cory/Cory.hpp>
+
 #include "CubeDemo.hpp"
 
 #include <cstdlib>
@@ -8,6 +10,7 @@
 int main(int argc, char** argv)
 {
     try {
+        Cory::Init();
         CubeDemoApplication app{argc, argv};
 
         app.run();

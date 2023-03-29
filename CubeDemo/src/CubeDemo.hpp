@@ -23,7 +23,7 @@ struct CubeUBO {
     glm::vec3 lightPosition;
 };
 
-class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove {
+class CubeDemoApplication : public Cory::Application {
   public:
     CubeDemoApplication(int argc, char **argv);
     ~CubeDemoApplication();
@@ -61,7 +61,6 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
   private:
     bool disableValidation_{false};
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
-    std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
 
     Cory::SamplerHandle defaultSampler_;

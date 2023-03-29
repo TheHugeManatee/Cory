@@ -9,8 +9,8 @@
 #include <Magnum/Vk/Vk.h> // forward declaration header
 #include <Magnum/Vk/Vulkan.h>
 
-#include <Cory/Renderer/Synchronization.hpp>
 #include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
+#include <Cory/Renderer/Synchronization.hpp>
 #include <Cory/Renderer/flextVkExt.h> // extensions
 
 #include <cstdint>
@@ -18,6 +18,7 @@
 namespace Cory {
 // forward declared classes/structs
 class Context;
+struct ContextCreationInfo;
 class CpuBuffer;
 class RenderManager;
 class Shader;

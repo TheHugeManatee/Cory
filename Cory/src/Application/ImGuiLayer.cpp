@@ -120,12 +120,12 @@ createFramebuffers(Context &ctx, Window &window, Vk::RenderPass &renderPass)
 } // namespace
 
 struct ImGuiLayer::Private {
+    Context *ctx;
     Window *window;
     Vk::RenderPass renderPass{Corrade::NoCreate};
     BasicVkObjectWrapper<VkDescriptorPool> descriptorPool;
     std::vector<Vk::Framebuffer> framebuffers;
     Magnum::Color4 clearValue{};
-    KDBindings::ConnectionHandle handle{};
 };
 
 void check_vk_result(VkResult err)
@@ -152,16 +152,12 @@ ImGuiLayer::~ImGuiLayer()
 
 void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
 {
+    data_->ctx = &ctx;
     auto &window = *data_->window;
 
     data_->descriptorPool = createImguiDescriptorPool(ctx);
     data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
-
-    auto recreateSizedResources = [&](SwapchainResizedEvent event) {
-        data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
-    };
-    data_->handle = window.onSwapchainResized.connect(recreateSizedResources);
-    recreateSizedResources({});
+    data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -243,22 +239,21 @@ void ImGuiLayer::onDetach(Context &ctx)
 
 bool ImGuiLayer::onEvent(Event event)
 {
-    return std::visit(lambda_visitor{
-                          [](auto event) { return false; },
-//                          [this](const SwapchainResizedEvent &event) {
-//                              //
-//                              return false;
-//                          },
-//                          [this](const ScrollEvent &event) {
-//                              //
-//                              return false;
-//                          },
-//                          [this](const MouseMovedEvent &event) {
-//                              //
-//                              return false;
-//                          },
-                      },
-                      event);
+    return std::visit(
+        lambda_visitor{
+            [](auto event) { return false; },
+            [this](const SwapchainResizedEvent &event) {
+                data_->framebuffers =
+                    createFramebuffers(*data_->ctx, *data_->window, data_->renderPass);
+                return false;
+            },
+            // we just need to prevent lower layers from using the events, actual processing
+            // happens in the onUpdate() method
+            [](const ScrollEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
+            [](const MouseButtonEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
+            [](const MouseMovedEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
+        },
+        event);
 }
 
 void ImGuiLayer::onUpdate()

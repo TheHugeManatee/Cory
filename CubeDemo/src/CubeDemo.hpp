@@ -23,7 +23,7 @@ struct CubeUBO {
     glm::vec3 lightPosition;
 };
 
-class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove {
+class CubeDemoApplication : public Cory::Application {
   public:
     CubeDemoApplication(int argc, char **argv);
     ~CubeDemoApplication();
@@ -46,11 +46,6 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
                    Cory::TransientTextureHandle colorTarget,
                    Cory::TransientTextureHandle depthTarget);
 
-    Cory::RenderTaskDeclaration<PassOutputs>
-    imguiRenderTask(Cory::RenderTaskBuilder builder,
-                    Cory::TransientTextureHandle colorTarget,
-                    Cory::FrameContext ctx);
-
     static double now();
     [[nodiscard]] double getElapsedTimeSeconds() const;
 
@@ -61,15 +56,12 @@ class CubeDemoApplication : public Cory::Application, Cory::NoCopy, Cory::NoMove
   private:
     bool disableValidation_{false};
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
-    std::unique_ptr<Cory::Context> ctx_;
     std::unique_ptr<Cory::Window> window_;
 
     Cory::SamplerHandle defaultSampler_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;
-    std::unique_ptr<Cory::DepthDebugLayer> depthDebugLayer_;
-    std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     std::vector<Magnum::Vk::DescriptorSet> descriptorSets_;

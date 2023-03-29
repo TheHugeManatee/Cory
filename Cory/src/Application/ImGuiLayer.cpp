@@ -3,6 +3,9 @@
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/Utils.hpp>
+#include <Cory/Framegraph/CommandList.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/SingleShotCommandBuffer.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
@@ -117,12 +120,12 @@ createFramebuffers(Context &ctx, Window &window, Vk::RenderPass &renderPass)
 } // namespace
 
 struct ImGuiLayer::Private {
+    Context *ctx;
     Window *window;
     Vk::RenderPass renderPass{Corrade::NoCreate};
     BasicVkObjectWrapper<VkDescriptorPool> descriptorPool;
     std::vector<Vk::Framebuffer> framebuffers;
     Magnum::Color4 clearValue{};
-    KDBindings::ConnectionHandle handle{};
 };
 
 void check_vk_result(VkResult err)
@@ -132,10 +135,12 @@ void check_vk_result(VkResult err)
     if (err < 0) { abort(); }
 }
 
-ImGuiLayer::ImGuiLayer()
-    : data_{std::make_unique<Private>()}
+ImGuiLayer::ImGuiLayer(Window &window)
+    : ApplicationLayer("ImGui")
+    , data_{std::make_unique<Private>()}
 {
     data_->clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
+    data_->window = &window;
 }
 
 ImGuiLayer::~ImGuiLayer()
@@ -145,17 +150,14 @@ ImGuiLayer::~ImGuiLayer()
     }
 }
 
-void ImGuiLayer::init(Window &window, Context &ctx)
+void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
 {
-    data_->window = &window;
+    data_->ctx = &ctx;
+    auto &window = *data_->window;
+
     data_->descriptorPool = createImguiDescriptorPool(ctx);
     data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
-
-    auto recreateSizedResources = [&](SwapchainResizedEvent event) {
-        data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
-    };
-    data_->handle = window.onSwapchainResized.connect(recreateSizedResources);
-    recreateSizedResources({});
+    data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -225,7 +227,7 @@ void ImGuiLayer::init(Window &window, Context &ctx)
     // setupCustomColors();
 }
 
-void ImGuiLayer::deinit(Context &ctx)
+void ImGuiLayer::onDetach(Context &ctx)
 {
     // free all buffers before destroying the imgui context
     data_.reset();
@@ -235,11 +237,47 @@ void ImGuiLayer::deinit(Context &ctx)
     ImGui::DestroyContext();
 }
 
-void ImGuiLayer::newFrame(Context &ctx)
+bool ImGuiLayer::onEvent(Event event)
+{
+    return std::visit(
+        lambda_visitor{
+            [](auto event) { return false; },
+            [this](const SwapchainResizedEvent &event) {
+                data_->framebuffers =
+                    createFramebuffers(*data_->ctx, *data_->window, data_->renderPass);
+                return false;
+            },
+            // we just need to prevent lower layers from using the events, actual processing
+            // happens in the onUpdate() method
+            [](const ScrollEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
+            [](const MouseButtonEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
+            [](const MouseMovedEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
+        },
+        event);
+}
+
+void ImGuiLayer::onUpdate()
 {
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+}
+
+RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(Cory::RenderTaskBuilder builder,
+                                                               LayerPassOutputs previousLayer)
+{
+    auto [writtenColorHandle, colorInfo] =
+        builder.readWrite(previousLayer.color, Cory::Sync::AccessType::ColorAttachmentWrite);
+
+    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+
+    Context &ctx = *renderApi.ctx;
+    FrameContext &frameCtx = *renderApi.frameCtx;
+
+    // note - currently, we're letting imgui handle the final resolve and transition to
+    // present_layout
+    recordFrameCommands(ctx, frameCtx.index, renderApi.cmd->handle());
 }
 
 void ImGuiLayer::recordFrameCommands(Context &ctx,
@@ -269,6 +307,7 @@ void ImGuiLayer::recordFrameCommands(Context &ctx,
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer);
     cmdBuffer.endRenderPass();
 }
+
 void ImGuiLayer::setupCustomColors()
 {
     ImVec4 *colors = ImGui::GetStyle().Colors;

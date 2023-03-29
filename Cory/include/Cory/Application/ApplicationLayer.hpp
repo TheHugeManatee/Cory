@@ -1,24 +1,14 @@
 #pragma once
 
+#include <Cory/Application/Common.hpp>
 #include <Cory/Application/Event.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
+#include <kdbindings/property.h>
 
 #include <string>
 
 namespace Cory {
-
-/// the outputs of a layer's render task
-struct LayerPassOutputs {
-    TransientTextureHandle color;
-    TransientTextureHandle depth;
-};
-
-/// data to be passed to a layer when it is attached
-struct LayerAttachInfo {
-    uint32_t maxFramesInFlight;
-    glm::i32vec2 viewportDimensions;
-};
 
 /**
  * a base class for application layers
@@ -30,23 +20,33 @@ struct LayerAttachInfo {
 class ApplicationLayer {
   public:
     ApplicationLayer(std::string name)
-        : name_(name)
+        : name(name)
     {
     }
 
     virtual ~ApplicationLayer() = default;
 
+    /// called when the layer is attached to the layer stack
     virtual void onAttach(Context &ctx, LayerAttachInfo info) {}
+    /// called when the layer is detached from the layer stack
     virtual void onDetach(Context &ctx) {}
+
+    /// called on any UI event. enqueue any expensive actions and process in the update loop
     virtual bool onEvent(Event event) { return false; }
+
+    /// called once per frame. use to update any state
     virtual void onUpdate() {}
+
+    /**
+     * used to query whether the layer has a render task. if this returns true, the renderTask
+     * method will be called
+     */
+    virtual bool hasRenderTask() const { return false; }
+    /// if hasRenderTask() returns true, this method will be called to get the coroutine render task
     virtual RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
                                                                LayerPassOutputs previousLayer) = 0;
 
-    const std::string &name() { return name_; }
-
-  private:
-    std::string name_;
+    kdb::Property<std::string> name;
 };
 
 } // namespace Cory

@@ -18,6 +18,8 @@ class DepthDebugLayer : public ApplicationLayer {
     bool onEvent(Event event) override;
     void onUpdate() override;
 
+    [[nodiscard]] bool hasRenderTask() const override { return renderEnabled.get(); }
+
     RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
                                                        LayerPassOutputs previousLayer) override;
 

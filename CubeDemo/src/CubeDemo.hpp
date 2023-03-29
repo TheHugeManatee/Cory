@@ -67,7 +67,6 @@ class CubeDemoApplication : public Cory::Application {
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;
-    std::unique_ptr<Cory::DepthDebugLayer> depthDebugLayer_;
     std::unique_ptr<Cory::ImGuiLayer> imguiLayer_;
 
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;

@@ -4,6 +4,7 @@
 #include <Cory/Application/DepthDebugLayer.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
+#include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Math.hpp>
@@ -135,7 +136,6 @@ void animate(PushConstants &d, float t, float i)
 
 CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     : mesh_{}
-    , depthDebugLayer_{std::make_unique<Cory::DepthDebugLayer>()}
     , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
     , startupTime_{now()}
 {
@@ -170,7 +170,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
                                               window_->swapchain().maxFramesInFlight(),
                                           .viewportDimensions = window_->dimensions()};
-    depthDebugLayer_->onAttach(ctx(), layerAttachInfo);
+    layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
     camera_.setWindowSize(window_->dimensions());
@@ -201,7 +201,6 @@ CubeDemoApplication::~CubeDemoApplication()
     resources.release(fragmentShader_);
 
     imguiLayer_->deinit(ctx());
-    depthDebugLayer_->onDetach(ctx());
     CO_APP_TRACE("Destroying CubeDemoApplication");
 }
 
@@ -219,7 +218,7 @@ void CubeDemoApplication::run()
         // TODO process events?
 
         drawImguiControls();
-        depthDebugLayer_->onUpdate();
+        layers().update();
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.index];
@@ -275,15 +274,11 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto mainPass =
         cubeRenderTask(framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget);
 
-    auto depthDebugPass = depthDebugLayer_->renderTask(
-        framegraph.declareTask("TASK_DepthDebug"),
-        {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
+    auto layersOutput = layers().declareRenderTasks(
+        framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
     auto imguiPass =
-        imguiRenderTask(framegraph.declareTask("TASK_ImGui"),
-                        depthDebugLayer_->renderEnabled.get() ? depthDebugPass.output().color
-                                                              : mainPass.output().colorOut,
-                        frameCtx);
+        imguiRenderTask(framegraph.declareTask("TASK_ImGui"), layersOutput.color, frameCtx);
 
     auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
 }
@@ -495,19 +490,19 @@ void CubeDemoApplication::setupCameraCallbacks()
     window_->onMouseMoved.connect([this](Cory::MouseMovedEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
 
-        if (depthDebugLayer_->onEvent(event)) { return; }
+        if (layers().onEvent(event)) { return; }
         if (event.button != Cory::MouseButton::None) {
             camera_.mouseMove(glm::ivec2(event.position), event.button, event.modifiers);
         }
     });
     window_->onMouseButton.connect([this](Cory::MouseButtonEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        if (depthDebugLayer_->onEvent(event)) { return; }
+        if (layers().onEvent(event)) { return; }
         camera_.setMousePosition(event.position);
     });
     window_->onMouseScrolled.connect([this](Cory::ScrollEvent event) {
         if (ImGui::GetIO().WantCaptureMouse) { return; }
-        if (depthDebugLayer_->onEvent(event)) { return; }
+        if (layers().onEvent(event)) { return; }
         camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
     });
 }

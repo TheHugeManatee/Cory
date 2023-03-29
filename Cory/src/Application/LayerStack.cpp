@@ -52,7 +52,8 @@ LayerPassOutputs LayerStack::declareRenderTasks(Framegraph &framegraph,
     for (auto &layer : layers_) {
         if (layer->hasRenderTask()) {
             previousLayer =
-                layer->renderTask(framegraph.declareTask(layer->name.get()), previousLayer)
+                layer
+                    ->renderTask(framegraph.declareTask("TASK_" + layer->name.get()), previousLayer)
                     .output();
         }
     }

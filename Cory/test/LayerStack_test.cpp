@@ -80,7 +80,7 @@ TEST_CASE("LayerStack", "[LayerStack]")
 
             AND_WHEN("Removing a layer")
             {
-                auto layer_ptr = stack.removeLayer("Layer 2");
+                auto layer_ptr = stack.detachLayer("Layer 2");
                 THEN("The layer is not in the stack anymore")
                 {
                     REQUIRE(stack.layers().size() == 2);

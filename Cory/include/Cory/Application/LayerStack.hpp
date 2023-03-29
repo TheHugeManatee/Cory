@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Cory/Application/ApplicationLayer.hpp>
 #include <Cory/Application/Common.hpp>
 #include <Cory/Application/Event.hpp>
 #include <Cory/Renderer/Common.hpp>
@@ -31,7 +32,20 @@ class LayerStack {
         return *static_cast<T *>(layers_.back().get());
     }
 
-    std::unique_ptr<ApplicationLayer> removeLayer(const std::string &name);
+    template <typename T, typename... Args>
+        requires std::derived_from<T, ApplicationLayer>
+    T &emplacePriorityLayer(LayerAttachInfo attachInfo, Args... args)
+    {
+        CO_CORE_ASSERT(priorityLayer_ == nullptr, "priority layer already set");
+        priorityLayer_ = std::make_unique<T>(std::forward<Args>(args)...);
+        priorityLayer_->onAttach(ctx_, attachInfo);
+        return *static_cast<T *>(priorityLayer_.get());
+    }
+
+    void attachLayer(std::unique_ptr<ApplicationLayer> layer, LayerAttachInfo attachInfo);
+
+    std::unique_ptr<ApplicationLayer> detachLayer(const std::string &name);
+    std::unique_ptr<ApplicationLayer> removePriorityLayer();
 
     /// update all layers
     void update();
@@ -49,5 +63,6 @@ class LayerStack {
   private:
     Context &ctx_;
     std::vector<std::unique_ptr<ApplicationLayer>> layers_;
+    std::unique_ptr<ApplicationLayer> priorityLayer_;
 };
 } // namespace Cory

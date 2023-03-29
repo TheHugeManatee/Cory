@@ -136,7 +136,6 @@ void animate(PushConstants &d, float t, float i)
 
 CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     : mesh_{}
-    , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
     , startupTime_{now()}
 {
     CLI::App app{"CubeDemo"};
@@ -166,11 +165,11 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
     createGeometry();
     createShaders();
 
-    imguiLayer_->init(*window_, ctx());
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
                                               window_->swapchain().maxFramesInFlight(),
                                           .viewportDimensions = window_->dimensions()};
     layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
+    layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
     camera_.setWindowSize(window_->dimensions());
@@ -199,8 +198,6 @@ CubeDemoApplication::~CubeDemoApplication()
     auto &resources = ctx().resources();
     resources.release(vertexShader_);
     resources.release(fragmentShader_);
-
-    imguiLayer_->deinit(ctx());
     CO_APP_TRACE("Destroying CubeDemoApplication");
 }
 
@@ -214,11 +211,10 @@ void CubeDemoApplication::run()
 
     while (!window_->shouldClose()) {
         glfwPollEvents();
-        imguiLayer_->newFrame(ctx());
-        // TODO process events?
+
+        layers().update();
 
         drawImguiControls();
-        layers().update();
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.index];
@@ -277,10 +273,7 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto imguiPass =
-        imguiRenderTask(framegraph.declareTask("TASK_ImGui"), layersOutput.color, frameCtx);
-
-    auto [outInfo, outState] = framegraph.declareOutput(imguiPass.output().colorOut);
+    auto [outInfo, outState] = framegraph.declareOutput(layersOutput.color);
 }
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
@@ -362,22 +355,6 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     }
 
     cubePass.end(*renderApi.cmd);
-}
-
-Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
-CubeDemoApplication::imguiRenderTask(Cory::RenderTaskBuilder builder,
-                                     Cory::TransientTextureHandle colorTarget,
-                                     Cory::FrameContext frameCtx)
-{
-    auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
-
-    co_yield PassOutputs{.colorOut = writtenColorHandle};
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
-
-    // note - currently, we're letting imgui handle the final resolve and transition to
-    // present_layout
-    imguiLayer_->recordFrameCommands(ctx(), frameCtx.index, renderApi.cmd->handle());
 }
 
 void CubeDemoApplication::createGeometry()
@@ -482,6 +459,7 @@ void CubeDemoApplication::drawImguiControls()
     }
     ImGui::End();
 }
+
 void CubeDemoApplication::setupCameraCallbacks()
 {
     window_->onSwapchainResized.connect(

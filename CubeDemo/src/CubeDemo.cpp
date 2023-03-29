@@ -148,8 +148,11 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
 
-    ctx_ = std::make_unique<Cory::Context>(disableValidation_ ? Cory::ValidationLayers::Disabled
-                                                              : Cory::ValidationLayers::Enabled);
+    Cory::ContextCreationInfo creationInfo{
+        .validation =
+            disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
+    };
+    ctx_ = std::make_unique<Cory::Context>(creationInfo);
     // determine msaa sample count to use - for simplicity, we use either 8 or one sample
     const auto &limits = ctx_->physicalDevice().properties().properties.limits;
     const VkSampleCountFlags counts =

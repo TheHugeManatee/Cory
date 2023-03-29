@@ -75,7 +75,7 @@ VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT mess
                                      void *pUserData);
 } // namespace detail
 
-Context::Context(ValidationLayers validationLayers)
+Context::Context(ContextCreationInfo creationInfo)
     : data_{std::make_unique<ContextPrivate>()}
 {
     data_->name = "CCtx";
@@ -92,7 +92,7 @@ Context::Context(ValidationLayers validationLayers)
         .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,
                                "VK_KHR_win32_surface",
                                VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME});
-    if (validationLayers == ValidationLayers::Enabled) {
+    if (creationInfo.validation == ValidationLayers::Enabled) {
         instanceCreateInfo.addEnabledLayers({"VK_LAYER_KHRONOS_validation"});
     }
     data_->instance.create(instanceCreateInfo);

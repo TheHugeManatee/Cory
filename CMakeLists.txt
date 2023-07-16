@@ -90,18 +90,20 @@ set(CORY_RESOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resource CACHE PATH "Directory
 
 
 # External dependencies are built into one static library
-add_subdirectory(ThirdParty)
+add_subdirectory(external)
 
 # It is always easier to navigate in an IDE when projects are organized in folders.
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-add_subdirectory(Cory)
-add_subdirectory(HelloTriangle)
-add_subdirectory(CubeDemo)
+add_subdirectory(src)
+if (CORY_BUILD_TESTS)
+    add_subdirectory(tests)
+endif ()
+add_subdirectory(examples)
 
 
 # Setup our project as the startup project for Visual so that people don't need to do it manually
-set_directory_properties(PROPERTIES VS_STARTUP_PROJECT CubeDemo)
+set_directory_properties(PROPERTIES VS_STARTUP_PROJECT example/CubeDemo)
 
 
 #===========#

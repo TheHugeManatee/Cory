@@ -31,7 +31,12 @@ TrianglePipeline::TrianglePipeline(Cory::Context &context,
     createGraphicsPipeline(window, mesh, std::move(vertFile), std::move(fragFile));
 }
 
-TrianglePipeline::~TrianglePipeline() = default;
+TrianglePipeline::~TrianglePipeline()
+{
+    Cory::ResourceManager &resources = ctx_.resources();
+    resources.release(vertexShader_);
+    resources.release(fragmentShader_);
+};
 
 void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
                                               const Magnum::Vk::Mesh &mesh,
@@ -39,7 +44,7 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
                                               std::filesystem::path fragFile)
 {
     Cory::ResourceManager &resources = ctx_.resources();
-    CO_APP_TRACE("Starting shader compilation");
+    CO_APP_TRACE("Starting shader compilation for {} and {}", vertFile.string(), fragFile.string());
     vertexShader_ = resources.createShader(Cory::ResourceLocator::Locate(vertFile));
     CO_APP_TRACE("Vertex shader code size: {}", resources[vertexShader_].size());
     fragmentShader_ = ctx_.resources().createShader(Cory::ResourceLocator::Locate(fragFile));

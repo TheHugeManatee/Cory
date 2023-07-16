@@ -32,6 +32,7 @@ class LayerStack {
         return *static_cast<T *>(layers_.back().get());
     }
 
+    /// emplace a layer with high priority - this is primarily intended for the ImGui layer
     template <typename T, typename... Args>
         requires std::derived_from<T, ApplicationLayer>
     T &emplacePriorityLayer(LayerAttachInfo attachInfo, Args... args)

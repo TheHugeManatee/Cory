@@ -4,6 +4,7 @@
 
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
+#include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Profiling.hpp>
@@ -99,20 +100,24 @@ void animate(PushConstants &d, float t, float i)
 
 HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     : mesh_{}
-    , imguiLayer_{std::make_unique<Cory::ImGuiLayer>()}
     , startupTime_{now()}
 {
     Cory::Init();
 
     CLI::App app{"HelloTriangle"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
+    app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
     app.parse(argc, argv);
 
     Cory::ResourceLocator::addSearchPath(TRIANGLE_RESOURCE_DIR);
 
-    ctx_ = std::make_unique<Cory::Context>();
+    init(Cory::ContextCreationInfo{
+        .validation =
+            disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
+    });
+
     // determine msaa sample count to use - for simplicity, we use either 8 or one sample
-    const auto &limits = ctx_->physicalDevice().properties().properties.limits;
+    const auto &limits = ctx().physicalDevice().properties().properties.limits;
     VkSampleCountFlags counts =
         limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
     // 2 samples are guaranteed to be supported, but we'd rather have 8
@@ -121,26 +126,28 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(*ctx_, WINDOW_SIZE, "HelloTriangle", msaaSamples);
-
-    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent) { createFramebuffers(); };
+    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
     createGeometry();
-    pipeline_ = std::make_unique<TrianglePipeline>(*ctx_,
+    pipeline_ = std::make_unique<TrianglePipeline>(ctx(),
                                                    *window_,
                                                    *mesh_,
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
-    createFramebuffers();
-    recreateSizedResources({window_->dimensions()});
-    window_->onSwapchainResized.connect(recreateSizedResources);
 
-    imguiLayer_->init(*window_, *ctx_);
+    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent) { createFramebuffers(); };
+    window_->onSwapchainResized.connect(recreateSizedResources);
+    recreateSizedResources({window_->dimensions()});
+
+    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
+                                              window_->swapchain().maxFramesInFlight(),
+                                          .viewportDimensions = window_->dimensions()};
+    imguiLayer_ =
+        &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 }
 
 HelloTriangleApplication::~HelloTriangleApplication()
 {
-    imguiLayer_->deinit(*ctx_);
     CO_APP_TRACE("Destroying HelloTriangleApplication");
 }
 
@@ -148,9 +155,10 @@ void HelloTriangleApplication::run()
 {
     while (!window_->shouldClose()) {
         glfwPollEvents();
-        imguiLayer_->newFrame(*ctx_);
-        // TODO process events?
+
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
+
+        layers().update();
 
         ImGui::ShowDemoWindow();
 
@@ -165,7 +173,7 @@ void HelloTriangleApplication::run()
     }
 
     // wait until last frame is finished rendering
-    ctx_->device()->DeviceWaitIdle(ctx_->device());
+    ctx().device()->DeviceWaitIdle(ctx().device());
 }
 
 void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
@@ -194,8 +202,8 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     VkRect2D scissor{{0, 0},
                      {static_cast<uint32_t>(window_->dimensions().x),
                       static_cast<uint32_t>(window_->dimensions().y)}};
-    ctx_->device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
-    ctx_->device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
+    ctx().device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
+    ctx().device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
     PushConstants pushData{};
 
@@ -204,7 +212,7 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
         animate(pushData, t, i);
 
-        ctx_->device()->CmdPushConstants(cmdBuffer,
+        ctx().device()->CmdPushConstants(cmdBuffer,
                                          pipeline_->layout(),
                                          VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
                                          0,
@@ -217,7 +225,7 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     cmdBuffer.endRenderPass();
 
-    imguiLayer_->recordFrameCommands(*ctx_, frameCtx.index, *frameCtx.commandBuffer);
+    imguiLayer_->recordFrameCommands(ctx(), frameCtx.index, *frameCtx.commandBuffer);
 
     cmdBuffer.end();
 }
@@ -231,7 +239,7 @@ void HelloTriangleApplication::createFramebuffers()
                         auto &color = window_->colorView();
 
                         return Vk::Framebuffer(
-                            ctx_->device(),
+                            ctx().device(),
                             Vk::FramebufferCreateInfo{
                                 pipeline_->mainRenderPass(), {color, depth}, framebufferSize});
                     }) |
@@ -240,7 +248,7 @@ void HelloTriangleApplication::createFramebuffers()
 
 void HelloTriangleApplication::createGeometry()
 {
-    mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createTriangle(*ctx_));
+    mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createTriangle(ctx()));
 }
 double HelloTriangleApplication::now() const
 {

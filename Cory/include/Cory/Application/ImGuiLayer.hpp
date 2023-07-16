@@ -33,9 +33,12 @@ class ImGuiLayer : public ApplicationLayer {
     bool hasRenderTask() const override { return true; }
     RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
                                                        LayerPassOutputs previousLayer) override;
+
+    // this is mostly still public so we can use the layer in an
+    // application that does not use a frame graph
+    void recordFrameCommands(Context &ctx, uint32_t frameIdx, Magnum::Vk::CommandBuffer &cmdBuffer);
   private:
     void newFrame(Context &ctx);
-    void recordFrameCommands(Context &ctx, uint32_t frameIdx, Magnum::Vk::CommandBuffer &cmdBuffer);
 
     struct Private;
     std::unique_ptr<Private> data_;

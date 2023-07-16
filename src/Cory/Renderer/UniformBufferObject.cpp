@@ -1,9 +1,9 @@
-#include "Cory/Renderer/UniformBufferObject.hpp"
+#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <numeric>
 
-#include "Cory/Renderer/Context.hpp"
-#include "Cory/Renderer/ResourceManager.hpp"
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ResourceManager.hpp>
 
 #include <Magnum/Vk/Buffer.h>
 #include <Magnum/Vk/Device.h>

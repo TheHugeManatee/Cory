@@ -1,6 +1,6 @@
 #include "CubeDemo.hpp"
 
-#include "Cory/Framegraph/TextureManager.hpp"
+#include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/Application/DepthDebugLayer.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>

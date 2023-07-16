@@ -4,9 +4,9 @@
  * All rights reserved
  */
 
-#include "Cory/Renderer/SingleShotCommandBuffer.hpp"
+#include <Cory/Renderer/SingleShotCommandBuffer.hpp>
 
-#include "Cory/Renderer/Context.hpp"
+#include <Cory/Renderer/Context.hpp>
 
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/Reference.h>

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Cory/Framegraph/Common.hpp"
+#include <Cory/Framegraph/Common.hpp>
 
-#include "Cory/Framegraph/Framegraph.hpp"
+#include <Cory/Framegraph/Framegraph.hpp>
 
 #include <string>
 

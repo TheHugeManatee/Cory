@@ -1,8 +1,8 @@
-#include "Cory/Cory.hpp"
+#include <Cory/Cory.hpp>
 
-#include "Cory/Base/Log.hpp"
-#include "Cory/Base/Time.hpp"
-#include "Cory/Renderer/Context.hpp"
+#include <Cory/Base/Log.hpp>
+#include <Cory/Base/Time.hpp>
+#include <Cory/Renderer/Context.hpp>
 
 #include <Corrade/Containers/StringView.h>
 #include <Magnum/Vk/DeviceProperties.h>

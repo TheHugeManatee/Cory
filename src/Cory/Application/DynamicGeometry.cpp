@@ -1,6 +1,6 @@
-#include "Cory/Application/DynamicGeometry.hpp"
+#include <Cory/Application/DynamicGeometry.hpp>
 
-#include "Cory/Renderer/Context.hpp"
+#include <Cory/Renderer/Context.hpp>
 
 #include <glm/trigonometric.hpp> // for glm::radians
 #include <glm/vec2.hpp>

@@ -1,11 +1,11 @@
-#include "Cory/Framegraph/Framegraph.hpp"
+#include <Cory/Framegraph/Framegraph.hpp>
 
 #include "FramegraphVisualizer.h"
 
-#include "Cory/Base/Profiling.hpp"
-#include "Cory/Framegraph/CommandList.hpp"
-#include "Cory/Framegraph/TextureManager.hpp"
-#include "Cory/Renderer/Context.hpp"
+#include <Cory/Base/Profiling.hpp>
+#include <Cory/Framegraph/CommandList.hpp>
+#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Renderer/Context.hpp>
 
 #include <Magnum/Vk/CommandBuffer.h>
 

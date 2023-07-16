@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Cory/Base/Common.hpp"
+#include <Cory/Base/Common.hpp>
 
 // std lib headers
 #include <string>

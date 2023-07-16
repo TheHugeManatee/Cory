@@ -29,7 +29,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#include "Cory/Renderer/Synchronization.hpp"
+#include <Cory/Renderer/Synchronization.hpp>
 
 #include <Magnum/Vk/Device.h>
 #include <array>

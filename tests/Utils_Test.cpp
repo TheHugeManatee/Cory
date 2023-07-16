@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "Cory/Base/CpuBuffer.hpp"
+#include <Cory/Base/CpuBuffer.hpp>
 #include <Cory/Base/Utils.hpp>
 
 TEST_CASE("formatBytes", "[Cory/Utils]")

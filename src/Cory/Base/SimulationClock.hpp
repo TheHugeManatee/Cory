@@ -28,49 +28,48 @@ template <typename UpstreamClock> class BasicSimulationClock {
     using time_point = std::chrono::time_point<BasicSimulationClock>;
 
     struct TickInfo {
-        time_point now;
-        duration delta;
+        time_point now{};     ///< the simulation time after the tick
+        time_point realNow{}; ///< the real time after the tick
+        duration delta{};     ///< the elapsed time
     };
 
     BasicSimulationClock() { reset(); }
 
-    time_point realNow() const
-    {
-        using namespace std::chrono;
-        return time_point{duration_cast<duration>(UpstreamClock::now() - epoch_)};
-    }
-    time_point simNow() const { return time_point{simulationNow_}; }
+    time_point realNow() const { return lastTick_.realNow; }
+    time_point simNow() const { return lastTick_.now; }
+    duration delta() const { return lastTick_.delta; }
+    uint64_t ticks() const { return ticks_; }
 
     TickInfo tick()
     {
-        const auto now = UpstreamClock::now();
-        const auto delta = now - lastTick_;
+        const auto upstreamNow = UpstreamClock::now();
+        const auto delta = upstreamNow - lastTickUpstream_;
 
         duration simulatedDelta = duration_cast<duration>(delta) * timeScale_;
 
-        simulationNow_ += simulatedDelta;
-        lastTick_ = now;
-
+        TickInfo thisTick{.now = simNow() + simulatedDelta,
+                          .realNow = realNow() + delta,
+                          .delta = simulatedDelta};
         ++ticks_;
 
-        return {.now = simulationNow_, .delta = simulatedDelta};
+        lastTick_ = thisTick;
+        lastTickUpstream_ = upstreamNow;
+
+        return thisTick;
     }
 
     void setTimeScale(StorageType scale) { timeScale_ = scale; }
     StorageType timeScale() const { return timeScale_; }
-    uint64_t ticks() const { return ticks_; }
 
     void reset()
     {
-        epoch_ = UpstreamClock::now();
-        lastTick_ = epoch_;
+        upstreamEpoch_ = UpstreamClock::now();
+        lastTickUpstream_ = upstreamEpoch_;
+        lastTick_ = TickInfo{};
         ticks_ = 0;
-        simulationNow_ = time_point{};
     }
 
-    static void Init() {
-        globalClock().reset();
-    };
+    static void Init() { globalClock().reset(); };
     // static interface for std::chrono compliant clock
     static BasicSimulationClock &globalClock()
     {
@@ -81,10 +80,10 @@ template <typename UpstreamClock> class BasicSimulationClock {
     static time_point now() { return globalClock().tick().now; }
 
   private:
-    UpstreamClock::time_point epoch_{};
-    UpstreamClock::time_point lastTick_{};
+    UpstreamClock::time_point upstreamEpoch_{};
+    UpstreamClock::time_point lastTickUpstream_{};
+    TickInfo lastTick_{};
     uint64_t ticks_{};
-    time_point simulationNow_{};
     StorageType timeScale_{1.0};
 };
 

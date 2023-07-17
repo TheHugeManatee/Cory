@@ -94,6 +94,9 @@ set(CORY_SOURCES
         Renderer/VulkanUtils.cpp
         Renderer/VulkanUtils.hpp
         Renderer/flextVkExt.h
+        Base/SimulationClock.cpp
+        Base/SimulationClock.hpp
+        Base/FutureFrameQueue.hpp
         )
 
 # determine includes from CORY_SOURCES by the .hpp suffix

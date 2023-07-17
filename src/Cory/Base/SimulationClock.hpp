@@ -34,7 +34,7 @@ template <typename UpstreamClock> class BasicSimulationClock {
         duration realDelta{}; ///< the real elapsed time
         uint64_t ticks{};     ///< the number of ticks since the clock was reset
 
-        bool operator==(const TickInfo &rhs) const = default;
+        constexpr bool operator==(const TickInfo &rhs) const = default;
     };
 
     BasicSimulationClock() { reset(); }

@@ -35,8 +35,11 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         RenderTaskDeclaration_Test.cpp
         DescriptorSetManager_Test.cpp
         VulkanUtils_Test.cpp
-        Time_Test.cpp
-        LayerStack_test.cpp)
+        SimulationClock.test.cpp
+        FutureFrameQueue.test.cpp
+        LayerStack_test.cpp
+        CoroutineGameLogic.cpp
+        )
 
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(${TARGET_NAME}_TestLib PRIVATE Cory::project_options)

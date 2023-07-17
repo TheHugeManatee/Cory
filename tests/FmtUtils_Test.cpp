@@ -35,9 +35,10 @@ TEST_CASE("Formatting glm::vec", "[Cory/Base/Formatting]")
     }
 }
 
-TEST_CASE("Formatting Cory::Timepoint and Cory::Seconds") {
-    auto t1 = Cory::Timepoint{0.0_s};
-    auto t2 = Cory::Timepoint{0.2_s};
+TEST_CASE("Formatting Cory::Timepoint and Cory::Seconds")
+{
+    auto t1 = Cory::Timepoint{Cory::Seconds{0.0}};
+    auto t2 = Cory::Timepoint{Cory::Seconds{0.2}};
 
     // timepoints and durations should be formattable
     fmt::print("Started: {}\n", t1);

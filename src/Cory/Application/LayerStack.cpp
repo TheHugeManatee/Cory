@@ -17,7 +17,7 @@ LayerStack::~LayerStack()
     for (auto &layer : layers_) {
         layer->onDetach(ctx_);
     }
-    priorityLayer_->onDetach(ctx_);
+    if (priorityLayer_) { priorityLayer_->onDetach(ctx_); }
 }
 
 void LayerStack::attachLayer(std::unique_ptr<ApplicationLayer> layer, LayerAttachInfo attachInfo)

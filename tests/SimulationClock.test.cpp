@@ -32,35 +32,34 @@ TEST_CASE("Clock")
     set_now(3.0);
     TestClock clk;
     // check that the clock starts at 0
-    CHECK(clk.simNow() == tp(0.0));
-    CHECK(clk.realNow() == tp(0.0));
-    CHECK(clk.ticks() == 0);
+    auto tick0 = clk.lastTick();
+    CHECK(tick0 == TestClock::TickInfo{});
 
     auto tick1 = clk.tick();
     CHECK(tick1.now == tp(0.0));
     CHECK(tick1.realNow == tp(0.0));
     CHECK(tick1.delta == 0.0_s);
-    CHECK(clk.simNow() == tp(0.0));
-    CHECK(clk.realNow() == tp(0.0));
-    CHECK(clk.ticks() == 1);
+    CHECK(tick1.realDelta == 0.0_s);
+    CHECK(tick1.ticks == 1);
+    CHECK(tick1 == clk.lastTick());
 
     set_now(4.0);
     auto tick2 = clk.tick();
     CHECK(tick2.now == tp(1.0));
     CHECK(tick2.realNow == tp(1.0));
     CHECK(tick2.delta == 1.0_s);
-    CHECK(clk.simNow() == tp(1.0));
-    CHECK(clk.realNow() == tp(1.0));
-    CHECK(clk.ticks() == 2);
+    CHECK(tick2.realDelta == 1.0_s);
+    CHECK(tick2.ticks == 2);
+    CHECK(tick2 == clk.lastTick());
 
     set_now(6.0);
     auto tick3 = clk.tick();
     CHECK(tick3.now == tp(3.0));
     CHECK(tick3.realNow == tp(3.0));
     CHECK(tick3.delta == 2.0_s);
-    CHECK(clk.simNow() == tp(3.0));
-    CHECK(clk.realNow() == tp(3.0));
-    CHECK(clk.ticks() == 3);
+    CHECK(tick3.realDelta == 2.0_s);
+    CHECK(tick3.ticks == 3);
+    CHECK(tick3 == clk.lastTick());
 
     clk.setTimeScale(2.0);
     set_now(7.0);
@@ -68,21 +67,19 @@ TEST_CASE("Clock")
     CHECK(tick4.now == tp(5.0));
     CHECK(tick4.realNow == tp(4.0));
     CHECK(tick4.delta == 2.0_s);
-    CHECK(clk.simNow() == tp(5.0));
-    CHECK(clk.realNow() == tp(4.0));
-    CHECK(clk.ticks() == 4);
+    CHECK(tick4.realDelta == 1.0_s);
+    CHECK(tick4.ticks == 4);
+    CHECK(tick4 == clk.lastTick());
 
     clk.reset();
-    CHECK(clk.simNow() == tp(0.0));
-    CHECK(clk.realNow() == tp(0.0));
-    CHECK(clk.ticks() == 0);
+    CHECK(clk.lastTick() == TestClock::TickInfo{});
 
     set_now(10.0);
     auto tick5 = clk.tick();
     CHECK(tick5.now == tp(6.0));
     CHECK(tick5.realNow == tp(3.0));
     CHECK(tick5.delta == 6.0_s);
-    CHECK(clk.simNow() == tp(6.0));
-    CHECK(clk.realNow() == tp(3.0));
-    CHECK(clk.ticks() == 1);
+    CHECK(tick5.realDelta == 3.0_s);
+    CHECK(tick5.ticks == 1);
+    CHECK(tick5 == clk.lastTick());
 }

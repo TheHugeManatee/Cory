@@ -31,14 +31,15 @@ template <typename UpstreamClock> class BasicSimulationClock {
         time_point now{};     ///< the simulation time after the tick
         time_point realNow{}; ///< the real time after the tick
         duration delta{};     ///< the elapsed time
+        duration realDelta{}; ///< the real elapsed time
+        uint64_t ticks{};     ///< the number of ticks since the clock was reset
+
+        bool operator==(const TickInfo &rhs) const = default;
     };
 
     BasicSimulationClock() { reset(); }
 
-    time_point realNow() const { return lastTick_.realNow; }
-    time_point simNow() const { return lastTick_.now; }
-    duration delta() const { return lastTick_.delta; }
-    uint64_t ticks() const { return ticks_; }
+    TickInfo lastTick() const { return lastTick_; }
 
     TickInfo tick()
     {
@@ -47,9 +48,11 @@ template <typename UpstreamClock> class BasicSimulationClock {
 
         duration simulatedDelta = duration_cast<duration>(delta) * timeScale_;
 
-        TickInfo thisTick{.now = simNow() + simulatedDelta,
-                          .realNow = realNow() + delta,
-                          .delta = simulatedDelta};
+        TickInfo thisTick{.now = lastTick_.now + simulatedDelta,
+                          .realNow = lastTick_.realNow + delta,
+                          .delta = simulatedDelta,
+                          .realDelta = delta,
+                          .ticks = lastTick_.ticks + 1};
         ++ticks_;
 
         lastTick_ = thisTick;
@@ -66,7 +69,6 @@ template <typename UpstreamClock> class BasicSimulationClock {
         upstreamEpoch_ = UpstreamClock::now();
         lastTickUpstream_ = upstreamEpoch_;
         lastTick_ = TickInfo{};
-        ticks_ = 0;
     }
 
     static void Init() { globalClock().reset(); };

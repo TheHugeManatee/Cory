@@ -1,6 +1,7 @@
 #include <Cory/Cory.hpp>
 
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Base/Time.hpp>
 #include <Cory/Renderer/Context.hpp>
 
@@ -13,20 +14,19 @@
 
 #include <fmt/core.h>
 
-
 namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
-void Init() {
+void Init()
+{
     // initialize all static objects in the correct order
     Cory::AppClock::Init();
+    Cory::SimulationClock::Init();
     Cory::Log::Init();
 }
 
-void Deinit() {
-
-}
+void Deinit() {}
 
 std::string queryVulkanInstanceVersion()
 {
@@ -52,6 +52,5 @@ void dumpInstanceInformation()
         CO_CORE_INFO("    {:<25}: {}", name.data(), extensions.isSupported(name));
     }
 }
-
 
 } // namespace Cory

@@ -52,11 +52,4 @@ using Timepoint = AppClock::time_point;
 
 // user-defined literals for convenience
 
-/// create a seconds literal
-constexpr Cory::Seconds operator""_s(long double x) { return Cory::Seconds(x); }
-/// create a milliseconds literal
-constexpr Cory::Seconds operator""_ms(long double x) { return Cory::Seconds(x / 1'000.0); }
-/// create a microseconds literal
-constexpr Cory::Seconds operator""_us(long double x) { return Cory::Seconds(x / 1'000'000.0); }
-/// create a nanoseconds literal
-constexpr Cory::Seconds operator""_ns(long double x) { return Cory::Seconds(x / 1'000'000'000.0); }
+

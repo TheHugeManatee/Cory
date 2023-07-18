@@ -48,16 +48,18 @@ template <typename UpstreamClock> class BasicSimulationClock {
 
         duration simulatedDelta = duration_cast<duration>(delta) * timeScale_;
 
-        TickInfo thisTick{.now = lastTick_.now + simulatedDelta,
-                          .realNow = lastTick_.realNow + delta,
-                          .delta = simulatedDelta,
-                          .realDelta = delta,
-                          .ticks = lastTick_.ticks + 1};
-        ++ticks_;
-
-        lastTick_ = thisTick;
+        auto thisTick = advance(delta, simulatedDelta);
         lastTickUpstream_ = upstreamNow;
 
+        return thisTick;
+    }
+    /**
+     * advance the clock by a given amount of simulation time
+     * This will not advance the real time, i.e. tick.realDelta = 0.
+     */
+    TickInfo tickBy(duration simulatedDelta)
+    {
+        auto thisTick = advance({}, simulatedDelta);
         return thisTick;
     }
 
@@ -66,8 +68,7 @@ template <typename UpstreamClock> class BasicSimulationClock {
 
     void reset()
     {
-        upstreamEpoch_ = UpstreamClock::now();
-        lastTickUpstream_ = upstreamEpoch_;
+        lastTickUpstream_ = UpstreamClock::now();
         lastTick_ = TickInfo{};
     }
 
@@ -82,7 +83,19 @@ template <typename UpstreamClock> class BasicSimulationClock {
     static time_point now() { return globalClock().tick().now; }
 
   private:
-    UpstreamClock::time_point upstreamEpoch_{};
+    TickInfo advance(duration delta, duration simulatedDelta)
+    {
+        TickInfo thisTick{.now = lastTick_.now + simulatedDelta,
+                          .realNow = lastTick_.realNow + delta,
+                          .delta = simulatedDelta,
+                          .realDelta = delta,
+                          .ticks = lastTick_.ticks + 1};
+        ++ticks_;
+
+        lastTick_ = thisTick;
+        return thisTick;
+    }
+
     UpstreamClock::time_point lastTickUpstream_{};
     TickInfo lastTick_{};
     uint64_t ticks_{};

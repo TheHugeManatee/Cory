@@ -82,4 +82,12 @@ TEST_CASE("Clock")
     CHECK(tick5.realDelta == 3.0_s);
     CHECK(tick5.ticks == 1);
     CHECK(tick5 == clk.lastTick());
+
+    auto tick6 = clk.tickBy(2.0_s);
+    CHECK(tick6.now == tp(8.0));
+    CHECK(tick6.realNow == tp(3.0));
+    CHECK(tick6.delta == 2.0_s);
+    CHECK(tick6.realDelta == 0.0_s);
+    CHECK(tick6.ticks == 2);
+    CHECK(tick6 == clk.lastTick());
 }

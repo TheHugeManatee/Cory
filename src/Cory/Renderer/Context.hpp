@@ -26,6 +26,7 @@ struct DebugMessageInfo {
 enum class ValidationLayers { Enabled, Disabled };
 struct ContextCreationInfo {
     ValidationLayers validation{ValidationLayers::Enabled};
+    std::span<const char*> args;
 };
 
 /**

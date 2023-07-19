@@ -86,7 +86,9 @@ Context::Context(ContextCreationInfo creationInfo)
     //  - KHR_get_physical_device_properties2 instance extension
     //  - KHR_dynamic_rendering device extension
     //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
-    Vk::InstanceCreateInfo instanceCreateInfo{};
+    Vk::InstanceCreateInfo instanceCreateInfo{gsl::narrow<int>(creationInfo.args.size()),
+                                              creationInfo.args.data()};
+
     instanceCreateInfo.setApplicationInfo(app_name, Vk::version(1, 0, 0))
         .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
         .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,

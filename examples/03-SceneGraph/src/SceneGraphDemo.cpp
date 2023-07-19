@@ -5,9 +5,6 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
-#include <Cory/Base/Log.hpp>
-#include <Cory/Base/Math.hpp>
-#include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
@@ -18,7 +15,7 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
-#include <Cory/Renderer/Swapchain.hpp>
+#include <Cory/SceneGraph/System.hpp>
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/ArrayView.h>
@@ -58,7 +55,7 @@
 
 namespace Vk = Magnum::Vk;
 
-struct PushConstants {
+struct AnimationComponent {
     glm::mat4 modelTransform{1.0f};
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
     float blend;
@@ -110,7 +107,7 @@ void randomize()
     randomize(ad.cfi);
 }
 
-void animate(PushConstants &d, float t, float i)
+void animate(AnimationComponent &d, float t, float i)
 {
 
     const float angle = ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t;
@@ -134,9 +131,54 @@ void animate(PushConstants &d, float t, float i)
     d.blend = ad.blend;
 }
 
+struct AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationComponent> {
+    void Init(Cory::Context &ctx)
+    {
+        mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(ctx));
+    }
+    void Destroy() { mesh_.reset(); }
+
+    void beforeUpdate(Cory::SceneGraph &sg)
+    {
+        // todo what if we reduce num_cubes?
+        while (entityIndex < ad.num_cubes) {
+            sg.createEntity(sg.root(), fmt::format("cube{}", entityIndex), AnimationComponent{});
+            entityIndex += 1.0f;
+        }
+        entityIndex = 0.0f;
+    }
+
+    void
+    update(Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity entity, AnimationComponent &anim)
+    {
+        animate(anim, tick.now.time_since_epoch().count(), entityIndex);
+        entityIndex += 1.0f;
+    }
+
+    void recordCommands(Cory::Context &ctx, Cory::SceneGraph &sg, Cory::CommandList &cmd)
+    {
+        forEach<AnimationComponent>(sg, [&](Cory::Entity e, const AnimationComponent &anim) {
+            // update push constants
+            ctx.device()->CmdPushConstants(cmd->handle(),
+                                           ctx.defaultPipelineLayout(),
+                                           VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
+                                           0,
+                                           sizeof(anim),
+                                           &anim);
+
+            cmd.handle().draw(*mesh_);
+        });
+    }
+
+  private:
+    std::unique_ptr<Vk::Mesh> mesh_;
+    float entityIndex{0};
+};
+static_assert(Cory::System<AnimationSystem>);
+static AnimationSystem animationSystem;
+
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
     : mesh_{}
-    , startupTime_{now()}
 {
     CLI::App app{"SceneGraphDemo"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
@@ -196,6 +238,7 @@ void SceneGraphDemoApplication::createUBO()
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()
 {
+    animationSystem.Destroy(); // TODO this should be done automatically
     auto &resources = ctx().resources();
     resources.release(vertexShader_);
     resources.release(fragmentShader_);
@@ -214,8 +257,10 @@ void SceneGraphDemoApplication::run()
         glfwPollEvents();
 
         layers().update();
-        // todo tick
         drawImguiControls();
+        // tick the components
+        auto tickInfo = clock_.tick();
+        animationSystem.tick(sceneGraph_, tickInfo);
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.index];
@@ -309,11 +354,7 @@ SceneGraphDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
     /// vvvv  RENDERING COMMANDS  vvvv
 
-    auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
-
     cubePass.begin(*renderApi.cmd);
-
-    PushConstants pushData{};
 
     float fovy = glm::radians(70.0f);
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
@@ -337,23 +378,8 @@ SceneGraphDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         .flushWrites()
         .bind(renderApi.cmd->handle(), frameCtx.index, ctx().defaultPipelineLayout());
 
-    for (int idx = 0; idx < ad.num_cubes; ++idx) {
-        float i = ad.num_cubes == 1
-                      ? 1.0f
-                      : static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
-
-        animate(pushData, t, i);
-
-        ctx().device()->CmdPushConstants(renderApi.cmd->handle(),
-                                         ctx().defaultPipelineLayout(),
-                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
-                                         0,
-                                         sizeof(pushData),
-                                         &pushData);
-
-        // draw our triangle mesh
-        renderApi.cmd->handle().draw(*mesh_);
-    }
+    // records commands for each cube
+    animationSystem.recordCommands(ctx(), sceneGraph_, *renderApi.cmd);
 
     cubePass.end(*renderApi.cmd);
 }
@@ -361,16 +387,9 @@ SceneGraphDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
 void SceneGraphDemoApplication::createGeometry()
 {
     const Cory::ScopeTimer st{"Init/Geometry"};
-    mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(ctx()));
-}
-double SceneGraphDemoApplication::now()
-{
-    return std::chrono::duration<double>(
-               std::chrono::high_resolution_clock::now().time_since_epoch())
-        .count();
+    animationSystem.Init(ctx());
 }
 
-double SceneGraphDemoApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }
 void SceneGraphDemoApplication::drawImguiControls()
 {
     namespace CoImGui = Cory::ImGui;
@@ -378,7 +397,10 @@ void SceneGraphDemoApplication::drawImguiControls()
 
     if (ImGui::Begin("Animation Params")) {
         if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
-        if (ImGui::Button("Restart")) { startupTime_ = now(); }
+        CoImGui::Text("Time: {:.3f}, Frame: {}",
+                      clock_.lastTick().now.time_since_epoch().count(),
+                      clock_.lastTick().ticks);
+        if (ImGui::Button("Restart")) { clock_.reset(); }
         if (ImGui::Button("Randomize")) { randomize(); }
 
         CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);

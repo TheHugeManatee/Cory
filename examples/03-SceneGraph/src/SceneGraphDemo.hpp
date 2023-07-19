@@ -3,6 +3,7 @@
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/CameraManipulator.hpp>
 #include <Cory/Application/Common.hpp>
+#include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
@@ -27,7 +28,7 @@ struct CubeUBO {
 
 class SceneGraphDemoApplication : public Cory::Application {
   public:
-    SceneGraphDemoApplication(std::span<const char*> args);
+    SceneGraphDemoApplication(std::span<const char *> args);
     ~SceneGraphDemoApplication();
 
     void run() override;
@@ -67,9 +68,9 @@ class SceneGraphDemoApplication : public Cory::Application {
 
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     std::vector<Magnum::Vk::DescriptorSet> descriptorSets_;
-    double startupTime_;
     bool dumpNextFramegraph_{false};
 
+    Cory::SimulationClock clock_;
     Cory::CameraManipulator camera_;
     Cory::SceneGraph sceneGraph_;
 };

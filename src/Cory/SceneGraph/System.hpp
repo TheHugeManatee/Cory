@@ -22,6 +22,13 @@ concept System = requires(T sys, SceneGraph &graph, TickInfo tickInfo, Entity en
     } -> std::same_as<void>;
 };
 
+template <typename T, typename... Args>
+concept CallableWith = requires(T t, Args... args) {
+    {
+        t(args...)
+    } -> std::same_as<void>;
+};
+
 /**
  * @brief A system is a coherent collection of logic that operates on the scene graph
  *
@@ -45,6 +52,15 @@ class SimpleSystem {
         if constexpr (SystemHasAfterUpdate<Derived>) {
             static_cast<Derived *>(this)->afterUpdate(graph);
         }
+    }
+
+  protected: // API functions for derived classes
+    template <Component... Cmps_, CallableWith<Entity, Cmps_...> Func>
+    void forEach(SceneGraph &graph, Func &&callable)
+    {
+        auto view = graph.registry().template view<Cmps...>();
+
+        view.each(std::forward<Func>(callable));
     }
 };
 

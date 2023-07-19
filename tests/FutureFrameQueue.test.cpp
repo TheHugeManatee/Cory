@@ -8,7 +8,7 @@ using namespace Cory;
 
 TEST_CASE("FutureFrameQueue")
 {
-    FutureFrameQueue<std::string> queue;
+    FutureFrameQueue<int, std::string> queue;
 
     CHECK(queue.size() == 0);
 

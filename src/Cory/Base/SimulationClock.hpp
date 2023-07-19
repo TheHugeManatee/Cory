@@ -41,36 +41,17 @@ template <typename UpstreamClock> class BasicSimulationClock {
 
     TickInfo lastTick() const { return lastTick_; }
 
-    TickInfo tick()
-    {
-        const auto upstreamNow = UpstreamClock::now();
-        const auto delta = upstreamNow - lastTickUpstream_;
-
-        duration simulatedDelta = duration_cast<duration>(delta) * timeScale_;
-
-        auto thisTick = advance(delta, simulatedDelta);
-        lastTickUpstream_ = upstreamNow;
-
-        return thisTick;
-    }
+    TickInfo tick();
     /**
      * advance the clock by a given amount of simulation time
      * This will not advance the real time, i.e. tick.realDelta = 0.
      */
-    TickInfo tickBy(duration simulatedDelta)
-    {
-        auto thisTick = advance({}, simulatedDelta);
-        return thisTick;
-    }
+    TickInfo tickBy(duration simulatedDelta);
 
     void setTimeScale(StorageType scale) { timeScale_ = scale; }
     StorageType timeScale() const { return timeScale_; }
 
-    void reset()
-    {
-        lastTickUpstream_ = UpstreamClock::now();
-        lastTick_ = TickInfo{};
-    }
+    void reset();
 
     static void Init() { globalClock().reset(); };
     // static interface for std::chrono compliant clock
@@ -83,18 +64,7 @@ template <typename UpstreamClock> class BasicSimulationClock {
     static time_point now() { return globalClock().tick().now; }
 
   private:
-    TickInfo advance(duration delta, duration simulatedDelta)
-    {
-        TickInfo thisTick{.now = lastTick_.now + simulatedDelta,
-                          .realNow = lastTick_.realNow + delta,
-                          .delta = simulatedDelta,
-                          .realDelta = delta,
-                          .ticks = lastTick_.ticks + 1};
-        ++ticks_;
-
-        lastTick_ = thisTick;
-        return thisTick;
-    }
+    TickInfo advance(duration delta, duration simulatedDelta);
 
     UpstreamClock::time_point lastTickUpstream_{};
     TickInfo lastTick_{};
@@ -103,7 +73,9 @@ template <typename UpstreamClock> class BasicSimulationClock {
 };
 
 using SimulationClock = BasicSimulationClock<std::chrono::high_resolution_clock>;
+using TimePoint = SimulationClock::time_point;
 using Seconds = SimulationClock::duration;
+using TickInfo = SimulationClock::TickInfo;
 
 namespace literals {
 /// create a seconds literal
@@ -126,3 +98,52 @@ inline auto operator<=>(Cory::SimulationClock::duration lhs, double rhs)
 {
     return lhs.count() <=> rhs;
 }
+
+/** ====================================== Implementation ====================================== **/
+
+namespace Cory {
+
+template <typename UpstreamClock>
+BasicSimulationClock<UpstreamClock>::TickInfo BasicSimulationClock<UpstreamClock>::tick()
+{
+    const auto upstreamNow = UpstreamClock::now();
+    const auto delta = upstreamNow - lastTickUpstream_;
+
+    duration simulatedDelta = duration_cast<duration>(delta) * timeScale_;
+
+    auto thisTick = advance(delta, simulatedDelta);
+    lastTickUpstream_ = upstreamNow;
+
+    return thisTick;
+}
+
+template <typename UpstreamClock>
+BasicSimulationClock<UpstreamClock>::TickInfo
+BasicSimulationClock<UpstreamClock>::tickBy(duration simulatedDelta)
+{
+    auto thisTick = advance({}, simulatedDelta);
+    return thisTick;
+}
+
+template <typename UpstreamClock> void BasicSimulationClock<UpstreamClock>::reset()
+{
+    lastTickUpstream_ = UpstreamClock::now();
+    lastTick_ = TickInfo{};
+}
+
+template <typename UpstreamClock>
+typename BasicSimulationClock<UpstreamClock>::TickInfo
+BasicSimulationClock<UpstreamClock>::advance(duration delta, duration simulatedDelta)
+{
+    TickInfo thisTick{.now = lastTick_.now + simulatedDelta,
+                      .realNow = lastTick_.realNow + delta,
+                      .delta = simulatedDelta,
+                      .realDelta = delta,
+                      .ticks = lastTick_.ticks + 1};
+    ++ticks_;
+
+    lastTick_ = thisTick;
+    return thisTick;
+}
+
+} // namespace Cory

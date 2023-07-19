@@ -13,16 +13,16 @@ namespace Cory {
 /**
  * utility class to queue up things that should be processed on a specific frame in the future
  */
-template <std::copyable WaitingObject> class FutureFrameQueue {
+template <typename Time, std::copyable WaitingObject> class FutureFrameQueue {
   public:
     /// enqueue an object for the given frame
-    template <typename T> void enqueueFor(uint64_t frame, T &&obj)
+    template <typename T> void enqueueFor(Time time, T &&obj)
     {
-        waitingObjects_.emplace(frame, std::forward<T>(obj));
+        waitingObjects_.emplace(time, std::forward<T>(obj));
     }
 
-    /// dequeue all objects waiting for the given frame or any previous
-    std::vector<WaitingObject> dequeueUntil(uint64_t frame);
+    /// dequeue all objects waiting for the given time or any previous times
+    std::vector<WaitingObject> dequeueUntil(Time time);
 
     /// dequeue all objects
     std::vector<WaitingObject> dequeueAll();
@@ -32,11 +32,11 @@ template <std::copyable WaitingObject> class FutureFrameQueue {
     auto size() { return waitingObjects_.size(); }
 
   private:
-    std::multimap<uint64_t, WaitingObject> waitingObjects_;
+    std::multimap<Time, WaitingObject> waitingObjects_;
 };
 
-template <std::copyable WaitingObject>
-std::vector<WaitingObject> FutureFrameQueue<WaitingObject>::dequeueAll()
+template <typename Time, std::copyable WaitingObject>
+std::vector<WaitingObject> FutureFrameQueue<Time, WaitingObject>::dequeueAll()
 {
     auto dequeued =
         ranges::views::all(waitingObjects_) | ranges::views::values | ranges::to<std::vector>();
@@ -44,14 +44,14 @@ std::vector<WaitingObject> FutureFrameQueue<WaitingObject>::dequeueAll()
     return dequeued;
 }
 
-template <std::copyable WaitingObject>
-std::vector<WaitingObject> FutureFrameQueue<WaitingObject>::dequeueUntil(uint64_t frame)
+template <typename Time, std::copyable WaitingObject>
+std::vector<WaitingObject> FutureFrameQueue<Time, WaitingObject>::dequeueUntil(Time time)
 {
-    auto bound = waitingObjects_.upper_bound(frame);
+    auto bound = waitingObjects_.upper_bound(time);
     // wrap the range [begin, bound] into a view so we can use ranges::to<..>
     auto dequeued = ranges::subrange(waitingObjects_.begin(), bound) | ranges::views::values |
                     ranges::to<std::vector>();
-    
+
     waitingObjects_.erase(waitingObjects_.begin(), bound);
     return dequeued;
 }

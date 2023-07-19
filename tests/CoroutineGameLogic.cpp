@@ -8,7 +8,10 @@
 
 #include <cppcoro/coroutine.hpp>
 
+#include <Cory/Base/FutureFrameQueue.hpp>
 #include <Cory/Base/Log.hpp>
+
+#include <range/v3/view/concat.hpp>
 
 using namespace Cory;
 
@@ -97,39 +100,72 @@ class World {
     }
 
     void tick();
+    void tickBy(Seconds duration);
     void end();
 
   public:
     friend class Behavior;
 
-    auto nextTick()
+    auto sleepForTicks(uint64_t sleepTicks)
     {
         struct Awaiter {
             World &world_;
+            uint64_t sleepTicks;
             bool await_ready() const noexcept { return false; }
             void await_suspend(Behavior::Handle h) noexcept
             {
-                world_.waitingForNextTick_.push_back(h);
+                world_.waitingForFutureTicks_.enqueueFor(world_.lastTick_.ticks + sleepTicks, h);
+                h.promise().wasAdopted_ = true;
             }
             SimulationClock::TickInfo await_resume() noexcept { return world_.lastTick_; }
         };
-        return Awaiter{*this};
+        return Awaiter{*this, sleepTicks};
+    }
+    auto sleepNextTick() { return sleepForTicks(1); }
+
+    auto sleepFor(Seconds sleepTime)
+    {
+        struct Awaiter {
+            World &world_;
+            Seconds sleepTime;
+            bool await_ready() const noexcept { return false; }
+            void await_suspend(Behavior::Handle h) noexcept
+            {
+                world_.waitingForTimePoint_.enqueueFor(world_.lastTick_.now + sleepTime, h);
+                h.promise().wasAdopted_ = true;
+            }
+            SimulationClock::TickInfo await_resume() noexcept { return world_.lastTick_; }
+        };
+        return Awaiter{*this, sleepTime};
     }
 
   private:
+    void processTick(SimulationClock::TickInfo tickInfo);
+
     SimulationClock clock_{};
     SimulationClock::TickInfo lastTick_;
 
-    std::vector<Behavior::Handle> waitingForNextTick_;
+    FutureFrameQueue<uint64_t, Behavior::Handle> waitingForFutureTicks_;
+    FutureFrameQueue<SimulationClock::time_point, Behavior::Handle> waitingForTimePoint_;
 };
 
 void World::tick()
 {
-    lastTick_ = clock_.tick();
-    // get all coroutines that are waiting for the next tick and resume them
-    std::vector logic_updates = std::exchange(waitingForNextTick_, {});
-    for (auto h : logic_updates) {
+    auto tickInfo = clock_.tick();
+    processTick(tickInfo);
+}
+void World::tickBy(Seconds duration) {
+    auto tickInfo = clock_.tickBy(duration);
+    processTick(tickInfo);
+}
 
+void World::processTick(SimulationClock::TickInfo tickInfo)
+{
+    lastTick_ = tickInfo;
+    // get all coroutines that are waiting for the next tick and resume them
+    auto scheduledFromTicks = waitingForFutureTicks_.dequeueUntil(lastTick_.ticks);
+    auto scheduledFromTimepoint = waitingForTimePoint_.dequeueUntil(lastTick_.now);
+    for (auto h : ranges::view::concat(scheduledFromTicks, scheduledFromTimepoint)) {
         if (h.done()) { CO_CORE_WARN("Coroutine is already done!"); }
         else {
             h.resume();
@@ -138,15 +174,15 @@ void World::tick()
             CO_CORE_INFO("Coroutine is done! Destroying...");
             h.destroy();
         }
-    }
+    };
 }
 
 void World::end()
 {
-    for (auto h : waitingForNextTick_) {
+    auto waiting = waitingForFutureTicks_.dequeueAll();
+    for (auto h : waiting) {
         h.destroy();
     }
-    waitingForNextTick_.clear();
 }
 
 TEST_CASE("Simple behavior")
@@ -161,19 +197,20 @@ TEST_CASE("Simple behavior")
         }};
         state = 1;
         CO_CORE_INFO("behavior: initialization");
-        auto tick = co_await world.nextTick();
+        auto tick = co_await world.sleepNextTick();
         CO_CORE_INFO("behavior: tick 1: {:<05f}", tick.now.time_since_epoch().count());
         state = 2;
-        auto tick2 = co_await world.nextTick();
+        auto tick2 = co_await world.sleepNextTick();
         CO_CORE_INFO("behavior: tick 2: {:<05f}", tick2.now.time_since_epoch().count());
         state = 3;
     }(world, state);
 
-    LogicComponent logic{[](World &world) -> Behavior { auto tick = co_await world.nextTick(); }};
+    LogicComponent logic{
+        [](World &world) -> Behavior { auto tick = co_await world.sleepNextTick(); }};
 
     //    AnotherCoro ticker2 = [](World &world, int &state) -> AnotherCoro {
     //        state = 1;
-    //        auto tick = co_await world.nextTick();
+    //        auto tick = co_await world.sleepNextTick();
     //    }(world, state);
 
     CHECK(state == 1);
@@ -200,7 +237,7 @@ TEST_CASE("Looping behavior")
             CO_CORE_INFO("behavior: cleanup");
         }};
         while (true) {
-            auto tick = co_await world.nextTick();
+            auto tick = co_await world.sleepNextTick();
             ++state;
         }
     }(world, state);
@@ -212,6 +249,73 @@ TEST_CASE("Looping behavior")
     CHECK(state == 1);
     world.tick();
     CO_CORE_INFO("World tick 2 complete");
+    CHECK(state == 2);
+
+    world.end();
+    CO_CORE_INFO("World ended");
+    CHECK(state == -1);
+}
+
+TEST_CASE("Sleeping multiple ticks")
+{
+    int state{0};
+    World world;
+
+    Behavior ticker = [](World &world, int &state) -> Behavior {
+        gsl::final_action cleanup{[&]() {
+            state = -1;
+            CO_CORE_INFO("behavior: cleanup");
+        }};
+        state = 1;
+        auto tick1 = co_await world.sleepForTicks(2);
+        state = 2;
+        auto tick2 = co_await world.sleepForTicks(2);
+        state = 3;
+    }(world, state);
+
+    CHECK(state == 1);
+    CO_CORE_INFO("Before world tick");
+    world.tick();
+    CO_CORE_INFO("World tick 1 complete");
+    CHECK(state == 1);
+    world.tick();
+    CO_CORE_INFO("World tick 2 complete");
+    CHECK(state == 2);
+    world.tick();
+    CO_CORE_INFO("World tick 3 complete");
+    CHECK(state == 2);
+
+    world.end();
+    CO_CORE_INFO("World ended");
+    CHECK(state == -1);
+}
+
+TEST_CASE("Sleeping for simulated time")
+{
+    using namespace Cory::literals;
+    int state{0};
+    World world;
+
+    Behavior ticker = [](World &world, int &state) -> Behavior {
+        gsl::final_action cleanup{[&]() {
+            state = -1;
+            CO_CORE_INFO("behavior: cleanup");
+        }};
+        state = 1;
+        auto tick1 = co_await world.sleepFor(2.0_ms);
+        state = 2;
+    }(world, state);
+
+    CHECK(state == 1);
+    CO_CORE_INFO("Before world tick");
+    world.tick();
+    CO_CORE_INFO("World tick 1 complete");
+    CHECK(state == 1);
+    world.tick();
+    CO_CORE_INFO("World tick 2 complete");
+    CHECK(state == 1);
+    world.tick();
+    CO_CORE_INFO("World tick 3 complete");
     CHECK(state == 2);
 
     world.end();

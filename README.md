@@ -48,10 +48,11 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] Use std::pmr more consistently to improve memory allocations
     - [ ] introduce per-frame memory arena into `FrameContext`
     - [ ] use std::pmr based allocator for Vulkan API calls
+- GameObject/Scenegraph system (Entities + Components, not full data-drive ECS)
+  - [ ] basic entity/component system
 
 #### Mid Term
 
-- GameObject system (Entities + Components, not ECS)
 - Implement a simple Volume Raymarcher
 - Extend usage of c++20 coroutines where meaningful
   - [x] use coroutines for framegraph execution
@@ -65,9 +66,9 @@ As such, it uses features that are only supported in rather modern compilers.
 
 #### Long Term
 
-- Implement Monte Carlo Volume Raycasting
+- Implement Monte Carlo Volume Raycasting (for medical volume rendering)
 - Play around with ray tracing
-- Play around with mesh shaders
+- Play around with mesh shaders (cause they seem to be hot right now)
 
 ### Inspiration and Resources
 

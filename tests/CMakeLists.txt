@@ -38,8 +38,9 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         SimulationClock.test.cpp
         FutureFrameQueue.test.cpp
         LayerStack_test.cpp
+        SceneGraph.test.cpp
         CoroutineGameLogic.cpp
-        )
+        TransformSystem.test.cpp)
 
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(${TARGET_NAME}_TestLib PRIVATE Cory::project_options)

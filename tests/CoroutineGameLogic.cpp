@@ -154,7 +154,8 @@ void World::tick()
     auto tickInfo = clock_.tick();
     processTick(tickInfo);
 }
-void World::tickBy(Seconds duration) {
+void World::tickBy(Seconds duration)
+{
     auto tickInfo = clock_.tickBy(duration);
     processTick(tickInfo);
 }
@@ -171,7 +172,7 @@ void World::processTick(SimulationClock::TickInfo tickInfo)
             h.resume();
         }
         if (h.done()) {
-            CO_CORE_INFO("Coroutine is done! Destroying...");
+            CO_CORE_TRACE("Coroutine is done! Destroying...");
             h.destroy();
         }
     };
@@ -179,8 +180,9 @@ void World::processTick(SimulationClock::TickInfo tickInfo)
 
 void World::end()
 {
-    auto waiting = waitingForFutureTicks_.dequeueAll();
-    for (auto h : waiting) {
+    auto waitingTicks = waitingForFutureTicks_.dequeueAll();
+    auto waitingTime = waitingForTimePoint_.dequeueAll();
+    for (auto h : ranges::view::concat(waitingTicks, waitingTime)) {
         h.destroy();
     }
 }
@@ -193,15 +195,15 @@ TEST_CASE("Simple behavior")
     Behavior ticker = [](World &world, int &state) -> Behavior {
         gsl::final_action cleanup{[&]() {
             state = -1;
-            CO_CORE_INFO("behavior: cleanup");
+            CO_CORE_TRACE("behavior: cleanup");
         }};
         state = 1;
-        CO_CORE_INFO("behavior: initialization");
+        CO_CORE_TRACE("behavior: initialization");
         auto tick = co_await world.sleepNextTick();
-        CO_CORE_INFO("behavior: tick 1: {:<05f}", tick.now.time_since_epoch().count());
+        CO_CORE_TRACE("behavior: tick 1: {:<05f}", tick.now.time_since_epoch().count());
         state = 2;
         auto tick2 = co_await world.sleepNextTick();
-        CO_CORE_INFO("behavior: tick 2: {:<05f}", tick2.now.time_since_epoch().count());
+        CO_CORE_TRACE("behavior: tick 2: {:<05f}", tick2.now.time_since_epoch().count());
         state = 3;
     }(world, state);
 
@@ -214,15 +216,15 @@ TEST_CASE("Simple behavior")
     //    }(world, state);
 
     CHECK(state == 1);
-    CO_CORE_INFO("Before world tick");
+    CO_CORE_TRACE("Before world tick");
     world.tick();
-    CO_CORE_INFO("World tick 1 complete");
+    CO_CORE_TRACE("World tick 1 complete");
     CHECK(state == 2);
     world.tick();
-    CO_CORE_INFO("World tick 2 complete");
+    CO_CORE_TRACE("World tick 2 complete");
     CHECK(state == -1);
     world.tick();
-    CO_CORE_INFO("World tick 3 complete");
+    CO_CORE_TRACE("World tick 3 complete");
     CHECK(state == -1);
 }
 
@@ -234,7 +236,7 @@ TEST_CASE("Looping behavior")
     Behavior ticker = [](World &world, int &state) -> Behavior {
         gsl::final_action cleanup{[&]() {
             state = -1;
-            CO_CORE_INFO("behavior: cleanup");
+            CO_CORE_TRACE("behavior: cleanup");
         }};
         while (true) {
             auto tick = co_await world.sleepNextTick();
@@ -243,16 +245,16 @@ TEST_CASE("Looping behavior")
     }(world, state);
 
     CHECK(state == 0);
-    CO_CORE_INFO("Before world tick");
+    CO_CORE_TRACE("Before world tick");
     world.tick();
-    CO_CORE_INFO("World tick 1 complete");
+    CO_CORE_TRACE("World tick 1 complete");
     CHECK(state == 1);
     world.tick();
-    CO_CORE_INFO("World tick 2 complete");
+    CO_CORE_TRACE("World tick 2 complete");
     CHECK(state == 2);
 
     world.end();
-    CO_CORE_INFO("World ended");
+    CO_CORE_TRACE("World ended");
     CHECK(state == -1);
 }
 
@@ -264,7 +266,7 @@ TEST_CASE("Sleeping multiple ticks")
     Behavior ticker = [](World &world, int &state) -> Behavior {
         gsl::final_action cleanup{[&]() {
             state = -1;
-            CO_CORE_INFO("behavior: cleanup");
+            CO_CORE_TRACE("behavior: cleanup");
         }};
         state = 1;
         auto tick1 = co_await world.sleepForTicks(2);
@@ -274,19 +276,19 @@ TEST_CASE("Sleeping multiple ticks")
     }(world, state);
 
     CHECK(state == 1);
-    CO_CORE_INFO("Before world tick");
+    CO_CORE_TRACE("Before world tick");
     world.tick();
-    CO_CORE_INFO("World tick 1 complete");
+    CO_CORE_TRACE("World tick 1 complete");
     CHECK(state == 1);
     world.tick();
-    CO_CORE_INFO("World tick 2 complete");
+    CO_CORE_TRACE("World tick 2 complete");
     CHECK(state == 2);
     world.tick();
-    CO_CORE_INFO("World tick 3 complete");
+    CO_CORE_TRACE("World tick 3 complete");
     CHECK(state == 2);
 
     world.end();
-    CO_CORE_INFO("World ended");
+    CO_CORE_TRACE("World ended");
     CHECK(state == -1);
 }
 
@@ -299,26 +301,26 @@ TEST_CASE("Sleeping for simulated time")
     Behavior ticker = [](World &world, int &state) -> Behavior {
         gsl::final_action cleanup{[&]() {
             state = -1;
-            CO_CORE_INFO("behavior: cleanup");
+            CO_CORE_TRACE("behavior: cleanup");
         }};
         state = 1;
         auto tick1 = co_await world.sleepFor(2.0_ms);
         state = 2;
+        auto tick2 = co_await world.sleepFor(2.0_ms);
     }(world, state);
 
     CHECK(state == 1);
-    CO_CORE_INFO("Before world tick");
-    world.tick();
-    CO_CORE_INFO("World tick 1 complete");
+    CO_CORE_TRACE("Before world tick");
+    world.tickBy(0.5_ms);
+    CO_CORE_TRACE("World tick 1 complete");
     CHECK(state == 1);
-    world.tick();
-    CO_CORE_INFO("World tick 2 complete");
+    world.tickBy(1.0_ms);
+    CO_CORE_TRACE("World tick 2 complete");
     CHECK(state == 1);
-    world.tick();
-    CO_CORE_INFO("World tick 3 complete");
+    world.tickBy(1.0_ms);
+    CO_CORE_TRACE("World tick 3 complete");
     CHECK(state == 2);
-
     world.end();
-    CO_CORE_INFO("World ended");
+    CO_CORE_TRACE("World ended");
     CHECK(state == -1);
 }

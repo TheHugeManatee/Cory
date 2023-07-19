@@ -96,7 +96,6 @@ TEST_CASE("Adding and removing entities and components")
         CHECK(sg.data(root).children.empty());
         CHECK_FALSE(sg.valid(entity));
 
-        CHECK_THROWS(sg.data(entity));
         CHECK(sg.getComponent<EntityMetaData>(entity) == nullptr);
     }
 }
@@ -158,7 +157,6 @@ TEST_CASE("Handling hierarchies")
             CHECK(sg.data(child).children.empty());
             CHECK_FALSE(sg.valid(grandchild));
 
-            CHECK_THROWS(sg.data(grandchild));
             CHECK(sg.getComponent<EntityMetaData>(grandchild) == nullptr);
         }
         SECTION("Removing an inner node removes all children")

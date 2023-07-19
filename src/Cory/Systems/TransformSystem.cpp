@@ -25,19 +25,19 @@ void TransformSystem::beforeUpdate(SceneGraph &sg) { sg.sortByDepth<Transform>()
 
 void TransformSystem::update(SceneGraph &sg, TickInfo tickInfo, Entity entity, Transform &transform)
 {
-    CO_CORE_INFO("Updating transform for {}", sg.data(entity).name);
     glm::mat4 parent{1.0f};
 
     if (transform.mode == TransformMode::Local) { parent = parentTransform(sg, entity); }
 
+    // TODO: potentially, we want to switch to representing the rotation as euler angles instead
     transform.worldTransform = glm::translate(parent, transform.position) *
                                glm::mat4_cast(transform.rotation) *
                                glm::scale(glm::mat4(1.0f), transform.scale);
 
-    CO_CORE_INFO("Translation for {} is {} (parent={})",
-                 sg.data(entity).name,
-                 transform.worldTransform[3],
-                 parent[3]);
+//    CO_CORE_INFO("Translation for {} is {} (parent={})",
+//                 sg.data(entity).name,
+//                 transform.worldTransform[3],
+//                 parent[3]);
 }
 
 void TransformSystem::afterUpdate(SceneGraph &sg) {}

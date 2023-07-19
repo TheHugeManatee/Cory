@@ -4,30 +4,7 @@
 
 #include <Cory/Systems/TransformSystem.hpp>
 
-#include <Cory/Base/FmtUtils.hpp>
-#include <Cory/Base/Log.hpp>
-
 using namespace Cory;
-
-template <typename... Components>
-class CallbackSystem : public SimpleSystem<CallbackSystem<Components...>, Components...> {
-  public:
-    template <typename Fn>
-    CallbackSystem(Fn &&fn)
-        : updateFn_(std::forward<Fn>(fn))
-    {
-    }
-
-    void beforeUpdate(SceneGraph &graph){};
-    void update(SceneGraph &graph, TickInfo tickInfo, Entity entity, Components &...components)
-    {
-        updateFn_(graph, tickInfo, entity, components...);
-    }
-    void afterUpdate(SceneGraph &graph){};
-
-  private:
-    std::function<void(SceneGraph &, TickInfo, Entity, Components &...)> updateFn_;
-};
 
 TEST_CASE("CallbackSystem")
 {
@@ -37,6 +14,14 @@ TEST_CASE("CallbackSystem")
         [](SceneGraph &graph, TickInfo tickInfo, Entity entity, Transform &transform) {
             transform.position += glm::vec3(1.0f);
         }};
+    static_assert(System<CallbackSystem<Transform>>); // make sure we implement the system interface
+
+    Entity entity = sg.createEntity(sg.root(), "entity", Transform{.position{1.0f, 1.0f, 1.0f}});
+    updater.tick(sg, {});
+
+    CHECK(sg.getComponent<Transform>(entity)->position == glm::vec3(2.0f, 2.0f, 2.0f));
+    updater.tick(sg, {});
+    CHECK(sg.getComponent<Transform>(entity)->position == glm::vec3(3.0f, 3.0f, 3.0f));
 }
 
 TEST_CASE("Transform System works")
@@ -55,7 +40,7 @@ TEST_CASE("Transform System works")
     Transform &grandchildTransform = sg.addComponent<Transform>(grandchild);
 
     TransformSystem ts;
-    ts.tick(sg, TickInfo{});
+    ts.tick(sg, {});
 
     CHECK(sg.getComponent<Transform>(entity)->worldTransform[3] ==
           glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -66,7 +51,7 @@ TEST_CASE("Transform System works")
 
     sg.getComponent<Transform>(entity)->scale = glm::vec3(2.0f, 1.0f, 1.0f);
     sg.getComponent<Transform>(grandchild)->position = glm::vec3(-1.0f, 0.0f, 0.0f);
-    ts.tick(sg, TickInfo{});
+    ts.tick(sg, {});
 
     CHECK(sg.getComponent<Transform>(entity)->worldTransform[3] ==
           glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -74,4 +59,6 @@ TEST_CASE("Transform System works")
           glm::vec4(2.0f, 1.0f, 0.0f, 1.0f));
     CHECK(sg.getComponent<Transform>(grandchild)->worldTransform[3] ==
           glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+
+    // todo check rotation at some point
 }

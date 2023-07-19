@@ -9,21 +9,32 @@
 
 namespace Cory {
 
-/**
- * @brief A system is a coherent collection of logic that operates on the scene graph
- */
-class System {
-  public:
-    virtual ~System() = default;
-    virtual void tick(SceneGraph& graph, TickInfo tickInfo) = 0;
+template <typename Sys>
+concept SystemHasBeforeUpdate = requires(Sys sys, SceneGraph &graph) { sys.beforeUpdate(graph); };
+template <typename Sys>
+concept SystemHasAfterUpdate = requires(Sys sys, SceneGraph &graph) { sys.afterUpdate(graph); };
+
+template <typename T>
+concept System = requires(T sys, SceneGraph &graph, TickInfo tickInfo, Entity entity) {
+    // for now, all we require is that the system has a tick function
+    {
+        sys.tick(graph, tickInfo)
+    } -> std::same_as<void>;
 };
 
+/**
+ * @brief A system is a coherent collection of logic that operates on the scene graph
+ *
+ * This is a CRTP class that provides a simple interface for systems to operate on the scene graph.
+ */
 template <typename Derived, Component... Cmps> // CRTP
-class SimpleSystem : public System {
+class SimpleSystem {
   public:
-    void tick(SceneGraph& graph, TickInfo tickInfo) override
+    void tick(SceneGraph &graph, TickInfo tickInfo)
     {
-        static_cast<Derived *>(this)->beforeUpdate(graph);
+        if constexpr (SystemHasBeforeUpdate<Derived>) {
+            static_cast<Derived *>(this)->beforeUpdate(graph);
+        }
 
         auto view = graph.registry().template view<Cmps...>();
 
@@ -31,8 +42,28 @@ class SimpleSystem : public System {
             static_cast<Derived *>(this)->update(graph, tickInfo, entity, components...);
         });
 
-        static_cast<Derived *>(this)->afterUpdate(graph);
+        if constexpr (SystemHasAfterUpdate<Derived>) {
+            static_cast<Derived *>(this)->afterUpdate(graph);
+        }
     }
+};
+
+template <typename... Components>
+class CallbackSystem : public SimpleSystem<CallbackSystem<Components...>, Components...> {
+  public:
+    template <typename Fn>
+    CallbackSystem(Fn &&fn)
+        : updateFn_(std::forward<Fn>(fn))
+    {
+    }
+
+    void update(SceneGraph &graph, TickInfo tickInfo, Entity entity, Components &...components)
+    {
+        updateFn_(graph, tickInfo, entity, components...);
+    }
+
+  private:
+    std::function<void(SceneGraph &, TickInfo, Entity, Components &...)> updateFn_;
 };
 
 /** ====================================== Implementation ====================================== **/

@@ -31,6 +31,8 @@ concept SystemHasAfterUpdate = requires(Sys sys, SceneGraph &graph) { sys.afterU
 template <typename Derived, Component... Cmps> // CRTP
 class BasicSystem {
   public:
+    using Base = BasicSystem<Derived, Cmps...>;
+
     void tick(SceneGraph &graph, TickInfo tickInfo)
     {
         if constexpr (SystemHasBeforeUpdate<Derived>) {
@@ -52,7 +54,7 @@ class BasicSystem {
     template <Component... Cmps_, CallableWith<Entity, Cmps_...> Func>
     void forEach(SceneGraph &graph, Func &&callable)
     {
-        auto view = graph.registry().template view<Cmps...>();
+        auto view = graph.registry().template view<Cmps_...>();
 
         view.each(std::forward<Func>(callable));
     }

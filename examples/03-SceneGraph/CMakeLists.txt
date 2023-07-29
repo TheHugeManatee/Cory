@@ -10,7 +10,11 @@ add_executable(${TARGET_NAME}
         src/main.cpp
         src/SceneGraphDemo.cpp
         src/SceneGraphDemo.hpp
-        )
+        src/CubeRenderSystem.hpp
+        src/Common.hpp
+        src/CubeAnimationSystem.hpp
+        src/CubeRenderSystem.cpp
+)
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)

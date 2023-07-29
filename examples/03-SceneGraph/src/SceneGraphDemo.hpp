@@ -20,13 +20,6 @@
 #include <memory>
 #include <span>
 
-struct CubeUBO {
-    glm::mat4 projection;
-    glm::mat4 view;
-    glm::mat4 viewProjection;
-    glm::vec3 lightPosition;
-};
-
 class SceneGraphDemoApplication : public Cory::Application {
   public:
     SceneGraphDemoApplication(std::span<const char *> args);
@@ -36,18 +29,7 @@ class SceneGraphDemoApplication : public Cory::Application {
 
   private:
     // create the mesh to be rendered
-    void createUBO();
-    void createShaders();
     void defineRenderPasses(Cory::Framegraph &framegraph, const Cory::FrameContext &frameCtx);
-
-    struct PassOutputs {
-        Cory::TransientTextureHandle colorOut;
-        Cory::TransientTextureHandle depthOut;
-    };
-    Cory::RenderTaskDeclaration<PassOutputs>
-    cubeRenderTask(Cory::RenderTaskBuilder builder,
-                   Cory::TransientTextureHandle colorTarget,
-                   Cory::TransientTextureHandle depthTarget);
 
     void drawImguiControls();
 
@@ -58,12 +40,6 @@ class SceneGraphDemoApplication : public Cory::Application {
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
 
-    Cory::SamplerHandle defaultSampler_;
-    Cory::ShaderHandle vertexShader_;
-    Cory::ShaderHandle fragmentShader_;
-    std::unique_ptr<Magnum::Vk::Mesh> mesh_;
-
-    std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     std::vector<Magnum::Vk::DescriptorSet> descriptorSets_;
     bool dumpNextFramegraph_{false};
 
@@ -72,4 +48,6 @@ class SceneGraphDemoApplication : public Cory::Application {
     Cory::SceneGraph sceneGraph_;
     Cory::SystemCoordinator systems_;
     class CubeAnimationSystem *animationSystem_{nullptr};
+    class CubeRenderSystem *renderSystem_{nullptr};
+    void setupSystems();
 };

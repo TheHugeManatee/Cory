@@ -1,5 +1,9 @@
 #include "SceneGraphDemo.hpp"
 
+#include "Common.hpp"
+#include "CubeAnimationSystem.hpp"
+#include "CubeRenderSystem.hpp"
+
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
@@ -54,13 +58,6 @@
 
 namespace Vk = Magnum::Vk;
 
-struct AnimationComponent {
-    glm::mat4 modelTransform{1.0f};
-    glm::vec4 color{1.0, 0.0, 0.0, 1.0};
-    float blend;
-    float entityIndex{};
-};
-
 static struct AnimationData {
     int num_cubes{200};
     float blend{0.8f};
@@ -109,12 +106,6 @@ void randomize()
 
 class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem, AnimationComponent> {
   public:
-    CubeAnimationSystem(Cory::Context &ctx)
-        : Cory::BasicSystem<CubeAnimationSystem, AnimationComponent>()
-    {
-        mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(ctx));
-    }
-
     void beforeUpdate(Cory::SceneGraph &sg)
     {
         if (numEntities_ != ad.num_cubes) {
@@ -138,21 +129,6 @@ class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem, Animat
     {
         auto now = tick.now.time_since_epoch().count();
         animate(anim, now);
-    }
-
-    void recordCommands(Cory::Context &ctx, Cory::SceneGraph &sg, Cory::CommandList &cmd)
-    {
-        forEach<AnimationComponent>(sg, [&](Cory::Entity e, const AnimationComponent &anim) {
-            // update push constants
-            ctx.device()->CmdPushConstants(cmd->handle(),
-                                           ctx.defaultPipelineLayout(),
-                                           VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
-                                           0,
-                                           sizeof(anim),
-                                           &anim);
-
-            cmd.handle().draw(*mesh_);
-        });
     }
 
   private:
@@ -181,18 +157,11 @@ class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem, Animat
         d.blend = ad.blend;
     }
 
-    std::unique_ptr<Vk::Mesh> mesh_;
     float numEntities_{0};
 };
 static_assert(Cory::System<CubeAnimationSystem>);
 
-
-class CubeRenderSystem : public Cory::BasicSystem<CubeRenderSystem, AnimationComponent> {
-
-};
-
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
-    : mesh_{}
 {
     CLI::App app{"SceneGraphDemo"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
@@ -220,41 +189,43 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "SceneGraphDemo", msaaSamples);
 
-    animationSystem_ = &systems_.emplace<CubeAnimationSystem>(ctx());
-    createShaders();
+    camera_.setMode(Cory::CameraManipulator::Mode::Fly);
+    camera_.setWindowSize(window_->dimensions());
+    camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
+    setupCameraCallbacks();
+
+    setupSystems();
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
                                               window_->swapchain().maxFramesInFlight(),
                                           .viewportDimensions = window_->dimensions()};
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
-
-    camera_.setMode(Cory::CameraManipulator::Mode::Fly);
-    camera_.setWindowSize(window_->dimensions());
-    camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
-    setupCameraCallbacks();
-    createUBO();
 }
-
-void SceneGraphDemoApplication::createShaders()
+void SceneGraphDemoApplication::setupSystems()
 {
-    const Cory::ScopeTimer st{"Init/Shaders"};
-    vertexShader_ = ctx().resources().createShader(Cory::ResourceLocator::Locate("cube.vert"));
-    fragmentShader_ = ctx().resources().createShader(Cory::ResourceLocator::Locate("cube.frag"));
-}
+    animationSystem_ = &systems_.emplace<CubeAnimationSystem>();
 
-void SceneGraphDemoApplication::createUBO()
-{
-    // create and initialize descriptor sets for each frame in flight
-    const Cory::ScopeTimer st{"Init/UBO"};
-    globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
-        ctx(), window_->swapchain().maxFramesInFlight());
+    // set up the camera updates
+    Cory::Entity camera = sceneGraph_.createEntity(sceneGraph_.root(), "camera");
+    sceneGraph_.addComponent<CameraComponent>(
+        camera, CameraComponent{.fovy = glm::radians(70.0f), .nearPlane = 1.0f, .farPlane = 10.0f});
+
+    // set up a system to update the camera from the camera manipulator
+    systems_.emplace<Cory::CallbackSystem<CameraComponent>>(
+        [this](Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity e, CameraComponent &c) {
+            c.position = camera_.getCameraPosition();
+            c.direction = camera_.getCenterPosition() - c.position;
+            c.viewMatrix = camera_.getViewMatrix();
+        });
+
+    // render system should go last to be aware of the latest state
+    renderSystem_ =
+        &systems_.emplace<CubeRenderSystem>(ctx(), window_->swapchain().maxFramesInFlight());
 }
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()
 {
-    auto &resources = ctx().resources();
-    resources.release(vertexShader_);
-    resources.release(fragmentShader_);
+
     CO_APP_TRACE("Destroying SceneGraphDemoApplication");
 }
 
@@ -326,75 +297,13 @@ void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
                                 *frameCtx.depthImage,
                                 *frameCtx.depthImageView);
 
-    auto mainPass =
-        cubeRenderTask(framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget);
+    auto mainPass = renderSystem_->cubeRenderTask(
+        framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget);
 
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
     auto [outInfo, outState] = framegraph.declareOutput(layersOutput.color);
-}
-
-Cory::RenderTaskDeclaration<SceneGraphDemoApplication::PassOutputs>
-SceneGraphDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
-                                          Cory::TransientTextureHandle colorTarget,
-                                          Cory::TransientTextureHandle depthTarget)
-{
-
-    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-    float clearDepth = 1.0f;
-
-    auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
-    auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
-
-    auto cubePass = builder.declareRenderPass("PASS_Cubes")
-                        .shaders({vertexShader_, fragmentShader_})
-                        .attach(colorTarget,
-                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                VK_ATTACHMENT_STORE_OP_STORE,
-                                clearColor)
-                        .attachDepth(depthTarget,
-                                     VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                     VK_ATTACHMENT_STORE_OP_STORE,
-                                     clearDepth)
-                        .finish();
-
-    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
-
-    /// ^^^^     DECLARATION      ^^^^
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
-    /// vvvv  RENDERING COMMANDS  vvvv
-
-    cubePass.begin(*renderApi.cmd);
-
-    float fovy = glm::radians(70.0f);
-    float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
-    glm::mat4 viewMatrix = camera_.getViewMatrix();
-    glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 1.0f, 10.0f);
-    glm::mat4 viewProjection = projectionMatrix * viewMatrix;
-
-    Cory::FrameContext &frameCtx = *renderApi.frameCtx;
-
-    // update the uniform buffer
-    CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
-    ubo.view = viewMatrix;
-    ubo.projection = projectionMatrix;
-    ubo.viewProjection = viewProjection;
-    // need explicit flush otherwise the mapped memory is not synced to the GPU
-    globalUbo_->flush(frameCtx.index);
-
-    ctx()
-        .descriptorSets()
-        .write(Cory::DescriptorSets::SetType::Static, frameCtx.index, *globalUbo_)
-        .flushWrites()
-        .bind(renderApi.cmd->handle(), frameCtx.index, ctx().defaultPipelineLayout());
-
-    // records commands for each cube
-    animationSystem_->recordCommands(ctx(), sceneGraph_, *renderApi.cmd);
-
-    cubePass.end(*renderApi.cmd);
 }
 
 void SceneGraphDemoApplication::drawImguiControls()

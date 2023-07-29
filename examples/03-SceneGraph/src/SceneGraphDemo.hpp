@@ -10,6 +10,7 @@
 #include <Cory/Renderer/Swapchain.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
+#include <Cory/Systems/SystemCoordinator.hpp>
 
 #include <Magnum/Vk/DescriptorSet.h>
 #include <Magnum/Vk/Framebuffer.h>
@@ -35,7 +36,6 @@ class SceneGraphDemoApplication : public Cory::Application {
 
   private:
     // create the mesh to be rendered
-    void createGeometry();
     void createUBO();
     void createShaders();
     void defineRenderPasses(Cory::Framegraph &framegraph, const Cory::FrameContext &frameCtx);
@@ -48,9 +48,6 @@ class SceneGraphDemoApplication : public Cory::Application {
     cubeRenderTask(Cory::RenderTaskBuilder builder,
                    Cory::TransientTextureHandle colorTarget,
                    Cory::TransientTextureHandle depthTarget);
-
-    static double now();
-    [[nodiscard]] double getElapsedTimeSeconds() const;
 
     void drawImguiControls();
 
@@ -73,4 +70,6 @@ class SceneGraphDemoApplication : public Cory::Application {
     Cory::SimulationClock clock_;
     Cory::CameraManipulator camera_;
     Cory::SceneGraph sceneGraph_;
+    Cory::SystemCoordinator systems_;
+    class CubeAnimationSystem *animationSystem_{nullptr};
 };

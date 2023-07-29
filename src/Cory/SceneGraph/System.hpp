@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
+#include <Cory/Base/Concepts.hpp>
 #include <Cory/Base/SimulationClock.hpp>
 #include <Cory/SceneGraph/Common.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
@@ -9,33 +10,26 @@
 
 namespace Cory {
 
+template <typename T>
+concept System = requires(T sys, SceneGraph &graph, TickInfo tickInfo, Entity entity) {
+    {
+        // for now, all we require is that a system has a tick function
+        sys.tick(graph, tickInfo)
+    } -> std::same_as<void>;
+};
+
 template <typename Sys>
 concept SystemHasBeforeUpdate = requires(Sys sys, SceneGraph &graph) { sys.beforeUpdate(graph); };
 template <typename Sys>
 concept SystemHasAfterUpdate = requires(Sys sys, SceneGraph &graph) { sys.afterUpdate(graph); };
 
-template <typename T>
-concept System = requires(T sys, SceneGraph &graph, TickInfo tickInfo, Entity entity) {
-    // for now, all we require is that the system has a tick function
-    {
-        sys.tick(graph, tickInfo)
-    } -> std::same_as<void>;
-};
-
-template <typename T, typename... Args>
-concept CallableWith = requires(T t, Args... args) {
-    {
-        t(args...)
-    } -> std::same_as<void>;
-};
-
 /**
- * @brief A system is a coherent collection of logic that operates on the scene graph
+ * @brief A basic system just monitors the scene graph and reacts to specific components
  *
  * This is a CRTP class that provides a simple interface for systems to operate on the scene graph.
  */
 template <typename Derived, Component... Cmps> // CRTP
-class SimpleSystem {
+class BasicSystem {
   public:
     void tick(SceneGraph &graph, TickInfo tickInfo)
     {
@@ -65,7 +59,7 @@ class SimpleSystem {
 };
 
 template <typename... Components>
-class CallbackSystem : public SimpleSystem<CallbackSystem<Components...>, Components...> {
+class CallbackSystem : public BasicSystem<CallbackSystem<Components...>, Components...> {
   public:
     template <typename Fn>
     CallbackSystem(Fn &&fn)

@@ -22,9 +22,9 @@ struct Transform {
     glm::mat4 worldTransform{1.0f};
 };
 
-class TransformSystem : public SimpleSystem<TransformSystem, Transform> {
+class TransformSystem : public BasicSystem<TransformSystem, Transform> {
   public:
-    using SimpleSystem<TransformSystem, Transform>::SimpleSystem;
+    using BasicSystem<TransformSystem, Transform>::BasicSystem;
     void beforeUpdate(SceneGraph &graph);
     void update(SceneGraph &graph, TickInfo tickInfo, Entity entity, Transform &transform);
     void afterUpdate(SceneGraph &graph);

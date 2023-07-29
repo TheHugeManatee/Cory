@@ -9,6 +9,6 @@ using Entity = uint32_t;
 template <typename T>
 concept Component = std::copyable<T>;
 
-template <typename Derived, Component... Cmps> class SimpleSystem;
+template <typename Derived, Component... Cmps> class BasicSystem;
 
 } // namespace Cory

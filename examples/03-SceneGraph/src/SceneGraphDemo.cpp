@@ -107,37 +107,13 @@ void randomize()
     randomize(ad.cfi);
 }
 
-void animate(AnimationComponent &d, float t)
-{
-    float i = d.entityIndex;
-    const float angle = ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t;
-    const float scale = ad.s0 + ad.st * t + ad.si * i;
-
-    const float tsf = ad.tsf / 2.0f + ad.tsf * sin(t / 10.0f);
-    const glm::vec3 translation{sin(i * tsf) * i * ad.tsi, cos(i * tsf) * i * ad.tsi, i * ad.ti};
-
-    d.modelTransform = Cory::makeTransform(ad.translation + translation,
-                                           ad.rotation + glm::vec3{0.0f, angle, angle / 2.0f},
-                                           glm::vec3{scale});
-
-    const float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
-    const float brightness = i + 0.2f * abs(sin(t + i));
-    const float r = ad.c0 * t * colorFreq;
-    const glm::vec4 start{0.8f, 0.2f, 0.2f, 1.0f};
-    const glm::mat4 cm = glm::rotate(
-        glm::scale(glm::mat4{1.0f}, glm::vec3{brightness}), r, glm::vec3{1.0f, 1.0f, 1.0f});
-
-    d.color = start * cm;
-    d.blend = ad.blend;
-}
-
-class AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationComponent> {
+class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem, AnimationComponent> {
   public:
-    void Init(Cory::Context &ctx)
+    CubeAnimationSystem(Cory::Context &ctx)
+        : Cory::BasicSystem<CubeAnimationSystem, AnimationComponent>()
     {
         mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(ctx));
     }
-    void Destroy() { mesh_.reset(); }
 
     void beforeUpdate(Cory::SceneGraph &sg)
     {
@@ -148,13 +124,12 @@ class AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationComp
                     sg.root(), fmt::format("cube{}", numEntities_), AnimationComponent{});
                 numEntities_ += 1.0f;
             }
-            forEach<AnimationComponent>(
-                sg,
-                [total = numEntities_, entityIndex = 0.0f](Cory::Entity e,
-                                                           AnimationComponent &anim) mutable {
-                    anim.entityIndex = entityIndex / total;
-                    entityIndex += 1.0f;
-                });
+            forEach<AnimationComponent>(sg,
+                                        [total = numEntities_, entityIndex = 0.0f](
+                                            Cory::Entity e, AnimationComponent &anim) mutable {
+                                            anim.entityIndex = entityIndex / total;
+                                            entityIndex += 1.0f;
+                                        });
         }
     }
 
@@ -181,11 +156,40 @@ class AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationComp
     }
 
   private:
+    void animate(AnimationComponent &d, float t)
+    {
+        float i = d.entityIndex;
+        const float angle = ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t;
+        const float scale = ad.s0 + ad.st * t + ad.si * i;
+
+        const float tsf = ad.tsf / 2.0f + ad.tsf * sin(t / 10.0f);
+        const glm::vec3 translation{
+            sin(i * tsf) * i * ad.tsi, cos(i * tsf) * i * ad.tsi, i * ad.ti};
+
+        d.modelTransform = Cory::makeTransform(ad.translation + translation,
+                                               ad.rotation + glm::vec3{0.0f, angle, angle / 2.0f},
+                                               glm::vec3{scale});
+
+        const float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
+        const float brightness = i + 0.2f * abs(sin(t + i));
+        const float r = ad.c0 * t * colorFreq;
+        const glm::vec4 start{0.8f, 0.2f, 0.2f, 1.0f};
+        const glm::mat4 cm = glm::rotate(
+            glm::scale(glm::mat4{1.0f}, glm::vec3{brightness}), r, glm::vec3{1.0f, 1.0f, 1.0f});
+
+        d.color = start * cm;
+        d.blend = ad.blend;
+    }
+
     std::unique_ptr<Vk::Mesh> mesh_;
     float numEntities_{0};
 };
-static_assert(Cory::System<AnimationSystem>);
-static AnimationSystem animationSystem;
+static_assert(Cory::System<CubeAnimationSystem>);
+
+
+class CubeRenderSystem : public Cory::BasicSystem<CubeRenderSystem, AnimationComponent> {
+
+};
 
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
     : mesh_{}
@@ -216,7 +220,7 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "SceneGraphDemo", msaaSamples);
 
-    createGeometry();
+    animationSystem_ = &systems_.emplace<CubeAnimationSystem>(ctx());
     createShaders();
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
@@ -248,7 +252,6 @@ void SceneGraphDemoApplication::createUBO()
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()
 {
-    animationSystem.Destroy(); // TODO this should be done automatically
     auto &resources = ctx().resources();
     resources.release(vertexShader_);
     resources.release(fragmentShader_);
@@ -270,7 +273,7 @@ void SceneGraphDemoApplication::run()
         drawImguiControls();
         // tick the components
         auto tickInfo = clock_.tick();
-        animationSystem.tick(sceneGraph_, tickInfo);
+        systems_.tick(sceneGraph_, tickInfo);
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.index];
@@ -280,9 +283,9 @@ void SceneGraphDemoApplication::run()
         fg.resetForNextFrame();
 
         defineRenderPasses(fg, frameCtx);
+
         frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
         auto execInfo = fg.record(frameCtx);
-
         frameCtx.commandBuffer->end();
 
         window_->submitAndPresent(frameCtx);
@@ -389,15 +392,9 @@ SceneGraphDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         .bind(renderApi.cmd->handle(), frameCtx.index, ctx().defaultPipelineLayout());
 
     // records commands for each cube
-    animationSystem.recordCommands(ctx(), sceneGraph_, *renderApi.cmd);
+    animationSystem_->recordCommands(ctx(), sceneGraph_, *renderApi.cmd);
 
     cubePass.end(*renderApi.cmd);
-}
-
-void SceneGraphDemoApplication::createGeometry()
-{
-    const Cory::ScopeTimer st{"Init/Geometry"};
-    animationSystem.Init(ctx());
 }
 
 void SceneGraphDemoApplication::drawImguiControls()

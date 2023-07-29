@@ -77,7 +77,7 @@ class SceneGraph : NoCopy {
 
   private:
     // since we're not yet implementing the full interface, we'll just expose the registry for now
-    template <typename Derived, Component... Cmps> friend class SimpleSystem;
+    template <typename Derived, Component... Cmps> friend class BasicSystem;
     Registry &registry();
     const Registry &registry() const;
 

@@ -13,6 +13,7 @@ layout (push_constant) uniform PushConstants {
     mat4 modelTransform;
     vec4 color;
     float blend;
+    float entityIndex;
 } push;
 
 layout (set = 0, binding = 0) uniform CubeUBO {

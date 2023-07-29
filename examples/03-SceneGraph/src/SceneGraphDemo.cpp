@@ -1,6 +1,5 @@
 #include "SceneGraphDemo.hpp"
 
-#include <Cory/Application/DepthDebugLayer.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
@@ -59,6 +58,7 @@ struct AnimationComponent {
     glm::mat4 modelTransform{1.0f};
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
     float blend;
+    float entityIndex{};
 };
 
 static struct AnimationData {
@@ -107,9 +107,9 @@ void randomize()
     randomize(ad.cfi);
 }
 
-void animate(AnimationComponent &d, float t, float i)
+void animate(AnimationComponent &d, float t)
 {
-
+    float i = d.entityIndex;
     const float angle = ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t;
     const float scale = ad.s0 + ad.st * t + ad.si * i;
 
@@ -131,7 +131,8 @@ void animate(AnimationComponent &d, float t, float i)
     d.blend = ad.blend;
 }
 
-struct AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationComponent> {
+class AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationComponent> {
+  public:
     void Init(Cory::Context &ctx)
     {
         mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(ctx));
@@ -140,19 +141,28 @@ struct AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationCom
 
     void beforeUpdate(Cory::SceneGraph &sg)
     {
-        // todo what if we reduce num_cubes?
-        while (entityIndex < ad.num_cubes) {
-            sg.createEntity(sg.root(), fmt::format("cube{}", entityIndex), AnimationComponent{});
-            entityIndex += 1.0f;
+        if (numEntities_ != ad.num_cubes) {
+            // todo what if we reduce num_cubes?
+            while (numEntities_ < ad.num_cubes) {
+                sg.createEntity(
+                    sg.root(), fmt::format("cube{}", numEntities_), AnimationComponent{});
+                numEntities_ += 1.0f;
+            }
+            forEach<AnimationComponent>(
+                sg,
+                [total = numEntities_, entityIndex = 0.0f](Cory::Entity e,
+                                                           AnimationComponent &anim) mutable {
+                    anim.entityIndex = entityIndex / total;
+                    entityIndex += 1.0f;
+                });
         }
-        entityIndex = 0.0f;
     }
 
     void
     update(Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity entity, AnimationComponent &anim)
     {
-        animate(anim, tick.now.time_since_epoch().count(), entityIndex);
-        entityIndex += 1.0f;
+        auto now = tick.now.time_since_epoch().count();
+        animate(anim, now);
     }
 
     void recordCommands(Cory::Context &ctx, Cory::SceneGraph &sg, Cory::CommandList &cmd)
@@ -172,7 +182,7 @@ struct AnimationSystem : public Cory::SimpleSystem<AnimationSystem, AnimationCom
 
   private:
     std::unique_ptr<Vk::Mesh> mesh_;
-    float entityIndex{0};
+    float numEntities_{0};
 };
 static_assert(Cory::System<AnimationSystem>);
 static AnimationSystem animationSystem;

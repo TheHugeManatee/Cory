@@ -4,21 +4,16 @@
 #include "CubeAnimationSystem.hpp"
 #include "CubeRenderSystem.hpp"
 
-#include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
-#include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/ImGui/Inputs.hpp>
+#include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
-#include <Cory/SceneGraph/System.hpp>
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/ArrayView.h>
@@ -42,130 +37,21 @@
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/vec3.hpp>
-#include <glm/vec4.hpp>
 #include <imgui.h>
 
 #include <gsl/gsl>
 #include <gsl/narrow>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
 
 #include <algorithm>
-#include <chrono>
 
 namespace Vk = Magnum::Vk;
-
-static struct AnimationData {
-    int num_cubes{200};
-    float blend{0.8f};
-
-    struct param {
-        float val;
-        float min;
-        float max;
-        operator float() const { return val; }
-    };
-    param ti{1.5f, 0.0f, 10.0f};
-    param tsi{2.0f, 0.0f, 3.0f};
-    param tsf{100.0f, 0.0f, 250.0f};
-    param r0{0.0f, -2.0f, 2.0f};
-    param rt{-0.1f, -2.0f, 2.0f};
-    param ri{1.3f, -2.0f, 2.0f};
-    param rti{0.05f, -2.0f, 2.0f};
-    param s0{0.05f, 0.0f, 1.0f};
-    param st{0.0f, -0.01f, 0.01f};
-    param si{0.4f, 0.0f, 2.0f};
-    param c0{-0.75f, -2.0f, 2.0f};
-    param cf0{2.0f, -10.0f, 10.0f};
-    param cfi{-0.5f, -2.0f, 2.0f};
-
-    glm::vec3 translation{0.0, 0.0f, 2.5f};
-    glm::vec3 rotation{0.0f};
-} ad;
-
-void randomize(AnimationData::param &p) { p.val = Cory::RNG::Uniform(p.min, p.max); }
-void randomize()
-{
-    randomize(ad.ti);
-    randomize(ad.tsi);
-    randomize(ad.tsf);
-    randomize(ad.r0);
-    randomize(ad.rt);
-    randomize(ad.ri);
-    randomize(ad.rti);
-    randomize(ad.s0);
-    randomize(ad.st);
-    randomize(ad.si);
-    randomize(ad.c0);
-    randomize(ad.cf0);
-    randomize(ad.cfi);
-}
-
-class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem, AnimationComponent> {
-  public:
-    void beforeUpdate(Cory::SceneGraph &sg)
-    {
-        if (numEntities_ != ad.num_cubes) {
-            // todo what if we reduce num_cubes?
-            while (numEntities_ < ad.num_cubes) {
-                sg.createEntity(
-                    sg.root(), fmt::format("cube{}", numEntities_), AnimationComponent{});
-                numEntities_ += 1.0f;
-            }
-            forEach<AnimationComponent>(sg,
-                                        [total = numEntities_, entityIndex = 0.0f](
-                                            Cory::Entity e, AnimationComponent &anim) mutable {
-                                            anim.entityIndex = entityIndex / total;
-                                            entityIndex += 1.0f;
-                                        });
-        }
-    }
-
-    void
-    update(Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity entity, AnimationComponent &anim)
-    {
-        auto now = tick.now.time_since_epoch().count();
-        animate(anim, now);
-    }
-
-  private:
-    void animate(AnimationComponent &d, float t)
-    {
-        float i = d.entityIndex;
-        const float angle = ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t;
-        const float scale = ad.s0 + ad.st * t + ad.si * i;
-
-        const float tsf = ad.tsf / 2.0f + ad.tsf * sin(t / 10.0f);
-        const glm::vec3 translation{
-            sin(i * tsf) * i * ad.tsi, cos(i * tsf) * i * ad.tsi, i * ad.ti};
-
-        d.modelTransform = Cory::makeTransform(ad.translation + translation,
-                                               ad.rotation + glm::vec3{0.0f, angle, angle / 2.0f},
-                                               glm::vec3{scale});
-
-        const float colorFreq = 1.0f / (ad.cf0 + ad.cfi * i);
-        const float brightness = i + 0.2f * abs(sin(t + i));
-        const float r = ad.c0 * t * colorFreq;
-        const glm::vec4 start{0.8f, 0.2f, 0.2f, 1.0f};
-        const glm::mat4 cm = glm::rotate(
-            glm::scale(glm::mat4{1.0f}, glm::vec3{brightness}), r, glm::vec3{1.0f, 1.0f, 1.0f});
-
-        d.color = start * cm;
-        d.blend = ad.blend;
-    }
-
-    float numEntities_{0};
-};
-static_assert(Cory::System<CubeAnimationSystem>);
 
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
 {
     CLI::App app{"SceneGraphDemo"};
+    bool disableValidation{false};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
-    app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
+    app.add_flag("--disable-validation", disableValidation, "Disable validation layers");
     app.allow_config_extras(true);
     app.parse(gsl::narrow<int>(args.size()), args.data());
 
@@ -173,7 +59,7 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
 
     init(Cory::ContextCreationInfo{
         .validation =
-            disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
+            disableValidation ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
         .args = args,
     });
 
@@ -225,7 +111,6 @@ void SceneGraphDemoApplication::setupSystems()
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()
 {
-
     CO_APP_TRACE("Destroying SceneGraphDemoApplication");
 }
 
@@ -303,42 +188,23 @@ void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto [outInfo, outState] = framegraph.declareOutput(layersOutput.color);
+    framegraph.declareOutput(layersOutput.color);
 }
 
 void SceneGraphDemoApplication::drawImguiControls()
 {
-    namespace CoImGui = Cory::ImGui;
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
-    if (ImGui::Begin("Animation Params")) {
+    if (ImGui::Begin("Demo")) {
         if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
         CoImGui::Text("Time: {:.3f}, Frame: {}",
                       clock_.lastTick().now.time_since_epoch().count(),
                       clock_.lastTick().ticks);
         if (ImGui::Button("Restart")) { clock_.reset(); }
-        if (ImGui::Button("Randomize")) { randomize(); }
-
-        CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);
-        CoImGui::Slider("blend", ad.blend, 0.0f, 1.0f);
-        CoImGui::Slider("translation", ad.translation, -3.0f, 3.0f);
-        CoImGui::Slider("rotation", ad.rotation, -glm::pi<float>(), glm::pi<float>());
-
-        CoImGui::Slider("ti", ad.ti.val, ad.ti.min, ad.ti.max);
-        CoImGui::Slider("tsi", ad.tsi.val, ad.tsi.min, ad.tsi.max);
-        CoImGui::Slider("tsf", ad.tsf.val, ad.tsf.min, ad.tsf.max);
-        CoImGui::Slider("r0", ad.r0.val, ad.r0.min, ad.r0.max);
-        CoImGui::Slider("rt", ad.rt.val, ad.rt.min, ad.rt.max);
-        CoImGui::Slider("ri", ad.ri.val, ad.ri.min, ad.ri.max);
-        CoImGui::Slider("rti", ad.rti.val, ad.rti.min, ad.rti.max);
-        CoImGui::Slider("s0", ad.s0.val, ad.s0.min, ad.s0.max);
-        CoImGui::Slider("st", ad.st.val, ad.st.min, ad.st.max);
-        CoImGui::Slider("si", ad.si.val, ad.si.min, ad.si.max);
-        CoImGui::Slider("c0", ad.c0.val, ad.c0.min, ad.c0.max);
-        CoImGui::Slider("cf0", ad.cf0.val, ad.cf0.min, ad.cf0.max);
-        CoImGui::Slider("cfi", ad.cfi.val, ad.cfi.min, ad.cfi.max);
     }
     ImGui::End();
+
+    animationSystem_->drawImguiControls();
     if (ImGui::Begin("Camera")) {
         glm::vec3 position = camera_.getCameraPosition();
         glm::vec3 center = camera_.getCenterPosition();
@@ -363,38 +229,7 @@ void SceneGraphDemoApplication::drawImguiControls()
     if (ImGui::Begin("Profiling")) {
         auto records = Cory::Profiler::GetRecords();
 
-        auto to_ms = [](uint64_t ns) { return double(ns) / 1'000'000.0; };
-
-        if (ImGui::BeginTable("Profiling", 5)) {
-
-            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("min [ms]", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("max [ms]", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("avg [ms]", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("graph", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableHeadersRow();
-
-            for (auto [name, record] : records) {
-                auto stats = record.stats();
-                auto hist = record.history();
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                CoImGui::Text("{}", name);
-                ImGui::TableNextColumn();
-                CoImGui::Text("{:3.2f}", to_ms(stats.min));
-                ImGui::TableNextColumn();
-                CoImGui::Text("{:3.2f}", to_ms(stats.max));
-                ImGui::TableNextColumn();
-                CoImGui::Text("{:3.2f}", to_ms(stats.avg));
-                ImGui::TableNextColumn();
-
-                auto h = hist | ranges::views::transform([](auto v) { return float(v); }) |
-                         ranges::to<std::vector>;
-                ImGui::PlotLines(
-                    "", h.data(), gsl::narrow<int>(h.size()), 0, nullptr, 0.0f, float(stats.max));
-            }
-            ImGui::EndTable();
-        }
+        CoImGui::drawProfilerRecords(records);
     }
     ImGui::End();
 }

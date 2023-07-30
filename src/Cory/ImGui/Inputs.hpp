@@ -5,13 +5,14 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <imgui.h>
+#include <kdbindings/property.h>
 
 #include <concepts>
 #include <fmt/format.h>
 #include <string>
 #include <string_view>
 
-namespace Cory::ImGui {
+namespace CoImGui {
 
 namespace detail {
 static constexpr float LABEL_WIDTH{150.0f};
@@ -77,7 +78,7 @@ auto Slider(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 
 // template for KDBindings::Property
 template <typename Property, typename... Arguments>
-    requires kdb::Private::is_property<Property>::value
+    requires KDBindings::Private::is_property<Property>::value
 auto Slider(std::string_view label, Property &property, Arguments... args)
 {
     auto v = property.get();
@@ -143,7 +144,7 @@ auto Input(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 
 // template for KDBindings::Property
 template <typename Property, typename... Arguments>
-    requires kdb::Private::is_property<Property>::value
+    requires KDBindings::Private::is_property<Property>::value
 auto Input(std::string_view label, Property &property, Arguments... args)
 {
     auto v = property.get();
@@ -154,4 +155,4 @@ auto Input(std::string_view label, Property &property, Arguments... args)
     return false;
 }
 
-} // namespace Cory::ImGui
+} // namespace CoImGui

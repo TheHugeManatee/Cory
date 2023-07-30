@@ -103,7 +103,9 @@ set(CORY_SOURCES
         Base/SimulationClock.cpp
         Base/SimulationClock.hpp
         Base/FutureFrameQueue.hpp
-        Systems/TransformSystem.cpp Systems/TransformSystem.hpp Systems/SystemCoordinator.hpp Base/Concepts.hpp)
+        Systems/TransformSystem.cpp Systems/TransformSystem.hpp Systems/SystemCoordinator.hpp Base/Concepts.hpp
+        ImGui/Widgets.hpp
+        ImGui/Widgets.cpp)
 
 # determine includes from CORY_SOURCES by the .hpp suffix
 set(CORY_INCLUDES "")

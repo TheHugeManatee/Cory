@@ -8,7 +8,6 @@
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
 #include <Cory/Systems/SystemCoordinator.hpp>
 
@@ -36,11 +35,9 @@ class SceneGraphDemoApplication : public Cory::Application {
     void setupCameraCallbacks();
 
   private:
-    bool disableValidation_{false};
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
 
-    std::vector<Magnum::Vk::DescriptorSet> descriptorSets_;
     bool dumpNextFramegraph_{false};
 
     Cory::SimulationClock clock_;

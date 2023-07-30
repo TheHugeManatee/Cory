@@ -96,9 +96,9 @@ void DepthDebugLayer::onUpdate()
         if (bool is_enabled = renderEnabled.get(); ::ImGui::Checkbox("Enabled", &is_enabled)) {
             renderEnabled = is_enabled;
         }
-        Cory::ImGui::Slider("center", center, 0.0f, 1.0f);
-        Cory::ImGui::Slider("size", size, 0.0f, 1.0f);
-        Cory::ImGui::Slider("window", window, 0.0f, 1.0f);
+        CoImGui::Slider("center", center, 0.0f, 1.0f);
+        CoImGui::Slider("size", size, 0.0f, 1.0f);
+        CoImGui::Slider("window", window, 0.0f, 1.0f);
     }
     ::ImGui::End();
 }

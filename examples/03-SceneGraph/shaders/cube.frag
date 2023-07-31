@@ -7,10 +7,9 @@ layout (location = 2) in vec4 inColor;
 layout (location = 0) out vec4 outColor;
 
 layout (push_constant) uniform PushConstants {
-    mat4 modelTransform;
+    mat4 modelToWorld;
     vec4 color;
     float blend;
-    float entityIndex;
 } push;
 
 layout (set = 0, binding = 0) uniform CubeUBO {

@@ -105,7 +105,8 @@ set(CORY_SOURCES
         Base/FutureFrameQueue.hpp
         Systems/TransformSystem.cpp Systems/TransformSystem.hpp Systems/SystemCoordinator.hpp Base/Concepts.hpp
         ImGui/Widgets.hpp
-        ImGui/Widgets.cpp)
+        ImGui/Widgets.cpp
+        Systems/CommonComponents.hpp)
 
 # determine includes from CORY_SOURCES by the .hpp suffix
 set(CORY_INCLUDES "")

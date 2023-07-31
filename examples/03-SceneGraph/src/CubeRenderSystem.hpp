@@ -8,6 +8,7 @@
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 #include <Cory/SceneGraph/System.hpp>
+#include <Cory/Systems/CommonComponents.hpp>
 
 namespace Magnum::Vk {
 class Mesh;
@@ -20,7 +21,14 @@ struct CubeUBO {
     glm::vec3 lightPosition;
 };
 
-class CubeRenderSystem : public Cory::BasicSystem<CubeRenderSystem, AnimationComponent> {
+struct CubePushConstantState {
+    glm::mat4 modelToWorld{1.0f};
+    glm::vec4 color{1.0, 0.0, 0.0, 1.0};
+    float blend;
+};
+
+class CubeRenderSystem
+    : public Cory::BasicSystem<CubeRenderSystem, AnimationComponent, Cory::Components::Transform> {
   public:
     explicit CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight);
     ~CubeRenderSystem();
@@ -30,7 +38,8 @@ class CubeRenderSystem : public Cory::BasicSystem<CubeRenderSystem, AnimationCom
     void update(Cory::SceneGraph &sg,
                 Cory::TickInfo tick,
                 Cory::Entity entity,
-                const AnimationComponent &anim);
+                const AnimationComponent &anim,
+                const Cory::Components::Transform &transform);
 
     struct PassOutputs {
         Cory::TransientTextureHandle colorOut;
@@ -44,7 +53,7 @@ class CubeRenderSystem : public Cory::BasicSystem<CubeRenderSystem, AnimationCom
   private:
     void recordCommands(Cory::CommandList &cmd);
 
-    std::vector<AnimationComponent> renderState_;
+    std::vector<CubePushConstantState> renderState_;
     CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};

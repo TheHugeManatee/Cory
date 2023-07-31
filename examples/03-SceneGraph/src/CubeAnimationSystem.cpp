@@ -10,7 +10,10 @@ void CubeAnimationSystem::beforeUpdate(Cory::SceneGraph &sg)
     if (numEntities_ != ad_.num_cubes) {
         // todo what if we reduce num_cubes?
         while (numEntities_ < ad_.num_cubes) {
-            sg.createEntity(sg.root(), fmt::format("cube{}", numEntities_), AnimationComponent{});
+            sg.createEntity(sg.root(),
+                            fmt::format("cube_{}", numEntities_),
+                            AnimationComponent{},
+                            Cory::Components::Transform{});
             numEntities_ += 1.0f;
         }
         forEach<AnimationComponent>(sg,
@@ -25,10 +28,11 @@ void CubeAnimationSystem::beforeUpdate(Cory::SceneGraph &sg)
 void CubeAnimationSystem::update(Cory::SceneGraph &sg,
                                  Cory::TickInfo tick,
                                  Cory::Entity entity,
-                                 AnimationComponent &anim)
+                                 AnimationComponent &anim,
+                                 Cory::Components::Transform &transform)
 {
     auto now = gsl::narrow_cast<float>(tick.now.time_since_epoch().count());
-    animate(anim, now);
+    animate(anim, transform, now);
 }
 
 void CubeAnimationSystem::drawImguiControls()
@@ -58,7 +62,9 @@ void CubeAnimationSystem::drawImguiControls()
     }
     ImGui::End();
 }
-void CubeAnimationSystem::animate(AnimationComponent &d, float t)
+void CubeAnimationSystem::animate(AnimationComponent &d,
+                                  Cory::Components::Transform &transform,
+                                  float t)
 {
     float i = d.entityIndex;
     const float angle = ad_.r0 + ad_.rt * t + ad_.ri * i + ad_.rti * i * t;
@@ -67,9 +73,9 @@ void CubeAnimationSystem::animate(AnimationComponent &d, float t)
     const float tsf = ad_.tsf / 2.0f + ad_.tsf * sin(t / 10.0f);
     const glm::vec3 translation{sin(i * tsf) * i * ad_.tsi, cos(i * tsf) * i * ad_.tsi, i * ad_.ti};
 
-    d.modelTransform = Cory::makeTransform(ad_.translation + translation,
-                                           ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f},
-                                           glm::vec3{scale});
+    transform.position = ad_.translation + translation;
+    transform.rotation = ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f};
+    transform.scale = glm::vec3{scale};
 
     const float colorFreq = 1.0f / (ad_.cf0 + ad_.cfi * i);
     const float brightness = i + 0.2f * abs(sin(t + i));

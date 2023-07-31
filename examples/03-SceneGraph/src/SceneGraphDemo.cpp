@@ -14,19 +14,16 @@
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Systems/TransformSystem.hpp>
 
 #include <Corrade/Containers/Array.h>
 #include <Corrade/Containers/ArrayView.h>
 #include <Corrade/Containers/Reference.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/Vector3.h>
-#include <Magnum/Vk/BufferCreateInfo.h>
 #include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/DescriptorPool.h>
-#include <Magnum/Vk/DescriptorSetLayout.h>
 #include <Magnum/Vk/Device.h>
 #include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/FramebufferCreateInfo.h>
 #include <Magnum/Vk/Mesh.h>
 #include <Magnum/Vk/PipelineLayout.h>
 #include <Magnum/Vk/Queue.h>
@@ -103,6 +100,9 @@ void SceneGraphDemoApplication::setupSystems()
             c.direction = camera_.getCenterPosition() - c.position;
             c.viewMatrix = camera_.getViewMatrix();
         });
+
+    // after the "logic" has updated, sync all the transforms of the scenegraph
+    systems_.emplace<Cory::TransformSystem>();
 
     // render system should go last to be aware of the latest state
     renderSystem_ =

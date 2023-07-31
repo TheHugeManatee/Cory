@@ -3,11 +3,12 @@
 #include "Common.hpp"
 
 #include <Cory/SceneGraph/System.hpp>
+#include <Cory/Systems/CommonComponents.hpp>
 
 #include <glm/vec3.hpp>
 
 struct AnimationData {
-    int num_cubes{200};
+    int num_cubes{20000};
     float blend{0.8f};
 
     struct param {
@@ -34,21 +35,24 @@ struct AnimationData {
     glm::vec3 rotation{0.0f};
 };
 
-
-
-class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem, AnimationComponent> {
+class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem,
+                                                     AnimationComponent,
+                                                     Cory::Components::Transform> {
   public:
     void beforeUpdate(Cory::SceneGraph &sg);
 
-    void
-    update(Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity entity, AnimationComponent &anim);
+    void update(Cory::SceneGraph &sg,
+                Cory::TickInfo tick,
+                Cory::Entity entity,
+                AnimationComponent &anim,
+                Cory::Components::Transform &transform);
 
     void drawImguiControls();
 
   private:
-    void animate(AnimationComponent &d, float t);
+    void animate(AnimationComponent &d, Cory::Components::Transform &transform, float t);
     void randomize(AnimationData::param &p);
-    void randomize(AnimationData& ad);
+    void randomize(AnimationData &ad);
 
     float numEntities_{0};
     AnimationData ad_;

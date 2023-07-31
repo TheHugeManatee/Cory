@@ -44,9 +44,11 @@ void CubeRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
 void CubeRenderSystem::update(Cory::SceneGraph &sg,
                               Cory::TickInfo tick,
                               Cory::Entity entity,
-                              const AnimationComponent &anim)
+                              const AnimationComponent &anim,
+                              const Cory::Components::Transform &transform)
 {
-    renderState_.push_back(anim);
+    renderState_.push_back(
+        {.modelToWorld = transform.modelToWorld, .color = anim.color, .blend = anim.blend});
 }
 
 Cory::RenderTaskDeclaration<CubeRenderSystem::PassOutputs>

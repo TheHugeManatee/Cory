@@ -5,6 +5,7 @@
 #include <Cory/Systems/TransformSystem.hpp>
 
 using namespace Cory;
+using Components::Transform;
 
 TEST_CASE("CallbackSystem")
 {
@@ -26,6 +27,7 @@ TEST_CASE("CallbackSystem")
 
 TEST_CASE("Transform System works")
 {
+
     SceneGraph sg;
 
     Entity root = sg.root();
@@ -42,22 +44,22 @@ TEST_CASE("Transform System works")
     TransformSystem ts;
     ts.tick(sg, {});
 
-    CHECK(sg.getComponent<Transform>(entity)->worldTransform[3] ==
+    CHECK(sg.getComponent<Transform>(entity)->modelToWorld[3] ==
           glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-    CHECK(sg.getComponent<Transform>(child)->worldTransform[3] ==
+    CHECK(sg.getComponent<Transform>(child)->modelToWorld[3] ==
           glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
-    CHECK(sg.getComponent<Transform>(grandchild)->worldTransform[3] ==
+    CHECK(sg.getComponent<Transform>(grandchild)->modelToWorld[3] ==
           glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
 
     sg.getComponent<Transform>(entity)->scale = glm::vec3(2.0f, 1.0f, 1.0f);
     sg.getComponent<Transform>(grandchild)->position = glm::vec3(-1.0f, 0.0f, 0.0f);
     ts.tick(sg, {});
 
-    CHECK(sg.getComponent<Transform>(entity)->worldTransform[3] ==
+    CHECK(sg.getComponent<Transform>(entity)->modelToWorld[3] ==
           glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-    CHECK(sg.getComponent<Transform>(child)->worldTransform[3] ==
+    CHECK(sg.getComponent<Transform>(child)->modelToWorld[3] ==
           glm::vec4(2.0f, 1.0f, 0.0f, 1.0f));
-    CHECK(sg.getComponent<Transform>(grandchild)->worldTransform[3] ==
+    CHECK(sg.getComponent<Transform>(grandchild)->modelToWorld[3] ==
           glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 
     // todo check rotation at some point

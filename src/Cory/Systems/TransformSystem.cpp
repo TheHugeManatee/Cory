@@ -23,7 +23,11 @@ glm::mat4 parentTransform(SceneGraph &sg, Entity entity)
 
 void TransformSystem::beforeUpdate(SceneGraph &sg)
 {
-    // note - this can potentially be quite expensive
+    // note - this can potentially be quite expensive so we should
+    // eventually figure out a way to only do that when actually needed,
+    // i.e. when the elements where added or reparented
+    // we should also benchmark if it's faster to instead just traverse the
+    // graph from the root instead of sorting
     sg.sortByDepth<Transform>();
 }
 

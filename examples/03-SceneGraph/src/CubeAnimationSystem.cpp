@@ -7,22 +7,7 @@
 
 void CubeAnimationSystem::beforeUpdate(Cory::SceneGraph &sg)
 {
-    if (numEntities_ != ad_.num_cubes) {
-        // todo what if we reduce num_cubes?
-        while (numEntities_ < ad_.num_cubes) {
-            sg.createEntity(sg.root(),
-                            fmt::format("cube_{}", numEntities_),
-                            AnimationComponent{},
-                            Cory::Components::Transform{});
-            numEntities_ += 1.0f;
-        }
-        forEach<AnimationComponent>(sg,
-                                    [total = numEntities_, entityIndex = 0.0f](
-                                        Cory::Entity e, AnimationComponent &anim) mutable {
-                                        anim.entityIndex = entityIndex / total;
-                                        entityIndex += 1.0f;
-                                    });
-    }
+
 }
 
 void CubeAnimationSystem::update(Cory::SceneGraph &sg,
@@ -41,7 +26,6 @@ void CubeAnimationSystem::drawImguiControls()
 
         if (ImGui::Button("Randomize")) { randomize(ad_); }
 
-        CoImGui::Input("Cubes", ad_.num_cubes, 1, 10000);
         CoImGui::Slider("blend", ad_.blend, 0.0f, 1.0f);
         CoImGui::Slider("translation", ad_.translation, -3.0f, 3.0f);
         CoImGui::Slider("rotation", ad_.rotation, -glm::pi<float>(), glm::pi<float>());
@@ -73,9 +57,9 @@ void CubeAnimationSystem::animate(AnimationComponent &d,
     const float tsf = ad_.tsf / 2.0f + ad_.tsf * sin(t / 10.0f);
     const glm::vec3 translation{sin(i * tsf) * i * ad_.tsi, cos(i * tsf) * i * ad_.tsi, i * ad_.ti};
 
-    transform.position = ad_.translation + translation;
+    //transform.position = ad_.translation + translation;
     transform.rotation = ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f};
-    transform.scale = glm::vec3{scale};
+    //transform.scale = glm::vec3{scale};
 
     const float colorFreq = 1.0f / (ad_.cf0 + ad_.cfi * i);
     const float brightness = i + 0.2f * abs(sin(t + i));

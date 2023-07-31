@@ -47,4 +47,5 @@ class SceneGraphDemoApplication : public Cory::Application {
     class CubeAnimationSystem *animationSystem_{nullptr};
     class CubeRenderSystem *renderSystem_{nullptr};
     void setupSystems();
+    void setupScene();
 };

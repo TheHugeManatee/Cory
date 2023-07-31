@@ -20,8 +20,12 @@ layout (set = 0, binding = 0) uniform CubeUBO {
 } globals;
 
 void main() {
+    const float ambient = 0.1;
     vec3 posToLight = globals.lightPosition - inWorldPosition;
     vec3 lightVector = normalize(posToLight);
-    float diffuse = max(0.0, dot(inNormal, lightVector));
-    outColor = diffuse * mix(inColor, push.color, push.blend);
+    //float diffuse = max(0.0, dot(inNormal, lightVector));
+    float diffuse = abs(dot(inNormal, lightVector));
+    const vec4 albedo = mix(inColor, push.color, push.blend);
+
+    outColor = min(diffuse + ambient, 1.0) * albedo;
 }

@@ -8,7 +8,6 @@
 #include <glm/vec3.hpp>
 
 struct AnimationData {
-    int num_cubes{20000};
     float blend{0.8f};
 
     struct param {
@@ -24,9 +23,9 @@ struct AnimationData {
     param rt{-0.1f, -2.0f, 2.0f};
     param ri{1.3f, -2.0f, 2.0f};
     param rti{0.05f, -2.0f, 2.0f};
-    param s0{0.05f, 0.0f, 1.0f};
+    param s0{1.0f, 0.0f, 1.0f};
     param st{0.0f, -0.01f, 0.01f};
-    param si{0.4f, 0.0f, 2.0f};
+    param si{0.0f, 0.0f, 2.0f};
     param c0{-0.75f, -2.0f, 2.0f};
     param cf0{2.0f, -10.0f, 10.0f};
     param cfi{-0.5f, -2.0f, 2.0f};

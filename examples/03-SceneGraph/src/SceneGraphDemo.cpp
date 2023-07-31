@@ -41,6 +41,8 @@
 
 #include <algorithm>
 
+#include <range/v3/action/take.hpp>
+
 namespace Vk = Magnum::Vk;
 
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
@@ -74,9 +76,10 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
     camera_.setWindowSize(window_->dimensions());
-    camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
+    camera_.setLookat({0.0f, 0.0f, 15.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
     setupCameraCallbacks();
 
+    setupScene();
     setupSystems();
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
@@ -84,14 +87,65 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
                                           .viewportDimensions = window_->dimensions()};
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 }
-void SceneGraphDemoApplication::setupSystems()
+
+void SceneGraphDemoApplication::setupScene()
 {
-    animationSystem_ = &systems_.emplace<CubeAnimationSystem>();
 
     // set up the camera updates
     Cory::Entity camera = sceneGraph_.createEntity(sceneGraph_.root(), "camera");
     sceneGraph_.addComponent<CameraComponent>(
-        camera, CameraComponent{.fovy = glm::radians(70.0f), .nearPlane = 1.0f, .farPlane = 10.0f});
+        camera,
+        CameraComponent{.fovy = glm::radians(70.0f), .nearPlane = 0.2f, .farPlane = 100.0f});
+
+    Cory::Entity root = sceneGraph_.root();
+    auto center = sceneGraph_.createEntity(root,
+                                           fmt::format("center"),
+                                           AnimationComponent{
+                                               .blend = 0.8f,
+                                               .entityIndex = 0.0f,
+                                           },
+                                           Cory::Components::Transform{
+                                               .position{0.0f, 0.0f, 0.0f},
+                                           });
+
+    // creates 5 cubes in a circle parented to the given parent
+    auto add_subcubes = [this](Cory::Entity parent, float level) -> std::vector<Cory::Entity> {
+        std::vector<Cory::Entity> entities;
+
+        float numChildren = Cory::RNG::Uniform(2.0f, 7.0f);
+        for (int i = 0; i < numChildren; ++i) {
+            const float radius = Cory::RNG::Uniform(3.0f, 7.0f);
+
+            auto pos = Cory::RNG::UniformInSphere() * radius;
+
+            auto child =
+                sceneGraph_.createEntity(parent,
+                                         fmt::format("cube{}", i),
+                                         AnimationComponent{
+                                             .blend = 0.8f,
+                                             .entityIndex = Cory::RNG::Uniform(0.1f, 0.9f),
+                                         },
+                                         Cory::Components::Transform{
+                                             .position = pos,
+                                             .rotation = glm::vec3{0.0f, 0.0f, 0.0f},
+                                             .scale = glm::vec3{Cory::RNG::Uniform(0.25f, 0.65f)},
+                                         });
+            entities.push_back(child);
+        }
+        return entities;
+    };
+
+    // coroutines, just because we can
+    for (auto &e : add_subcubes(center, 0.25)) {
+        for (auto &sub_e : add_subcubes(e, 0.5)) {
+            add_subcubes(sub_e, 0.75);
+        }
+    }
+}
+
+void SceneGraphDemoApplication::setupSystems()
+{
+    animationSystem_ = &systems_.emplace<CubeAnimationSystem>();
 
     // set up a system to update the camera from the camera manipulator
     systems_.emplace<Cory::CallbackSystem<CameraComponent>>(

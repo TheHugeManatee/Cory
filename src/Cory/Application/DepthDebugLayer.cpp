@@ -37,7 +37,7 @@ DepthDebugLayer::DepthDebugLayer()
 
 DepthDebugLayer::~DepthDebugLayer()
 {
-    if (state_) { CO_CORE_WARN("DepthDebugLayer was not before it was destroyed!"); }
+    CO_CORE_ASSERT(!state_, "DepthDebugLayer was not detached before it was destroyed!");
 }
 
 void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
@@ -46,8 +46,9 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
 
     auto &res = ctx.resources();
     state_ = std::make_unique<State>(State{
-        .fullscreenTriShader{res.createShader(ResourceLocator::Locate("fullscreenTri.vert"))},
-        .depthDebugShader{res.createShader(ResourceLocator::Locate("depthDebug.frag"))},
+        .fullscreenTriShader{
+            res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert"))},
+        .depthDebugShader{res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag"))},
         .ubo{Cory::UniformBufferObject<Uniforms>(ctx, info.maxFramesInFlight)},
         .viewportDimensions = info.viewportDimensions,
     });
@@ -55,6 +56,9 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
 
 void DepthDebugLayer::onDetach(Context &ctx)
 {
+    // might have had an exception during attach, or moved-from
+    if (!state_) return;
+
     auto &res = ctx.resources();
     res.release(state_->fullscreenTriShader);
     res.release(state_->depthDebugShader);
@@ -64,7 +68,7 @@ void DepthDebugLayer::onDetach(Context &ctx)
 
 bool DepthDebugLayer::onEvent(Event event)
 {
-    if(!renderEnabled.get()) { return false; }
+    if (!renderEnabled.get()) { return false; }
     return std::visit(lambda_visitor{
                           [](auto event) { return false; },
                           [this](const SwapchainResizedEvent &event) {
@@ -96,9 +100,9 @@ void DepthDebugLayer::onUpdate()
         if (bool is_enabled = renderEnabled.get(); ::ImGui::Checkbox("Enabled", &is_enabled)) {
             renderEnabled = is_enabled;
         }
-        Cory::ImGui::Slider("center", center, 0.0f, 1.0f);
-        Cory::ImGui::Slider("size", size, 0.0f, 1.0f);
-        Cory::ImGui::Slider("window", window, 0.0f, 1.0f);
+        CoImGui::Slider("center", center, 0.0f, 1.0f);
+        CoImGui::Slider("size", size, 0.0f, 1.0f);
+        CoImGui::Slider("window", window, 0.0f, 1.0f);
     }
     ::ImGui::End();
 }

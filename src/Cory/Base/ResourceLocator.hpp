@@ -10,8 +10,7 @@
 namespace Cory {
 
 struct ResourceNotFound : public std::runtime_error {
-    ResourceNotFound(std::string message)
-        : std::runtime_error(std::move(message)){};
+    using std::runtime_error::runtime_error;
 };
 
 class ResourceLocator {

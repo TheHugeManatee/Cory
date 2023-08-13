@@ -9,6 +9,7 @@ find_package(Magnum REQUIRED Vk)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
+find_package(EnTT REQUIRED)
 find_package(glfw3)
 find_package(glm REQUIRED)
 find_package(imgui REQUIRED)
@@ -38,8 +39,10 @@ set(CORY_SOURCES
         Base/BitField.hpp
         Base/Callback.hpp
         Base/Common.hpp
+        Base/Concepts.hpp
         Base/CpuBuffer.hpp
         Base/FmtUtils.hpp
+        Base/FutureFrameQueue.hpp
         Base/Log.cpp
         Base/Log.hpp
         Base/Math.hpp
@@ -48,6 +51,8 @@ set(CORY_SOURCES
         Base/Random.hpp
         Base/ResourceLocator.cpp
         Base/ResourceLocator.hpp
+        Base/SimulationClock.cpp
+        Base/SimulationClock.hpp
         Base/SlotMap.hpp
         Base/SlotMapHandle.hpp
         Base/Time.cpp
@@ -71,6 +76,8 @@ set(CORY_SOURCES
         Framegraph/TransientRenderPass.cpp
         Framegraph/TransientRenderPass.hpp
         ImGui/Inputs.hpp
+        ImGui/Widgets.cpp
+        ImGui/Widgets.hpp
         Renderer/APIConversion.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
@@ -94,6 +101,16 @@ set(CORY_SOURCES
         Renderer/VulkanUtils.cpp
         Renderer/VulkanUtils.hpp
         Renderer/flextVkExt.h
+        SceneGraph/Common.hpp
+        SceneGraph/SceneGraph.cpp
+        SceneGraph/SceneGraph.hpp
+        SceneGraph/System.cpp
+        SceneGraph/System.hpp
+        Systems/CommonComponents.hpp
+        Systems/SystemCoordinator.cpp
+        Systems/SystemCoordinator.hpp
+        Systems/TransformSystem.cpp
+        Systems/TransformSystem.hpp
         )
 
 # determine includes from CORY_SOURCES by the .hpp suffix
@@ -126,6 +143,7 @@ target_link_libraries(${TARGET_NAME}
         glfw::glfw
         glm::glm
         imgui::imgui
+        EnTT::EnTT
         magic_enum::magic_enum
         range-v3::range-v3
         cppcoro::cppcoro
@@ -148,7 +166,7 @@ target_compile_definitions(${TARGET_NAME}
         GLM_ENABLE_EXPERIMENTAL)
 
 # for now, we hardcode the resource path until we have a proper resource management in place
-target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
+target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_DATA_DIR=\"${CORY_DATA_DIR}\"")
 
 # generate the export header for this library
 include(GenerateExportHeader)
@@ -187,4 +205,4 @@ if (target_type STREQUAL SHARED_LIBRARY)
     install(FILES $<TARGET_PDB_FILE:${TARGET_NAME}> DESTINATION ${CMAKE_INSTALL_PDBDIR} OPTIONAL)
 endif ()
 # Install the export header
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${TARGET_HEADER_SUBDIR}${TARGET_NAME}_export.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${TARGET_HEADER_SUBDIR})
+install(FILES ${TARGET_NAME}_export.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${TARGET_HEADER_SUBDIR})

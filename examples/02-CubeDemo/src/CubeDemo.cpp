@@ -15,6 +15,7 @@
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
+#include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
@@ -372,7 +373,6 @@ double CubeDemoApplication::now()
 double CubeDemoApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }
 void CubeDemoApplication::drawImguiControls()
 {
-    namespace CoImGui = Cory::ImGui;
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
     if (ImGui::Begin("Animation Params")) {
@@ -424,38 +424,7 @@ void CubeDemoApplication::drawImguiControls()
     if (ImGui::Begin("Profiling")) {
         auto records = Cory::Profiler::GetRecords();
 
-        auto to_ms = [](uint64_t ns) { return double(ns) / 1'000'000.0; };
-
-        if (ImGui::BeginTable("Profiling", 5)) {
-
-            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableSetupColumn("min [ms]", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("max [ms]", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("avg [ms]", ImGuiTableColumnFlags_WidthFixed);
-            ImGui::TableSetupColumn("graph", ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableHeadersRow();
-
-            for (auto [name, record] : records) {
-                auto stats = record.stats();
-                auto hist = record.history();
-                ImGui::TableNextRow();
-                ImGui::TableNextColumn();
-                CoImGui::Text("{}", name);
-                ImGui::TableNextColumn();
-                CoImGui::Text("{:3.2f}", to_ms(stats.min));
-                ImGui::TableNextColumn();
-                CoImGui::Text("{:3.2f}", to_ms(stats.max));
-                ImGui::TableNextColumn();
-                CoImGui::Text("{:3.2f}", to_ms(stats.avg));
-                ImGui::TableNextColumn();
-
-                auto h = hist | ranges::views::transform([](auto v) { return float(v); }) |
-                         ranges::to<std::vector>;
-                ImGui::PlotLines(
-                    "", h.data(), gsl::narrow<int>(h.size()), 0, nullptr, 0.0f, float(stats.max));
-            }
-            ImGui::EndTable();
-        }
+        CoImGui::drawProfilerRecords(records);
     }
     ImGui::End();
 }
@@ -482,3 +451,4 @@ void CubeDemoApplication::setupCameraCallbacks()
         camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
     });
 }
+

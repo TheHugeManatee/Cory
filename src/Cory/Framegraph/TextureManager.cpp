@@ -173,8 +173,10 @@ TextureState TextureManager::state(TextureHandle handle) const
 void TextureManager::clear()
 {
     for (auto &res : data_->textureResources_) {
-        data_->ctx_->resources().release(res.image);
-        data_->ctx_->resources().release(res.view);
+        if (res.state.status != TextureMemoryStatus::Virtual) {
+            data_->ctx_->resources().release(res.image);
+            data_->ctx_->resources().release(res.view);
+        }
     }
     data_->textureResources_.clear();
 }

@@ -19,9 +19,5 @@ int main(int argc, char** argv)
         spdlog::critical("Uncaught exception on main thread: {}", e.what());
         return EXIT_FAILURE;
     }
-    catch(...) {
-        spdlog::critical("Uncaught exception on main thread");
-        return EXIT_FAILURE;
-    }
     return EXIT_SUCCESS;
 }

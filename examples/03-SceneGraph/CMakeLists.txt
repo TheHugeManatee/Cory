@@ -32,9 +32,6 @@ target_link_libraries(${TARGET_NAME}
         project_warnings
         Cory::Cory
         Cory::ThirdParty
-        Vulkan::Vulkan
-        GLEW::GLEW
-        range-v3::range-v3
         CLI11::CLI11
         )
 

@@ -26,7 +26,7 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         SlotMap_Test.cpp
         BitField_Test.cpp
         Callback_Test.cpp
-        FrameGraph.Test.cpp
+        FrameGraph.test.cpp
         CoroutinePlayground.cpp
         ResourceManager_Test.cpp
         TestUtils.cpp

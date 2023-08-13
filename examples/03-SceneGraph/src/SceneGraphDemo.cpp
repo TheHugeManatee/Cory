@@ -41,8 +41,6 @@
 
 #include <algorithm>
 
-#include <range/v3/action/take.hpp>
-
 namespace Vk = Magnum::Vk;
 
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
@@ -76,7 +74,7 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
     camera_.setWindowSize(window_->dimensions());
-    camera_.setLookat({0.0f, 0.0f, 15.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+    camera_.setLookat({0.0f, 0.0f, -10.0f}, {0.0f, 0.0f, -25.0f}, {0.0f, 1.0f, 0.0f});
     setupCameraCallbacks();
 
     setupScene();

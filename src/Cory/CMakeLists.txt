@@ -39,8 +39,10 @@ set(CORY_SOURCES
         Base/BitField.hpp
         Base/Callback.hpp
         Base/Common.hpp
+        Base/Concepts.hpp
         Base/CpuBuffer.hpp
         Base/FmtUtils.hpp
+        Base/FutureFrameQueue.hpp
         Base/Log.cpp
         Base/Log.hpp
         Base/Math.hpp
@@ -49,6 +51,8 @@ set(CORY_SOURCES
         Base/Random.hpp
         Base/ResourceLocator.cpp
         Base/ResourceLocator.hpp
+        Base/SimulationClock.cpp
+        Base/SimulationClock.hpp
         Base/SlotMap.hpp
         Base/SlotMapHandle.hpp
         Base/Time.cpp
@@ -72,6 +76,8 @@ set(CORY_SOURCES
         Framegraph/TransientRenderPass.cpp
         Framegraph/TransientRenderPass.hpp
         ImGui/Inputs.hpp
+        ImGui/Widgets.cpp
+        ImGui/Widgets.hpp
         Renderer/APIConversion.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
@@ -95,18 +101,17 @@ set(CORY_SOURCES
         Renderer/VulkanUtils.cpp
         Renderer/VulkanUtils.hpp
         Renderer/flextVkExt.h
-        SceneGraph/System.cpp
-        SceneGraph/System.hpp
+        SceneGraph/Common.hpp
         SceneGraph/SceneGraph.cpp
         SceneGraph/SceneGraph.hpp
-        SceneGraph/Common.hpp
-        Base/SimulationClock.cpp
-        Base/SimulationClock.hpp
-        Base/FutureFrameQueue.hpp
-        Systems/TransformSystem.cpp Systems/TransformSystem.hpp Systems/SystemCoordinator.hpp Base/Concepts.hpp
-        ImGui/Widgets.hpp
-        ImGui/Widgets.cpp
-        Systems/CommonComponents.hpp)
+        SceneGraph/System.cpp
+        SceneGraph/System.hpp
+        Systems/CommonComponents.hpp
+        Systems/SystemCoordinator.cpp
+        Systems/SystemCoordinator.hpp
+        Systems/TransformSystem.cpp
+        Systems/TransformSystem.hpp
+        )
 
 # determine includes from CORY_SOURCES by the .hpp suffix
 set(CORY_INCLUDES "")

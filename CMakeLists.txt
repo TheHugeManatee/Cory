@@ -86,7 +86,7 @@ endif()
 
 # currently, we just map a hardcoded path for our resources - no fancy
 # resource bundling or deployment yet
-set(CORY_RESOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resource CACHE PATH "Directory to resources (textures/shaders)")
+set(CORY_DATA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/data CACHE PATH "Directory to data (textures/shaders)")
 
 
 # External dependencies are built into one static library

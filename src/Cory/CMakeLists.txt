@@ -161,7 +161,7 @@ target_compile_definitions(${TARGET_NAME}
         GLM_ENABLE_EXPERIMENTAL)
 
 # for now, we hardcode the resource path until we have a proper resource management in place
-target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_RESOURCE_DIR=\"${CORY_RESOURCE_DIR}\"")
+target_compile_definitions(${TARGET_NAME} PUBLIC "CORY_DATA_DIR=\"${CORY_DATA_DIR}\"")
 
 # generate the export header for this library
 include(GenerateExportHeader)

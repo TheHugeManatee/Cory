@@ -7,7 +7,7 @@
 namespace Cory {
 
 // seeded with the empty path, i.e. relative to the current working directory or an absolute path
-std::vector<std::filesystem::path> ResourceLocator::searchPaths_{CORY_RESOURCE_DIR, ""};
+std::vector<std::filesystem::path> ResourceLocator::searchPaths_{CORY_DATA_DIR, ""};
 
 void ResourceLocator::addSearchPath(std::filesystem::path path)
 {

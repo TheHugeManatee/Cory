@@ -54,7 +54,8 @@ class CubeRenderSystem
     void recordCommands(Cory::CommandList &cmd);
 
     std::vector<CubePushConstantState> renderState_;
-    CameraComponent camera_;
+    // updated every frame
+    Cory::Components::CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};
     std::unique_ptr<Magnum::Vk::Mesh> mesh_;

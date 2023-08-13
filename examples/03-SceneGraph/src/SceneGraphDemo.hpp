@@ -32,8 +32,6 @@ class SceneGraphDemoApplication : public Cory::Application {
 
     void drawImguiControls();
 
-    void setupCameraCallbacks();
-
   private:
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
@@ -41,7 +39,7 @@ class SceneGraphDemoApplication : public Cory::Application {
     bool dumpNextFramegraph_{false};
 
     Cory::SimulationClock clock_;
-    Cory::CameraManipulator camera_;
+    Cory::CameraLayer* cameraLayer_;
     Cory::SceneGraph sceneGraph_;
     Cory::SystemCoordinator systems_;
     class CubeAnimationSystem *animationSystem_{nullptr};

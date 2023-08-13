@@ -22,6 +22,8 @@ set(CORY_SOURCES
         Application/Application.cpp
         Application/Application.hpp
         Application/ApplicationLayer.hpp
+        Application/CameraLayer.hpp
+        Application/CameraLayer.cpp
         Application/CameraManipulator.cpp
         Application/CameraManipulator.hpp
         Application/Common.hpp

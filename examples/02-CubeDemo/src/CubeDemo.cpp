@@ -432,22 +432,22 @@ void CubeDemoApplication::drawImguiControls()
 void CubeDemoApplication::setupCameraCallbacks()
 {
     window_->onSwapchainResized.connect([this](Cory::SwapchainResizedEvent event) {
-        layers().onEvent(event);
+        layers().processEvent(event);
         camera_.setWindowSize(event.size);
     });
 
     window_->onMouseMoved.connect([this](Cory::MouseMovedEvent event) {
-        if (layers().onEvent(event)) { return; }
+        if (layers().processEvent(event)) { return; }
         if (event.button != Cory::MouseButton::None) {
             camera_.mouseMove(glm::ivec2(event.position), event.button, event.modifiers);
         }
     });
     window_->onMouseButton.connect([this](Cory::MouseButtonEvent event) {
-        if (layers().onEvent(event)) { return; }
+        if (layers().processEvent(event)) { return; }
         camera_.setMousePosition(event.position);
     });
     window_->onMouseScrolled.connect([this](Cory::ScrollEvent event) {
-        if (layers().onEvent(event)) { return; }
+        if (layers().processEvent(event)) { return; }
         camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
     });
 }

@@ -24,4 +24,15 @@ struct Transform {
     // TODO: split into two components?
     glm::mat4 modelToWorld{1.0f};
 };
+
+struct CameraComponent {
+    glm::mat4 viewMatrix{1.0f};
+    glm::vec3 position{0.0f};
+    glm::vec3 direction{0.0f};
+    float fovy{glm::radians(45.0f)};
+    float nearPlane{5.0f};
+    float farPlane{100.0f};
+};
+
+
 } // namespace Cory::Components

@@ -1,6 +1,7 @@
 #include <Cory/Application/LayerStack.hpp>
 
 #include <Cory/Application/ApplicationLayer.hpp>
+#include <Cory/Application/Window.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 
 #include <range/v3/view/reverse.hpp>
@@ -51,7 +52,7 @@ void LayerStack::update()
     }
 }
 
-bool LayerStack::onEvent(Event event)
+bool LayerStack::processEvent(Event event)
 {
     if (priorityLayer_ && priorityLayer_->onEvent(event)) { return true; }
     for (auto &layer : ranges::views::reverse(layers_)) {
@@ -80,6 +81,15 @@ LayerPassOutputs LayerStack::declareRenderTasks(Framegraph &framegraph,
                 .output();
     }
     return previousLayer;
+}
+
+void LayerStack::connectToWindow(Window &window)
+{
+    auto process = [this](auto event) { return processEvent(event); };
+    window.onSwapchainResized.connect(process);
+    window.onMouseMoved.connect(process);
+    window.onMouseButton.connect(process);
+    window.onMouseScrolled.connect(process);
 }
 
 } // namespace Cory

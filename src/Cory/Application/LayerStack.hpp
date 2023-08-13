@@ -52,7 +52,7 @@ class LayerStack {
     void update();
 
     /// pass an event top-down to the first layer that accepts it
-    bool onEvent(Event event);
+    bool processEvent(Event event);
 
     /// queue render tasks for all layers, bottom-up
     [[maybe_unused]] LayerPassOutputs declareRenderTasks(Framegraph &framegraph,
@@ -60,6 +60,8 @@ class LayerStack {
 
     /// list layers
     const std::vector<std::unique_ptr<ApplicationLayer>> &layers() const { return layers_; }
+
+    void connectToWindow(Window &window);
 
   private:
     Context &ctx_;

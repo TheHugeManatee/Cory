@@ -24,8 +24,9 @@ layout (set = 0, binding = 0) uniform CubeUBO {
 
 void main() {
     vec4 worldPos = globals.view * push.modelTransform * vec4(inPosition, 1.0);
-    vec4 projectedPos = globals.projection * worldPos;
-    gl_Position = projectedPos / projectedPos.w;
+
+    gl_Position = globals.projection * worldPos;
+    
     outWorldPosition = worldPos.xyz;
     // we currently compute this in the shader because we don't have enough space in the push constants
     mat4 normalMatrix = transpose(inverse(push.modelTransform));

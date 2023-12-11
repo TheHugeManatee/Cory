@@ -11,14 +11,7 @@ As such, it uses features that are only supported in rather modern compilers.
 
 #### Done
 
-- [x] Basic coroutine-based framegraph **concept/API draft**
-- [x] ImGui integration
-- [x] Performance and Logging classes
-- [x] On-the fly shader compilation using [google/shaderc](https://github.com/google/shaderc)
-- [x] The triangle!
-- [x] Basic window and renderer infrastructure
-- [x] push constants
-- [x] dynamic rendering
+
 
 #### Short Term
 
@@ -50,7 +43,22 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] use std::pmr based allocator for Vulkan API calls
 - GameObject/Scenegraph system (Entities + Components, not full data-drive ECS)
   - [ ] basic entity/component system
+- Shader System
+  - [x] push constants 
+  - [x] On-the fly shader compilation using [google/shaderc](https://github.com/google/shaderc)
+  - [ ] shader hot-reloading
+  - [ ] shader reflection using [SPIR-V Reflect](https://github.com/KhronosGroup/SPIRV-Reflect)
+  - [ ] shader compilation cache
+  - [ ] [shader specialization constants](https://blogs.igalia.com/itoral/2018/03/20/improving-shader-performance-with-vulkans-specialization-constants/)
 
+- [x] Basic coroutine-based framegraph **concept/API draft**
+- [x] ImGui integration
+- [x] Performance and Logging classes
+- [x] The triangle!
+- [x] Basic window and renderer infrastructure
+
+- [x] KHR_dynamic_rendering
+- 
 #### Mid Term
 
 - Implement a simple Volume Raymarcher
@@ -72,23 +80,21 @@ As such, it uses features that are only supported in rather modern compilers.
 
 ### Inspiration and Resources
 
-- Engine structure and basic from Hazel engine by TheCherno, greatly documented on his Youtube
-  Channel https://www.youtube.com/user/TheChernoProject
-- Alexander Overvoorde's excellent Vulkan tutorial https://vulkan-tutorial.com/
-- Brendan Galea's Vulkan Tutorial https://www.youtube.com/watch?v=Y9U9IE0gVHA&list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR
-- Tutorial on how to actually integrate imgui into a vulkan renderer https://frguthmann.github.io/posts/vulkan_imgui/,
-  based off of the vulkan-tutorial.com source code
+- Engine structure and basic from Hazel engine by TheCherno, greatly documented on his [Youtube
+  Channel](https://www.youtube.com/user/TheChernoProject)
+- Alexander Overvoorde's excellent [Vulkan tutorial](https://vulkan-tutorial.com/)
+- Brendan Galea's [Vulkan Tutorial](https://www.youtube.com/watch?v=Y9U9IE0gVHA&list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR)
+- Tutorial on how to actually [integrate imgui into a vulkan renderer](https://frguthmann.github.io/posts/vulkan_imgui/) based off of the vulkan-tutorial.com source code
 - Framegraphs/Render graphs:
-    - Framegraphs in Frostbite: GDC presentation by Yuri
-      O'Donnell https://www.gdcvault.com/play/1024045/FrameGraph-Extensible-Rendering-Architecture-in
-    - TheMaister blog post on Framegraphs: http://themaister.net/blog/2017/08/15/render-graphs-and-vulkan-a-deep-dive/
-    - Graham Wihlidal (SEED) talk on
-      Halcyon: https://www.khronos.org/assets/uploads/developers/library/2019-reboot-develop-blue/SEED-EA_Rapid-Innovation-Using-Modern-Graphics_Apr19.pdf
+    - [Framegraphs in Frostbite: GDC presentation by Yuri
+      O'Donnell](https://www.gdcvault.com/play/1024045/FrameGraph-Extensible-Rendering-Architecture-in)
+    - [TheMaister blog post on Framegraphs](http://themaister.net/blog/2017/08/15/render-graphs-and-vulkan-a-deep-dive/)
+    - [Graham Wihlidal (SEED) talk on
+      Halcyon](https://www.khronos.org/assets/uploads/developers/library/2019-reboot-develop-blue/SEED-EA_Rapid-Innovation-Using-Modern-Graphics_Apr19.pdf)
 - Dynamic rendering:
-    - Lesley Lai's tutorial on dynamic rendering: https://lesleylai.info/en/vk-khr-dynamic-rendering/
+    - Lesley Lai's [tutorial on dynamic rendering](https://lesleylai.info/en/vk-khr-dynamic-rendering/)
     - [Sascha Willem's Dynamic Rendering example](https://github.com/SaschaWillems/Vulkan/blob/313ac10de4a765997ddf5202c599e4a0ca32c8ca/examples/dynamicrendering/dynamicrendering.cpp)
-    - `VK_KHR_dynamic_rendering`
-      proposal: https://github.com/KhronosGroup/Vulkan-Docs/blob/main/proposals/VK_KHR_dynamic_rendering.adoc
+    - [`VK_KHR_dynamic_rendering`](https://github.com/KhronosGroup/Vulkan-Docs/blob/main/proposals/VK_KHR_dynamic_rendering.adoc)
 
 ### Included Third-Party sources
 

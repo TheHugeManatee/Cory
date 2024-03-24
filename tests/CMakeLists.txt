@@ -42,6 +42,7 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         CoroutineGameLogic.cpp
         TransformSystem.test.cpp
         SystemCoordinator.test.cpp
+        Math_Test.cpp
 )
 
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)

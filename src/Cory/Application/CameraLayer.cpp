@@ -98,9 +98,9 @@ void CameraLayer::onUpdate()
     ::ImGui::End();
 }
 
-void CameraLayer::lookAt(glm::vec3 position, glm::vec3 focus, glm::vec3 up)
+void CameraLayer::lookAt(glm::vec3 newPosition, glm::vec3 newFocus, glm::vec3 newUp)
 {
-    viewToWorldMatrix = glm::lookAt(position, focus, up);
+    viewToWorldMatrix = glm::lookAt(newPosition, newFocus, newUp);
 }
 
 void CameraLayer::update()
@@ -138,58 +138,54 @@ bool CameraLayer::mouseMove(const MouseMovedEvent &event)
     else if (event.button == MouseButton::Middle) {
         mode = Mode::Roll;
     }
-    //    if (event.modifiers.is_set(ModifierFlagBits::Shift))
-    //        mode = Mode::Pan;
-    //    else if (event.modifiers.is_set(ModifierFlagBits::Alt))
-    //        mode = Mode::Orbit;
-    //    else if (event.modifiers.is_set(ModifierFlagBits::Ctrl))
-    //        mode = Mode::Look;
 
-    glm::vec2 delta = event.position - state_->lastMousePosition;
+    glm::vec2 mouseDelta = event.position - state_->lastMousePosition;
     state_->lastMousePosition = event.position;
 
+    std::optional<glm::mat4> newViewToWorld{};
     switch (mode) {
     case Mode::None:
         return false;
     case Mode::Look: {
         // Calculate the rotation around the up vector (azimuth) and the right vector (elevation)
-        const float azimuth = delta.x * rotationSpeed();
-        const float elevation = -delta.y * rotationSpeed();
+        const float azimuth = mouseDelta.x * rotationSpeed();
+        const float elevation = -mouseDelta.y * rotationSpeed();
 
         // Create a rotation matrix for the azimuth and elevation
-        glm::mat4 newViewToWorld = rotate(viewToWorldMatrix(), azimuth, localUp);
-        newViewToWorld = rotate(newViewToWorld, elevation, localRight);
-        viewToWorldMatrix = newViewToWorld;
+        newViewToWorld =
+            rotate(rotate(viewToWorldMatrix(), azimuth, localUp), elevation, localRight);
         break;
     }
     case Mode::Pan: {
         // "Pan" moves the camera in the plane of the screen
-        const glm::vec3 panDelta = -localRight * delta.x - delta.y * localUp;
-        viewToWorldMatrix = glm::translate(viewToWorldMatrix(), panDelta * movementSpeed());
+        const glm::vec3 panDelta = -localRight * mouseDelta.x - mouseDelta.y * localUp;
+        newViewToWorld = glm::translate(viewToWorldMatrix(), panDelta * movementSpeed());
         break;
     }
     case Mode::Orbit: {
         // Calculate the rotation around the up vector (azimuth) and the right vector (elevation)
-        const float azimuth = delta.x * rotationSpeed();
-        const float elevation = -delta.y * rotationSpeed();
+        const float azimuth = mouseDelta.x * rotationSpeed();
+        const float elevation = -mouseDelta.y * rotationSpeed();
 
-        // Create a rotation matrix for the azimuth and elevation
+        // Create a rotation matrix for the azimuth and elevation, but rotating around the focus
+        // point
         const glm::vec3 localFocus = worldToViewMatrix() * glm::vec4{focus(), 1.0f};
-        auto newViewToWorld = viewToWorldMatrix();
-        newViewToWorld = glm::translate(newViewToWorld, localFocus);
-        newViewToWorld = rotate(newViewToWorld, azimuth, localUp);
-        newViewToWorld = rotate(newViewToWorld, elevation, localRight);
-        newViewToWorld = glm::translate(newViewToWorld, -localFocus);
-        viewToWorldMatrix = newViewToWorld;
+        auto v2w = viewToWorldMatrix();
+        v2w = glm::translate(v2w, localFocus);
+        v2w = rotate(v2w, azimuth, localUp);
+        v2w = rotate(v2w, elevation, localRight);
+        v2w = glm::translate(v2w, -localFocus);
+        newViewToWorld = v2w;
         break;
     }
     case Mode::Roll: {
-        const float rotationAngle = delta.x * rotationSpeed();
-        // "Roll" rotates the camera round the view axis, effectively rotating the up vector by a
-        viewToWorldMatrix = rotate(viewToWorldMatrix(), rotationAngle, localForward);
+        // "Roll" rotates the camera round the view axis
+        const float rotationAngle = mouseDelta.x * rotationSpeed();
+        newViewToWorld = rotate(viewToWorldMatrix(), rotationAngle, localForward);
         break;
     }
     }
+    if (newViewToWorld) { viewToWorldMatrix = *newViewToWorld; }
 
     return true;
 }

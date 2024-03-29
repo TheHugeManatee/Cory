@@ -82,6 +82,8 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
     layers().connectToWindow(*window_);
+
+    clock_.setTimeScale(0.01);
 }
 
 void SceneGraphDemoApplication::setupScene()
@@ -89,10 +91,14 @@ void SceneGraphDemoApplication::setupScene()
 
     // set up the camera updates
     Cory::Entity camera = sceneGraph_.createEntity(sceneGraph_.root(), "camera");
-    sceneGraph_.addComponent<Cory::Components::CameraComponent>(
+    auto &camera_cmp = sceneGraph_.addComponent<Cory::Components::CameraComponent>(
         camera,
-        Cory::Components::CameraComponent{
-            .fovy = glm::radians(70.0f), .nearPlane = 0.2f, .farPlane = 100.0f});
+        Cory::Components::CameraComponent{.viewMatrix = glm::mat4{1.0f},
+                                          .position = {0.0f, 0.0f, 1.0f},
+                                          .direction = {0.0f, 0.0f, -1.0f},
+                                          .fovy = glm::radians(55.0f),
+                                          .nearPlane = 0.2f,
+                                          .farPlane = 1000.0f});
 
     Cory::Entity root = sceneGraph_.root();
     auto center = sceneGraph_.createEntity(root,
@@ -109,7 +115,7 @@ void SceneGraphDemoApplication::setupScene()
     auto add_subcubes = [this](Cory::Entity parent, float level) -> std::vector<Cory::Entity> {
         std::vector<Cory::Entity> entities;
 
-        float numChildren = Cory::RNG::Uniform(5.0f, 15.0f);
+        float numChildren = Cory::RNG::Uniform(1.0f, 5.0f);
         for (int i = 0; i < numChildren; ++i) {
             const float radius = Cory::RNG::Uniform(3.0f, 7.0f);
 
@@ -138,6 +144,41 @@ void SceneGraphDemoApplication::setupScene()
             add_subcubes(sub_e, 0.75);
         }
     }
+
+    /// add a coordinate system indicator
+    auto make_colored_axis =
+        [&](std::string_view axis_name, glm::vec3 color, glm::vec3 axis, uint32_t steps) {
+            // create entity with an AnimationComponent and a TransformComponent for each step
+            for (uint32_t i = 0; i < steps / 2; ++i) {
+                sceneGraph_.createEntity(root,
+                                         fmt::format("{}{}", axis_name, i),
+                                         AnimationComponent{
+                                             .color = glm::vec4{color, 1.0f},
+                                             .blend = 0.5f,
+                                             .entityIndex = -1.0f,
+                                         },
+                                         Cory::Components::Transform{
+                                             .position = 0.2f * axis * static_cast<float>(i),
+                                             .scale = glm::vec3{0.1f},
+                                         });
+
+                // sceneGraph_.createEntity(root,
+                //                          fmt::format("{}{}", axis_name, -i),
+                //                          AnimationComponent{
+                //                              .color = glm::vec4{color, 1.0f},
+                //                              .blend = 0.5f,
+                //                              .entityIndex = -1.0f,
+                //                          },
+                //                          Cory::Components::Transform{
+                //                              .position = axis * static_cast<float>(-i),
+                //                              .scale = glm::vec3{0.1f},
+                //                          });
+            }
+        };
+    // create colored axes for X, Y and Z
+    make_colored_axis("X", {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 100);
+    make_colored_axis("Y", {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 100);
+    make_colored_axis("Z", {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 100);
 }
 
 void SceneGraphDemoApplication::setupSystems()
@@ -148,9 +189,9 @@ void SceneGraphDemoApplication::setupSystems()
     // set up a system to update the camera from the camera manipulator
     systems_.emplace<Cory::CallbackSystem<CameraComponent>>(
         [this](Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity e, CameraComponent &c) {
-            c.position = cameraLayer_->position.get();
-            c.direction = cameraLayer_->focus.get() - c.position;
-            c.viewMatrix = cameraLayer_->viewMatrix.get();
+            c.position = cameraLayer_->position();
+            c.direction = cameraLayer_->focus() - c.position;
+            c.viewMatrix = cameraLayer_->worldToViewMatrix();
         });
 
     // after the "logic" has updated, sync all the transforms of the scenegraph
@@ -258,22 +299,21 @@ void SceneGraphDemoApplication::drawImguiControls()
 
     animationSystem_->drawImguiControls();
     if (ImGui::Begin("Camera")) {
-        glm::vec3 position = cameraLayer_->position.get();
-        glm::vec3 center = cameraLayer_->focus.get();
-        glm::vec3 up = cameraLayer_->up.get();
-        glm::mat4 mat = glm::transpose(cameraLayer_->viewMatrix.get());
+        glm::vec3 position = cameraLayer_->position();
+        glm::vec3 center = cameraLayer_->focus();
+        glm::vec3 up = cameraLayer_->up();
+        glm::mat4 mat = glm::transpose(cameraLayer_->worldToViewMatrix());
 
         bool changed = CoImGui::Input("position", position, "%.3f");
         changed = CoImGui::Input("center", center, "%.3f") || changed;
         changed = CoImGui::Input("up", up, "%.3f") || changed;
 
         // if (changed) { camera_.lookAt(position, center, up); }
-
         if (ImGui::CollapsingHeader("View Matrix")) {
-            CoImGui::Input("r0", mat[0], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("r1", mat[1], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("r2", mat[2], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("r3", mat[3], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 0", mat[0], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 1", mat[1], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 2", mat[2], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 3", mat[3], "%.3f", ImGuiInputTextFlags_ReadOnly);
         }
     }
     ImGui::End();

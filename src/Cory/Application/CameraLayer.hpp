@@ -8,7 +8,9 @@
 namespace Cory {
 
 /**
- *
+ * Implements a camera controller that reacts to mouse events to move the camera around.
+ * Note: The properties are currently effectively read-only as the internal viewToWorld matrix
+ *       is used as the single source of truth. External modifications will be ignored.
  */
 class CameraLayer : public ApplicationLayer {
   public:

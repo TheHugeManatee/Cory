@@ -124,8 +124,7 @@ inline glm::mat4 makePerspective(float fovy, float aspect, float near, float far
 {
     assert(glm::abs(aspect - std::numeric_limits<float>::epsilon()) > 0.0f);
     const float tanHalfFovy = tan(fovy / 2.f);
-    glm::mat4 ret{1.0f};
-    ret = glm::mat4{0.0f};
+    glm::mat4 ret{0.0f};
     ret[0][0] = 1.f / (aspect * tanHalfFovy);
     ret[1][1] = 1.f / (tanHalfFovy);
     ret[2][2] = far / (far - near);

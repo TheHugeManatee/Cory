@@ -26,8 +26,6 @@ struct CameraLayer::State {
     };
 
     glm::vec2 lastMousePosition{};
-    glm::vec3 orbitUp{};
-    glm::vec3 orbitRight{};
 
     Mode mode{};
 };
@@ -36,10 +34,6 @@ CameraLayer::CameraLayer()
     : ApplicationLayer("Camera")
 {
     lookAt(position(), focus(), up());
-    // process internal and external changes in the update() function
-    // position.valueChanged().connect([this]() { update(); });
-    // focus.valueChanged().connect([this]() { update(); });
-    // up.valueChanged().connect([this]() { update(); });
 }
 
 CameraLayer::~CameraLayer()
@@ -62,8 +56,6 @@ void CameraLayer::onDetach(Context &ctx)
 {
     // might have had an exception during attach, or moved-from
     if (!state_) return;
-
-    // auto &res = ctx.resources();
 
     state_.reset();
 }
@@ -91,15 +83,13 @@ void CameraLayer::onUpdate()
         CoImGui::Slider("fovy", fovy, 10.0f, 140.0f);
         CoImGui::Slider("forward", forward, -1.0f, 1.0f);
         CoImGui::Slider("right", right, -1.0f, 1.0f);
-        //
-        CoImGui::Input("orbit_up", state_->orbitUp);
-        CoImGui::Input("orbit_right", state_->orbitRight);
     }
     ::ImGui::End();
 }
 
 void CameraLayer::lookAt(glm::vec3 newPosition, glm::vec3 newFocus, glm::vec3 newUp)
 {
+
     viewToWorldMatrix = glm::lookAt(newPosition, newFocus, newUp);
 }
 
@@ -116,8 +106,6 @@ bool CameraLayer::mouseButton(const MouseButtonEvent &event)
 {
     if (event.action == ButtonAction::Press) {
         state_->lastMousePosition = event.position;
-        state_->orbitUp = up();
-        state_->orbitRight = right();
         return true;
     }
 
@@ -185,7 +173,10 @@ bool CameraLayer::mouseMove(const MouseMovedEvent &event)
         break;
     }
     }
-    if (newViewToWorld) { viewToWorldMatrix = *newViewToWorld; }
+    if (newViewToWorld) {
+        const auto &newV2W = *newViewToWorld;
+        viewToWorldMatrix = newV2W;
+    }
 
     return true;
 }

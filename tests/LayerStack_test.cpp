@@ -116,7 +116,7 @@ TEST_CASE("LayerStack", "[LayerStack]")
         }
         WHEN("Passing events through a stack that does not accept any events")
         {
-            bool processed = stack.onEvent(Cory::Event{});
+            bool processed = stack.processEvent(Cory::Event{});
             THEN("The event is passed to the layers that accept it")
             {
                 REQUIRE(layer1.receivedEvents_.size() == 0);
@@ -134,7 +134,7 @@ TEST_CASE("LayerStack", "[LayerStack]")
         {
             layer1.acceptsEvents_ = true;
             layer2.acceptsEvents_ = true;
-            bool processed = stack.onEvent(Cory::Event{});
+            bool processed = stack.processEvent(Cory::Event{});
             THEN("The event is passed to the first layer from the top that accepts it")
             {
                 REQUIRE(layer1.receivedEvents_.size() == 0);

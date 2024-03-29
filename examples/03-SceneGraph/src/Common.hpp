@@ -9,12 +9,3 @@ struct AnimationComponent {
     float blend;
     float entityIndex{};
 };
-
-struct CameraComponent {
-    glm::mat4 viewMatrix{1.0f};
-    glm::vec3 position{0.0f};
-    glm::vec3 direction{0.0f};
-    float fovy{glm::radians(45.0f)};
-    float nearPlane{0.1f};
-    float farPlane{100.0f};
-};

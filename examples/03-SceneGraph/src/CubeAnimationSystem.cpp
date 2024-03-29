@@ -16,6 +16,10 @@ void CubeAnimationSystem::update(Cory::SceneGraph &sg,
                                  AnimationComponent &anim,
                                  Cory::Components::Transform &transform)
 {
+    // update only entities with non-negative entityIndex
+    if(anim.entityIndex < 0.0f) {
+        return;
+    }
     auto now = gsl::narrow_cast<float>(tick.now.time_since_epoch().count());
     animate(anim, transform, now);
 }

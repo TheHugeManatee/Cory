@@ -4,6 +4,7 @@
 #include "CubeAnimationSystem.hpp"
 #include "CubeRenderSystem.hpp"
 
+#include <Cory/Application/CameraLayer.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
@@ -72,18 +73,17 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "SceneGraphDemo", msaaSamples);
 
-    camera_.setMode(Cory::CameraManipulator::Mode::Fly);
-    camera_.setWindowSize(window_->dimensions());
-    camera_.setLookat({0.0f, 0.0f, -10.0f}, {0.0f, 0.0f, -25.0f}, {0.0f, 1.0f, 0.0f});
-    setupCameraCallbacks();
-
     setupScene();
     setupSystems();
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
                                               window_->swapchain().maxFramesInFlight(),
                                           .viewportDimensions = window_->dimensions()};
+    cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+    layers().connectToWindow(*window_);
+
+    clock_.setTimeScale(0.01);
 }
 
 void SceneGraphDemoApplication::setupScene()
@@ -91,9 +91,14 @@ void SceneGraphDemoApplication::setupScene()
 
     // set up the camera updates
     Cory::Entity camera = sceneGraph_.createEntity(sceneGraph_.root(), "camera");
-    sceneGraph_.addComponent<CameraComponent>(
+    auto &camera_cmp = sceneGraph_.addComponent<Cory::Components::CameraComponent>(
         camera,
-        CameraComponent{.fovy = glm::radians(70.0f), .nearPlane = 0.2f, .farPlane = 100.0f});
+        Cory::Components::CameraComponent{.viewMatrix = glm::mat4{1.0f},
+                                          .position = {0.0f, 0.0f, 1.0f},
+                                          .direction = {0.0f, 0.0f, -1.0f},
+                                          .fovy = glm::radians(55.0f),
+                                          .nearPlane = 0.2f,
+                                          .farPlane = 1000.0f});
 
     Cory::Entity root = sceneGraph_.root();
     auto center = sceneGraph_.createEntity(root,
@@ -106,51 +111,75 @@ void SceneGraphDemoApplication::setupScene()
                                                .position{0.0f, 0.0f, 0.0f},
                                            });
 
-    // creates 5 cubes in a circle parented to the given parent
+    // creates 5 cubes within a sphere around the given parent
     auto add_subcubes = [this](Cory::Entity parent, float level) -> std::vector<Cory::Entity> {
         std::vector<Cory::Entity> entities;
 
-        float numChildren = Cory::RNG::Uniform(2.0f, 7.0f);
+        float numChildren = Cory::RNG::Uniform(1.0f, 5.0f);
         for (int i = 0; i < numChildren; ++i) {
             const float radius = Cory::RNG::Uniform(3.0f, 7.0f);
 
             auto pos = Cory::RNG::UniformInSphere() * radius;
+            auto scale = glm::vec3{Cory::RNG::Uniform(0.25f, 0.65f)};
+            auto index = level + (level / 2.0f * Cory::RNG::Uniform(-1.0f, 2.0f));
 
-            auto child =
-                sceneGraph_.createEntity(parent,
-                                         fmt::format("cube{}", i),
-                                         AnimationComponent{
-                                             .blend = 0.8f,
-                                             .entityIndex = Cory::RNG::Uniform(0.1f, 0.9f),
-                                         },
-                                         Cory::Components::Transform{
-                                             .position = pos,
-                                             .rotation = glm::vec3{0.0f, 0.0f, 0.0f},
-                                             .scale = glm::vec3{Cory::RNG::Uniform(0.25f, 0.65f)},
-                                         });
+            auto child = sceneGraph_.createEntity(parent,
+                                                  fmt::format("cube{}", i),
+                                                  AnimationComponent{
+                                                      .blend = 0.8f,
+                                                      .entityIndex = index,
+                                                  },
+                                                  Cory::Components::Transform{
+                                                      .position = pos,
+                                                      .rotation = glm::vec3{0.0f, 0.0f, 0.0f},
+                                                      .scale = scale,
+                                                  });
             entities.push_back(child);
         }
         return entities;
     };
 
-    // coroutines, just because we can
     for (auto &e : add_subcubes(center, 0.25)) {
         for (auto &sub_e : add_subcubes(e, 0.5)) {
             add_subcubes(sub_e, 0.75);
         }
     }
+
+    /// add a coordinate system indicator
+    auto make_colored_axis =
+        [&](std::string_view axis_name, glm::vec3 color, glm::vec3 axis, uint32_t steps) {
+            // create entity with an AnimationComponent and a TransformComponent for each step
+            for (uint32_t i = 0; i < steps / 2; ++i) {
+                sceneGraph_.createEntity(root,
+                                         fmt::format("{}{}", axis_name, i),
+                                         AnimationComponent{
+                                             .color = glm::vec4{color, 1.0f},
+                                             .blend = 0.5f,
+                                             .entityIndex = -1.0f,
+                                         },
+                                         Cory::Components::Transform{
+                                             .position = 0.2f * axis * static_cast<float>(i),
+                                             .scale = glm::vec3{0.1f},
+                                         });
+            }
+        };
+    // create colored axes for X, Y and Z
+    make_colored_axis("X", {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, 100);
+    make_colored_axis("Y", {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 100);
+    make_colored_axis("Z", {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 100);
 }
 
 void SceneGraphDemoApplication::setupSystems()
 {
     animationSystem_ = &systems_.emplace<CubeAnimationSystem>();
 
+    using Cory::Components::CameraComponent;
     // set up a system to update the camera from the camera manipulator
     systems_.emplace<Cory::CallbackSystem<CameraComponent>>(
         [this](Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity e, CameraComponent &c) {
-            c.position = camera_.getCameraPosition();
-            c.direction = camera_.getCenterPosition() - c.position;
-            c.viewMatrix = camera_.getViewMatrix();
+            c.position = cameraLayer_->position();
+            c.direction = cameraLayer_->focus() - c.position;
+            c.viewMatrix = cameraLayer_->worldToViewMatrix();
         });
 
     // after the "logic" has updated, sync all the transforms of the scenegraph
@@ -258,22 +287,21 @@ void SceneGraphDemoApplication::drawImguiControls()
 
     animationSystem_->drawImguiControls();
     if (ImGui::Begin("Camera")) {
-        glm::vec3 position = camera_.getCameraPosition();
-        glm::vec3 center = camera_.getCenterPosition();
-        glm::vec3 up = camera_.getUpVector();
-        glm::mat4 mat = glm::transpose(camera_.getViewMatrix());
+        glm::vec3 position = cameraLayer_->position();
+        glm::vec3 center = cameraLayer_->focus();
+        glm::vec3 up = cameraLayer_->up();
+        glm::mat4 mat = glm::transpose(cameraLayer_->worldToViewMatrix());
 
         bool changed = CoImGui::Input("position", position, "%.3f");
         changed = CoImGui::Input("center", center, "%.3f") || changed;
         changed = CoImGui::Input("up", up, "%.3f") || changed;
 
-        if (changed) { camera_.setLookat(position, center, up); }
-
+        // if (changed) { camera_.lookAt(position, center, up); }
         if (ImGui::CollapsingHeader("View Matrix")) {
-            CoImGui::Input("r0", mat[0], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("r1", mat[1], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("r2", mat[2], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("r3", mat[3], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 0", mat[0], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 1", mat[1], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 2", mat[2], "%.3f", ImGuiInputTextFlags_ReadOnly);
+            CoImGui::Input("Row 3", mat[3], "%.3f", ImGuiInputTextFlags_ReadOnly);
         }
     }
     ImGui::End();
@@ -284,27 +312,4 @@ void SceneGraphDemoApplication::drawImguiControls()
         CoImGui::drawProfilerRecords(records);
     }
     ImGui::End();
-}
-
-void SceneGraphDemoApplication::setupCameraCallbacks()
-{
-    window_->onSwapchainResized.connect([this](Cory::SwapchainResizedEvent event) {
-        layers().onEvent(event);
-        camera_.setWindowSize(event.size);
-    });
-
-    window_->onMouseMoved.connect([this](Cory::MouseMovedEvent event) {
-        if (layers().onEvent(event)) { return; }
-        if (event.button != Cory::MouseButton::None) {
-            camera_.mouseMove(glm::ivec2(event.position), event.button, event.modifiers);
-        }
-    });
-    window_->onMouseButton.connect([this](Cory::MouseButtonEvent event) {
-        if (layers().onEvent(event)) { return; }
-        camera_.setMousePosition(event.position);
-    });
-    window_->onMouseScrolled.connect([this](Cory::ScrollEvent event) {
-        if (layers().onEvent(event)) { return; }
-        camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
-    });
 }

@@ -10,10 +10,42 @@
 #include <range/v3/range/concepts.hpp>
 
 namespace Cory {
-/// convert spherical coordinates (r, theta, phi) to cartesian (x, y, z)
-inline glm::vec3 sphericalToCartesian(const glm::vec3 spherical);
-/// convert cartesian (x, y, z) to spherical coordinates (r, theta, phi)
-inline glm::vec3 cartesianToSpherical(const glm::vec3 cartesian);
+/**
+ * @brief Converts spherical coordinates to cartesian coordinates.
+ * @param spherical A 3D vector representing spherical coordinates (r, theta, phi).
+ * @return glm::vec3 A 3D vector representing cartesian coordinates (x, y, z).
+ *
+ * The function takes a 3D vector representing spherical coordinatesand converts
+ * them to cartesian coordinates.
+ *
+ * Spherical coordinates are defined as
+ *  - radius r
+ *  - inclination/elevation theta
+ *  - azimuth phi
+ */
+inline glm::vec3 sphericalToCartesian(glm::vec3 spherical);
+
+/**
+ * @brief Converts cartesian coordinates to spherical coordinates.
+ *
+ * The function takes a 3D vector representing cartesian coordinates (x, y, z) and converts them to
+ * spherical coordinates (r, theta, phi). The spatial relationship is as follows:
+ *
+ * Cartesian coordinates:
+ * x: Distance from the origin to the point in the x direction.
+ * y: Distance from the origin to the point in the y direction.
+ * z: Distance from the origin to the point in the z direction.
+ *
+ * Spherical coordinates:
+ * r: sqrt(x^2 + y^2 + z^2)
+ * theta: atan(y / x) (azimuthal angle)
+ * phi: atan(sqrt(x^2 + y^2) / z) (polar angle)
+ *
+ * @param cartesian A 3D vector representing cartesian coordinates (x, y, z).
+ * @return glm::vec3 A 3D vector representing spherical coordinates (r, theta, phi).
+ */
+inline glm::vec3 cartesianToSpherical(glm::vec3 cartesian);
+
 /// this is the same as what boost::hash_combine does
 template <typename T>
     requires(!ranges::range<T>)
@@ -105,33 +137,32 @@ inline glm::mat4 makePerspective(float fovy, float aspect, float near, float far
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
-inline glm::vec3 sphericalToCartesian(const glm::vec3 spherical)
+inline glm::vec3 sphericalToCartesian(glm::vec3 spherical)
 {
-    auto r = spherical.x;
-    auto theta = spherical.y;
-    auto phi = spherical.z;
-    float x = r * sin(phi) * cos(theta);
-    float y = r * sin(phi) * sin(theta);
-    float z = r * cos(phi);
+    auto [r, theta, phi] = spherical;
+
+    float x = r * sin(theta) * cos(phi);
+    float y = r * sin(theta) * sin(phi);
+    float z = r * cos(theta);
+
     return {x, y, z};
 }
 
-inline glm::vec3 cartesianToSpherical(const glm::vec3 cartesian)
+inline glm::vec3 cartesianToSpherical(glm::vec3 cartesian)
 {
-    float r = glm::length(cartesian);
-    if (cartesian.x == 0.0 && cartesian.y == 0.0) return {r, 0.0, 0.0};
+    float x = cartesian.x;
+    float y = cartesian.y;
+    float z = cartesian.z;
 
-    float theta = atan(cartesian.y / cartesian.x);
-    float phi = atan(sqrt(cartesian.x * cartesian.x + cartesian.y * cartesian.y) / cartesian.z);
+    float r = sqrt(x * x + y * y + z * z);
+    if (r == 0.0) { return {0.0f, 0.0f, 0.0f}; }
 
-    if (cartesian.x < 0.0 && cartesian.y >= 0.0 && theta == 0.0) { theta = glm::pi<float>(); }
-    else if (cartesian.x < 0.0 && cartesian.y < 0.0 && theta > 0.0) {
-        theta -= glm::pi<float>();
-    }
-    else if (cartesian.x < 0.0 && cartesian.y > 0.0 && theta < 0.0) {
-        theta += glm::pi<float>();
-    }
-    return {r, theta, phi};
+    float theta = acos(z / r);                                 // inclination/elevation
+    float phi = (x == 0.0f && y == 0.0f) ? 0.0f : atan2(y, x); // azimuth
+
+    if (phi < 0.0f) { phi += 2.0f * glm::pi<float>(); }
+
+    return glm::vec3(r, theta, phi);
 }
 
 } // namespace Cory

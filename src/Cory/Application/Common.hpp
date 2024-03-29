@@ -30,5 +30,6 @@ struct LayerPassOutputs {
 
 class ImGuiLayer;
 class DepthDebugLayer;
+class CameraLayer;
 
 } // namespace Cory

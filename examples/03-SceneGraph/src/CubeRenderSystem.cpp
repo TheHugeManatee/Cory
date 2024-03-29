@@ -37,8 +37,8 @@ void CubeRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
 {
     renderState_.clear();
     // update the camera's state
-    forEach<CameraComponent>(sg,
-                             [this](Cory::Entity e, CameraComponent &camera) { camera_ = camera; });
+    forEach<Cory::Components::CameraComponent>(
+        sg, [this](Cory::Entity e, auto &camera) { camera_ = camera; });
 }
 
 void CubeRenderSystem::update(Cory::SceneGraph &sg,

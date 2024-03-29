@@ -4,6 +4,7 @@
 #include <Cory/Application/Common.hpp>
 #include <Cory/Application/Event.hpp>
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 
 #include <string>
@@ -44,7 +45,10 @@ class ApplicationLayer {
     virtual bool hasRenderTask() const { return false; }
     /// if hasRenderTask() returns true, this method will be called to get the coroutine render task
     virtual RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
-                                                               LayerPassOutputs previousLayer) = 0;
+                                                               LayerPassOutputs previousLayer)
+    {
+        co_return;
+    }
 
     kdb::Property<std::string> name;
 };

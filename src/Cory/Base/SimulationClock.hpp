@@ -19,10 +19,9 @@ namespace Cory {
  */
 template <typename UpstreamClock> class BasicSimulationClock {
   public:
-    using StorageType = double;
     // symmetry to std::chrono::clock
     static constexpr bool is_steady{false};
-    using duration = std::chrono::duration<StorageType>;
+    using duration = std::chrono::duration<double>;
     using rep = duration::rep;
     using period = duration::period;
     using time_point = std::chrono::time_point<BasicSimulationClock>;
@@ -48,8 +47,8 @@ template <typename UpstreamClock> class BasicSimulationClock {
      */
     TickInfo tickBy(duration simulatedDelta);
 
-    void setTimeScale(StorageType scale) { timeScale_ = scale; }
-    StorageType timeScale() const { return timeScale_; }
+    void setTimeScale(double scale) { timeScale_ = scale; }
+    double timeScale() const { return timeScale_; }
 
     void reset();
 
@@ -66,10 +65,10 @@ template <typename UpstreamClock> class BasicSimulationClock {
   private:
     TickInfo advance(duration delta, duration simulatedDelta);
 
-    UpstreamClock::time_point lastTickUpstream_{};
+    typename UpstreamClock::time_point lastTickUpstream_{};
     TickInfo lastTick_{};
     uint64_t ticks_{};
-    StorageType timeScale_{1.0};
+    double timeScale_{1.0};
 };
 
 using SimulationClock = BasicSimulationClock<std::chrono::high_resolution_clock>;

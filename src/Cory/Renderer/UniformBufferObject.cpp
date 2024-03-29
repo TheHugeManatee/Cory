@@ -2,6 +2,7 @@
 
 #include <numeric>
 
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 

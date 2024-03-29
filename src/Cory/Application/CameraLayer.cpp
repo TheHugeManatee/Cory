@@ -135,6 +135,9 @@ bool CameraLayer::mouseMove(const MouseMovedEvent &event)
     else if (event.button == MouseButton::Right) {
         mode = Mode::Pan;
     }
+    else if (event.button == MouseButton::Middle) {
+        mode = Mode::Roll;
+    }
     //    if (event.modifiers.is_set(ModifierFlagBits::Shift))
     //        mode = Mode::Pan;
     //    else if (event.modifiers.is_set(ModifierFlagBits::Alt))
@@ -181,8 +184,9 @@ bool CameraLayer::mouseMove(const MouseMovedEvent &event)
         break;
     }
     case Mode::Roll: {
-        // "Roll" rotates the camera round the view axis, effectively rotating the up fector by a
-        // given angle/delta around the forward axis todo
+        const float rotationAngle = delta.x * rotationSpeed();
+        // "Roll" rotates the camera round the view axis, effectively rotating the up vector by a
+        viewToWorldMatrix = rotate(viewToWorldMatrix(), rotationAngle, localForward);
         break;
     }
     }

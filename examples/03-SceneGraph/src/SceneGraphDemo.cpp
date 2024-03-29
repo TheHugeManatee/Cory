@@ -161,18 +161,6 @@ void SceneGraphDemoApplication::setupScene()
                                              .position = 0.2f * axis * static_cast<float>(i),
                                              .scale = glm::vec3{0.1f},
                                          });
-
-                // sceneGraph_.createEntity(root,
-                //                          fmt::format("{}{}", axis_name, -i),
-                //                          AnimationComponent{
-                //                              .color = glm::vec4{color, 1.0f},
-                //                              .blend = 0.5f,
-                //                              .entityIndex = -1.0f,
-                //                          },
-                //                          Cory::Components::Transform{
-                //                              .position = axis * static_cast<float>(-i),
-                //                              .scale = glm::vec3{0.1f},
-                //                          });
             }
         };
     // create colored axes for X, Y and Z

@@ -249,10 +249,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 
     auto [resultInfo, resultState] = graph.declareOutput(postprocessOut.color);
 
-    CO_APP_INFO("Final output is a color texture of {}x{}x{}",
-                resultInfo.size.x,
-                resultInfo.size.y,
-                resultInfo.size.z);
+    CO_APP_INFO("Final output is a color texture of {}", resultInfo.size);
 
     Magnum::Vk::CommandBuffer buffer = t.ctx().commandPool().allocate();
     nameVulkanObject(t.ctx().device(), buffer, "CMD_FramegraphTest");

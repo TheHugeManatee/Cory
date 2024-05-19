@@ -24,11 +24,11 @@ enum class ResourceType { Buffer, Shader, Pipeline, Sampler };
  *  - Buffers
  *  - Shaders
  *  - Pipelines
+ *  - images & image views
  *  - Samplers
  *  - descriptor layouts
  *
  * Eventually also:
- *  - Textures and Buffers?
  *  - RenderPasses?
  *  - Descriptors? etc
  */

@@ -11,14 +11,12 @@ As such, it uses features that are only supported in rather modern compilers.
 
 #### Done
 
-
-
 #### Short Term
 
 - descriptor set/shader uniforms abstraction
     - [x] basics demo done
     - [ ] manage descriptors and sets via ResourceManager
-      - [x] Images, Samplers, Buffers, DescriptorSets all managed
+        - [x] Images, Samplers, Buffers, DescriptorSets all managed
     - [ ] define a global descriptor set 0 that is managed by cory itself
 - Render Graphs/Frame Graphs
     - [x] basic coroutine-based API and render pass resolution via graph search
@@ -42,14 +40,14 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] introduce per-frame memory arena into `FrameContext`
     - [ ] use std::pmr based allocator for Vulkan API calls
 - GameObject/Scenegraph system (Entities + Components, not full data-drive ECS)
-  - [ ] basic entity/component system
+    - [ ] basic entity/component system
 - Shader System
-  - [x] push constants 
-  - [x] On-the fly shader compilation using [google/shaderc](https://github.com/google/shaderc)
-  - [ ] shader hot-reloading
-  - [ ] shader reflection using [SPIR-V Reflect](https://github.com/KhronosGroup/SPIRV-Reflect)
-  - [ ] shader compilation cache
-  - [ ] [shader specialization constants](https://blogs.igalia.com/itoral/2018/03/20/improving-shader-performance-with-vulkans-specialization-constants/)
+    - [x] push constants
+    - [x] On-the fly shader compilation using [google/shaderc](https://github.com/google/shaderc)
+    - [ ] shader hot-reloading
+    - [ ] shader reflection using [SPIR-V Reflect](https://github.com/KhronosGroup/SPIRV-Reflect)
+    - [ ] shader compilation cache
+    - [ ] [shader specialization constants](https://blogs.igalia.com/itoral/2018/03/20/improving-shader-performance-with-vulkans-specialization-constants/)
 
 - [x] Basic coroutine-based framegraph **concept/API draft**
 - [x] ImGui integration
@@ -58,13 +56,13 @@ As such, it uses features that are only supported in rather modern compilers.
 - [x] Basic window and renderer infrastructure
 
 - [x] KHR_dynamic_rendering
-- 
+
 #### Mid Term
 
 - Implement a simple Volume Raymarcher
 - Extend usage of c++20 coroutines where meaningful
-  - [x] use coroutines for framegraph execution
-  - [ ] use coroutines for "game" logic
+    - [x] use coroutines for framegraph execution
+    - [ ] use coroutines for "game" logic
 - Multithreading?!
     - Multithreaded framegraph recording?
     - Offload resource creation (shaders/pipelines) to another thread (pool)
@@ -84,7 +82,8 @@ As such, it uses features that are only supported in rather modern compilers.
   Channel](https://www.youtube.com/user/TheChernoProject)
 - Alexander Overvoorde's excellent [Vulkan tutorial](https://vulkan-tutorial.com/)
 - Brendan Galea's [Vulkan Tutorial](https://www.youtube.com/watch?v=Y9U9IE0gVHA&list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR)
-- Tutorial on how to actually [integrate imgui into a vulkan renderer](https://frguthmann.github.io/posts/vulkan_imgui/) based off of the vulkan-tutorial.com source code
+- Tutorial on how to actually [integrate imgui into a vulkan renderer](https://frguthmann.github.io/posts/vulkan_imgui/)
+  based off of the vulkan-tutorial.com source code
 - Framegraphs/Render graphs:
     - [Framegraphs in Frostbite: GDC presentation by Yuri
       O'Donnell](https://www.gdcvault.com/play/1024045/FrameGraph-Extensible-Rendering-Architecture-in)
@@ -116,7 +115,9 @@ the top of the header files:
 - Dear ImGui Vulkan backend, https://github.com/ocornut/imgui/tree/master/backends, MIT License
 - imGuIZMO.quat for rotation widgets https://github.com/BrutPitt/imGuIZMO.quat, BSD 2-clause License
 - KDBindings, https://github.com/KDAB/KDBindings, MIT License
-- Ported simpler_vulkan_synchronization by Tobias Hector, https://github.com/Tobski/simple_vulkan_synchronization/, MIT License -- this has been adapted to this project's conventions and interfaces, see Renderer/SimplerVulkanSynchronization
+- Ported simpler_vulkan_synchronization by Tobias Hector, https://github.com/Tobski/simple_vulkan_synchronization/, MIT
+  License -- this has been adapted to this project's conventions and interfaces, see
+  Renderer/SimplerVulkanSynchronization
 
 See `conanfile.txt` for the additional libraries and their exact versions used. I update them to their latest versions
 sporadically, but there is of course always some flexibility in using different versions.
@@ -125,10 +126,9 @@ sporadically, but there is of course always some flexibility in using different 
 
 I'm currently building on MSVC 2022 and use several of the latest features, so you'll only be able to build this with a
 fairly recent compiler.
-While I generally try to stick with platform-independent code, I did not (yet?) invest much time into actual testing
+While I generally try to stick with platform-independent code, I did not invest much time into actual testing
 with different platforms (compilers and/or drivers) - likely I'm already hitting some MSVC and NVidia-specific quirks
-that
-may make compiling/running the application difficult on other environments.
+that may make compiling/running the application difficult on other environments.
 I'm always interested in feedback on compatibility issues, but I can of course not promise to be able to fix anything.
 
 That being said, to build the app, you will need to roughly perform the following steps:

@@ -8,7 +8,9 @@
 namespace Cory {
 
 /**
- *
+ * Implements a camera controller that reacts to mouse events to move the camera around.
+ * Note: The properties are currently effectively read-only as the internal viewToWorld matrix
+ *       is used as the single source of truth. External modifications will be ignored.
  */
 class CameraLayer : public ApplicationLayer {
   public:
@@ -42,7 +44,7 @@ class CameraLayer : public ApplicationLayer {
     static constexpr glm::vec3 localUp = {0.0f, 1.0f, 0.0f};
     static constexpr glm::vec3 localForward = {0.0f, 0.0f, -1.0f};
 
-    void lookAt(glm::vec3 position, glm::vec3 focus, glm::vec3 up = localUp);
+    void lookAt(glm::vec3 position, glm::vec3 focus, glm::vec3 up);
 
   private:
     struct State;

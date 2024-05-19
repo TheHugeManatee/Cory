@@ -26,7 +26,7 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         SlotMap_Test.cpp
         BitField_Test.cpp
         Callback_Test.cpp
-        FrameGraph.test.cpp
+        FrameGraph_Test.cpp
         CoroutinePlayground.cpp
         ResourceManager_Test.cpp
         TestUtils.cpp
@@ -35,13 +35,13 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         RenderTaskDeclaration_Test.cpp
         DescriptorSetManager_Test.cpp
         VulkanUtils_Test.cpp
-        SimulationClock.test.cpp
-        FutureFrameQueue.test.cpp
-        LayerStack_test.cpp
-        SceneGraph.test.cpp
+        SimulationClock_Test.cpp
+        FutureFrameQueue_Test.cpp
+        LayerStack_Test.cpp
+        SceneGraph_Test.cpp
         CoroutineGameLogic.cpp
-        TransformSystem.test.cpp
-        SystemCoordinator.test.cpp
+        TransformSystem_Test.cpp
+        SystemCoordinator_Test.cpp
         Math_Test.cpp
 )
 
@@ -54,7 +54,7 @@ target_link_libraries(${TARGET_NAME}_Tests PRIVATE
         Cory::project_warnings
         Cory::project_options
         ${TARGET_NAME}_TestLib
-        )
+)
 
 # automatically discover tests that are defined in catch based test files you can modify the unittests. Set TEST_PREFIX
 # to whatever you want, or use different for different binaries

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <glm/mat4x4.hpp>
-#include <glm/trigonometric.hpp>
 #include <glm/vec4.hpp>
 
 struct AnimationComponent {

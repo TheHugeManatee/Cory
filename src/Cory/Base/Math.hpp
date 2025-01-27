@@ -9,6 +9,8 @@
 
 #include <range/v3/range/concepts.hpp>
 
+#include <numeric>
+
 namespace Cory {
 /**
  * @brief Converts spherical coordinates to cartesian coordinates.
@@ -131,6 +133,13 @@ inline glm::mat4 makePerspective(float fovy, float aspect, float near, float far
     ret[2][3] = 1.f;
     ret[3][2] = -(far * near) / (far - near);
     return ret;
+}
+
+/// divide two integers and round up to the nearest integer
+/// @note: This might overflow at the extremes of the integer range
+template <std::integral T> [[nodiscard]] T divideRoundUp(T numerator, T denominator)
+{
+    return (numerator + denominator - 1) / denominator;
 }
 
 ///////////////////////////////////////////////////////////////////////

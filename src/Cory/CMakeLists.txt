@@ -113,7 +113,9 @@ set(CORY_SOURCES
         Systems/SystemCoordinator.hpp
         Systems/TransformSystem.cpp
         Systems/TransformSystem.hpp
-        )
+        Base/SignalTree.cpp
+        Base/SignalTree.hpp
+)
 
 # determine includes from CORY_SOURCES by the .hpp suffix
 set(CORY_INCLUDES "")

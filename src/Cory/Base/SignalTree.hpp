@@ -30,7 +30,14 @@ class SignalTree : NoCopy, NoMove {
     void set(SignalIdx index);
 
     /// Query and clear a signal. Returns the index of the signal that was cleared.
-    SignalIdx clearAndReturn();
+    [[nodiscard]] std::optional<SignalIdx> clearNext();
+
+    /// Query the total number of set signals
+    [[nodiscard]] uint64_t count() const;
+
+    // Debug/testing methods
+
+    void validateInternal() const;
 
     /// Query whether a signal is set. this is not threadsafe!
     bool unsafeQueryIsSet(SignalIdx signal) const;
@@ -39,7 +46,7 @@ class SignalTree : NoCopy, NoMove {
     std::string debugPrint() const;
 
   private:
-    // Wrapper aroundd internal node to satisfy putting std::atomic in vector
+    // Wrapper aroundd atomic for internal node to satisfy putting std::atomic in vector
     struct InternalNode {
         std::atomic<uint64_t> count_;
 
@@ -53,6 +60,10 @@ class SignalTree : NoCopy, NoMove {
         {
         }
 
+        auto inc() { return count_.fetch_add(1); }
+        auto dec() { return count_.fetch_sub(1); }
+        auto count() const { return count_.load(); }
+
         InternalNode &operator=(const InternalNode &other)
         {
             count_.store(other.count_.load());
@@ -60,7 +71,7 @@ class SignalTree : NoCopy, NoMove {
         }
     };
 
-    // A block of leaf node bits
+    // A block of leaf node bits with atomic storage
     struct LeafNodeBlock {
         static constexpr uint64_t NUM_BITS = 64;
         std::atomic<uint64_t> bits_;
@@ -80,12 +91,40 @@ class SignalTree : NoCopy, NoMove {
             bits_.store(other.bits_.load());
             return *this;
         }
+
+        bool set(uint64_t bit)
+        {
+            auto mask = 1ull << bit;
+            auto previous = bits_.fetch_or(mask);
+            return (previous & mask) == 0;
+        }
+
+        bool clear(uint64_t bit)
+        {
+            auto mask = 1ull << bit;
+            auto previous = bits_.fetch_and(~mask);
+            return (previous & mask) != 0;
+        }
+
+        bool isSet(uint64_t bit) const
+        {
+            auto bits = bits_.load();
+            return (bits & (1ull << bit)) != 0;
+        }
     };
 
+    auto left(uint64_t index) const { return 2 * index + 1; }
+    auto right(uint64_t index) const { return 2 * index + 2; }
+    auto parent(uint64_t index) const { return (index - 1) / 2; }
+    uint64_t childSum(uint64_t index) const;
+
+    bool updateLeaf(SignalIdx signal, bool set);
+
+    uint64_t maxSignals_;
     // Internal nodes store the total number of set signals in their subtree
     std::vector<InternalNode> internalNodes_;
-    // leaf nodes store the signal state as a bitmask
-    std::vector<LeafNodeBlock> leafNodes_;
+    // leaf nodes store the signal state as a bitset in atomics
+    std::vector<LeafNodeBlock> leafNodeBlocks_;
 };
 
 } // namespace Cory

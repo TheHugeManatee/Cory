@@ -41,11 +41,11 @@ class SignalTree : NoCopy, NoMove {
 
     void validateInternal() const;
 
-    /// Query whether a signal is set. this is not threadsafe!
-    bool unsafeQueryIsSet(SignalIdx signal) const;
+    /// Query whether a signal is set. this is not threadsafe, just here for testing/debugging
+    [[nodiscard]] bool unsafeQueryIsSet(SignalIdx signal) const;
 
-    /// Provide a debug printable representation of the tree
-    std::string debugPrint() const;
+    /// Provide a debug printable representation of the tree (DOT syntax). This is not threadsafe.
+    [[nodiscard]] std::string debugPrint() const;
 
   private:
     using NodeIdx = std::uint64_t;
@@ -88,6 +88,7 @@ class SignalTree : NoCopy, NoMove {
     };
 
     // A block of leaf node bits with atomic storage
+    // each bit represents the signal state of one signal index
     struct LeafNodeBlock {
         static constexpr uint64_t NUM_BITS = 64;
         std::atomic<uint64_t> bits_;
@@ -135,6 +136,8 @@ class SignalTree : NoCopy, NoMove {
     NodeIdx parent(NodeIdx index) const { return (index - 1) / 2; }
     uint64_t childSum(NodeIdx index) const;
 
+    NodeIdx selectInternalNode(NodeIdx firstIdx, NodeIdx secondIdx);
+    NodeIdx selectLeafNode(NodeIdx firstIdx, NodeIdx secondIdx);
     bool updateLeafSignal(SignalIdx signal, bool set);
 
     uint64_t maxSignals_;

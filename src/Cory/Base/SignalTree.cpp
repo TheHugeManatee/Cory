@@ -52,7 +52,7 @@ std::optional<SignalTree::SignalIdx> SignalTree::select()
         return std::nullopt;
     }
 
-    while (currentNodeIdx < internalNodes_.size()) {
+    while (true) {
         auto firstNodeIdx = left(currentNodeIdx);
         auto secondNodeIdx = right(currentNodeIdx);
 
@@ -60,29 +60,11 @@ std::optional<SignalTree::SignalIdx> SignalTree::select()
         // todo bias: std::swap(first_node, second_node);
 
         if (isNodeInternal(firstNodeIdx)) {
-            if (updated = internalNodes_[firstNodeIdx].tryDec(); updated.success) {
-                currentNodeIdx = firstNodeIdx;
-            }
-            else {
-                updated = internalNodes_[secondNodeIdx].tryDec();
-                CO_CORE_ASSERT(updated.success,
-                               "Internal inconsistency - decrement should always succeed!");
-                currentNodeIdx = secondNodeIdx;
-            }
+            currentNodeIdx = selectInternalNode(firstNodeIdx, secondNodeIdx);
             continue;
         }
 
-        // handle leaf nodes
-        // last level has only leaf nodes so we have to query the bitset instead
-        const auto firstSignalIdx = firstNodeIdx - internalNodes_.size();
-        const auto secondSignalIdx = secondNodeIdx - internalNodes_.size();
-
-        // If the first leaf signal was set, clear it and return its index
-        if (updateLeafSignal(firstSignalIdx, false)) { return firstSignalIdx; }
-
-        // Otherwise, the second signal must have been set - return it instead
-        updateLeafSignal(secondSignalIdx, false);
-        return secondSignalIdx;
+        return selectLeafNode(firstNodeIdx, secondNodeIdx);
     }
 }
 
@@ -129,6 +111,30 @@ uint64_t SignalTree::childSum(uint64_t index) const
     const auto rightSet = unsafeQueryIsSet(rightSignalIndex) ? 1 : 0;
 
     return leftSet + rightSet;
+}
+
+SignalTree::NodeIdx SignalTree::selectInternalNode(NodeIdx firstIdx, NodeIdx secondIdx)
+{
+    if (auto updated = internalNodes_[firstIdx].tryDec(); updated.success) { return firstIdx; }
+
+    auto updated = internalNodes_[secondIdx].tryDec();
+    CO_CORE_ASSERT(updated.success, "Internal inconsistency - decrement should always succeed!");
+    return secondIdx;
+}
+
+SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondIdx)
+{
+    // handle leaf nodes
+    // last level has only leaf nodes so we have to query the bitset instead
+    const auto firstSignalIdx = firstIdx - internalNodes_.size();
+    const auto secondSignalIdx = secondIdx - internalNodes_.size();
+
+    // If the first leaf signal was set, clear it and return its index
+    if (updateLeafSignal(firstSignalIdx, false)) { return firstSignalIdx; }
+
+    // Otherwise, the second signal must have been set - return it instead
+    updateLeafSignal(secondSignalIdx, false);
+    return secondSignalIdx;
 }
 
 bool SignalTree::updateLeafSignal(SignalIdx signal, bool set)

@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 
 #include <barrier>
+#include <latch>
 #include <random>
 #include <set>
 #include <thread>
@@ -85,6 +86,93 @@ TEST_CASE("SignalTree", "[Cory/Base]")
         }
 
         REQUIRE(signalsToSet == signalsThatWereSet);
+    }
+}
+
+TEST_CASE("SignalTree MT Producer Only", "[Cory/Base]")
+{
+    struct SignalTreeTestConfig {
+        uint64_t SIGNALS_PER_THREAD;
+        uint64_t NUM_PRODUCERS;
+        uint64_t MAX_SIGNALS;
+    };
+    auto run_producer_only_test = [](SignalTreeTestConfig cfg) {
+        Cory::SignalTree signals(cfg.MAX_SIGNALS);
+        std::latch testStartLatch(1);
+
+        // Generate a random set of available signal indices
+        std::vector<Cory::SignalTree::SignalIdx> signalIndices(cfg.MAX_SIGNALS);
+        {
+            std::random_device rd;
+            std::mt19937 g(rd());
+            std::iota(signalIndices.begin(), signalIndices.end(), 0);
+            std::shuffle(signalIndices.begin(), signalIndices.end(), g);
+        }
+
+        // Every producer gets its individual slice of the signal indices
+        auto producer_func = [&](size_t indexOffset) {
+            return [&, indexOffset]() {
+                std::vector<Cory::SignalTree::SignalIdx> thisThreadSignals{
+                    signalIndices.begin() + indexOffset,
+                    signalIndices.begin() + indexOffset + cfg.SIGNALS_PER_THREAD};
+
+                testStartLatch.wait();
+                for (auto signal : thisThreadSignals) {
+                    signals.set(signal);
+                }
+            };
+        };
+
+        std::vector<std::thread> producers;
+        for (int i = 0; i < cfg.NUM_PRODUCERS; ++i) {
+            producers.emplace_back(producer_func(i * cfg.SIGNALS_PER_THREAD));
+        }
+
+        // start all producers at the same time to create a bit more contention
+        testStartLatch.count_down();
+
+        for (auto &producer : producers) {
+            producer.join();
+        }
+        // signals count must match
+        REQUIRE(signals.count() == cfg.NUM_PRODUCERS * cfg.SIGNALS_PER_THREAD);
+        // signal tree must be internally consistent
+        signals.validateInternal();
+
+        // The correct signals must be set
+        for (uint64_t i = 0; i < cfg.MAX_SIGNALS; ++i) {
+            auto signalIdx = signalIndices[i];
+            bool shouldBeSet = i < cfg.NUM_PRODUCERS * cfg.SIGNALS_PER_THREAD;
+            // CAPTURE(i);
+            // CAPTURE(signalIdx);
+            // spdlog::critical(signals.debugPrint());
+            REQUIRE(signals.unsafeQueryIsSet(signalIdx) == shouldBeSet);
+        }
+    };
+
+    SECTION("Basic - MT Set all")
+    {
+        run_producer_only_test(
+            {.SIGNALS_PER_THREAD = 4, .NUM_PRODUCERS = 32, .MAX_SIGNALS = 4 * 32});
+    }
+    SECTION("Basic - MT Set some")
+    {
+        run_producer_only_test({.SIGNALS_PER_THREAD = 2, .NUM_PRODUCERS = 16, .MAX_SIGNALS = 64});
+    }
+    SECTION("Basic - Very MT Set some")
+    {
+        run_producer_only_test(
+            {.SIGNALS_PER_THREAD = 4096, .NUM_PRODUCERS = 16, .MAX_SIGNALS = 4096 * 4096});
+    }
+    SECTION("Basic - MT Set HALF")
+    {
+        run_producer_only_test(
+            {.SIGNALS_PER_THREAD = 1024, .NUM_PRODUCERS = 1024, .MAX_SIGNALS = 2 * 1024 * 1024});
+    }
+    SECTION("Basic - Very MT Set all")
+    {
+        run_producer_only_test(
+            {.SIGNALS_PER_THREAD = 4096, .NUM_PRODUCERS = 4096, .MAX_SIGNALS = 4096 * 4096});
     }
 }
 

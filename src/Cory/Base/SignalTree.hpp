@@ -34,7 +34,7 @@ class SignalTree : NoCopy, NoMove {
     /// Query and clear a signal. Returns the index of the signal that was cleared.
     [[nodiscard]] std::optional<SignalIdx> select();
 
-    /// Query the total number of set signals
+    /// Query the current number of set signals.
     [[nodiscard]] uint64_t count() const;
 
     // Debug/testing methods

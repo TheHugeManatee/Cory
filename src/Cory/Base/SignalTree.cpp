@@ -13,7 +13,7 @@ namespace Cory {
 SignalTree::SignalTree(std::uint64_t signals)
     : maxSignals_{signals}
 {
-    // signals must be a power of two > 2
+    // signals must be a power of two > 2 cause otherwise why even bother using a signal tree
     if (signals < 2 || (signals & (signals - 1)) != 0) {
         throw std::invalid_argument("SignalTree must be initialized with a power of two signals");
     }
@@ -41,7 +41,6 @@ void SignalTree::set(SignalIdx index)
 
 std::optional<SignalTree::SignalIdx> SignalTree::select()
 {
-
     // To find a signal to clear, we start at the root and go down the tree
     // We decrement the count of the internal nodes as we go
     auto currentNodeIdx = ROOT_NODE_IDX;
@@ -52,6 +51,8 @@ std::optional<SignalTree::SignalIdx> SignalTree::select()
         return std::nullopt;
     }
 
+    // Note: Once we've decremented the root node, we know that the tree is non-empty
+    // and that we *must* find a signal to clear regardless of multithreaded contention
     while (true) {
         auto firstNodeIdx = left(currentNodeIdx);
         auto secondNodeIdx = right(currentNodeIdx);
@@ -124,8 +125,7 @@ SignalTree::NodeIdx SignalTree::selectInternalNode(NodeIdx firstIdx, NodeIdx sec
 
 SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondIdx)
 {
-    // handle leaf nodes
-    // last level has only leaf nodes so we have to query the bitset instead
+    // last level has only leaf nodes so we have to query the bitset
     const auto firstSignalIdx = firstIdx - internalNodes_.size();
     const auto secondSignalIdx = secondIdx - internalNodes_.size();
 
@@ -133,7 +133,8 @@ SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondI
     if (updateLeafSignal(firstSignalIdx, false)) { return firstSignalIdx; }
 
     // Otherwise, the second signal must have been set - return it instead
-    updateLeafSignal(secondSignalIdx, false);
+    auto success = updateLeafSignal(secondSignalIdx, false);
+    CO_CORE_ASSERT(success, "Internal inconsistency - second signal should always be set!");
     return secondSignalIdx;
 }
 

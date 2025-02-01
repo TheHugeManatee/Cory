@@ -26,10 +26,14 @@ SignalTree::SignalTree(std::uint64_t signals)
     leafNodeBlocks_.resize(leafNodesSize);
 }
 
-void SignalTree::set(SignalIdx index)
+bool SignalTree::set(SignalIdx index)
 {
     // Set operations must go bottom-up from the leaf node to the root
-    updateLeafSignal(index, true);
+    bool before = updateLeafSignal(index, true);
+    if (before) {
+        // signal was already set
+        return false;
+    }
 
     // Update the internal nodes to obtain child-sum property
     for (auto internalNodeIdx = parent(internalNodes_.size() + index); internalNodeIdx != 0;
@@ -37,6 +41,7 @@ void SignalTree::set(SignalIdx index)
         internalNodes_[internalNodeIdx].inc();
     }
     internalNodes_[ROOT_NODE_IDX].inc();
+    return true;
 }
 
 std::optional<SignalTree::SignalIdx> SignalTree::select()
@@ -130,11 +135,13 @@ SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondI
     const auto secondSignalIdx = secondIdx - internalNodes_.size();
 
     // If the first leaf signal was set, clear it and return its index
-    if (updateLeafSignal(firstSignalIdx, false)) { return firstSignalIdx; }
+    if (bool firstWasSet = updateLeafSignal(firstSignalIdx, false); firstWasSet) {
+        return firstSignalIdx;
+    }
 
     // Otherwise, the second signal must have been set - return it instead
-    auto success = updateLeafSignal(secondSignalIdx, false);
-    CO_CORE_ASSERT(success, "Internal inconsistency - second signal should always be set!");
+    auto secondWasSet = updateLeafSignal(secondSignalIdx, false);
+    CO_CORE_ASSERT(secondWasSet, "Internal inconsistency - second signal should always be set!");
     return secondSignalIdx;
 }
 

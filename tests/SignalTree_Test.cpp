@@ -10,7 +10,7 @@
 #include <set>
 #include <thread>
 
-TEST_CASE("SignalTree", "[Cory/Base]")
+TEST_CASE("SignalTree", "[Cory/SignalTree]")
 {
     SECTION("Initializes with a power of two")
     {
@@ -89,7 +89,7 @@ TEST_CASE("SignalTree", "[Cory/Base]")
     }
 }
 
-TEST_CASE("SignalTree MT Producer Only", "[Cory/Base]")
+TEST_CASE("SignalTree MT Producer Only", "[Cory/SignalTree]")
 {
     struct SignalTreeTestConfig {
         uint64_t SIGNALS_PER_THREAD;
@@ -135,7 +135,7 @@ TEST_CASE("SignalTree MT Producer Only", "[Cory/Base]")
             producer.join();
         }
         // signals count must match
-        REQUIRE(signals.count() == cfg.NUM_PRODUCERS * cfg.SIGNALS_PER_THREAD);
+        REQUIRE(signals.count() == (cfg.NUM_PRODUCERS * cfg.SIGNALS_PER_THREAD));
         // signal tree must be internally consistent
         signals.validateInternal();
 
@@ -152,170 +152,218 @@ TEST_CASE("SignalTree MT Producer Only", "[Cory/Base]")
 
     SECTION("Basic - MT Set all")
     {
-        run_producer_only_test(
-            {.SIGNALS_PER_THREAD = 4, .NUM_PRODUCERS = 32, .MAX_SIGNALS = 4 * 32});
+        run_producer_only_test({
+            .SIGNALS_PER_THREAD = 4,
+            .NUM_PRODUCERS = 32,
+            .MAX_SIGNALS = 4 * 32,
+        });
     }
     SECTION("Basic - MT Set some")
     {
-        run_producer_only_test({.SIGNALS_PER_THREAD = 2, .NUM_PRODUCERS = 16, .MAX_SIGNALS = 64});
+        run_producer_only_test({
+            .SIGNALS_PER_THREAD = 2,
+            .NUM_PRODUCERS = 16,
+            .MAX_SIGNALS = 64,
+        });
     }
     SECTION("Basic - Very MT Set some")
     {
-        run_producer_only_test(
-            {.SIGNALS_PER_THREAD = 4096, .NUM_PRODUCERS = 16, .MAX_SIGNALS = 4096 * 4096});
+        run_producer_only_test({
+            .SIGNALS_PER_THREAD = 4096,
+            .NUM_PRODUCERS = 16,
+            .MAX_SIGNALS = 4096 * 4096,
+        });
     }
     SECTION("Basic - MT Set HALF")
     {
-        run_producer_only_test(
-            {.SIGNALS_PER_THREAD = 1024, .NUM_PRODUCERS = 1024, .MAX_SIGNALS = 2 * 1024 * 1024});
+        run_producer_only_test({
+            .SIGNALS_PER_THREAD = 1024,
+            .NUM_PRODUCERS = 1024,
+            .MAX_SIGNALS = 2 * 1024 * 1024,
+        });
     }
     SECTION("Basic - Very MT Set all")
     {
-        run_producer_only_test(
-            {.SIGNALS_PER_THREAD = 4096, .NUM_PRODUCERS = 4096, .MAX_SIGNALS = 4096 * 4096});
+        run_producer_only_test({
+            .SIGNALS_PER_THREAD = 4096,
+            .NUM_PRODUCERS = 4096,
+            .MAX_SIGNALS = 4096 * 4096,
+        });
     }
 }
 
-TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/Base]")
+TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
 {
     // This test creates a number of producers, each of which have their own signal subset assigned.
     // On each iteration, the producers set their signals and then synchronize at a shared barrier.
     // The consumer clears all signals and then kicks off another iteration. At the end, we make
     // sure that each signal was invoked once per iteration if it was assigned to a thread.
-    static auto MAX_SIGNALS = 0;
-    static auto SIGNALS_PER_THREAD = 0;
-    static auto NUM_PRODUCERS = 0;
-    static auto NUM_CONSUMERS = 0;
-    static auto NUM_ITERATIONS = 0;
+
+    struct SignalTreeTestConfig {
+        uint64_t MAX_SIGNALS;
+        uint64_t SIGNALS_PER_THREAD;
+        uint64_t NUM_PRODUCERS;
+        uint64_t NUM_CONSUMERS;
+        uint64_t NUM_ITERATIONS;
+    };
+
+    auto run_mt_stress_test = [](SignalTreeTestConfig cfg) {
+        Cory::SignalTree signals(cfg.MAX_SIGNALS);
+
+        // Generate a random set of available signal indices
+        std::vector<Cory::SignalTree::SignalIdx> signalIndices(cfg.MAX_SIGNALS);
+        {
+            std::random_device rd;
+            std::mt19937 g(rd());
+            std::iota(signalIndices.begin(), signalIndices.end(), 0);
+            std::shuffle(signalIndices.begin(), signalIndices.end(), g);
+        }
+
+        // one latch per iteration, to synchronize all producers finishing their loop
+        std::barrier iteration_barrier(cfg.NUM_PRODUCERS + cfg.NUM_CONSUMERS);
+        std::barrier consumers_done(cfg.NUM_PRODUCERS + cfg.NUM_CONSUMERS);
+        std::atomic<size_t> producersActive{0};
+
+        // Every producer gets its individual slice of the signal indices
+        auto producer_func = [&](size_t indexOffset) {
+            return [&, indexOffset]() {
+                std::vector<Cory::SignalTree::SignalIdx> thisThreadSignals{
+                    signalIndices.begin() + indexOffset,
+                    signalIndices.begin() + indexOffset + cfg.SIGNALS_PER_THREAD};
+
+                std::random_device rd;
+                std::mt19937 g(rd());
+
+                for (int i = 0; i < cfg.NUM_ITERATIONS; ++i) {
+                    ++producersActive;
+                    for (auto signal : thisThreadSignals) {
+                        bool wasSet = signals.set(signal);
+                        // if (!wasSet) {
+                        //     CAPTURE(signal);
+                        //     REQUIRE(wasSet);
+                        // }
+                    }
+                    --producersActive;
+                    iteration_barrier.arrive_and_wait();
+
+                    // re-shuffle the signals for the next iteration
+                    std::shuffle(thisThreadSignals.begin(), thisThreadSignals.end(), g);
+                    consumers_done.arrive_and_wait();
+                }
+            };
+        };
+
+        std::vector<std::vector<size_t>> signalsInvokedCounters{};
+        signalsInvokedCounters.resize(cfg.NUM_CONSUMERS);
+        auto consumer_func = [&](size_t consumerId) {
+            return [&, consumerId]() {
+                auto &signalsInvoked = signalsInvokedCounters[consumerId];
+                signalsInvoked.resize(cfg.MAX_SIGNALS, 0);
+                auto drain_signals = [&]() {
+                    for (auto signal = signals.select(); signal.has_value();
+                         signal = signals.select()) {
+                        signalsInvoked[signal.value()]++;
+                    }
+                };
+                for (int i = 0; i < cfg.NUM_ITERATIONS; ++i) {
+                    while (producersActive > 0) {
+                        drain_signals();
+                    }
+
+                    // arrive at the barrier and do some sanity checking
+                    iteration_barrier.arrive_and_wait();
+
+                    // producers have stopped setting signals, so we can drain the rest
+                    drain_signals();
+
+                    // all producers should now be done for this iteration, so we can do some
+                    // single-threaded validity checks
+                    if (consumerId == 0) {
+                        // non-zero signals would indicate the consumers haven't done their job
+                        CAPTURE(signals.debugPrint());
+                        REQUIRE(signals.count() == 0);
+
+                        try {
+                            signals.validateInternal();
+                        }
+                        catch (const std::exception &e) {
+                            spdlog::critical(e.what());
+                            spdlog::shutdown();
+                            FAIL("Validation failed");
+                        }
+                    }
+
+                    // kick off the next round
+                    consumers_done.arrive_and_wait();
+                }
+            };
+        };
+
+        std::vector<std::thread> producers;
+        for (int i = 0; i < cfg.NUM_PRODUCERS; ++i) {
+            producers.emplace_back(producer_func(i * cfg.SIGNALS_PER_THREAD));
+        }
+        std::vector<std::thread> consumers;
+        for (int i = 0; i < cfg.NUM_CONSUMERS; ++i) {
+            consumers.emplace_back(consumer_func(i));
+        }
+
+        for (auto &consumer : consumers) {
+            consumer.join();
+        }
+        for (auto &producer : producers) {
+            producer.join();
+        }
+
+        for (int i = 0; i < cfg.MAX_SIGNALS; ++i) {
+            auto signal_idx = signalIndices[i];
+            uint64_t signal_invoked =
+                std::accumulate(signalsInvokedCounters.begin(),
+                                signalsInvokedCounters.end(),
+                                0ull,
+                                [signal_idx](size_t sum, const std::vector<size_t> &v) {
+                                    return sum + v[signal_idx];
+                                });
+
+            if (i < cfg.NUM_PRODUCERS * cfg.SIGNALS_PER_THREAD) {
+                CHECK(signal_invoked == cfg.NUM_ITERATIONS);
+            }
+            else {
+                CHECK(signal_invoked == 0);
+            }
+        }
+    };
 
     SECTION("SPSC Test")
     {
-        MAX_SIGNALS = 32;
-        SIGNALS_PER_THREAD = 1;
-        NUM_PRODUCERS = 1;
-        NUM_CONSUMERS = 1;
-        NUM_ITERATIONS = 100;
+        run_mt_stress_test({.MAX_SIGNALS = 32,
+                            .SIGNALS_PER_THREAD = 1,
+                            .NUM_PRODUCERS = 1,
+                            .NUM_CONSUMERS = 1,
+                            .NUM_ITERATIONS = 100});
     }
-    // SECTION("MPMC Small")
-    // {
-    //     MAX_SIGNALS = 32;
-    //     SIGNALS_PER_THREAD = 1;
-    //     NUM_PRODUCERS = 16;
-    //     NUM_CONSUMERS = 2;
-    //     NUM_ITERATIONS = 100;
-    // }
-    // SECTION("MPMC Large")
-    // {
-    //     MAX_SIGNALS = 2 << 18;
-    //     SIGNALS_PER_THREAD = 2 << 13;
-    //     NUM_PRODUCERS = 16;
-    //     NUM_CONSUMERS = 2;
-    //     NUM_ITERATIONS = 100;
-    // }
-
-    Cory::SignalTree signals(MAX_SIGNALS);
-
-    // Generate a random set of available signal indices
-    std::vector<Cory::SignalTree::SignalIdx> signalIndices(MAX_SIGNALS);
+    SECTION("MPMC Small")
     {
-        std::random_device rd;
-        std::mt19937 g(rd());
-        std::iota(signalIndices.begin(), signalIndices.end(), 0);
-        std::shuffle(signalIndices.begin(), signalIndices.end(), g);
+        run_mt_stress_test({.MAX_SIGNALS = 32,
+                            .SIGNALS_PER_THREAD = 1,
+                            .NUM_PRODUCERS = 16,
+                            .NUM_CONSUMERS = 2,
+                            .NUM_ITERATIONS = 100});
     }
-
-    // one latch per iteration, to synchronize all producers finishing their loop
-    std::barrier iteration_barrier(NUM_PRODUCERS + NUM_CONSUMERS);
-    std::barrier consumers_done(NUM_PRODUCERS + NUM_CONSUMERS);
-    std::atomic<size_t> producersActive{0};
-
-    // Every producer gets its individual slice of the signal indices
-    auto producer_func = [&](size_t indexOffset) {
-        return [&, indexOffset]() {
-            std::vector<Cory::SignalTree::SignalIdx> thisThreadSignals{
-                signalIndices.begin() + indexOffset,
-                signalIndices.begin() + indexOffset + SIGNALS_PER_THREAD};
-
-            std::random_device rd;
-            std::mt19937 g(rd());
-
-            for (int i = 0; i < NUM_ITERATIONS; ++i) {
-                ++producersActive;
-                for (auto signal : thisThreadSignals) {
-                    signals.set(signal);
-                }
-                --producersActive;
-                iteration_barrier.arrive_and_wait();
-
-                // re-shuffle the signals for the next iteration
-                std::shuffle(thisThreadSignals.begin(), thisThreadSignals.end(), g);
-                consumers_done.arrive_and_wait();
-            }
-        };
-    };
-
-    std::vector<std::vector<size_t>> signalsInvokedCounters{};
-    signalsInvokedCounters.resize(NUM_CONSUMERS);
-    auto consumer_func = [&](size_t consumerId) {
-        return [&, consumerId]() {
-            auto &signalsInvoked = signalsInvokedCounters[consumerId];
-            signalsInvoked.resize(MAX_SIGNALS, 0);
-            for (int i = 0; i < NUM_ITERATIONS; ++i) {
-
-                while (producersActive.load() > 0) {
-                    auto signal = signals.select();
-                    if (signal.has_value()) { signalsInvoked[signal.value()]++; }
-                }
-                // arrive at the barrier and do some sanity checking
-                iteration_barrier.arrive_and_wait();
-
-                // all producers should now be done for this iteration, so we can do some
-                // single-threaded validity checks
-                if (consumerId == 0) {
-                    try {
-
-                        signals.validateInternal();
-                    }
-                    catch (const std::exception &e) {
-                        spdlog::critical(e.what());
-                        spdlog::shutdown();
-                        FAIL("Validation failed");
-                    }
-                }
-
-                // kick off the next round
-                consumers_done.arrive_and_wait();
-            }
-        };
-    };
-
-    std::vector<std::thread> producers;
-    for (int i = 0; i < NUM_PRODUCERS; ++i) {
-        producers.emplace_back(producer_func(i * SIGNALS_PER_THREAD));
+    SECTION("MPMC Medium")
+    {
+        run_mt_stress_test({.MAX_SIGNALS = 2 << 14,
+                            .SIGNALS_PER_THREAD = 2 << 9,
+                            .NUM_PRODUCERS = 16,
+                            .NUM_CONSUMERS = 2,
+                            .NUM_ITERATIONS = 100});
     }
-    std::vector<std::thread> consumers;
-    for (int i = 0; i < NUM_CONSUMERS; ++i) {
-        consumers.emplace_back(consumer_func(i));
-    }
-
-    for (auto &consumer : consumers) {
-        consumer.join();
-    }
-    for (auto &producer : producers) {
-        producer.join();
-    }
-
-    for (int i = 0; i < MAX_SIGNALS; ++i) {
-        auto signal_idx = signalIndices[i];
-        auto signal_invoked = std::accumulate(
-            signalsInvokedCounters.begin(),
-            signalsInvokedCounters.end(),
-            0ull,
-            [signal_idx](size_t sum, const std::vector<size_t> &v) { return sum + v[signal_idx]; });
-
-        if (i < NUM_PRODUCERS * SIGNALS_PER_THREAD) { CHECK(signal_invoked == NUM_ITERATIONS); }
-        else {
-            CHECK(signal_invoked == 0);
-        }
+    SECTION("MPMC Large")
+    {
+        run_mt_stress_test({.MAX_SIGNALS = 2 << 16,
+                            .SIGNALS_PER_THREAD = 2 << 11,
+                            .NUM_PRODUCERS = 16,
+                            .NUM_CONSUMERS = 16,
+                            .NUM_ITERATIONS = 100});
     }
 }

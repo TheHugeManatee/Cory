@@ -29,7 +29,8 @@ class SignalTree : NoCopy, NoMove {
     explicit SignalTree(std::uint64_t signals);
 
     /// set a signal by its index
-    void set(SignalIdx index);
+    /// Returns true if the signal was set, false if it was already set
+    bool set(SignalIdx index);
 
     /// Query and clear a signal. Returns the index of the signal that was cleared.
     [[nodiscard]] std::optional<SignalIdx> select();
@@ -109,18 +110,20 @@ class SignalTree : NoCopy, NoMove {
             return *this;
         }
 
+        // Attempts to set a bit atomically. Returns the previous value of the bit.
         bool set(uint64_t bit)
         {
-            auto mask = 1ull << bit;
+            const auto mask = 1ull << bit;
             auto previous = bits_.fetch_or(mask);
-            return (previous & mask) == 0;
+            return (previous & mask) > 0;
         }
 
+        // Attempts to clear a bit atomically. Returns the previous value of the bit.
         bool clear(uint64_t bit)
         {
-            auto mask = 1ull << bit;
+            const auto mask = 1ull << bit;
             auto previous = bits_.fetch_and(~mask);
-            return (previous & mask) != 0;
+            return (previous & mask) > 0;
         }
 
         bool isSet(uint64_t bit) const
@@ -136,8 +139,11 @@ class SignalTree : NoCopy, NoMove {
     NodeIdx parent(NodeIdx index) const { return (index - 1) / 2; }
     uint64_t childSum(NodeIdx index) const;
 
+    // "Atomically" select one of the two given nodes, decrementing the selected node's count
     NodeIdx selectInternalNode(NodeIdx firstIdx, NodeIdx secondIdx);
+    // Atomically select one of the two given nodes, clearing the selected node's signal
     NodeIdx selectLeafNode(NodeIdx firstIdx, NodeIdx secondIdx);
+    // Update the signal bit of the signal index. Returns the previous signaling value
     bool updateLeafSignal(SignalIdx signal, bool set);
 
     uint64_t maxSignals_;

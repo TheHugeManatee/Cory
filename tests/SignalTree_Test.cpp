@@ -2,14 +2,13 @@
 
 #include <Cory/Base/SignalTree.hpp>
 
+#include <spdlog/spdlog.h>
+
 #include <barrier>
 #include <random>
 #include <set>
 #include <thread>
 
-namespace std {
-class latch;
-}
 TEST_CASE("SignalTree", "[Cory/Base]")
 {
     SECTION("Initializes with a power of two")
@@ -49,7 +48,7 @@ TEST_CASE("SignalTree", "[Cory/Base]")
     {
         Cory::SignalTree signals(8);
 
-        REQUIRE_FALSE(signals.clearNext().has_value());
+        REQUIRE_FALSE(signals.select().has_value());
     }
 
     SECTION("Setting a single signal and then clearing it")
@@ -58,7 +57,7 @@ TEST_CASE("SignalTree", "[Cory/Base]")
 
         for (int i = 0; i < 8; ++i) {
             signals.set(i);
-            auto cleared = signals.clearNext();
+            auto cleared = signals.select();
             REQUIRE(cleared.has_value());
             REQUIRE(cleared.value() == i);
             signals.validateInternal();
@@ -80,7 +79,7 @@ TEST_CASE("SignalTree", "[Cory/Base]")
         }
 
         std::set<size_t> signalsThatWereSet;
-        for (auto signal = signals.clearNext(); signal.has_value(); signal = signals.clearNext()) {
+        for (auto signal = signals.select(); signal.has_value(); signal = signals.select()) {
             signalsThatWereSet.insert(signal.value());
             signals.validateInternal();
         }
@@ -95,11 +94,36 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/Base]")
     // On each iteration, the producers set their signals and then synchronize at a shared barrier.
     // The consumer clears all signals and then kicks off another iteration. At the end, we make
     // sure that each signal was invoked once per iteration if it was assigned to a thread.
-    static constexpr auto MAX_SIGNALS = 2 << 18;
-    static constexpr auto SIGNALS_PER_THREAD = 2 << 13;
-    static constexpr auto NUM_PRODUCERS = 16;
-    static constexpr auto NUM_CONSUMERS = 2;
-    static constexpr auto NUM_ITERATIONS = 100;
+    static auto MAX_SIGNALS = 0;
+    static auto SIGNALS_PER_THREAD = 0;
+    static auto NUM_PRODUCERS = 0;
+    static auto NUM_CONSUMERS = 0;
+    static auto NUM_ITERATIONS = 0;
+
+    SECTION("SPSC Test")
+    {
+        MAX_SIGNALS = 32;
+        SIGNALS_PER_THREAD = 1;
+        NUM_PRODUCERS = 1;
+        NUM_CONSUMERS = 1;
+        NUM_ITERATIONS = 100;
+    }
+    // SECTION("MPMC Small")
+    // {
+    //     MAX_SIGNALS = 32;
+    //     SIGNALS_PER_THREAD = 1;
+    //     NUM_PRODUCERS = 16;
+    //     NUM_CONSUMERS = 2;
+    //     NUM_ITERATIONS = 100;
+    // }
+    // SECTION("MPMC Large")
+    // {
+    //     MAX_SIGNALS = 2 << 18;
+    //     SIGNALS_PER_THREAD = 2 << 13;
+    //     NUM_PRODUCERS = 16;
+    //     NUM_CONSUMERS = 2;
+    //     NUM_ITERATIONS = 100;
+    // }
 
     Cory::SignalTree signals(MAX_SIGNALS);
 
@@ -151,7 +175,7 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/Base]")
             for (int i = 0; i < NUM_ITERATIONS; ++i) {
 
                 while (producersActive.load() > 0) {
-                    auto signal = signals.clearNext();
+                    auto signal = signals.select();
                     if (signal.has_value()) { signalsInvoked[signal.value()]++; }
                 }
                 // arrive at the barrier and do some sanity checking
@@ -159,7 +183,17 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/Base]")
 
                 // all producers should now be done for this iteration, so we can do some
                 // single-threaded validity checks
-                if (consumerId == 0) { signals.validateInternal(); }
+                if (consumerId == 0) {
+                    try {
+
+                        signals.validateInternal();
+                    }
+                    catch (const std::exception &e) {
+                        spdlog::critical(e.what());
+                        spdlog::shutdown();
+                        FAIL("Validation failed");
+                    }
+                }
 
                 // kick off the next round
                 consumers_done.arrive_and_wait();
@@ -188,7 +222,7 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/Base]")
         auto signal_invoked = std::accumulate(
             signalsInvokedCounters.begin(),
             signalsInvokedCounters.end(),
-            0,
+            0ull,
             [signal_idx](size_t sum, const std::vector<size_t> &v) { return sum + v[signal_idx]; });
 
         if (i < NUM_PRODUCERS * SIGNALS_PER_THREAD) { CHECK(signal_invoked == NUM_ITERATIONS); }

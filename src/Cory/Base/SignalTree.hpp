@@ -11,6 +11,8 @@ namespace Cory {
 /**
  * @brief A signal tree is a threadsafe tree of binary signals.
  *
+ * See https://github.com/CppCon/CppCon2024/blob/main/Presentations/Work_Contracts.pdf
+ *
  * - Each signal can be either signaled or unsignaled.
  * - The tree is a perfect binary tree
  * - The tree is threadsafe and lockfree
@@ -30,7 +32,7 @@ class SignalTree : NoCopy, NoMove {
     void set(SignalIdx index);
 
     /// Query and clear a signal. Returns the index of the signal that was cleared.
-    [[nodiscard]] std::optional<SignalIdx> clearNext();
+    [[nodiscard]] std::optional<SignalIdx> select();
 
     /// Query the total number of set signals
     [[nodiscard]] uint64_t count() const;
@@ -46,6 +48,12 @@ class SignalTree : NoCopy, NoMove {
     std::string debugPrint() const;
 
   private:
+    using NodeIdx = std::uint64_t;
+    static constexpr NodeIdx ROOT_NODE_IDX = 0;
+    struct UpdateResult {
+        uint64_t count;
+        bool success;
+    };
     // Wrapper aroundd atomic for internal node to satisfy putting std::atomic in vector
     struct InternalNode {
         std::atomic<uint64_t> count_;
@@ -60,8 +68,16 @@ class SignalTree : NoCopy, NoMove {
         {
         }
 
-        auto inc() { return count_.fetch_add(1); }
-        auto dec() { return count_.fetch_sub(1); }
+        UpdateResult inc() { return {count_.fetch_add(1), true}; }
+        UpdateResult tryDec()
+        {
+            auto expected = count_.load();
+            while (expected > 0) {
+                auto desired = expected - 1;
+                if (count_.compare_exchange_strong(expected, desired)) { return {desired, true}; }
+            }
+            return {expected, false};
+        }
         auto count() const { return count_.load(); }
 
         InternalNode &operator=(const InternalNode &other)
@@ -113,12 +129,13 @@ class SignalTree : NoCopy, NoMove {
         }
     };
 
-    auto left(uint64_t index) const { return 2 * index + 1; }
-    auto right(uint64_t index) const { return 2 * index + 2; }
-    auto parent(uint64_t index) const { return (index - 1) / 2; }
-    uint64_t childSum(uint64_t index) const;
+    bool isNodeInternal(NodeIdx index) const { return index < internalNodes_.size(); }
+    NodeIdx left(NodeIdx index) const { return 2 * index + 1; }
+    NodeIdx right(NodeIdx index) const { return 2 * index + 2; }
+    NodeIdx parent(NodeIdx index) const { return (index - 1) / 2; }
+    uint64_t childSum(NodeIdx index) const;
 
-    bool updateLeaf(SignalIdx signal, bool set);
+    bool updateLeafSignal(SignalIdx signal, bool set);
 
     uint64_t maxSignals_;
     // Internal nodes store the total number of set signals in their subtree

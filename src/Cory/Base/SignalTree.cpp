@@ -1,6 +1,7 @@
 
 #include "SignalTree.hpp"
 
+#include <Cory/Base/Log.hpp>
 #include <Cory/Base/Math.hpp>
 
 #include <fmt/format.h>
@@ -28,65 +29,60 @@ SignalTree::SignalTree(std::uint64_t signals)
 void SignalTree::set(SignalIdx index)
 {
     // Set operations must go bottom-up from the leaf node to the root
-    updateLeaf(index, true);
+    updateLeafSignal(index, true);
 
     // Update the internal nodes to obtain child-sum property
-    for (auto internal_node_idx = parent(internalNodes_.size() + index); internal_node_idx != 0;
-         internal_node_idx = parent(internal_node_idx)) {
-        internalNodes_[internal_node_idx].inc();
+    for (auto internalNodeIdx = parent(internalNodes_.size() + index); internalNodeIdx != 0;
+         internalNodeIdx = parent(internalNodeIdx)) {
+        internalNodes_[internalNodeIdx].inc();
     }
-    internalNodes_[0].inc();
+    internalNodes_[ROOT_NODE_IDX].inc();
 }
 
-std::optional<SignalTree::SignalIdx> SignalTree::clearNext()
+std::optional<SignalTree::SignalIdx> SignalTree::select()
 {
 
     // To find a signal to clear, we start at the root and go down the tree
     // We decrement the count of the internal nodes as we go
-    auto current_node = 0;
-    auto prev = internalNodes_[current_node].dec();
+    auto currentNodeIdx = ROOT_NODE_IDX;
+    auto updated = internalNodes_[currentNodeIdx].tryDec();
 
-    // tree is empty
-    if (prev == 0) {
-        // we just underflowed the root node, so re-add 1 to it
-        internalNodes_[current_node].inc();
+    if (!updated.success) {
+        // tree is empty
         return std::nullopt;
     }
 
-    while (current_node < internalNodes_.size()) {
-        auto first_node = left(current_node);
-        auto second_node = right(current_node);
+    while (currentNodeIdx < internalNodes_.size()) {
+        auto firstNodeIdx = left(currentNodeIdx);
+        auto secondNodeIdx = right(currentNodeIdx);
 
         // pick left or right child
         // todo bias: std::swap(first_node, second_node);
 
-        if (first_node < internalNodes_.size()) {
-            if (prev = internalNodes_[first_node].dec(); prev > 0) { current_node = first_node; }
-            else {
-                internalNodes_[first_node].inc();
-                // it was actually zero so we decremented it "below zero" - re-increment it
-                if (prev = internalNodes_[second_node].dec(); prev > 0) {
-                    current_node = second_node;
-                }
-                else {
-                    // another thread has snatched the signal from us?!
-                    internalNodes_[second_node].inc();
-                    return std::nullopt;
-                }
+        if (isNodeInternal(firstNodeIdx)) {
+            if (updated = internalNodes_[firstNodeIdx].tryDec(); updated.success) {
+                currentNodeIdx = firstNodeIdx;
             }
+            else {
+                updated = internalNodes_[secondNodeIdx].tryDec();
+                CO_CORE_ASSERT(updated.success,
+                               "Internal inconsistency - decrement should always succeed!");
+                currentNodeIdx = secondNodeIdx;
+            }
+            continue;
         }
-        else {
-            // last level has only leaf nodes so we have to query the bitset instead
-            const auto first_signal_index = first_node - internalNodes_.size();
-            const auto second_signal_index = second_node - internalNodes_.size();
 
-            // If the first leaf signal was set, clear it and return its index
-            if (updateLeaf(first_signal_index, false)) { return first_signal_index; }
+        // handle leaf nodes
+        // last level has only leaf nodes so we have to query the bitset instead
+        const auto firstSignalIdx = firstNodeIdx - internalNodes_.size();
+        const auto secondSignalIdx = secondNodeIdx - internalNodes_.size();
 
-            // Otherwise, the second signal must have been set - return it instead
-            updateLeaf(second_signal_index, false);
-            return second_signal_index;
-        }
+        // If the first leaf signal was set, clear it and return its index
+        if (updateLeafSignal(firstSignalIdx, false)) { return firstSignalIdx; }
+
+        // Otherwise, the second signal must have been set - return it instead
+        updateLeafSignal(secondSignalIdx, false);
+        return secondSignalIdx;
     }
 }
 
@@ -118,24 +114,24 @@ bool SignalTree::unsafeQueryIsSet(SignalIdx signal) const
 
 uint64_t SignalTree::childSum(uint64_t index) const
 {
-    const auto left_node = left(index);
-    const auto right_node = right(index);
+    const auto leftNode = left(index);
+    const auto rightNode = right(index);
 
-    if (left_node < internalNodes_.size()) {
+    if (isNodeInternal(leftNode)) {
         // children are internal nodes
-        return internalNodes_[left_node].count() + internalNodes_[right_node].count();
+        return internalNodes_[leftNode].count() + internalNodes_[rightNode].count();
     }
 
     // last level has only leaf nodes so we have to query the bitset instead
-    const auto left_signal_index = left_node - internalNodes_.size();
-    const auto right_signal_index = right_node - internalNodes_.size();
-    const auto left_set = unsafeQueryIsSet(left_signal_index) ? 1 : 0;
-    const auto right_set = unsafeQueryIsSet(right_signal_index) ? 1 : 0;
+    const auto leftSignalIndex = leftNode - internalNodes_.size();
+    const auto rightSignalIndex = rightNode - internalNodes_.size();
+    const auto leftSet = unsafeQueryIsSet(leftSignalIndex) ? 1 : 0;
+    const auto rightSet = unsafeQueryIsSet(rightSignalIndex) ? 1 : 0;
 
-    return left_set + right_set;
+    return leftSet + rightSet;
 }
 
-bool SignalTree::updateLeaf(SignalIdx signal, bool set)
+bool SignalTree::updateLeafSignal(SignalIdx signal, bool set)
 {
     auto leafNodeIndex = signal / LeafNodeBlock::NUM_BITS;
     auto leafNodeBit = signal % LeafNodeBlock::NUM_BITS;

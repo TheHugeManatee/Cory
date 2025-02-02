@@ -115,6 +115,7 @@ set(CORY_SOURCES
         Systems/TransformSystem.hpp
         Base/SignalTree.cpp
         Base/SignalTree.hpp
+        Base/ValOptional.hpp
 )
 
 # determine includes from CORY_SOURCES by the .hpp suffix

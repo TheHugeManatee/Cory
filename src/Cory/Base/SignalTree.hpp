@@ -33,7 +33,7 @@ class SignalTree : NoCopy, NoMove {
     bool set(SignalIdx index);
 
     /// Query and clear a signal. Returns the index of the signal that was cleared.
-    [[nodiscard]] std::optional<SignalIdx> select();
+    [[nodiscard]] std::optional<SignalIdx> select(uint64_t biasBits = 0);
 
     /// Query the current number of set signals.
     [[nodiscard]] uint64_t count() const;
@@ -75,7 +75,7 @@ class SignalTree : NoCopy, NoMove {
             auto expected = count_.load();
             while (expected > 0) {
                 auto desired = expected - 1;
-                if (count_.compare_exchange_strong(expected, desired)) { return {desired, true}; }
+                if (count_.compare_exchange_weak(expected, desired)) { return {desired, true}; }
             }
             return {expected, false};
         }

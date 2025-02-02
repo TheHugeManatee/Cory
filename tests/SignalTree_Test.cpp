@@ -79,8 +79,10 @@ TEST_CASE("SignalTree", "[Cory/SignalTree]")
             }
         }
 
+        uint64_t biasFlags = rand();
         std::set<size_t> signalsThatWereSet;
-        for (auto signal = signals.select(); signal.has_value(); signal = signals.select()) {
+        for (auto signal = signals.select(++biasFlags); signal.has_value();
+             signal = signals.select()) {
             signalsThatWereSet.insert(signal.value());
             signals.validateInternal();
         }
@@ -257,12 +259,14 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
         signalsInvokedCounters.resize(cfg.NUM_CONSUMERS);
         auto consumer_func = [&](size_t consumerId) {
             return [&, consumerId]() {
+                uint64_t bias = consumerId;
                 auto &signalsInvoked = signalsInvokedCounters[consumerId];
                 signalsInvoked.resize(cfg.MAX_SIGNALS, 0);
                 auto drain_signals = [&]() {
-                    for (auto signal = signals.select(); signal.has_value();
-                         signal = signals.select()) {
+                    for (auto signal = signals.select(consumerId); signal.has_value();
+                         signal = signals.select(consumerId)) {
                         signalsInvoked[signal.value()]++;
+                        ++bias;
                     }
                 };
                 for (int i = 0; i < cfg.NUM_ITERATIONS; ++i) {

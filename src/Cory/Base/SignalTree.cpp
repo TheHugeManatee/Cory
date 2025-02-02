@@ -10,6 +10,9 @@
 
 namespace Cory {
 
+// test/debug assertions
+#define CO_SIGNALTREE_ASSERT(cond, msg) CO_CORE_ASSERT(cond, msg)
+
 SignalTree::SignalTree(std::uint64_t signals)
     : maxSignals_{signals}
 {
@@ -44,7 +47,7 @@ bool SignalTree::set(SignalIdx index)
     return true;
 }
 
-std::optional<SignalTree::SignalIdx> SignalTree::select()
+std::optional<SignalTree::SignalIdx> SignalTree::select(uint64_t biasBits)
 {
     // To find a signal to clear, we start at the root and go down the tree
     // We decrement the count of the internal nodes as we go
@@ -62,15 +65,12 @@ std::optional<SignalTree::SignalIdx> SignalTree::select()
         auto firstNodeIdx = left(currentNodeIdx);
         auto secondNodeIdx = right(currentNodeIdx);
 
-        // pick left or right child
-        // todo bias: std::swap(first_node, second_node);
+        if (biasBits & 1) { std::swap(firstNodeIdx, secondNodeIdx); }
+        biasBits >>= 1;
 
-        if (isNodeInternal(firstNodeIdx)) {
-            currentNodeIdx = selectInternalNode(firstNodeIdx, secondNodeIdx);
-            continue;
-        }
+        if (!isNodeInternal(firstNodeIdx)) { return selectLeafNode(firstNodeIdx, secondNodeIdx); }
 
-        return selectLeafNode(firstNodeIdx, secondNodeIdx);
+        currentNodeIdx = selectInternalNode(firstNodeIdx, secondNodeIdx);
     }
 }
 
@@ -121,11 +121,27 @@ uint64_t SignalTree::childSum(uint64_t index) const
 
 SignalTree::NodeIdx SignalTree::selectInternalNode(NodeIdx firstIdx, NodeIdx secondIdx)
 {
-    if (auto updated = internalNodes_[firstIdx].tryDec(); updated.success) { return firstIdx; }
-
-    auto updated = internalNodes_[secondIdx].tryDec();
-    CO_CORE_ASSERT(updated.success, "Internal inconsistency - decrement should always succeed!");
-    return secondIdx;
+    // Since we have successfully decremented the parent node, we know
+    // there *must* be a signal to clear for us in one of the children.
+    // However, there might be other consumer and producers threads
+    // manipulating the same nodes concurrently. Therefore, we have to
+    // keep trying to decrement both of the children until we succeed
+    // in decrementing one of them.
+    //
+    // The sequence of events we're working around would be:
+    //     1. Consumer1 decrements firstIdx and fails, then gets suspended
+    //     2. Producer inserts a new signal in the first subtree
+    //     3. Consumer2 enters this subtree, decrements secondIdx and acquires the signal
+    //     4. Consumer1 attempts to decrement secondIdx and also fails :(
+    //     5. Consumer1 goes back to firstIdx, which should now succeed.
+    //
+    // This really only happens mostly near the root of the tree where contention is highest.
+    // It is not expected that this loop runs for longer than one or two iterations, but it
+    // can theoretically run for longer i very unlucky cases of thread scheduling.
+    while (true) {
+        if (auto [_, success] = internalNodes_[firstIdx].tryDec(); success) { return firstIdx; }
+        if (auto [_, success] = internalNodes_[secondIdx].tryDec(); success) { return secondIdx; }
+    }
 }
 
 SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondIdx)
@@ -134,15 +150,14 @@ SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondI
     const auto firstSignalIdx = firstIdx - internalNodes_.size();
     const auto secondSignalIdx = secondIdx - internalNodes_.size();
 
-    // If the first leaf signal was set, clear it and return its index
-    if (bool firstWasSet = updateLeafSignal(firstSignalIdx, false); firstWasSet) {
-        return firstSignalIdx;
+    // similar to the internal nodes, there may be a multithreaded sequence of
+    // events where another thread snatches the secondSignal before we can get
+    // to it, while at the same time a producer has set the firstSignal after we
+    // have checked it. To handle the case, we need to loop here.
+    while (true) {
+        if (updateLeafSignal(firstSignalIdx, false)) { return firstSignalIdx; }
+        if (updateLeafSignal(secondSignalIdx, false)) { return secondSignalIdx; }
     }
-
-    // Otherwise, the second signal must have been set - return it instead
-    auto secondWasSet = updateLeafSignal(secondSignalIdx, false);
-    CO_CORE_ASSERT(secondWasSet, "Internal inconsistency - second signal should always be set!");
-    return secondSignalIdx;
 }
 
 bool SignalTree::updateLeafSignal(SignalIdx signal, bool set)

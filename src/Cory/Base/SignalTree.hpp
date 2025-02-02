@@ -28,6 +28,8 @@ class SignalTree : NoCopy, NoMove {
      */
     explicit SignalTree(std::uint64_t signals);
 
+    ~SignalTree();
+
     /// set a signal by its index
     /// Returns true if the signal was set, false if it was already set
     bool set(SignalIdx index);
@@ -51,89 +53,14 @@ class SignalTree : NoCopy, NoMove {
   private:
     using NodeIdx = std::uint64_t;
     static constexpr NodeIdx ROOT_NODE_IDX = 0;
+    struct InternalNode;
+    struct LeafNodeBlock;
     struct UpdateResult {
         uint64_t count;
         bool success;
     };
-    // Wrapper aroundd atomic for internal node to satisfy putting std::atomic in vector
-    struct InternalNode {
-        std::atomic<uint64_t> count_;
 
-        InternalNode()
-            : count_(0)
-        {
-        }
-
-        InternalNode(const InternalNode &rhs)
-            : count_(rhs.count_.load())
-        {
-        }
-
-        UpdateResult inc() { return {count_.fetch_add(1), true}; }
-        UpdateResult tryDec()
-        {
-            auto expected = count_.load();
-            while (expected > 0) {
-                auto desired = expected - 1;
-                if (count_.compare_exchange_weak(expected, desired)) { return {desired, true}; }
-            }
-            return {expected, false};
-        }
-        auto count() const { return count_.load(); }
-
-        InternalNode &operator=(const InternalNode &other)
-        {
-            count_.store(other.count_.load());
-            return *this;
-        }
-    };
-
-    // A block of leaf node bits with atomic storage
-    // each bit represents the signal state of one signal index
-    struct LeafNodeBlock {
-        static constexpr uint64_t NUM_BITS = 64;
-        std::atomic<uint64_t> bits_;
-
-        LeafNodeBlock()
-            : bits_(0)
-        {
-        }
-
-        LeafNodeBlock(const LeafNodeBlock &rhs)
-            : bits_(rhs.bits_.load())
-        {
-        }
-
-        LeafNodeBlock &operator=(const LeafNodeBlock &other)
-        {
-            bits_.store(other.bits_.load());
-            return *this;
-        }
-
-        // Attempts to set a bit atomically. Returns the previous value of the bit.
-        bool set(uint64_t bit)
-        {
-            const auto mask = 1ull << bit;
-            auto previous = bits_.fetch_or(mask);
-            return (previous & mask) > 0;
-        }
-
-        // Attempts to clear a bit atomically. Returns the previous value of the bit.
-        bool clear(uint64_t bit)
-        {
-            const auto mask = 1ull << bit;
-            auto previous = bits_.fetch_and(~mask);
-            return (previous & mask) > 0;
-        }
-
-        bool isSet(uint64_t bit) const
-        {
-            auto bits = bits_.load();
-            return (bits & (1ull << bit)) != 0;
-        }
-    };
-
-    bool isNodeInternal(NodeIdx index) const { return index < internalNodes_.size(); }
+    bool isNodeInternal(NodeIdx index) const;
     NodeIdx left(NodeIdx index) const { return 2 * index + 1; }
     NodeIdx right(NodeIdx index) const { return 2 * index + 2; }
     NodeIdx parent(NodeIdx index) const { return (index - 1) / 2; }

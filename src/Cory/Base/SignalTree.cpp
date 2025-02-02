@@ -13,6 +13,84 @@ namespace Cory {
 // test/debug assertions
 #define CO_SIGNALTREE_ASSERT(cond, msg) CO_CORE_ASSERT(cond, msg)
 
+// Wrapper aroundd atomic for internal node to satisfy putting std::atomic in vector
+struct SignalTree::InternalNode {
+    std::atomic<uint64_t> count_;
+
+    InternalNode()
+        : count_(0)
+    {
+    }
+
+    InternalNode(const InternalNode &rhs)
+        : count_(rhs.count_.load())
+    {
+    }
+
+    UpdateResult inc() { return {count_.fetch_add(1), true}; }
+    UpdateResult tryDec()
+    {
+        auto expected = count_.load();
+        while (expected > 0) {
+            auto desired = expected - 1;
+            if (count_.compare_exchange_weak(expected, desired)) { return {desired, true}; }
+        }
+        return {expected, false};
+    }
+    auto count() const { return count_.load(); }
+
+    InternalNode &operator=(const InternalNode &other)
+    {
+        count_.store(other.count_.load());
+        return *this;
+    }
+};
+
+// A block of leaf node bits with atomic storage
+// each bit represents the signal state of one signal index
+struct SignalTree::LeafNodeBlock {
+    static constexpr uint64_t NUM_BITS = 64;
+    std::atomic<uint64_t> bits_;
+
+    LeafNodeBlock()
+        : bits_(0)
+    {
+    }
+
+    LeafNodeBlock(const LeafNodeBlock &rhs)
+        : bits_(rhs.bits_.load())
+    {
+    }
+
+    LeafNodeBlock &operator=(const LeafNodeBlock &other)
+    {
+        bits_.store(other.bits_.load());
+        return *this;
+    }
+
+    // Attempts to set a bit atomically. Returns the previous value of the bit.
+    bool set(uint64_t bit)
+    {
+        const auto mask = 1ull << bit;
+        auto previous = bits_.fetch_or(mask);
+        return (previous & mask) > 0;
+    }
+
+    // Attempts to clear a bit atomically. Returns the previous value of the bit.
+    bool clear(uint64_t bit)
+    {
+        const auto mask = 1ull << bit;
+        auto previous = bits_.fetch_and(~mask);
+        return (previous & mask) > 0;
+    }
+
+    bool isSet(uint64_t bit) const
+    {
+        auto bits = bits_.load();
+        return (bits & (1ull << bit)) != 0;
+    }
+};
+
 SignalTree::SignalTree(std::uint64_t signals)
     : maxSignals_{signals}
 {
@@ -28,6 +106,8 @@ SignalTree::SignalTree(std::uint64_t signals)
     const auto leafNodesSize = divideRoundUp(signals, LeafNodeBlock::NUM_BITS);
     leafNodeBlocks_.resize(leafNodesSize);
 }
+
+SignalTree::~SignalTree() = default;
 
 bool SignalTree::set(SignalIdx index)
 {
@@ -118,6 +198,8 @@ uint64_t SignalTree::childSum(uint64_t index) const
 
     return leftSet + rightSet;
 }
+
+bool SignalTree::isNodeInternal(NodeIdx index) const { return index < internalNodes_.size(); }
 
 SignalTree::NodeIdx SignalTree::selectInternalNode(NodeIdx firstIdx, NodeIdx secondIdx)
 {

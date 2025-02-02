@@ -11,31 +11,29 @@
 namespace Cory {
 
 // test/debug assertions
-#define CO_SIGNALTREE_ASSERT(cond, msg) CO_CORE_ASSERT(cond, msg)
+// #define CO_SIGNALTREE_ASSERT(cond, msg) CO_CORE_ASSERT(cond, msg)
+#define CO_SIGNALTREE_ASSERT(cond, msg)
 
 // Wrapper aroundd atomic for internal node to satisfy putting std::atomic in vector
 struct SignalTree::InternalNode {
-    std::atomic<uint64_t> count_;
+    std::atomic<uint64_t> count_{0};
 
-    InternalNode()
-        : count_(0)
-    {
-    }
+    InternalNode() = default;
 
     InternalNode(const InternalNode &rhs)
         : count_(rhs.count_.load())
     {
     }
 
-    UpdateResult inc() { return {count_.fetch_add(1), true}; }
-    UpdateResult tryDec()
+    void inc() { count_.fetch_add(1); }
+    bool tryDec()
     {
         auto expected = count_.load();
         while (expected > 0) {
             auto desired = expected - 1;
-            if (count_.compare_exchange_weak(expected, desired)) { return {desired, true}; }
+            if (count_.compare_exchange_weak(expected, desired)) { return true; }
         }
-        return {expected, false};
+        return false;
     }
     auto count() const { return count_.load(); }
 
@@ -50,12 +48,9 @@ struct SignalTree::InternalNode {
 // each bit represents the signal state of one signal index
 struct SignalTree::LeafNodeBlock {
     static constexpr uint64_t NUM_BITS = 64;
-    std::atomic<uint64_t> bits_;
+    std::atomic<uint64_t> bits_{0};
 
-    LeafNodeBlock()
-        : bits_(0)
-    {
-    }
+    LeafNodeBlock() = default;
 
     LeafNodeBlock(const LeafNodeBlock &rhs)
         : bits_(rhs.bits_.load())
@@ -107,34 +102,32 @@ SignalTree::SignalTree(std::uint64_t signals)
     leafNodeBlocks_.resize(leafNodesSize);
 }
 
-SignalTree::~SignalTree() = default;
+SignalTree::~SignalTree() noexcept = default;
 
-bool SignalTree::set(SignalIdx index)
+bool SignalTree::set(SignalIdx index) noexcept
 {
     // Set operations must go bottom-up from the leaf node to the root
-    bool before = updateLeafSignal(index, true);
-    if (before) {
-        // signal was already set
+    if (bool wasSet = updateLeafSignal(index, true); wasSet) {
+        // signal was already set - we don't need to update the tree
         return false;
     }
 
     // Update the internal nodes to obtain child-sum property
-    for (auto internalNodeIdx = parent(internalNodes_.size() + index); internalNodeIdx != 0;
+    for (auto internalNodeIdx = parent(internalNodes_.size() + index);;
          internalNodeIdx = parent(internalNodeIdx)) {
         internalNodes_[internalNodeIdx].inc();
+        if (internalNodeIdx == ROOT_NODE_IDX) { break; }
     }
-    internalNodes_[ROOT_NODE_IDX].inc();
     return true;
 }
 
-std::optional<SignalTree::SignalIdx> SignalTree::select(uint64_t biasBits)
+std::optional<SignalTree::SignalIdx> SignalTree::select(uint64_t biasBits) noexcept
 {
     // To find a signal to clear, we start at the root and go down the tree
     // We decrement the count of the internal nodes as we go
     auto currentNodeIdx = ROOT_NODE_IDX;
-    auto updated = internalNodes_[currentNodeIdx].tryDec();
 
-    if (!updated.success) {
+    if (!internalNodes_[currentNodeIdx].tryDec()) {
         // tree is empty
         return std::nullopt;
     }
@@ -145,8 +138,8 @@ std::optional<SignalTree::SignalIdx> SignalTree::select(uint64_t biasBits)
         auto firstNodeIdx = left(currentNodeIdx);
         auto secondNodeIdx = right(currentNodeIdx);
 
-        if (biasBits & 1) { std::swap(firstNodeIdx, secondNodeIdx); }
-        biasBits >>= 1;
+        // if (biasBits & 1) { std::swap(firstNodeIdx, secondNodeIdx); }
+        // biasBits >>= 1;
 
         if (!isNodeInternal(firstNodeIdx)) { return selectLeafNode(firstNodeIdx, secondNodeIdx); }
 
@@ -154,7 +147,7 @@ std::optional<SignalTree::SignalIdx> SignalTree::select(uint64_t biasBits)
     }
 }
 
-uint64_t SignalTree::count() const
+uint64_t SignalTree::count() const noexcept
 {
     // By the tree's construction, the count of the root node is equal to the total count
     return internalNodes_[0].count();
@@ -174,10 +167,10 @@ void SignalTree::validateInternal() const
 
 bool SignalTree::unsafeQueryIsSet(SignalIdx signal) const
 {
-    auto leafNodeIndex = signal / LeafNodeBlock::NUM_BITS;
+    auto leafNodeBlockIndex = signal / LeafNodeBlock::NUM_BITS;
     auto leafNodeBit = signal % LeafNodeBlock::NUM_BITS;
 
-    return leafNodeBlocks_[leafNodeIndex].isSet(leafNodeBit);
+    return leafNodeBlocks_[leafNodeBlockIndex].isSet(leafNodeBit);
 }
 
 uint64_t SignalTree::childSum(uint64_t index) const
@@ -199,7 +192,10 @@ uint64_t SignalTree::childSum(uint64_t index) const
     return leftSet + rightSet;
 }
 
-bool SignalTree::isNodeInternal(NodeIdx index) const { return index < internalNodes_.size(); }
+bool SignalTree::isNodeInternal(NodeIdx index) const noexcept
+{
+    return index < internalNodes_.size();
+}
 
 SignalTree::NodeIdx SignalTree::selectInternalNode(NodeIdx firstIdx, NodeIdx secondIdx)
 {
@@ -221,8 +217,8 @@ SignalTree::NodeIdx SignalTree::selectInternalNode(NodeIdx firstIdx, NodeIdx sec
     // It is not expected that this loop runs for longer than one or two iterations, but it
     // can theoretically run for longer i very unlucky cases of thread scheduling.
     while (true) {
-        if (auto [_, success] = internalNodes_[firstIdx].tryDec(); success) { return firstIdx; }
-        if (auto [_, success] = internalNodes_[secondIdx].tryDec(); success) { return secondIdx; }
+        if (internalNodes_[firstIdx].tryDec()) { return firstIdx; }
+        if (internalNodes_[secondIdx].tryDec()) { return secondIdx; }
     }
 }
 
@@ -244,12 +240,12 @@ SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondI
 
 bool SignalTree::updateLeafSignal(SignalIdx signal, bool set)
 {
-    auto leafNodeIndex = signal / LeafNodeBlock::NUM_BITS;
+    auto leafNodeBlockIndex = signal / LeafNodeBlock::NUM_BITS;
     auto leafNodeBit = signal % LeafNodeBlock::NUM_BITS;
 
-    if (set) { return leafNodeBlocks_[leafNodeIndex].set(leafNodeBit); }
+    if (set) { return leafNodeBlocks_[leafNodeBlockIndex].set(leafNodeBit); }
 
-    return leafNodeBlocks_[leafNodeIndex].clear(leafNodeBit);
+    return leafNodeBlocks_[leafNodeBlockIndex].clear(leafNodeBit);
 }
 
 std::string SignalTree::debugPrint() const

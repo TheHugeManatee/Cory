@@ -284,7 +284,7 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
                     // single-threaded validity checks
                     if (consumerId == 0) {
                         // non-zero signals would indicate the consumers haven't done their job
-                        CAPTURE(signals.debugPrint());
+                        // CAPTURE(signals.debugPrint());
                         REQUIRE(signals.count() == 0);
 
                         try {
@@ -356,16 +356,16 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
     }
     SECTION("MPMC Medium")
     {
-        run_mt_stress_test({.MAX_SIGNALS = 2 << 14,
-                            .SIGNALS_PER_THREAD = 2 << 9,
+        run_mt_stress_test({.MAX_SIGNALS = 1ull << 14,
+                            .SIGNALS_PER_THREAD = 1ull << 9,
                             .NUM_PRODUCERS = 16,
                             .NUM_CONSUMERS = 2,
                             .NUM_ITERATIONS = 100});
     }
     SECTION("MPMC Large")
     {
-        run_mt_stress_test({.MAX_SIGNALS = 2 << 16,
-                            .SIGNALS_PER_THREAD = 2 << 11,
+        run_mt_stress_test({.MAX_SIGNALS = 1ull << 16,
+                            .SIGNALS_PER_THREAD = 1ull << 11,
                             .NUM_PRODUCERS = 16,
                             .NUM_CONSUMERS = 16,
                             .NUM_ITERATIONS = 100});

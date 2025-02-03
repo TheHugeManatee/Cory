@@ -169,8 +169,8 @@ std::optional<SignalTree::SignalIdx> SignalTree::select(uint64_t biasBits) noexc
         auto firstNodeIdx = left(currentNodeIdx);
         auto secondNodeIdx = right(currentNodeIdx);
 
-        // if (biasBits & 1) { std::swap(firstNodeIdx, secondNodeIdx); }
-        // biasBits >>= 1;
+        if (biasBits & 1) { std::swap(firstNodeIdx, secondNodeIdx); }
+        biasBits >>= 1;
 
         if (!isNodeInternal(firstNodeIdx)) { return selectLeafNode(firstNodeIdx, secondNodeIdx); }
 

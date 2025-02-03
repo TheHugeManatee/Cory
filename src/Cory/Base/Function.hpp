@@ -33,44 +33,11 @@ template <typename R, typename... Args> class Function<R(Args...)> {
     {
     }
 
+    Function() = default;
+
+    explicit operator bool() const { return callable != nullptr; }
+
     R operator()(Args... args) { return callable->invoke(std::forward<Args>(args)...); }
-};
-
-template <typename Signature> class ContractFunctor;
-
-template <typename OptionalArg> class ContractFunctor {
-    struct CallableBase {
-        virtual void invoke(OptionalArg arg) = 0;
-        virtual ~CallableBase() = default;
-    };
-
-    template <typename F> struct CallableImpl : CallableBase {
-        F f;
-
-        CallableImpl(F &&f)
-            : f(std::forward<F>(f))
-        {
-        }
-
-        void invoke(OptionalArg arg) override
-        {
-            if constexpr (std::is_invocable_v<F, OptionalArg>) { f(arg); }
-            else {
-                f();
-            }
-        }
-    };
-
-    std::unique_ptr<CallableBase> callable;
-
-  public:
-    template <typename F>
-    ContractFunctor(F &&f)
-        : callable(std::make_unique<CallableImpl<std::decay_t<F>>>(std::forward<F>(f)))
-    {
-    }
-
-    void operator()(OptionalArg arg) { return callable->invoke(std::forward<OptionalArg>(arg)); }
 };
 
 } // namespace Cory

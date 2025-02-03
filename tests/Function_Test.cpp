@@ -12,4 +12,7 @@ TEST_CASE("Function", "[Cory/Base]")
     Cory::Function<int(int)> g = [i = 0](int x) mutable { return ++i + x; };
     REQUIRE(g(1) == 2);
     REQUIRE(g(1) == 3);
+
+    Cory::Function<int(int)> h;
+    CHECK_FALSE(h);
 }

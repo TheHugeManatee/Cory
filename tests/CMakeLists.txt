@@ -44,7 +44,9 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         SystemCoordinator_Test.cpp
         Math_Test.cpp
         SignalTree_Test.cpp
+        WorkContractGroup_Test.cpp
         ValOptional_Test.cpp
+        Function_Test.cpp
 )
 
 target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)

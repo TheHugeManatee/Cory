@@ -89,6 +89,27 @@ TEST_CASE("SignalTree", "[Cory/SignalTree]")
 
         REQUIRE(signalsToSet == signalsThatWereSet);
     }
+
+    SECTION("Creating fully signaled")
+    {
+        auto num_signals = 4096ull;
+        Cory::SignalTree signals(num_signals, Cory::SignalTree::CreateMode::FullySignaled);
+        REQUIRE(signals.count() == num_signals);
+        signals.validateInternal();
+
+        std::vector<Cory::SignalTree::SignalIdx> signalsSet;
+        for (size_t i = 0; i < num_signals; ++i) {
+            REQUIRE(signals.unsafeQueryIsSet(i));
+            signalsSet.push_back(signals.select().value());
+        }
+        REQUIRE(signalsSet.size() == num_signals);
+
+        // all signals from 0 to 63 were set
+        std::sort(signalsSet.begin(), signalsSet.end());
+        for (Cory::SignalTree::SignalIdx i = 0; i < num_signals; ++i) {
+            REQUIRE(signalsSet[i] == i);
+        }
+    }
 }
 
 TEST_CASE("SignalTree MT Producer Only", "[Cory/SignalTree]")

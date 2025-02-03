@@ -19,6 +19,10 @@ struct SignalTree::InternalNode {
     std::atomic<uint64_t> count_{0};
 
     InternalNode() = default;
+    InternalNode(uint64_t count)
+        : count_(count)
+    {
+    }
 
     InternalNode(const InternalNode &rhs)
         : count_(rhs.count_.load())
@@ -51,6 +55,10 @@ struct SignalTree::LeafNodeBlock {
     std::atomic<uint64_t> bits_{0};
 
     LeafNodeBlock() = default;
+    LeafNodeBlock(uint64_t bits)
+        : bits_(bits)
+    {
+    }
 
     LeafNodeBlock(const LeafNodeBlock &rhs)
         : bits_(rhs.bits_.load())
@@ -86,7 +94,7 @@ struct SignalTree::LeafNodeBlock {
     }
 };
 
-SignalTree::SignalTree(std::uint64_t signals)
+SignalTree::SignalTree(std::uint64_t signals, CreateMode createMode)
     : maxSignals_{signals}
 {
     // signals must be a power of two > 2 cause otherwise why even bother using a signal tree
@@ -99,7 +107,30 @@ SignalTree::SignalTree(std::uint64_t signals)
 
     // We store the signals in the leaf nodes as a bitmask
     const auto leafNodesSize = divideRoundUp(signals, LeafNodeBlock::NUM_BITS);
-    leafNodeBlocks_.resize(leafNodesSize);
+
+    if (createMode != CreateMode::FullySignaled) {
+        // If we're not creating a fully signaled tree, we're done - leaf
+        // nodes and internal nodes are all initialized to zero after this
+        leafNodeBlocks_.resize(leafNodesSize);
+        return;
+    }
+
+    // Set everything to fully signaled
+    // start filling lowest level internal nodes, which have a max count of 2
+    // then work up level by level, doubling the max count each time
+    uint64_t counter_max = 2;
+    gsl::index next_node = internalNodes_.size() - 1;
+
+    for (uint64_t nodes_per_level = signals / 2;; nodes_per_level /= 2) {
+        for (uint64_t i = 0; i < nodes_per_level; ++i) {
+            internalNodes_[next_node].count_ = counter_max;
+            --next_node;
+        }
+        counter_max *= 2;
+        if (nodes_per_level == 1) { break; }
+    }
+    // fill all leaf node bits to fully set
+    leafNodeBlocks_.resize(leafNodesSize, LeafNodeBlock{~0ull});
 }
 
 SignalTree::~SignalTree() noexcept = default;

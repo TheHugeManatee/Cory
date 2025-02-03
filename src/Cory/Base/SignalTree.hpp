@@ -32,12 +32,14 @@ namespace Cory {
 class SignalTree : NoCopy, NoMove {
   public:
     using SignalIdx = std::uint64_t;
+    enum class CreateMode { Normal, FullySignaled };
 
     /**
      * @brief Create a signal tree with a maximum number of signals.
      * @param signals the number of available individual signals. Must be a power of two.
+     * @param createMode whether to create the tree with all signals set or not.
      */
-    explicit SignalTree(std::uint64_t signals);
+    explicit SignalTree(std::uint64_t signals, CreateMode createMode = CreateMode::Normal);
 
     ~SignalTree() noexcept;
 
@@ -71,6 +73,8 @@ class SignalTree : NoCopy, NoMove {
     NodeIdx right(NodeIdx index) const noexcept { return 2 * index + 2; }
     NodeIdx parent(NodeIdx index) const noexcept { return (index - 1) / 2; }
     uint64_t childSum(NodeIdx index) const;
+
+    void setFullySignaled();
 
     // "Atomically" select one of the two given nodes, decrementing the selected node's count
     NodeIdx selectInternalNode(NodeIdx firstIdx, NodeIdx secondIdx);

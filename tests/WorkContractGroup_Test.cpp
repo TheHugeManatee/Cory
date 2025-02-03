@@ -112,4 +112,30 @@ TEST_CASE("WorkContractGroup", "Cory/Base/WorkContractGroup")
             }
         }
     }
+    WHEN("Creating a contract that can reschedule itself")
+    {
+        uint64_t counter = 0;
+        Cory::WorkContract contract =
+            workContractGroup.createContract([&](Cory::ContractToken &token) {
+                ++counter;
+                if (counter < 10) { token.schedule(); }
+            });
+
+        THEN("The contract is valid") { CHECK(contract.valid()); }
+
+        AND_WHEN("Executing until no more contracts are available")
+        {
+            contract.schedule();
+
+            uint64_t contractsExecuted = 0;
+            while (workContractGroup.executeNext()) {
+                contractsExecuted++;
+            }
+            THEN("The contract reschedules itself")
+            {
+                CHECK(counter == 10);
+                CHECK(workContractGroup.contractsScheduled() == 1);
+            }
+        }
+    }
 }

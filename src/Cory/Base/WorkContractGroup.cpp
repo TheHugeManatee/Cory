@@ -18,6 +18,11 @@ WorkContract::~WorkContract()
 void WorkContract::schedule()
 {
     CO_WORKCONTRACT_ASSERT(valid(), "Cannot schedule an invalid contract");
+    auto &contract = group_->contracts_[*id_];
+    // TODO handle rescheduling propertly
+    //    - if the contract is already scheduled, we should not schedule it again
+    //    - if the contract is currently executing, we should not schedule it again
+
     // scheduled by setting the signal ID in the scheduled tree
     group_->contractsScheduled_.set(*id_);
 }
@@ -47,8 +52,23 @@ bool WorkContractGroup::executeNext(uint64_t biasBits)
 
     auto &contract = contracts_[*id];
 
-    ContractToken token{};
+    contract.setBits(ContractFlagExecuting);
+
+    ContractToken token{contract};
     contract.work(token);
+
+    // handle re-scheduling via token.schedule() method:
+    //  - atomically check and clear the ScheduleRequested flag
+    //  - if it was set, we need to reschedule the contract
+    //  NB: We could directly re-execute without rescheduling, but this would
+    //    lead to recursion as well as very unfair scheduling of contracts.
+    if (auto prev_flags = contract.clearBits(ContractFlagExecuting | ContractFlagScheduleRequested |
+                                             ContractFlagScheduled);
+        prev_flags & ContractFlagScheduleRequested) {
+
+        // still needs to be atomic, as another thread could have scheduled it in the meantime
+        if (!contract.setBits(ContractFlagScheduled)) { contractsScheduled_.set(*id); }
+    }
 
     return true;
 }

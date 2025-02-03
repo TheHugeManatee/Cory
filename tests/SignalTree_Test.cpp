@@ -97,7 +97,7 @@ TEST_CASE("SignalTree", "[Cory/SignalTree]")
         REQUIRE(signals.count() == num_signals);
         signals.validateInternal();
 
-        std::vector<Cory::SignalTree::SignalIdx> signalsSet;
+        std::vector<uint64_t> signalsSet;
         for (size_t i = 0; i < num_signals; ++i) {
             REQUIRE(signals.unsafeQueryIsSet(i));
             signalsSet.push_back(signals.select().value());
@@ -106,7 +106,7 @@ TEST_CASE("SignalTree", "[Cory/SignalTree]")
 
         // all signals from 0 to 63 were set
         std::sort(signalsSet.begin(), signalsSet.end());
-        for (Cory::SignalTree::SignalIdx i = 0; i < num_signals; ++i) {
+        for (gsl::index i = 0; i < num_signals; ++i) {
             REQUIRE(signalsSet[i] == i);
         }
     }
@@ -341,7 +341,7 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
         }
 
         for (int i = 0; i < cfg.MAX_SIGNALS; ++i) {
-            auto signal_idx = signalIndices[i];
+            auto signal_idx = *signalIndices[i];
             uint64_t signal_invoked =
                 std::accumulate(signalsInvokedCounters.begin(),
                                 signalsInvokedCounters.end(),

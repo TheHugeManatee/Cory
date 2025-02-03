@@ -144,7 +144,7 @@ bool SignalTree::set(SignalIdx index) noexcept
     }
 
     // Update the internal nodes to obtain child-sum property
-    for (auto internalNodeIdx = parent(internalNodes_.size() + index);;
+    for (auto internalNodeIdx = parent(internalNodes_.size() + *index);;
          internalNodeIdx = parent(internalNodeIdx)) {
         internalNodes_[internalNodeIdx].inc();
         if (internalNodeIdx == ROOT_NODE_IDX) { break; }
@@ -152,7 +152,7 @@ bool SignalTree::set(SignalIdx index) noexcept
     return true;
 }
 
-std::optional<SignalTree::SignalIdx> SignalTree::select(uint64_t biasBits) noexcept
+SignalTree::SignalIdx SignalTree::select(uint64_t biasBits) noexcept
 {
     // To find a signal to clear, we start at the root and go down the tree
     // We decrement the count of the internal nodes as we go
@@ -198,8 +198,8 @@ void SignalTree::validateInternal() const
 
 bool SignalTree::unsafeQueryIsSet(SignalIdx signal) const
 {
-    auto leafNodeBlockIndex = signal / LeafNodeBlock::NUM_BITS;
-    auto leafNodeBit = signal % LeafNodeBlock::NUM_BITS;
+    auto leafNodeBlockIndex = *signal / LeafNodeBlock::NUM_BITS;
+    auto leafNodeBit = *signal % LeafNodeBlock::NUM_BITS;
 
     return leafNodeBlocks_[leafNodeBlockIndex].isSet(leafNodeBit);
 }
@@ -271,8 +271,8 @@ SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondI
 
 bool SignalTree::updateLeafSignal(SignalIdx signal, bool set)
 {
-    auto leafNodeBlockIndex = signal / LeafNodeBlock::NUM_BITS;
-    auto leafNodeBit = signal % LeafNodeBlock::NUM_BITS;
+    auto leafNodeBlockIndex = *signal / LeafNodeBlock::NUM_BITS;
+    auto leafNodeBit = *signal % LeafNodeBlock::NUM_BITS;
 
     if (set) { return leafNodeBlocks_[leafNodeBlockIndex].set(leafNodeBit); }
 

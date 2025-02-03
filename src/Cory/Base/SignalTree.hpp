@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
+#include <Cory/Base/ValOptional.hpp>
 
 #include <atomic>
 #include <cstdint>
@@ -31,7 +32,7 @@ namespace Cory {
  */
 class SignalTree : NoCopy, NoMove {
   public:
-    using SignalIdx = std::uint64_t;
+    using SignalIdx = ValOptional<uint64_t>;
     enum class CreateMode { Normal, FullySignaled };
 
     /**
@@ -48,7 +49,7 @@ class SignalTree : NoCopy, NoMove {
     bool set(SignalIdx index) noexcept;
 
     /// Query and clear a signal. Returns the index of the signal that was cleared.
-    [[nodiscard]] std::optional<SignalIdx> select(uint64_t biasBits = 0) noexcept;
+    [[nodiscard]] SignalIdx select(uint64_t biasBits = 0) noexcept;
 
     /// Query the current number of set signals.
     [[nodiscard]] uint64_t count() const noexcept;

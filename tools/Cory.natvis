@@ -1,6 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
+    <Type Name="Cory::SignalTree">
+        <DisplayString>
+            {{signaled={internalNodes_._Mypair._Myval2._Myfirst->count_._Storage._Value},capacity={maxSignals_}}}
+        </DisplayString>
+        <Expand>
+            <Item Name="[capacity]">maxSignals_</Item>
+            <Item Name="[Internal Nodes]">internalNodes_</Item>
+            <Item Name="[Leaf Nodes]">leafNodes_</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="Cory::SignalTree::InternalNode">
+        <DisplayString>{{{count_._Storage._Value}}}</DisplayString>
+        <Expand>
+            <Item Name="[count]">count_._Storage._Value</Item>
+        </Expand>
+    </Type>
+
+    <Type Name="Cory::SignalTree::LeafNodeBlock">
+        <DisplayString>{{0x{bits_._Storage._Value,Xb}}}</DisplayString>
+        <Expand>
+            <Item Name="[bits]">bits_._Storage._Value,b</Item>
+        </Expand>
+    </Type>
+
     <Type Name="Cory::SlotMapHandle">
         <DisplayString Condition="free_ || index_ == 0xFFFFFFFF">{{invalid}}</DisplayString>
         <DisplayString>{{{index_}_{version_}}}</DisplayString>

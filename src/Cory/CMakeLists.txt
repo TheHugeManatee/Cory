@@ -113,7 +113,13 @@ set(CORY_SOURCES
         Systems/SystemCoordinator.hpp
         Systems/TransformSystem.cpp
         Systems/TransformSystem.hpp
-        )
+        Base/SignalTree.cpp
+        Base/SignalTree.hpp
+        Base/WorkContractGroup.cpp
+        Base/WorkContractGroup.hpp
+        Base/ValOptional.hpp
+        Base/Function.hpp
+)
 
 # determine includes from CORY_SOURCES by the .hpp suffix
 set(CORY_INCLUDES "")
@@ -125,14 +131,14 @@ endforeach ()
 
 add_library(${TARGET_NAME} STATIC
         ${CORY_SOURCES}
-        )
+)
 
 target_include_directories(${TARGET_NAME}
         PUBLIC
         ${VULKAN_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../>
         $<INSTALL_INTERFACE:include>
-        )
+)
 
 target_link_libraries(${TARGET_NAME}
         PUBLIC
@@ -155,7 +161,7 @@ target_link_libraries(${TARGET_NAME}
         PRIVATE
         Cory::project_warnings
         Cory::project_options
-        )
+)
 
 target_compile_definitions(${TARGET_NAME}
         PUBLIC
@@ -184,7 +190,7 @@ target_include_directories(${TARGET_NAME} PUBLIC
         $<INSTALL_INTERFACE:include>
         PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Cory>
-        )
+)
 
 add_library(Cory::Cory ALIAS Cory)
 

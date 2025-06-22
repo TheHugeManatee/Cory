@@ -93,7 +93,8 @@ As such, it uses features that are only supported in rather modern compilers.
 - Dynamic rendering:
     - Lesley Lai's [tutorial on dynamic rendering](https://lesleylai.info/en/vk-khr-dynamic-rendering/)
     - [Sascha Willem's Dynamic Rendering example](https://github.com/SaschaWillems/Vulkan/blob/313ac10de4a765997ddf5202c599e4a0ca32c8ca/examples/dynamicrendering/dynamicrendering.cpp)
-    - [`VK_KHR_dynamic_rendering`](https://github.com/KhronosGroup/Vulkan-Docs/blob/main/proposals/VK_KHR_dynamic_rendering.adoc)
+    - [
+      `VK_KHR_dynamic_rendering`](https://github.com/KhronosGroup/Vulkan-Docs/blob/main/proposals/VK_KHR_dynamic_rendering.adoc)
 
 ### Included Third-Party sources
 
@@ -136,16 +137,12 @@ That being said, to build the app, you will need to roughly perform the followin
 ```
 git clone https://github.com/TheHugeManatee/Cory
 cd Cory
-cd Cory/conan-recipes
-conan export corrade 2022.09.10_vk13@TheHugeManatee/custom
-conan export magnum 2022.09.10_vk13@TheHugeManatee/custom
-cd ..
-mkdir build && cd build
-conan install .. -s build_type=Debug
-# -or- conan install .. -s build_type=Release
-cmake ..
-cmake --build .
+#conan install . --output-folder=build/debug -s build_type=Debug --build=missing
+conan install . --output-folder=build/release -s build_type=Release --build=missing
+cmake --preset conan-release 
 ```
+
+Then bring your IDE to use the generated CMakeUserPresets.json file
 
 ### Cory?
 

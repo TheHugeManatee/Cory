@@ -5,7 +5,6 @@ set(TARGET_HEADER_SUBDIR "Cory/")
 find_package(Vulkan REQUIRED FATAL_ERROR)
 
 find_package(GLEW)
-find_package(Magnum REQUIRED Vk)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
@@ -145,10 +144,9 @@ target_link_libraries(${TARGET_NAME}
         ${VULKAN_LIBRARIES}
         Cory::ThirdParty
         GLEW::GLEW
-        Magnum::Vk
         Microsoft.GSL::GSL
         fmt::fmt
-        glfw::glfw
+        glfw
         glm::glm
         imgui::imgui
         EnTT::EnTT
@@ -157,6 +155,7 @@ target_link_libraries(${TARGET_NAME}
         cppcoro::cppcoro
         shaderc::shaderc
         spdlog::spdlog
+        KDGpu::KDGpu
 
         PRIVATE
         Cory::project_warnings

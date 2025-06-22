@@ -1,3 +1,15 @@
+## KDGPU Does not support conan yet
+include(FetchContent)
+
+FetchContent_Declare(
+        KDGpu
+        SOURCE_DIR "C:/dev/KDGpu"
+        #GIT_REPOSITORY https://github.com/KDAB/KDGpu.git
+        #GIT_TAG v0.8.0
+)
+FetchContent_MakeAvailable(KDGpu)
+
+
 ## This is where you put and configure external dependencies
 ## A couple of options are:
 # * Header-only libraries: Just include directly into your repository
@@ -16,7 +28,7 @@ add_library(${TARGET_NAME} STATIC
         src/imgui_impl_vulkan.cpp
         src/imgui_impl_glfw.cpp
         src/imGuIZMOquat.cpp
-        )
+)
 
 # optick
 file(GLOB_RECURSE OPTICK_SRC "src/optick/*.cpp")
@@ -39,11 +51,11 @@ target_include_directories(${TARGET_NAME} PUBLIC
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         imgui::imgui
-        glfw::glfw
+        glfw
         glm::glm
         PRIVATE
         Vulkan::Headers
-        )
+)
 
 add_library(Cory::ThirdParty ALIAS ThirdPartyLibs)
 

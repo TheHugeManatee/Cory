@@ -30,26 +30,8 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 include(Warnings)
 
 # disable this to debug conan-related problems
-option(CORY_CONAN_CMAKE_SILENT_OUTPUT "Silence conan output in CMake config" ON )
+option(CORY_CONAN_CMAKE_SILENT_OUTPUT "Silence conan output in CMake config" ON)
 set(CONAN_CMAKE_SILENT_OUTPUT ${CORY_CONAN_CMAKE_SILENT_OUTPUT})
-
-### Run conan install so we don't have to do it manually
-if (NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
-    message(STATUS "Downloading conan.cmake from https://github.com/conan-io/cmake-conan")
-    file(DOWNLOAD "https://raw.githubusercontent.com/conan-io/cmake-conan/0.18.1/conan.cmake"
-            "${CMAKE_BINARY_DIR}/conan.cmake"
-            TLS_VERIFY ON)
-endif ()
-include(${CMAKE_BINARY_DIR}/conan.cmake)
-conan_cmake_autodetect(conan_settings)
-message("Conan autodetected settings: ${conan_settings}")
-# fixup RelWithDebInfo to Release (most packages don't have a RelWithDebInfo build)
-string(REGEX REPLACE "RelWithDebInfo" "Release" conan_settings "${conan_settings}")
-message("Running CONAN command. This might take a while if libraries need to be built.")
-conan_cmake_install(PATH_OR_REFERENCE ${CMAKE_SOURCE_DIR}
-        SETTINGS ${conan_settings}
-        BUILD missing
-        OUTPUT_QUIET)
 
 # add this to find the conan-generated Find*.cmake files
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_BINARY_DIR})
@@ -77,11 +59,11 @@ option(CORY_BUILD_USE_DOXYGEN "Add a doxygen target to generate the documentatio
 cmake_dependent_option(CORY_BUILD_TESTS
         "Enable tests targets" ON # By default we want tests if CTest is enabled
         "BUILD_TESTING" ON # Stay coherent with CTest variables
-        )
-if(CORY_BUILD_TESTS)
+)
+if (CORY_BUILD_TESTS)
     #include(CTest)
     enable_testing()
-endif()
+endif ()
 
 
 # currently, we just map a hardcoded path for our resources - no fancy
@@ -132,7 +114,7 @@ set_directory_properties(PROPERTIES VS_STARTUP_PROJECT example/CubeDemo)
 if (CORY_BUILD_USE_DOXYGEN AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.9)
     find_package(Doxygen
             OPTIONAL_COMPONENTS dot mscgen dia
-            )
+    )
     if (DOXYGEN_FOUND)
         set(DOXYGEN_USE_MDFILE_AS_MAINPAGE README.md)
         doxygen_add_docs(

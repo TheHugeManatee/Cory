@@ -1,6 +1,11 @@
 ## KDGPU Does not support conan yet
 include(FetchContent)
 
+find_package(KDBindings REQUIRED)
+find_package(VulkanHeaders REQUIRED)
+find_package(imgui REQUIRED)
+find_package(glm REQUIRED)
+
 FetchContent_Declare(
         KDGpu
         SOURCE_DIR "C:/dev/KDGpu"
@@ -15,11 +20,6 @@ FetchContent_MakeAvailable(KDGpu)
 # * Header-only libraries: Just include directly into your repository
 
 set(TARGET_NAME ThirdPartyLibs)
-
-find_package(VulkanHeaders)
-find_package(imgui)
-find_package(glfw3)
-find_package(glm)
 
 add_library(${TARGET_NAME} STATIC
         src/stb_image.cpp

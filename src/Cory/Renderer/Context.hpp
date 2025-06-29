@@ -1,14 +1,12 @@
 #pragma once
 
-#include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/Semaphore.hpp>
-#include <Cory/Renderer/VulkanUtils.hpp>
+#include <Cory/Renderer/KDGpuFwd.hpp>
 
-#include <Magnum/Vk/Fence.h>
+#include <KDGpu/instance.h>
+#include <KDGpu/surface.h>
 
-#include <magic_enum.hpp>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -22,11 +20,11 @@ struct DebugMessageInfo {
     std::string message;
 };
 
-
 enum class ValidationLayers { Enabled, Disabled };
+enum class DeviceFeatures { RequiredOnly, All };
 struct ContextCreationInfo {
     ValidationLayers validation{ValidationLayers::Enabled};
-    std::span<const char*> args;
+    std::span<const char *> args;
 };
 
 /**
@@ -38,47 +36,38 @@ class Context : NoCopy {
     ~Context();
 
     // movable
-    Context(Context &&rhs);
-    Context &operator=(Context &&rhs);
+    Context(Context &&rhs) noexcept;
+    Context &operator=(Context &&rhs) noexcept;
 
     std::string name() const;
 
-    [[nodiscard]] Semaphore createSemaphore(std::string_view name = "");
-    [[nodiscard]] Magnum::Vk::Fence createFence(std::string_view name = "",
-                                                FenceCreateMode mode = {});
+    [[nodiscard]] KDGpu::GpuSemaphore createSemaphore(std::string_view name = "");
+    [[nodiscard]] KDGpu::Fence createFence(std::string_view name = "", FenceCreateMode mode = {});
 
     bool isHeadless() const;
 
-    Magnum::Vk::Instance &instance();
-    Magnum::Vk::DeviceProperties &physicalDevice();
-    Magnum::Vk::Device &device();
-    DescriptorSets &descriptorSets();
-    Magnum::Vk::CommandPool &commandPool();
+    KDGpu::Surface createSurface(std::string_view name, KDGpuKDGui::View &view);
+    KDGpu::Instance &instance();
 
-    Magnum::Vk::Queue &graphicsQueue();
-    uint32_t graphicsQueueFamily() const;
-    Magnum::Vk::Queue &computeQueue();
-    uint32_t computeQueueFamily() const;
+    KDGpu::GraphicsApi &graphicsApi();
+    const KDGpu::AdapterProperties &physicalDevice();
+    KDGpu::Device &device();
+    // DescriptorSets &descriptorSets();
 
-    ResourceManager &resources();
-    const ResourceManager &resources() const;
+    KDGpu::Queue &graphicsQueue();
 
-    /// register a callback that gets called on vulkan validation messages etc.
-    void onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo &)> callback);
-
-    // get the default mesh layout. if empty is true, will return an empty layout with zero
-    // attachments
-    const Magnum::Vk::MeshLayout &defaultMeshLayout(bool empty = false) const;
-    // non-const only to allow casting to VkPipelineLayout
-    Magnum::Vk::PipelineLayout &defaultPipelineLayout();
-    // non-const only to allow casting to VkDescriptorSetLayotu
-    Magnum::Vk::DescriptorSetLayout &defaultDescriptorSetLayout();
-
-    SamplerHandle defaultSampler() const;
+    KDGpu::VulkanResourceManager &resources();
+    const KDGpu::VulkanResourceManager &resources() const;
 
   private:
+    KDGpu::AdapterAndDevice createDefaultDevice(
+        const KDGpu::Surface &surface,
+        DeviceFeatures features = DeviceFeatures::RequiredOnly,
+        KDGpu::AdapterDeviceType deviceType = KDGpu::AdapterDeviceType::Default) const;
+
+    KDGpu::AdapterFeatures getRequiredFeatures() const;
+
     std::unique_ptr<struct ContextPrivate> data_;
-    void setupDebugMessenger();
 };
 // static_assert(std::movable<Context>, "Context must be movable");
 

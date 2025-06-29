@@ -2,78 +2,57 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
-#include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/StringStlView.h>
-#include <Magnum/Vk/BufferCreateInfo.h>
-#include <Magnum/Vk/CommandPoolCreateInfo.h>
-#include <Magnum/Vk/DescriptorPoolCreateInfo.h>
-#include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
-#include <Magnum/Vk/DescriptorType.h>
-#include <Magnum/Vk/DeviceCreateInfo.h>
-#include <Magnum/Vk/DeviceFeatures.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/ExtensionProperties.h>
-#include <Magnum/Vk/Extensions.h>
-#include <Magnum/Vk/FenceCreateInfo.h>
-#include <Magnum/Vk/InstanceCreateInfo.h>
-#include <Magnum/Vk/MeshLayout.h>
-#include <Magnum/Vk/PipelineLayoutCreateInfo.h>
-#include <Magnum/Vk/Queue.h>
-#include <Magnum/Vk/Result.h>
-#include <Magnum/Vk/SamplerCreateInfo.h>
-#include <Magnum/Vk/Version.h>
-#include <Magnum/Vk/VertexFormat.h>
-
-namespace Vk = Magnum::Vk;
+#include <KDGpu/graphics_api.h>
+#include <KDGpu/instance.h>
+#include <KDGpu/resource_manager.h>
+#include <KDGpu/vulkan/vulkan_graphics_api.h>
+#include <KDGpuKDGui/view.h>
+#include <KDGui/gui_application.h>
+#include <vulkan/vulkan_win32.h>
 
 namespace Cory {
 
+using InstanceHandle = KDGpu::Handle<KDGpu::Instance_t>;
+using DeviceHandle = KDGpu::Handle<KDGpu::Device_t>;
+using AdapterHandle = KDGpu::Handle<KDGpu::Adapter_t>;
+using QueueHandle = KDGpu::Handle<KDGpu::Queue_t>;
+using SwapchainHandle = KDGpu::Handle<KDGpu::Swapchain_t>;
+using SurfaceHandle = KDGpu::Handle<KDGpu::Surface_t>;
+using TextureHandle = KDGpu::Handle<KDGpu::Texture_t>;
+using TextureViewHandle = KDGpu::Handle<KDGpu::TextureView_t>;
+using ShaderModuleHandle = KDGpu::Handle<KDGpu::ShaderModule_t>;
+using RenderPassHandle = KDGpu::Handle<KDGpu::RenderPass_t>;
+using PipelineLayoutHandle = KDGpu::Handle<KDGpu::PipelineLayout_t>;
+using GraphicsPipelineHandle = KDGpu::Handle<KDGpu::GraphicsPipeline_t>;
+using ComputePipelineHandle = KDGpu::Handle<KDGpu::ComputePipeline_t>;
+using RenderPassCommandRecorderHandle = KDGpu::Handle<KDGpu::RenderPassCommandRecorder_t>;
+using GpuSemaphoreHandle = KDGpu::Handle<KDGpu::GpuSemaphore_t>;
+using ComputePassCommandRecorderHandle = KDGpu::Handle<KDGpu::ComputePassCommandRecorder_t>;
+using CommandBufferHandle = KDGpu::Handle<KDGpu::CommandBuffer_t>;
+using BindGroupHandle = KDGpu::Handle<KDGpu::BindGroup_t>;
+using BindGroupLayoutHandle = KDGpu::Handle<KDGpu::BindGroupLayout_t>;
+using FenceHandle = KDGpu::Handle<KDGpu::Fence_t>;
+
 struct ContextPrivate {
     std::string name;
-    bool isHeadless{false};
-    Vk::Instance instance{Corrade::NoCreate};
+    bool isHeadless{true};
+
+    KDGpu::GraphicsApi api;
+    KDGpu::Instance instance;
+
+    KDGpu::Surface surface;
+    KDGpu::Adapter *adapter;
+    KDGpu::Device device;
+    KDGpu::Queue queue;
+
     BasicVkObjectWrapper<VkDebugUtilsMessengerEXT> debugMessenger{};
-    Vk::DeviceProperties physicalDevice{Corrade::NoCreate};
-    Vk::Device device{Corrade::NoCreate};
-
-    Vk::Queue graphicsQueue{Corrade::NoCreate};
-    uint32_t graphicsQueueFamily{};
-    Vk::Queue computeQueue{Corrade::NoCreate};
-    uint32_t computeQueueFamily{};
-
-    Vk::CommandPool commandPool{Corrade::NoCreate};
-
-    ResourceManager resources;
-
-    Callback<const DebugMessageInfo &> onVulkanDebugMessageReceived;
-
-    DescriptorSets descriptorSetManager;
-    /// todo pipeline layout should probably belong to the framegraph instead of the context
-    Magnum::Vk::PipelineLayout defaultPipelineLayout{Corrade::NoCreate};
-    Magnum::Vk::MeshLayout defaultMeshLayout{Corrade::NoInit};
-    /// mesh layout with no bindings, to implement dynamic vertex generation/pulling
-    Magnum::Vk::MeshLayout emptyMeshLayout{Corrade::NoInit};
-    SamplerHandle defaultSampler;
 
     void receiveDebugUtilsMessage(DebugMessageSeverity severity,
                                   DebugMessageType messageType,
                                   const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
 };
-
-namespace detail {
-PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPrivate &data);
-Magnum::Vk::PipelineLayout
-createDefaultPipelineLayout(Context &ctx, Vk::DescriptorSetLayout &descriptorSetLayout);
-Magnum::Vk::MeshLayout createDefaultMeshLayout();
-VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                                     void *pUserData);
-} // namespace detail
 
 Context::Context(ContextCreationInfo creationInfo)
     : data_{std::make_unique<ContextPrivate>()}
@@ -86,96 +65,23 @@ Context::Context(ContextCreationInfo creationInfo)
     //  - KHR_get_physical_device_properties2 instance extension
     //  - KHR_dynamic_rendering device extension
     //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
-    Vk::InstanceCreateInfo instanceCreateInfo{gsl::narrow<int>(creationInfo.args.size()),
-                                              creationInfo.args.data()};
-
-    instanceCreateInfo.setApplicationInfo(app_name, Vk::version(1, 0, 0))
-        .addEnabledExtensions<Magnum::Vk::Extensions::EXT::debug_utils>()
-        .addEnabledExtensions({VK_KHR_SURFACE_EXTENSION_NAME,
-                               "VK_KHR_win32_surface",
-                               VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME});
+    KDGpu::InstanceOptions instanceOptions = {
+        .applicationName = KDGui::GuiApplication::instance()->applicationName(),
+        .applicationVersion = KDGPU_MAKE_API_VERSION(0, 1, 0, 0),
+        .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
+        .layers = {},
+        .extensions = {VK_KHR_SURFACE_EXTENSION_NAME,
+                       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+                       VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME},
+    };
     if (creationInfo.validation == ValidationLayers::Enabled) {
-        instanceCreateInfo.addEnabledLayers({"VK_LAYER_KHRONOS_validation"});
+        instanceOptions.layers.push_back("VK_LAYER_KHRONOS_validation");
     }
-    data_->instance.create(instanceCreateInfo);
-    data_->instance.populateGlobalFunctionPointers();
-
-    data_->physicalDevice = Vk::pickDevice(data_->instance);
-    CO_APP_INFO("Using device {}", data_->physicalDevice.name());
-
-    const Vk::ExtensionProperties extensions = data_->physicalDevice.enumerateExtensionProperties();
-    Vk::DeviceCreateInfo info{data_->physicalDevice, &extensions};
-    info.addEnabledExtensions({VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                               VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-                               "VK_KHR_fragment_shading_rate",
-                               "VK_KHR_dynamic_rendering"});
-
-    // configure a Graphics and a Compute queue - assumes that there is a family that
-    // supports both graphics and compute, which is probably not universal
-    data_->graphicsQueueFamily = data_->physicalDevice.pickQueueFamily(
-        Vk::QueueFlags::Type::Graphics | Vk::QueueFlags::Type::Compute);
-    info.addQueues(data_->graphicsQueueFamily, {1.0f}, {data_->graphicsQueue});
-
-    // set up the required features
-    auto pnext_chain = detail::setupRequiredDeviceFeatures(info, *data_);
-    info->pNext = pnext_chain.head();
-
-    Vk::Result deviceCreateResult = data_->device.tryCreate(data_->instance, std::move(info));
-    if (deviceCreateResult != Vk::Result::Success) {
-        throw std::runtime_error{
-            fmt::format("Could not create logical device! result = {}", deviceCreateResult)};
-    }
-    data_->device.populateGlobalFunctionPointers();
-    // set a debug name for the logical device and queues
-    nameVulkanObject(data_->device, data_->device, fmt::format("DEV_{}", data_->name));
-    nameVulkanObject(data_->device, data_->graphicsQueue, fmt::format("QUE_Gfx_{}", data_->name));
-    // nameVulkanObject(data_->device, data_->computeQueue, fmt::format("QUE_Comp_{}",
-    // data_->name));
-
-    setupDebugMessenger();
-
-    data_->commandPool =
-        Vk::CommandPool{data_->device, Vk::CommandPoolCreateInfo{data_->graphicsQueueFamily}};
-
-    // delayed-init of the resource manager
-    resources().setContext(*this);
-
-    // TODO descriptorsetmanager should move to more frontend-facing object like swapchain, window,
-    // or application base class
-    // default layout currently only has a single uniform buffer and eight images and buffers
-    Vk::DescriptorSetLayoutBinding::Flags bindless_flags{};
-    bindless_flags |= Vk::DescriptorSetLayoutBinding::Flag::PartiallyBound;
-    bindless_flags |= Vk::DescriptorSetLayoutBinding::Flag::UpdateAfterBind;
-
-    // static cast is needed because Magnum does not know about this flag yet
-    Vk::DescriptorSetLayoutCreateInfo::Flags layout_flags(
-        static_cast<Vk::DescriptorSetLayoutCreateInfo::Flag>(
-            VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT));
-
-    auto all_graphics = Vk::ShaderStage{VK_SHADER_STAGE_ALL_GRAPHICS};
-
-    Vk::DescriptorSetLayoutCreateInfo defaultLayout{
-        {
-            {{0, Vk::DescriptorType::UniformBuffer, 1, all_graphics, bindless_flags}},
-            {{1, Vk::DescriptorType::CombinedImageSampler, 8, all_graphics, bindless_flags}},
-            {{2, Vk::DescriptorType::StorageBuffer, 8, all_graphics, bindless_flags}},
-        },
-        layout_flags};
-    static constexpr uint32_t FRAMES_IN_FLIGHT = 4;
-
-    data_->descriptorSetManager.init(
-        data_->device, data_->resources, std::move(defaultLayout), FRAMES_IN_FLIGHT);
-
-    // create default resources
-    data_->defaultMeshLayout = detail::createDefaultMeshLayout();
-    data_->emptyMeshLayout = Magnum::Vk::MeshLayout{Vk::MeshPrimitive::Triangles};
-    data_->defaultPipelineLayout = detail::createDefaultPipelineLayout(
-        *this, resources()[data_->descriptorSetManager.layout()]);
-    data_->defaultSampler = resources().createSampler("SMPL_Default", Vk::SamplerCreateInfo{});
+    data_->instance = data_->api.createInstance(instanceOptions);
 }
 
-Context::Context(Context &&rhs) { std::swap(rhs.data_, data_); }
-Context &Context::operator=(Context &&rhs)
+Context::Context(Context &&rhs) noexcept { std::swap(rhs.data_, data_); }
+Context &Context::operator=(Context &&rhs) noexcept
 {
     if (this != &rhs) { std::swap(rhs.data_, data_); }
     return *this;
@@ -183,201 +89,168 @@ Context &Context::operator=(Context &&rhs)
 
 Context::~Context()
 {
-    if (data_) {
-        data_->resources.release(data_->defaultSampler);
-        CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
-    }
-}
-
-void Context::setupDebugMessenger()
-{
-    VkDebugUtilsMessengerCreateInfoEXT dbgMessengerCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-        .pNext = nullptr,
-        .flags = 0,
-        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-        .pfnUserCallback = detail::debugUtilsMessengerCallback,
-        .pUserData = data_.get()};
-
-    VkDebugUtilsMessengerEXT messenger;
-    instance()->CreateDebugUtilsMessengerEXT(
-        data_->instance, &dbgMessengerCreateInfo, nullptr, &messenger);
-    data_->debugMessenger.wrap(messenger, [this](auto *messenger) {
-        data_->instance->DestroyDebugUtilsMessengerEXT(data_->instance, messenger, nullptr);
-    });
-    // this seems to crash - not sure if driver or implementation bug...
-    // nameRawVulkanObject(
-    //    data->device.handle(), debugMessenger, fmt::format("{} Debug Messenger", data->name));
+    if (data_) { CO_CORE_TRACE("Destroying Cory::Context {}", data_->name); }
 }
 
 std::string Context::name() const { return data_->name; }
 
-Semaphore Context::createSemaphore(std::string_view name)
+KDGpu::GpuSemaphore Context::createSemaphore(std::string_view name)
 {
-    VkSemaphoreCreateInfo create_info{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0};
+    auto &device = data_->device;
+    KDGpu::GpuSemaphoreOptions options{
+        .label = name,
+    };
 
-    VkSemaphore semaphore;
-    THROW_ON_ERROR(device()->CreateSemaphore(data_->device, &create_info, nullptr, &semaphore),
-                   "failed to create a semaphore object");
-
-    if (!name.empty()) { nameRawVulkanObject(data_->device, semaphore, name); }
-
-    return Semaphore{semaphore, [&device = data_->device](VkSemaphore f) {
-                         device->DestroySemaphore(device, f, nullptr);
-                     }};
+    return device.createGpuSemaphore(options);
 }
 
-Vk::Fence Context::createFence(std::string_view name, Cory::FenceCreateMode mode)
+KDGpu::Fence Context::createFence(std::string_view name, FenceCreateMode mode)
 {
-    Vk::Fence fence{Corrade::NoCreate};
-    if (mode == FenceCreateMode::Signaled) {
-        fence = Vk::Fence{data_->device, Vk::FenceCreateInfo{Vk::FenceCreateInfo::Flag::Signaled}};
-    }
+    auto &device = data_->device;
 
-    fence = Vk::Fence{data_->device, Vk::FenceCreateInfo{}};
-    nameVulkanObject(data_->device, fence, name);
-    return fence;
+    KDGpu::FenceOptions options{
+        .label = name,
+        .createSignalled = (mode == FenceCreateMode::Signaled),
+        .externalFenceHandleType{KDGpu::ExternalFenceHandleTypeFlagBits::None},
+    };
+    return device.createFence(options);
 }
 
 bool Context::isHeadless() const { return data_->isHeadless; }
-Vk::Instance &Context::instance() { return data_->instance; }
-Magnum::Vk::DeviceProperties &Context::physicalDevice() { return data_->physicalDevice; }
-Vk::Device &Context::device() { return data_->device; }
-DescriptorSets &Context::descriptorSets() { return data_->descriptorSetManager; }
-Vk::CommandPool &Context::commandPool() { return data_->commandPool; }
-Magnum::Vk::Queue &Context::graphicsQueue() { return data_->graphicsQueue; }
-uint32_t Context::graphicsQueueFamily() const { return data_->graphicsQueueFamily; }
-Magnum::Vk::Queue &Context::computeQueue() { return data_->computeQueue; }
-uint32_t Context::computeQueueFamily() const { return data_->computeQueueFamily; }
-ResourceManager &Context::resources() { return data_->resources; }
-const ResourceManager &Context::resources() const { return data_->resources; }
 
-void Context::onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo &)> callback)
+KDGpu::AdapterAndDevice Context::createDefaultDevice(const KDGpu::Surface &surface,
+                                                     DeviceFeatures features,
+                                                     KDGpu::AdapterDeviceType deviceType) const
 {
-    data_->onVulkanDebugMessageReceived(std::move(callback));
-}
+    using namespace KDGpu;
 
-const Magnum::Vk::MeshLayout &Context::defaultMeshLayout(bool empty) const
-{
-    return empty ? data_->emptyMeshLayout : data_->defaultMeshLayout;
-}
+    // Enumerate the adapters (physical devices) and select one to use. Here we look for
+    // a discrete GPU. In a real app, we could fallback to an integrated one.
+    Adapter *selectedAdapter = data_->instance.selectAdapter(deviceType);
+    if (!selectedAdapter) {
+        CO_CORE_FATAL("Unable to find a suitable Adapter. Aborting...");
+        return {};
+    }
 
-Magnum::Vk::PipelineLayout &Context::defaultPipelineLayout()
-{
-    return data_->defaultPipelineLayout;
-}
-SamplerHandle Context::defaultSampler() const { return data_->defaultSampler; }
+    auto queueTypes = selectedAdapter->queueTypes();
+    const bool hasGraphicsAndCompute = queueTypes[0].supportsFeature(
+        QueueFlags(QueueFlagBits::GraphicsBit) | QueueFlags(QueueFlagBits::ComputeBit));
+    CO_CORE_INFO("Queue family 0 graphics and compute support: {}", hasGraphicsAndCompute);
 
-void ContextPrivate::receiveDebugUtilsMessage(
-    DebugMessageSeverity severity,
-    DebugMessageType messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT *callbackData)
-{
-    auto level = [&]() {
-        switch (severity) {
-        case DebugMessageSeverity::Verbose:
-            return spdlog::level::trace;
-        case DebugMessageSeverity::Info:
-            return spdlog::level::info;
-        case DebugMessageSeverity::Warning:
-            return spdlog::level::warn;
-        case DebugMessageSeverity::Error:
-            return spdlog::level::err;
-        }
-        return spdlog::level::debug;
-    }();
+    // We are now able to query the adapter for swapchain properties and presentation support
+    // with the window surface
+    const auto swapchainProperties = selectedAdapter->swapchainProperties(surface);
+    CO_CORE_INFO("Supported swapchain present modes:");
+    for (const auto &mode : swapchainProperties.presentModes) {
+        CO_CORE_INFO("  - {}", presentModeToString(mode));
+    }
 
-    onVulkanDebugMessageReceived.invoke({.severity = severity,
-                                         .messageType = messageType,
-                                         .messageIdNumber = callbackData->messageIdNumber,
-                                         .message = callbackData->pMessage});
-    Log::GetCoreLogger()->log(level, "[VulkanDebugMsg:{}] {}", messageType, callbackData->pMessage);
-}
+    const bool supportsPresentation =
+        selectedAdapter->supportsPresentation(surface, 0); // Query about the 1st queue type
+    CO_CORE_INFO("Queue family 0 supports presentation: {}", supportsPresentation);
 
-namespace detail {
+    const auto adapterExtensions = selectedAdapter->extensions();
+    CO_CORE_INFO("Supported adapter extensions:");
+    for (const auto &extension : adapterExtensions) {
+        CO_CORE_INFO("  - {} Version {}", extension.name, extension.version);
+    }
 
-PNextChain<> setupRequiredDeviceFeatures(Vk::DeviceCreateInfo &info, ContextPrivate &data)
-{
-    PNextChain chain;
+    if (!supportsPresentation || !hasGraphicsAndCompute) {
+        CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
+        return {};
+    }
 
-    //    VkPhysicalDeviceFeatures2 deviceFeatures{.sType =
-    //    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-    //                                             .pNext = nullptr};
-    //    data.instance->GetPhysicalDeviceFeatures2(data.physicalDevice, &deviceFeatures);
+    const bool supportsMultiView = selectedAdapter->features().multiView;
+    CO_CORE_INFO("Supports multiview: {}", supportsMultiView);
 
-    // general enabled features
-    auto &enabled_features = chain.insert(VkPhysicalDeviceFeatures{
-        // sample rate shading to be able to work with multisampling properly
-        .sampleRateShading = VK_TRUE,
+    const bool supportsUBOIndexing =
+        selectedAdapter->features().shaderUniformBufferArrayNonUniformIndexing &&
+        selectedAdapter->features().bindGroupBindingUniformBufferUpdateAfterBind;
+    CO_CORE_INFO("Supports Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
+
+    const bool supportsAccelerationStructures = selectedAdapter->features().accelerationStructures;
+    CO_CORE_INFO("Supports acceleration structures: {}", supportsAccelerationStructures);
+
+    const bool supportsRayTracing = selectedAdapter->features().rayTracingPipeline;
+    CO_CORE_INFO("Supports raytracing: {}", supportsRayTracing);
+
+    const bool supportsMeshShader = selectedAdapter->features().meshShader;
+    const bool supportsTaskShader = selectedAdapter->features().taskShader;
+    CO_CORE_INFO("Supports meshShader: {}", supportsMeshShader);
+    CO_CORE_INFO("Supports taskShader: {}", supportsTaskShader);
+
+    const bool supportsHostToImageCopy = selectedAdapter->features().hostImageCopy;
+    CO_CORE_INFO("Supports host to image copy: {}", supportsHostToImageCopy);
+
+    // Now we can create a device from the selected adapter that we can then use to interact
+    // with the GPU.
+
+    auto device = selectedAdapter->createDevice(DeviceOptions{
+        .label = "Main Device",
+        .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
+        .layers = {},
+        .extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                       VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+                       VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
+                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME},
+        .queues = {},
+        .requestedFeatures =
+            features == DeviceFeatures::All ? selectedAdapter->features() : getRequiredFeatures(),
+        .adapterGroup = {},
     });
-    info->pEnabledFeatures = &enabled_features;
 
-    // synchronization2
-    chain.prepend(VkPhysicalDeviceSynchronization2Features{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-        .synchronization2 = VK_TRUE});
-
-    // dynamic_rendering
-    chain.prepend(VkPhysicalDeviceDynamicRenderingFeatures{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-        .dynamicRendering = VK_TRUE,
-    });
-
-    // indexing_features (required for bindless)
-    chain.prepend(VkPhysicalDeviceDescriptorIndexingFeatures{
-        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-        .descriptorBindingUniformBufferUpdateAfterBind = VK_TRUE,
-        .descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
-        .descriptorBindingStorageBufferUpdateAfterBind = VK_TRUE,
-        .descriptorBindingPartiallyBound = VK_TRUE,
-        .runtimeDescriptorArray = VK_TRUE});
-
-    return chain;
+    return {selectedAdapter, std::move(device)};
 }
-
-VkBool32 debugUtilsMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                                     void *pUserData)
+KDGpu::AdapterFeatures Context::getRequiredFeatures() const
 {
-    ContextPrivate *contextData = static_cast<ContextPrivate *>(pUserData);
-    contextData->receiveDebugUtilsMessage(static_cast<DebugMessageSeverity>(messageSeverity),
-                                          static_cast<DebugMessageType>(messageType),
-                                          pCallbackData);
-    return VK_TRUE;
+    KDGpu::AdapterFeatures features{};
+    features.sampleRateShading = true;
+    // synchronization2 is automatically enabled by kdgpu
+
+    // TODO dynamic_rendering
+    // VkPhysicalDeviceDynamicRenderingFeatures{
+    //     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+    //     .dynamicRendering = VK_TRUE,
+    // };
+
+    features.bindGroupBindingUniformBufferUpdateAfterBind = true;
+    features.bindGroupBindingSampledImageUpdateAfterBind = true;
+    features.bindGroupBindingStorageBufferUpdateAfterBind = true;
+    features.bindGroupBindingPartiallyBound = true;
+    features.runtimeBindGroupArray = true;
+
+    return features;
 }
 
-Magnum::Vk::PipelineLayout createDefaultPipelineLayout(Context &ctx,
-                                                       Vk::DescriptorSetLayout &descriptorSetLayout)
+KDGpu::Surface Context::createSurface(std::string_view name, KDGpuKDGui::View &view)
 {
-    // use max guaranteed memory of 128 bytes, for all shaders
-    VkPushConstantRange pushConstantRange{
-        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
+    auto &instance = data_->instance;
+    auto &device = data_->device;
+    auto surface = view.createSurface(instance);
 
-    // create pipeline layout
-    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{
-        descriptorSetLayout, descriptorSetLayout, descriptorSetLayout, descriptorSetLayout};
-    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
-    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
-    return Vk::PipelineLayout(ctx.device(), pipelineLayoutCreateInfo);
+    // Create a device and a queue to use
+    auto defaultDevice = createDefaultDevice(surface);
+    data_->adapter = defaultDevice.adapter;
+    device = std::move(defaultDevice.device);
+    CO_CORE_ASSERT(!device.queues().empty(), "Device has no queues!");
+    data_->queue = data_->device.queues()[0];
+
+    data_->isHeadless = false;
+
+    return surface;
 }
 
-Magnum::Vk::MeshLayout createDefaultMeshLayout()
+KDGpu::Instance &Context::instance() { return data_->instance; }
+KDGpu::GraphicsApi &Context::graphicsApi() { return data_->api; }
+const KDGpu::AdapterProperties &Context::physicalDevice() { return data_->adapter->properties(); }
+KDGpu::Device &Context::device() { return data_->device; }
+
+KDGpu::Queue &Context::graphicsQueue() { return data_->queue; }
+
+KDGpu::VulkanResourceManager &Context::resources() { return *data_->api.resourceManager(); }
+const KDGpu::VulkanResourceManager &Context::resources() const
 {
-    static constexpr uint32_t binding{0};
-    return Vk::MeshLayout{Vk::MeshPrimitive::Triangles}
-        .addBinding(binding, 10 * sizeof(float))
-        .addAttribute(0, binding, Vk::VertexFormat::Vector3, 0)
-        .addAttribute(1, binding, Vk::VertexFormat::Vector3, 3 * sizeof(float))
-        .addAttribute(2, binding, Vk::VertexFormat::Vector4, 6 * sizeof(float));
+    return *data_->api.resourceManager();
 }
-
-} // namespace detail
 
 } // namespace Cory

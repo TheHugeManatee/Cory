@@ -9,9 +9,7 @@
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
-#include <Magnum/Vk/CommandBuffer.h>
-
-#include <memory>
+#include <KDGpu/command_recorder.h>
 
 namespace Cory {
 
@@ -21,25 +19,25 @@ namespace Cory {
  * intended to perform per-frame operations but rather to perform operations like resource
  * creation/initialization etc. in the app initialization phase.
  */
-class SingleShotCommandBuffer : NoCopy {
+class SingleShotCommandRecorder : NoCopy {
   public:
-    SingleShotCommandBuffer(Context &ctx);
-    ~SingleShotCommandBuffer();
+    SingleShotCommandRecorder(Context &ctx);
+    ~SingleShotCommandRecorder();
 
     // movable
-    SingleShotCommandBuffer(SingleShotCommandBuffer&&) = default;
-    SingleShotCommandBuffer& operator=(SingleShotCommandBuffer&&) = default;
+    SingleShotCommandRecorder(SingleShotCommandRecorder &&) = default;
+    SingleShotCommandRecorder &operator=(SingleShotCommandRecorder &&) = default;
 
-    operator VkCommandBuffer() { return buffer(); }
+    operator KDGpu::CommandRecorder &() { return buffer(); }
 
-    Magnum::Vk::CommandBuffer &buffer() { return commandBuffer_; }
+    KDGpu::CommandRecorder &buffer() { return commandRecorder_; }
 
-    Magnum::Vk::CommandBuffer *operator->() { return &commandBuffer_; };
+    KDGpu::CommandRecorder *operator->() { return &commandRecorder_; };
 
   private:
     Context *ctx_;
-    Magnum::Vk::CommandBuffer commandBuffer_;
+    KDGpu::CommandRecorder commandRecorder_;
 };
-static_assert(std::movable<SingleShotCommandBuffer>);
+static_assert(std::movable<SingleShotCommandRecorder>);
 
 } // namespace Cory

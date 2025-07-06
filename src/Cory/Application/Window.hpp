@@ -4,20 +4,20 @@
 #include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Profiling.hpp>
-#include <Cory/Renderer/Swapchain.hpp>
-#include <Cory/Renderer/VulkanUtils.hpp>
+#include <Cory/Renderer/Common.hpp>
 
-#include <Magnum/Vk/Image.h>
-#include <Magnum/Vk/ImageView.h>
+#include <KDGpu/fence.h>
+#include <KDGpu/gpu_semaphore.h>
+#include <KDGpu/surface.h>
+#include <KDGpu/swapchain.h>
+#include <KDGpuKDGui/view.h>
 
-#include "kdbindings/signal.h"
+#include <kdbindings/signal.h>
 
 #include <glm/vec2.hpp>
+
 #include <memory>
 #include <string>
-
-struct GLFWwindow;
-typedef struct VkSurfaceKHR_T *VkSurfaceKHR;
 
 namespace Cory {
 
@@ -25,6 +25,7 @@ class Context;
 
 class Window : NoCopy, NoMove {
   public:
+    static constexpr uint32_t FRAMES_IN_FLIGHT = 2;
     Window(Context &context,
            glm::i32vec2 dimensions,
            std::string windowName,
@@ -35,28 +36,15 @@ class Window : NoCopy, NoMove {
 
     glm::i32vec2 dimensions() const { return dimensions_; }
 
-    Swapchain &swapchain() { return *swapchain_; };
+    KDGpu::Swapchain &swapchain() { return swapchain_; };
 
     [[nodiscard]] FrameContext nextSwapchainImage();
     void submitAndPresent(FrameContext &frameCtx);
 
-    [[nodiscard]] GLFWwindow *handle() { return window_.get(); }
-    [[nodiscard]] const GLFWwindow *handle() const { return window_.get(); }
-
-    /// the MSAA samples
-    [[nodiscard]] int32_t sampleCount() const noexcept { return sampleCount_; }
     /// pixel format of the offscreen color images
-    [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return colorFormat_; }
-    /// access the offscreen color image
-    [[nodiscard]] Magnum::Vk::Image &colorImage() noexcept { return colorImage_; }
-    /// access the offscreen color image view
-    [[nodiscard]] Magnum::Vk::ImageView &colorView() noexcept { return colorImageView_; }
+    [[nodiscard]] KDGpu::Format colorFormat() const noexcept { return colorFormat_; }
     /// pixel format of the offscreen depth images
-    [[nodiscard]] Magnum::Vk::PixelFormat depthFormat() const noexcept { return depthFormat_; }
-    /// access the offscreen depth images
-    [[nodiscard]] auto &depthImages() const noexcept { return depthImages_; }
-    /// access the offscreen depth image views
-    [[nodiscard]] auto &depthViews() noexcept { return depthImageViews_; }
+    [[nodiscard]] KDGpu::Format depthFormat() const noexcept { return swapchainSetup_.depthFormat; }
 
     /**
      * This signal is emitted whenever the swapchain is resized and the application should
@@ -76,30 +64,54 @@ class Window : NoCopy, NoMove {
     KDBindings::Signal<ScrollEvent> onMouseScrolled;
 
     /// emitted when a keyboard key is called
-    struct KDBindings::Signal<KeyEvent> onKeyCallback;
+    KDBindings::Signal<KeyEvent> onKeyCallback;
+
+    // The sample count of the window
+    KDBindings::Property<KDGpu::SampleCountFlagBits> samples;
 
   private:
-    [[nodiscard]] BasicVkObjectWrapper<VkSurfaceKHR> createSurface();
-    [[nodiscard]] std::unique_ptr<Swapchain> createSwapchain();
+    // Use the device and surface to determine swapchainOptions
+    void determineSwapchainOptions();
+    [[nodiscard]] KDGpu::Swapchain createSwapchain();
     // create the (multisampled) color images
     void createColorAndDepthResources();
-    void createGlfwWindow();
+    void createWindow();
 
   private:
     Context &ctx_;
     std::string windowName_;
     int32_t sampleCount_;
     glm::i32vec2 dimensions_;
-    std::shared_ptr<GLFWwindow> window_{};
+    std::unique_ptr<KDGpuKDGui::View> window_{};
 
-    BasicVkObjectWrapper<VkSurfaceKHR> surface_{};
-    std::unique_ptr<Swapchain> swapchain_;
-    Magnum::Vk::PixelFormat colorFormat_;
-    Magnum::Vk::PixelFormat depthFormat_;
-    Magnum::Vk::Image colorImage_{Corrade::NoCreate};
-    Magnum::Vk::ImageView colorImageView_{Corrade::NoCreate};
-    std::vector<Magnum::Vk::Image> depthImages_;
-    std::vector<Magnum::Vk::ImageView> depthImageViews_;
+    KDGpu::Surface surface_{};
+    struct {
+        KDGpu::Format format{KDGpu::Format::B8G8R8A8_UNORM};
+        KDGpu::CompositeAlphaFlagBits compositeAlpha{KDGpu::CompositeAlphaFlagBits::OpaqueBit};
+        KDGpu::TextureUsageFlags usageFlags{KDGpu::TextureUsageFlagBits::ColorAttachmentBit};
+        KDGpu::Format depthFormat;
+        KDGpu::TextureUsageFlags depthImageUsage_;
+        std::vector<KDGpu::SampleCountFlagBits> supportedSampleCounts;
+
+        KDGpu::Extent2D extent;
+        bool showSurfaceCapabilities{false};
+        std::string capabilitiesString;
+        KDGpu::PresentMode presentMode;
+    } swapchainSetup_;
+    KDGpu::Swapchain swapchain_;
+    std::vector<KDGpu::TextureView> swapchainViews_;
+
+    KDGpu::Format colorFormat_;
+    std::vector<KDGpu::Texture> colorImages_;
+    std::vector<KDGpu::TextureView> colorImageViews_;
+    std::vector<KDGpu::Texture> depthImages_;
+    std::vector<KDGpu::TextureView> depthImageViews_;
+
+    uint32_t currentSwapchainImageIndex_{0};
+    uint32_t inFlightIndex_{0};
+    std::array<KDGpu::GpuSemaphore, FRAMES_IN_FLIGHT> presentCompleteSemaphores_;
+    std::array<KDGpu::GpuSemaphore, FRAMES_IN_FLIGHT> renderCompleteSemaphores_;
+    std::array<KDGpu::Fence, FRAMES_IN_FLIGHT> frameCompletedFences_;
 
     LapTimer fpsCounter_;
 };

@@ -5,14 +5,14 @@
 
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
 
-#include <Corrade/Containers/StringStlView.h>
-#include <Magnum/Vk/Vk.h> // forward declaration header
-#include <Magnum/Vk/Vulkan.h>
-
+#include <Cory/Renderer/KDGpuFwd.hpp>
 #include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
 #include <Cory/Renderer/Synchronization.hpp>
-#include <Cory/Renderer/flextVkExt.h> // extensions
+#include <vulkan/vulkan.h>
 
+#include <KDGpu/gpu_core.h>
+
+#include <KDGpu/command_recorder.h>
 #include <cstdint>
 
 namespace Cory {
@@ -23,7 +23,7 @@ class CpuBuffer;
 class RenderManager;
 class Shader;
 class ResourceManager;
-class SingleShotCommandBuffer;
+class SingleShotCommandRecorder;
 // Swapchain.hpp
 struct SwapchainSupportDetails;
 struct FrameContext;
@@ -33,11 +33,6 @@ template <typename BufferStruct>
     requires std::is_trivial_v<BufferStruct>
 class UniformBufferObject;
 class DescriptorSets;
-
-using PixelFormat = Magnum::Vk::PixelFormat;
-bool isColorFormat(PixelFormat format);
-bool isDepthFormat(PixelFormat format);
-bool isStencilFormat(PixelFormat format);
 
 // enums
 enum class ShaderType : uint32_t {
@@ -86,28 +81,34 @@ using MemoryFlags = BitField<MemoryFlagBits>;
 
 using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
-using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
-using PipelineHandle = PrivateTypedHandle<Magnum::Vk::Pipeline, ResourceManager>;
-using ImageHandle = PrivateTypedHandle<Magnum::Vk::Image, ResourceManager>;
-using ImageViewHandle = PrivateTypedHandle<Magnum::Vk::ImageView, ResourceManager>;
-using SamplerHandle = PrivateTypedHandle<Magnum::Vk::Sampler, ResourceManager>;
-using DescriptorSetLayoutHandle =
-    PrivateTypedHandle<Magnum::Vk::DescriptorSetLayout, ResourceManager>;
+using BufferHandle = PrivateTypedHandle<KDGpu::VulkanBuffer, ResourceManager>;
+using PipelineHandle = PrivateTypedHandle<KDGpu::VulkanPipeline, ResourceManager>;
+using ImageHandle = PrivateTypedHandle<KDGpu::VulkanTexture, ResourceManager>;
+using ImageViewHandle = PrivateTypedHandle<KDGpu::VulkanTextureView, ResourceManager>;
+using SamplerHandle = PrivateTypedHandle<KDGpu::VulkanSampler, ResourceManager>;
+using DescriptorSetLayoutHandle = PrivateTypedHandle<KDGpu::VulkanBindGroup, ResourceManager>;
 
 struct FrameContext {
     uint32_t index{};                    ///< the current swapchain image index
-    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
+    uint32_t swapchainImageIndex{};      ///< the current swapchain image index
+    uint64_t frameNumber{};              ///< the (monotonically increasing) frame number
     bool shouldRecreateSwapchain{false}; ///< set when window has been resized
-    Magnum::Vk::Image *swapchainImage{};
-    Magnum::Vk::ImageView *swapchainImageView{};
-    Magnum::Vk::Image *colorImage{};
-    Magnum::Vk::ImageView *colorImageView{};
-    Magnum::Vk::Image *depthImage{};
-    Magnum::Vk::ImageView *depthImageView{};
-    Magnum::Vk::Fence *inFlight{};
-    Semaphore *acquired{};
-    Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer *commandBuffer{};
+    const KDGpu::Texture *swapchainImage{};
+    KDGpu::TextureView *swapchainImageView{};
+    KDGpu::Texture *colorImage{};
+    KDGpu::TextureView *colorImageView{};
+    KDGpu::Texture *depthImage{};
+    KDGpu::TextureView *depthImageView{};
+    /// Fence to synchronize when the GPU has finished executing the commands associated with this
+    /// frame, and its resources can be safely reused.
+    KDGpu::Fence *inFlight{};
+    /// Semaphore will be signaled when the swapchain image has been acquired (i.e.
+    /// when presentation engine has finished with a preceding "present" call
+    KDGpu::GpuSemaphore *acquired{};
+    /// Semaphore will be signaled when all rendering commands have been executed on the GPU
+    KDGpu::GpuSemaphore *rendered{};
+
+    KDGpu::CommandRecorder commandBuffer;
 };
 
 } // namespace Cory

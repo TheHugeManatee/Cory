@@ -2,8 +2,6 @@
 
 #include <Cory/Renderer/Common.hpp>
 
-#include <Cory/Renderer/APIConversion.hpp>
-
 #include <functional>
 
 namespace Cory {
@@ -55,7 +53,8 @@ enum class TextureMemoryStatus { Virtual, Allocated, External };
 struct TextureInfo {
     std::string name;
     glm::u32vec3 size;
-    Magnum::Vk::PixelFormat format;
+    KDGpu::Format format;
+    KDGpu::TextureUsageFlags usage;
     int32_t sampleCount{1};
 };
 

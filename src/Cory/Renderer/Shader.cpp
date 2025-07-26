@@ -6,8 +6,6 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
-#include <Corrade/Containers/ArrayViewStl.h>
-#include <Magnum/Vk/ShaderCreateInfo.h>
 #include <shaderc/shaderc.hpp>
 
 #include <fstream>
@@ -144,12 +142,10 @@ Shader::Shader(Context &ctx, ShaderSource source)
         throw std::runtime_error{"Could not compile shader source to SPIR-V"};
     }
 
-    Magnum::Vk::ShaderCreateInfo info{Corrade::Containers::ArrayView<uint32_t>{spirvBinary}};
-
-    module_ = std::make_shared<Magnum::Vk::Shader>(ctx.device(), info);
+    // module_ = std::make_shared<Magnum::Vk::Shader>(ctx.device(), info);
     size_ = spirvBinary.size() * sizeof(uint32_t);
-    nameVulkanObject(
-        ctx_->device(), *module_, fmt::format("SHDR_{}", source.filePath().filename().string()));
+    // nameVulkanObject(
+    //     ctx_->device(), *module_, fmt::format("SHDR_{}", source.filePath().filename().string()));
 }
 
 // vk::PipelineShaderStageCreateInfo Shader::stageCreateInfo()

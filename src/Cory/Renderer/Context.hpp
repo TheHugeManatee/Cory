@@ -52,7 +52,6 @@ class Context : NoCopy {
     KDGpu::GraphicsApi &graphicsApi();
     const KDGpu::AdapterProperties &physicalDevice();
     KDGpu::Device &device();
-    // DescriptorSets &descriptorSets();
 
     KDGpu::Queue &graphicsQueue();
 

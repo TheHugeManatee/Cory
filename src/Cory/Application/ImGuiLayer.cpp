@@ -7,23 +7,12 @@
 #include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/SingleShotCommandBuffer.hpp>
+#include <Cory/Renderer/SingleShotCommandRecorder.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
-#include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 #include <imgui.h>
-
-#include <Magnum/Math/Color.h>
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/FramebufferCreateInfo.h>
-#include <Magnum/Vk/Instance.h>
-#include <Magnum/Vk/Pipeline.h>
-#include <Magnum/Vk/Queue.h>
-#include <Magnum/Vk/RenderPassCreateInfo.h>
 
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
@@ -218,7 +207,7 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
 
     // Upload Fonts - the SingleShotCommandBuffer syncs implicitly on destruction
     {
-        SingleShotCommandBuffer cmdBuff(ctx);
+        SingleShotCommandRecorder cmdBuff(ctx);
         ImGui_ImplVulkan_CreateFontsTexture(cmdBuff);
     }
 

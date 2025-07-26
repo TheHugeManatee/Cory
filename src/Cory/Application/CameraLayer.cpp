@@ -4,7 +4,6 @@
 #include <Cory/Base/Utils.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 

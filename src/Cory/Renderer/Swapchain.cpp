@@ -18,15 +18,13 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 
-namespace Vk = Magnum::Vk;
-
 namespace Cory {
 
 SwapchainSupportDetails SwapchainSupportDetails::query(Context &ctx, VkSurfaceKHR surface)
 {
     SwapchainSupportDetails details;
-    Vk::Instance &instance = ctx.instance();
-    Vk::DeviceProperties &physicalDevice = ctx.physicalDevice();
+    auto &instance = ctx.instance();
+    auto &physicalDevice = ctx.physicalDevice();
 
     instance->GetPhysicalDeviceSurfaceCapabilitiesKHR(
         physicalDevice, surface, &details.capabilities);
@@ -196,7 +194,8 @@ FrameContext Swapchain::nextImage()
     // TODO evaluate if it is more optimal to reuse command buffers?!
     commandBuffers_[nextFrameIndex] = ctx_->commandPool().allocate();
     fc.commandBuffer = &commandBuffers_[nextFrameIndex];
-    nameVulkanObject(ctx_->device(), *fc.commandBuffer, fmt::format("CMD_Frame[{}]", fc.frameNumber));
+    nameVulkanObject(
+        ctx_->device(), *fc.commandBuffer, fmt::format("CMD_Frame[{}]", fc.frameNumber));
 
     // advance the image index
     ++nextFrameNumber_;
@@ -245,7 +244,8 @@ void Swapchain::createImageViews()
     // name all objects
     for (uint32_t i = 0; i < num_images; ++i) {
         nameVulkanObject(device, images_[i], fmt::format("TEX_Swapchain[{}] {} (IMG)", i, extent_));
-        nameVulkanObject(device, imageViews_[i], fmt::format("TEX_Swapchain[{}] {} (VIEW)", i, extent_));
+        nameVulkanObject(
+            device, imageViews_[i], fmt::format("TEX_Swapchain[{}] {} (VIEW)", i, extent_));
     }
 }
 
@@ -257,8 +257,8 @@ void Swapchain::createSyncObjects()
             ctx_->createSemaphore(fmt::format("SEMA_Swapchain[{}]_Acquired", i)));
         imageRendered_.emplace_back(
             ctx_->createSemaphore(fmt::format("SEMA_Swapchain[{}]_Rendered", i)));
-        inFlightFences_.emplace_back(
-            ctx_->createFence(fmt::format("FNCE_Swapchain[{}]_InFlight", i), FenceCreateMode::Signaled));
+        inFlightFences_.emplace_back(ctx_->createFence(
+            fmt::format("FNCE_Swapchain[{}]_InFlight", i), FenceCreateMode::Signaled));
     }
 
     // initialize an array of (empty) fences, one for each image in the swap chain

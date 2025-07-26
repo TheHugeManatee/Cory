@@ -9,7 +9,6 @@ find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
 find_package(EnTT REQUIRED)
-find_package(glfw3)
 find_package(glm REQUIRED)
 find_package(imgui REQUIRED)
 find_package(magic_enum REQUIRED)
@@ -26,13 +25,13 @@ set(CORY_SOURCES
         Application/CameraManipulator.cpp
         Application/CameraManipulator.hpp
         Application/Common.hpp
-        Application/DepthDebugLayer.cpp
-        Application/DepthDebugLayer.hpp
-        Application/DynamicGeometry.cpp
-        Application/DynamicGeometry.hpp
+        #Application/DepthDebugLayer.cpp
+        #Application/DepthDebugLayer.hpp
+        #Application/DynamicGeometry.cpp
+        #Application/DynamicGeometry.hpp
         Application/Event.hpp
-        Application/ImGuiLayer.cpp
-        Application/ImGuiLayer.hpp
+        #Application/ImGuiLayer.cpp
+        #Application/ImGuiLayer.hpp
         Application/LayerStack.cpp
         Application/LayerStack.hpp
         Application/Window.cpp
@@ -62,46 +61,45 @@ set(CORY_SOURCES
         Base/Utils.hpp
         Cory.cpp
         Cory.hpp
-        Framegraph/Builder.cpp
-        Framegraph/CommandList.cpp
-        Framegraph/CommandList.hpp
-        Framegraph/Common.hpp
-        Framegraph/Framegraph.cpp
-        Framegraph/Framegraph.hpp
-        Framegraph/FramegraphVisualizer.cpp
-        Framegraph/FramegraphVisualizer.h
-        Framegraph/RenderTaskBuilder.hpp
-        Framegraph/RenderTaskDeclaration.hpp
-        Framegraph/TextureManager.cpp
-        Framegraph/TextureManager.hpp
-        Framegraph/TransientRenderPass.cpp
-        Framegraph/TransientRenderPass.hpp
+        #        Framegraph/Builder.cpp
+        #        Framegraph/CommandList.cpp
+        #        Framegraph/CommandList.hpp
+        #        Framegraph/Common.hpp
+        #        Framegraph/Framegraph.cpp
+        #        Framegraph/Framegraph.hpp
+        #        Framegraph/FramegraphVisualizer.cpp
+        #        Framegraph/FramegraphVisualizer.h
+        #        Framegraph/RenderTaskBuilder.hpp
+        #        Framegraph/RenderTaskDeclaration.hpp
+        #        Framegraph/TextureManager.cpp
+        #        Framegraph/TextureManager.hpp
+        #        Framegraph/TransientRenderPass.cpp
+        #        Framegraph/TransientRenderPass.hpp
         ImGui/Inputs.hpp
         ImGui/Widgets.cpp
         ImGui/Widgets.hpp
-        Renderer/APIConversion.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
         Renderer/Context.cpp
         Renderer/Context.hpp
-        Renderer/DescriptorSets.cpp
-        Renderer/DescriptorSets.hpp
-        Renderer/ResourceManager.cpp
-        Renderer/ResourceManager.hpp
-        Renderer/Semaphore.hpp
+        #Renderer/DescriptorSets.cpp
+        #Renderer/DescriptorSets.hpp
+        #Renderer/ResourceManager.cpp
+        #Renderer/ResourceManager.hpp
+        #Renderer/Semaphore.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
-        Renderer/SingleShotCommandBuffer.cpp
-        Renderer/SingleShotCommandBuffer.hpp
-        Renderer/Swapchain.cpp
-        Renderer/Swapchain.hpp
-        Renderer/Synchronization.cpp
-        Renderer/Synchronization.hpp
-        Renderer/UniformBufferObject.cpp
-        Renderer/UniformBufferObject.hpp
-        Renderer/VulkanUtils.cpp
-        Renderer/VulkanUtils.hpp
-        Renderer/flextVkExt.h
+        Renderer/SingleShotCommandRecorder.cpp
+        Renderer/SingleShotCommandRecorder.hpp
+        #Renderer/Swapchain.cpp
+        #Renderer/Swapchain.hpp
+        #Renderer/Synchronization.cpp
+        #Renderer/Synchronization.hpp
+        #Renderer/UniformBufferObject.cpp
+        #Renderer/UniformBufferObject.hpp
+        #Renderer/VulkanUtils.cpp
+        #Renderer/VulkanUtils.hpp
+
         SceneGraph/Common.hpp
         SceneGraph/SceneGraph.cpp
         SceneGraph/SceneGraph.hpp
@@ -118,6 +116,7 @@ set(CORY_SOURCES
         Base/WorkContractGroup.hpp
         Base/ValOptional.hpp
         Base/Function.hpp
+        Renderer/KDGpuFwd.hpp
 )
 
 # determine includes from CORY_SOURCES by the .hpp suffix
@@ -146,7 +145,6 @@ target_link_libraries(${TARGET_NAME}
         GLEW::GLEW
         Microsoft.GSL::GSL
         fmt::fmt
-        glfw
         glm::glm
         imgui::imgui
         EnTT::EnTT
@@ -156,6 +154,8 @@ target_link_libraries(${TARGET_NAME}
         shaderc::shaderc
         spdlog::spdlog
         KDGpu::KDGpu
+        KDGpu::KDGpuKDGui
+        KDUtils::KDGui
 
         PRIVATE
         Cory::project_warnings

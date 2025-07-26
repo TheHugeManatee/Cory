@@ -3,8 +3,7 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 
-#include <Magnum/Vk/Shader.h>
-#include <Magnum/Vk/Vulkan.h>
+#include <KDGpu/shader_module.h>
 
 #include <cstdint>
 #include <filesystem>
@@ -67,7 +66,7 @@ class Shader {
     Shader(Shader &&rhs) = default;
     Shader &operator=(Shader &&rhs) = default;
 
-    Magnum::Vk::Shader &module() { return *module_; }
+    KDGpu::ShaderModule &module() { return *module_; }
     ShaderType type() const { return type_; }
     bool valid() const;
 
@@ -81,7 +80,7 @@ class Shader {
     ShaderSource source_;
     ShaderType type_{};
     size_t size_{};
-    std::shared_ptr<Magnum::Vk::Shader> module_;
+    std::shared_ptr<KDGpu::ShaderModule> module_;
 
     std::string preprocessShader();
 

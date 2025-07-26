@@ -2,13 +2,10 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/KDGpuFwd.hpp>
 #include <Cory/Renderer/Semaphore.hpp>
 
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Fence.h>
-#include <Magnum/Vk/Image.h>
-#include <Magnum/Vk/ImageView.h>
-#include <Magnum/Vk/Vulkan.h>
+#include <KDGpu/gpu_core.h>
 
 #include <glm/vec2.hpp>
 
@@ -41,7 +38,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     ~Swapchain();
 
     [[nodiscard]] auto &images() const noexcept { return images_; }
-    [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return imageFormat_; }
+    [[nodiscard]] KDGpu::Format colorFormat() const noexcept { return imageFormat_; }
     [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
     [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
     [[nodiscard]] size_t size() const noexcept { return images_.size(); }
@@ -78,22 +75,22 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     Context *ctx_{};
 
     // general information about the swapchain setup
-    Magnum::Vk::PixelFormat imageFormat_{};
+    KDGpu::Format imageFormat_{};
     int32_t sampleCount_{1};
     glm::u32vec2 extent_{};
     const uint32_t maxFramesInFlight_{};
     uint64_t nextFrameNumber_{};
 
     // these are images with memory owned by the swapchain
-    std::vector<Magnum::Vk::Image> images_{};
-    std::vector<Magnum::Vk::ImageView> imageViews_{};
+    std::vector<KDGpu::Texture> images_{};
+    std::vector<KDGpu::TextureView> imageViews_{};
 
     // for each frame in flight, we also keep a set of additional resources
-    std::vector<Magnum::Vk::Fence> inFlightFences_{};
-    std::vector<Magnum::Vk::Fence *> imageFences_{};
+    std::vector<KDGpu::Fence> inFlightFences_{};
+    std::vector<KDGpu::Fence *> imageFences_{};
     std::vector<Semaphore> imageAcquired_{};
     std::vector<Semaphore> imageRendered_{};
-    std::vector<Magnum::Vk::CommandBuffer> commandBuffers_{};
+    std::vector<KDGpu::VulkanCommandRecorder> commandBuffers_{};
 };
 
 } // namespace Cory

@@ -5,10 +5,6 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ResourceManager.hpp>
 
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/ImageCreateInfo.h>
-#include <Magnum/Vk/ImageViewCreateInfo.h>
 #include <gsl/narrow>
 
 namespace Vk = Magnum::Vk;

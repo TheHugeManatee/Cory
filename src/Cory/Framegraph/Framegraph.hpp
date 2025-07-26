@@ -47,7 +47,7 @@ class Framegraph : NoCopy {
      *
      * Note that this can be only called once. It will cause all relevant render tasks to execute.
      */
-    ExecutionInfo record(FrameContext& frameCtx);
+    ExecutionInfo record(FrameContext &frameCtx);
 
     /**
      * @brief immediately retire all resources allocated by the framegraph
@@ -63,8 +63,8 @@ class Framegraph : NoCopy {
     /// declare an external texture as an input
     [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
                                                       Sync::AccessType lastWriteAccess,
-                                                      Magnum::Vk::Image &image,
-                                                      Magnum::Vk::ImageView &imageView);
+                                                      KDGpu::Texture &image,
+                                                      KDGpu::TextureView &imageView);
 
     /**
      * declare that a resource is to be read afterwards. returns general
@@ -108,7 +108,7 @@ class Framegraph : NoCopy {
     renderTasks() const;
 
   private:                             /* members */
-    friend RenderTaskBuilder;                    // convenience so it can call finishTaskDeclaration
+    friend RenderTaskBuilder;          // convenience so it can call finishTaskDeclaration
     friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
     friend FramegraphVisualizer;       // accesses all the internals
 

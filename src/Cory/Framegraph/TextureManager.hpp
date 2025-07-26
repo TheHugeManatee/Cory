@@ -31,15 +31,15 @@ class TextureManager : NoCopy {
     explicit TextureManager(Context &ctx);
     ~TextureManager();
 
-    TextureManager(TextureManager &&);
-    TextureManager &operator=(TextureManager &&);
+    explicit TextureManager(TextureManager &&) noexcept;
+    TextureManager &operator=(TextureManager &&) noexcept;
 
     TextureHandle declareTexture(TextureInfo info);
 
     TextureHandle registerExternal(TextureInfo info,
                                    Sync::AccessType lastWriteAccess,
-                                   Magnum::Vk::Image &resource,
-                                   Magnum::Vk::ImageView &resourceView);
+                                   KDGpu::Texture &resource,
+                                   KDGpu::TextureView &resourceView);
 
     void allocate(const std::vector<TextureHandle> &handles);
 

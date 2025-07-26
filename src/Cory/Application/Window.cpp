@@ -17,6 +17,7 @@
 #include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <range/v3/algorithm/find_first_of.hpp>
 #include <thread>
 
 namespace Cory {
@@ -26,16 +27,16 @@ Window::Window(Context &context,
                std::string windowName,
                int32_t sampleCount)
     : ctx_{context}
-    , sampleCount_{sampleCount}
     , dimensions_(dimensions)
     , windowName_{std::move(windowName)}
     , fpsCounter_{std::chrono::milliseconds{2000}}
 {
-    CO_CORE_ASSERT(!ctx_.isHeadless(), "Cannot initialize window with a headless context!");
+    samples = static_cast<KDGpu::SampleCountFlagBits>(sampleCount);
 
     createWindow();
 
     surface_ = ctx_.createSurface(windowName_, *window_);
+    determineSwapchainOptions();
     swapchain_ = createSwapchain();
 
     createColorAndDepthResources();

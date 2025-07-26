@@ -12,9 +12,6 @@
 #include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Device.h>
-
 namespace Cory {
 
 struct Uniforms {

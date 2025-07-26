@@ -2,8 +2,7 @@
 
 #include "TrianglePipeline.hpp"
 
-#include <Cory/Application/DynamicGeometry.hpp>
-#include <Cory/Application/ImGuiLayer.hpp>
+// #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
@@ -13,40 +12,21 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
-#include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/ArrayView.h>
-#include <Corrade/Containers/Reference.h>
-#include <Magnum/Math/Color.h>
-#include <Magnum/Math/Vector3.h>
-#include <Magnum/Vk/BufferCreateInfo.h>
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/FramebufferCreateInfo.h>
-#include <Magnum/Vk/Mesh.h>
-#include <Magnum/Vk/PipelineLayout.h>
-#include <Magnum/Vk/Queue.h>
-#include <Magnum/Vk/RenderPass.h>
-#include <Magnum/Vk/VertexFormat.h>
-
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
-#include <GLFW/glfw3.h>
+#include <KDGpu/buffer_options.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
-#include <imgui.h>
-
 #include <gsl/gsl>
+#include <imgui.h>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
 #include <array>
 #include <chrono>
-
-namespace Vk = Magnum::Vk;
 
 struct PushConstants {
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
@@ -116,12 +96,13 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
             disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
     });
 
-    // determine msaa sample count to use - for simplicity, we use either 8 or one sample
-    const auto &limits = ctx().physicalDevice().properties().properties.limits;
-    VkSampleCountFlags counts =
-        limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
-    // 2 samples are guaranteed to be supported, but we'd rather have 8
-    int msaaSamples = counts & VK_SAMPLE_COUNT_8_BIT ? 8 : 2;
+    // // determine msaa sample count to use - for simplicity, we use either 8 or one sample
+    // const auto &limits = ctx().physicalDevice().limits;
+    // KDGpu::SampleCountFlags counts =
+    //     limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+    // // 2 samples are guaranteed to be supported, but we'd rather have 8
+    // int msaaSamples = counts.testFlag(KDGpu::SampleCountFlagBits::Samples8Bit) ? 8 : 2;
+    int msaaSamples = 1;
     CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
@@ -139,11 +120,10 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     window_->onSwapchainResized.connect(recreateSizedResources);
     recreateSizedResources({window_->dimensions()});
 
-    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
-                                              window_->swapchain().maxFramesInFlight(),
+    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::Window::FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
-    imguiLayer_ =
-        &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+    // imguiLayer_ =
+    //     &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 }
 
 HelloTriangleApplication::~HelloTriangleApplication()
@@ -154,7 +134,6 @@ HelloTriangleApplication::~HelloTriangleApplication()
 void HelloTriangleApplication::run()
 {
     while (!window_->shouldClose()) {
-        glfwPollEvents();
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
@@ -173,7 +152,12 @@ void HelloTriangleApplication::run()
     }
 
     // wait until last frame is finished rendering
-    ctx().device()->DeviceWaitIdle(ctx().device());
+    ctx().device().waitUntilIdle();
+}
+
+void HelloTriangleApplication::createFramebuffers()
+{
+    // TODO
 }
 
 void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
@@ -181,29 +165,40 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     // do some color swirly thingy
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
     // Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
-    Magnum::Color4 clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 clearColor{0.0f, 0.0f, 0.0f, 1.0f};
 
-    Vk::CommandBuffer &cmdBuffer = *frameCtx.commandBuffer;
+    // TODO - dynamic rendering extensions in KDGpu
+    // VkViewport viewport{};
+    // viewport.x = 0.0f;
+    // viewport.y = 0.0f;
+    // viewport.width = static_cast<float>(window_->dimensions().x);
+    // viewport.height = static_cast<float>(window_->dimensions().y);
+    // viewport.minDepth = 0.0f;
+    // viewport.maxDepth = 1.0f;
+    // VkRect2D scissor{{0, 0},
+    //                  {static_cast<uint32_t>(window_->dimensions().x),
+    //                   static_cast<uint32_t>(window_->dimensions().y)}};
+    // ctx().device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
+    // ctx().device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
-    cmdBuffer.begin(Vk::CommandBufferBeginInfo{});
-    cmdBuffer.bindPipeline(pipeline_->pipeline());
-    cmdBuffer.beginRenderPass(
-        Vk::RenderPassBeginInfo{pipeline_->mainRenderPass(), framebuffers_[frameCtx.index]}
-            .clearColor(0, clearColor)
-            .clearDepthStencil(1, 1.0, 0));
+    // TODO imgui
+    // imguiLayer_->recordFrameCommands(ctx(), frameCtx.index, *frameCtx.commandBuffer);
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(window_->dimensions().x);
-    viewport.height = static_cast<float>(window_->dimensions().y);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    VkRect2D scissor{{0, 0},
-                     {static_cast<uint32_t>(window_->dimensions().x),
-                      static_cast<uint32_t>(window_->dimensions().y)}};
-    ctx().device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
-    ctx().device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
+    auto opaquePassOptions = KDGpu::RenderPassCommandRecorderOptions{
+        .colorAttachments = {{
+            .view = *frameCtx.swapchainImageView,
+            .clearValue = {clearColor.x, clearColor.y, clearColor.z, clearColor.w},
+            .finalLayout = KDGpu::TextureLayout::PresentSrc,
+        }},
+        .depthStencilAttachment = {.view = *frameCtx.depthImageView},
+    };
+
+    auto opaquePass = frameCtx.commandBuffer.beginRenderPass(opaquePassOptions);
+
+    opaquePass.setPipeline(pipeline_->pipeline());
+    opaquePass.setVertexBuffer(0, mesh_->vertexBuffer);
+    opaquePass.setIndexBuffer(mesh_->indexBuffer);
+    const KDGpu::DrawIndexedCommand drawCmd = {.indexCount = 3};
 
     PushConstants pushData{};
 
@@ -212,43 +207,108 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 
         animate(pushData, t, i);
 
-        ctx().device()->CmdPushConstants(cmdBuffer,
-                                         pipeline_->layout(),
-                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
-                                         0,
-                                         sizeof(pushData),
-                                         &pushData);
+        KDGpu::PushConstantRange range{
+            .offset = 0,
+            .size = sizeof(PushConstants),
+            .shaderStages =
+                KDGpu::ShaderStageFlagBits::VertexBit | KDGpu::ShaderStageFlagBits::FragmentBit,
+        };
+        opaquePass.pushConstant(range, &pushData, pipeline_->layout());
 
         // draw our triangle mesh
-        cmdBuffer.draw(*mesh_);
+        opaquePass.drawIndexed(drawCmd);
     }
 
-    cmdBuffer.endRenderPass();
-
-    imguiLayer_->recordFrameCommands(ctx(), frameCtx.index, *frameCtx.commandBuffer);
-
-    cmdBuffer.end();
+    // renderImGuiOverlay(&opaquePass);
+    opaquePass.end();
 }
 
-void HelloTriangleApplication::createFramebuffers()
-{
-    auto swapchainExtent = window_->swapchain().extent();
-    Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
-
-    framebuffers_ = window_->depthViews() | ranges::views::transform([&](auto &depth) {
-                        auto &color = window_->colorView();
-
-                        return Vk::Framebuffer(
-                            ctx().device(),
-                            Vk::FramebufferCreateInfo{
-                                pipeline_->mainRenderPass(), {color, depth}, framebufferSize});
-                    }) |
-                    ranges::to<std::vector<Vk::Framebuffer>>;
-}
+// void HelloTriangleApplication::createFramebuffers()
+// {
+//     auto swapchainExtent = window_->swapchain().extent();
+//     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
+//
+//     framebuffers_ = window_->depthViews() | ranges::views::transform([&](auto &depth) {
+//                         auto &color = window_->colorView();
+//
+//                         return Vk::Framebuffer(
+//                             ctx().device(),
+//                             Vk::FramebufferCreateInfo{
+//                                 pipeline_->mainRenderPass(), {color, depth}, framebufferSize});
+//                     }) |
+//                     ranges::to<std::vector<Vk::Framebuffer>>;
+// }
 
 void HelloTriangleApplication::createGeometry()
 {
-    mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createTriangle(ctx()));
+    struct Vertex {
+        glm::vec3 position;
+        glm::vec3 color;
+    };
+
+    auto &device = ctx().device();
+
+    mesh_ = std::make_unique<Mesh>();
+
+    KDGpu::UploadStagingBuffer vertex_staging_buffer;
+    KDGpu::UploadStagingBuffer index_staging_buffer;
+
+    // Create a buffer to hold triangle vertex data
+    {
+        const float r = 0.8f;
+
+        const float pi = glm::pi<float>();
+        const std::array vertexData = {
+            Vertex{// Bottom-left, red
+                   .position = {r * cosf(7.0f * pi / 6.0f), -r * sinf(7.0f * pi / 6.0f), 0.0f},
+                   .color = {1.0f, 0.0f, 0.0f}},
+            Vertex{// Bottom-right, green
+                   .position = {r * cosf(11.0f * pi / 6.0f), -r * sinf(11.0f * pi / 6.0f), 0.0f},
+                   .color = {0.0f, 1.0f, 0.0f}},
+            Vertex{// Top, blue
+                   .position = {0.0f, -r, 0.0f},
+                   .color = {0.0f, 0.0f, 1.0f}}};
+
+        const KDGpu::DeviceSize dataByteSize = vertexData.size() * sizeof(Vertex);
+        const KDGpu::BufferOptions bufferOptions = {
+            .label = "Vertex Buffer",
+            .size = dataByteSize,
+            .usage = KDGpu::BufferUsageFlagBits::VertexBufferBit |
+                     KDGpu::BufferUsageFlagBits::TransferDstBit,
+            .memoryUsage = KDGpu::MemoryUsage::GpuOnly};
+
+        mesh_->vertexBuffer = device.createBuffer(bufferOptions);
+
+        const KDGpu::BufferUploadOptions uploadOptions = {
+            .destinationBuffer = mesh_->vertexBuffer,
+            .dstStages = KDGpu::PipelineStageFlagBit::VertexAttributeInputBit,
+            .dstMask = KDGpu::AccessFlagBit::VertexAttributeReadBit,
+            .data = vertexData.data(),
+            .byteSize = dataByteSize};
+
+        vertex_staging_buffer = ctx().graphicsQueue().uploadBufferData(uploadOptions);
+    }
+    // Create a buffer to hold the geometry index data
+    {
+        std::array<uint32_t, 3> indexData = {0, 1, 2};
+        const KDGpu::DeviceSize dataByteSize = indexData.size() * sizeof(uint32_t);
+        const KDGpu::BufferOptions bufferOptions = {.label = "Index Buffer",
+                                                    .size = dataByteSize,
+                                                    .usage =
+                                                        KDGpu::BufferUsageFlagBits::IndexBufferBit |
+                                                        KDGpu::BufferUsageFlagBits::TransferDstBit,
+                                                    .memoryUsage = KDGpu::MemoryUsage::GpuOnly};
+        mesh_->indexBuffer = device.createBuffer(bufferOptions);
+        const KDGpu::BufferUploadOptions uploadOptions = {
+            .destinationBuffer = mesh_->indexBuffer,
+            .dstStages = KDGpu::PipelineStageFlagBit::IndexInputBit,
+            .dstMask = KDGpu::AccessFlagBit::IndexReadBit,
+            .data = indexData.data(),
+            .byteSize = dataByteSize};
+        index_staging_buffer = ctx().graphicsQueue().uploadBufferData(uploadOptions);
+    }
+    // Ensure upload is finished.
+    index_staging_buffer.fence.wait();
 }
 double HelloTriangleApplication::now() const
 {

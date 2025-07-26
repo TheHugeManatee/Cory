@@ -66,16 +66,18 @@ Context::Context(ContextCreationInfo creationInfo)
     //  - KHR_dynamic_rendering device extension
     //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
     KDGpu::InstanceOptions instanceOptions = {
-        .applicationName = KDGui::GuiApplication::instance()->applicationName(),
+        .applicationName = app_name,
         .applicationVersion = KDGPU_MAKE_API_VERSION(0, 1, 0, 0),
         .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
         .layers = {},
-        .extensions = {VK_KHR_SURFACE_EXTENSION_NAME,
-                       VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-                       VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME},
-    };
+        .extensions = {
+            VK_KHR_SURFACE_EXTENSION_NAME,
+            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
+            VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+        }};
     if (creationInfo.validation == ValidationLayers::Enabled) {
         instanceOptions.layers.push_back("VK_LAYER_KHRONOS_validation");
+        instanceOptions.extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
     data_->instance = data_->api.createInstance(instanceOptions);
 }

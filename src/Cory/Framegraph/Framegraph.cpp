@@ -20,8 +20,6 @@
 #include <unordered_map>
 #include <utility>
 
-namespace Vk = Magnum::Vk;
-
 namespace Cory {
 
 struct FramegraphPrivate {
@@ -41,7 +39,7 @@ struct FramegraphPrivate {
     FrameContext *currentFrameCtx{};
 };
 
-RenderTaskBuilder Framegraph::Framegraph::declareTask(std::string_view name)
+RenderTaskBuilder Framegraph::declareTask(std::string_view name)
 {
     //
     return RenderTaskBuilder{*data_->ctx, *this, name};

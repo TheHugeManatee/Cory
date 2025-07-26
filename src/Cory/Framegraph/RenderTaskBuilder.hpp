@@ -18,9 +18,9 @@ namespace Cory {
  */
 struct RenderInput {
     Context *ctx{};
-    FrameContext* frameCtx{};
+    FrameContext *frameCtx{};
     TextureManager *resources{};
-    DescriptorSets * descriptors{};
+    DescriptorSets *descriptors{};
     // eventually, add accessors modify descriptors, push constants etc
     CommandList *cmd{};
 };
@@ -72,7 +72,7 @@ class RenderTaskBuilder : NoCopy {
 
     /// declare that a render pass creates a certain texture
     TransientTextureHandle
-    create(std::string name, glm::u32vec3 size, PixelFormat format, Sync::AccessType writeAccess);
+    create(std::string name, glm::u32vec3 size, KDGpu::Format format, Sync::AccessType writeAccess);
 
     /// declares a dependency to the named resource
     TextureInfo read(TransientTextureHandle &h, Sync::AccessType readAccess);

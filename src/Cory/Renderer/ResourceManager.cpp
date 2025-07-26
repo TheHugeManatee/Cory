@@ -27,13 +27,13 @@ template <typename T> struct ResourceStorage {
 
 struct ResourceManagerPrivate {
     Context *ctx;
-    SlotMap<ResourceStorage<Vk::Buffer>> buffers;
+    SlotMap<ResourceStorage<KDGpu::Buffer>> buffers;
     SlotMap<ResourceStorage<Shader>> shaders;
-    SlotMap<ResourceStorage<Vk::Pipeline>> pipelines;
-    SlotMap<ResourceStorage<Vk::Image>> images;
-    SlotMap<ResourceStorage<Vk::ImageView>> imageViews;
-    SlotMap<ResourceStorage<Vk::Sampler>> samplers;
-    SlotMap<ResourceStorage<Vk::DescriptorSetLayout>> descriptorSetLayouts;
+    SlotMap<ResourceStorage<KDGpu::Pipeline>> pipelines;
+    SlotMap<ResourceStorage<KDGpu::Image>> images;
+    SlotMap<ResourceStorage<KDGpu::ImageView>> imageViews;
+    SlotMap<ResourceStorage<KDGpu::Sampler>> samplers;
+    SlotMap<ResourceStorage<KDGpu::DescriptorSetLayout>> descriptorSetLayouts;
 };
 
 ResourceManager::ResourceManager()

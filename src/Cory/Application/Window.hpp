@@ -26,6 +26,7 @@ class Context;
 class Window : NoCopy, NoMove {
   public:
     static constexpr uint32_t FRAMES_IN_FLIGHT = 2;
+
     Window(Context &context,
            glm::i32vec2 dimensions,
            std::string windowName,
@@ -42,7 +43,7 @@ class Window : NoCopy, NoMove {
     void submitAndPresent(FrameContext &frameCtx);
 
     /// pixel format of the offscreen color images
-    [[nodiscard]] KDGpu::Format colorFormat() const noexcept { return colorFormat_; }
+    [[nodiscard]] KDGpu::Format colorFormat() const noexcept { return swapchainSetup_.format; }
     /// pixel format of the offscreen depth images
     [[nodiscard]] KDGpu::Format depthFormat() const noexcept { return swapchainSetup_.depthFormat; }
 
@@ -80,7 +81,6 @@ class Window : NoCopy, NoMove {
   private:
     Context &ctx_;
     std::string windowName_;
-    int32_t sampleCount_;
     glm::i32vec2 dimensions_;
     std::unique_ptr<KDGpuKDGui::View> window_{};
 
@@ -101,7 +101,6 @@ class Window : NoCopy, NoMove {
     KDGpu::Swapchain swapchain_;
     std::vector<KDGpu::TextureView> swapchainViews_;
 
-    KDGpu::Format colorFormat_;
     std::vector<KDGpu::Texture> colorImages_;
     std::vector<KDGpu::TextureView> colorImageViews_;
     std::vector<KDGpu::Texture> depthImages_;

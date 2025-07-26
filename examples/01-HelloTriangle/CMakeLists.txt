@@ -8,7 +8,10 @@ find_package(CLI11 REQUIRED)
 # Always list the files explicitly
 add_executable(${TARGET_NAME}
         src/main.cpp
-        src/HelloTriangleApplication.cpp src/HelloTriangleApplication.hpp src/TrianglePipeline.cpp src/TrianglePipeline.hpp)
+        src/HelloTriangleApplication.cpp
+        src/HelloTriangleApplication.hpp
+        src/TrianglePipeline.cpp
+        src/TrianglePipeline.hpp)
 
 # add headers as sources automatically - this makes them show up in some IDEs
 # but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
@@ -29,12 +32,12 @@ target_link_libraries(${TARGET_NAME}
         GLEW::GLEW
         range-v3::range-v3
         CLI11::CLI11
-        )
+)
 
-if(CORY_BUILD_TESTS)
+if (CORY_BUILD_TESTS)
     enable_testing()
     add_test(NAME Smoketests.HelloTriangle COMMAND ${TARGET_NAME} --frames=100)
-endif()
+endif ()
 
 # Install in the desired folder
 install(TARGETS ${TARGET_NAME}

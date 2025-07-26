@@ -4,7 +4,6 @@
 
 #include <Cory/Base/Time.hpp>
 
-#include <Corrade/Containers/StringView.h>
 #include <fmt/chrono.h>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -58,15 +57,6 @@ struct fmt::formatter<
 #undef MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT
 #undef MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT_AUTO_DEFINE
 #endif // MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT_AUTO_DEFINE
-
-// formatter for Corrade::Containers::StringView
-template <> struct fmt::formatter<Corrade::Containers::StringView, char> {
-    constexpr auto parse(format_parse_context &ctx) -> decltype(ctx.begin()) { return ctx.end(); }
-    auto format(Corrade::Containers::StringView v, format_context &ctx) const
-    {
-        return fmt::format_to(ctx.out(), "{}", std::string_view{v.data(), v.size()});
-    }
-};
 
 // formatters for glm vector types
 template <typename glm::length_t L, typename ElementType>

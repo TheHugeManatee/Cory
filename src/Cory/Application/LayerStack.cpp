@@ -2,7 +2,7 @@
 
 #include <Cory/Application/ApplicationLayer.hpp>
 #include <Cory/Application/Window.hpp>
-#include <Cory/Framegraph/Framegraph.hpp>
+// #include <Cory/Framegraph/Framegraph.hpp>
 
 #include <range/v3/view/reverse.hpp>
 
@@ -64,23 +64,24 @@ bool LayerStack::processEvent(Event event)
 LayerPassOutputs LayerStack::declareRenderTasks(Framegraph &framegraph,
                                                 LayerPassOutputs previousLayer)
 {
-    for (auto &layer : layers_) {
-        if (layer->hasRenderTask()) {
-            previousLayer =
-                layer
-                    ->renderTask(framegraph.declareTask("TASK_" + layer->name.get()), previousLayer)
-                    .output();
-        }
-    }
-
-    if (priorityLayer_ && priorityLayer_->hasRenderTask()) {
-        previousLayer =
-            priorityLayer_
-                ->renderTask(framegraph.declareTask("TASK_" + priorityLayer_->name.get()),
-                             previousLayer)
-                .output();
-    }
-    return previousLayer;
+    return {};
+    // for (auto &layer : layers_) {
+    //     if (layer->hasRenderTask()) {
+    //         previousLayer =
+    //             layer
+    //                 ->renderTask(framegraph.declareTask("TASK_" + layer->name.get()),
+    //                 previousLayer) .output();
+    //     }
+    // }
+    //
+    // if (priorityLayer_ && priorityLayer_->hasRenderTask()) {
+    //     previousLayer =
+    //         priorityLayer_
+    //             ->renderTask(framegraph.declareTask("TASK_" + priorityLayer_->name.get()),
+    //                          previousLayer)
+    //             .output();
+    // }
+    // return previousLayer;
 }
 
 void LayerStack::connectToWindow(Window &window)

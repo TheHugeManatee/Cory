@@ -26,7 +26,6 @@ add_library(${TARGET_NAME} STATIC
         src/tiny_obj_loader.cpp
         src/vk_mem_alloc.cpp
         src/imgui_impl_vulkan.cpp
-        src/imgui_impl_glfw.cpp
         src/imGuIZMOquat.cpp
 )
 
@@ -51,7 +50,6 @@ target_include_directories(${TARGET_NAME} PUBLIC
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         imgui::imgui
-        glfw
         glm::glm
         PRIVATE
         Vulkan::Headers

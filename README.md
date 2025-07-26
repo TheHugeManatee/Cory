@@ -25,6 +25,7 @@ As such, it uses features that are only supported in rather modern compilers.
     - [x] actually execute render pass code that renders stuff
     - [x] implement a multi-pass example that reads from a texture
     - [x] vulkan object debug names set up
+    - [ ] restructure swapchain frame generation as a coroutine-based generator
     - [ ] extend multi-pass to dynamic uniforms & interactivity
     - [ ] proper allocation of transient textures from arena
     - [ ] create AccessInfo templates for most common usages

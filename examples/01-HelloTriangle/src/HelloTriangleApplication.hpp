@@ -1,9 +1,8 @@
 #pragma once
 
 #include <Cory/Application/Application.hpp>
-#include <Cory/Renderer/Swapchain.hpp>
 
-#include <Magnum/Vk/Framebuffer.h>
+#include <KDGpu/buffer.h>
 
 #include <memory>
 
@@ -14,9 +13,7 @@ class Window;
 class Context;
 } // namespace Cory
 
-namespace Magnum::Vk {
-class Mesh;
-}
+struct Mesh;
 
 class HelloTriangleApplication : public Cory::Application {
   public:
@@ -40,9 +37,8 @@ class HelloTriangleApplication : public Cory::Application {
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;
-    std::vector<Magnum::Vk::Framebuffer> framebuffers_;
-    std::unique_ptr<Magnum::Vk::Mesh> mesh_;
-    Cory::ImGuiLayer* imguiLayer_;
+    std::unique_ptr<Mesh> mesh_;
+    Cory::ImGuiLayer *imguiLayer_;
 
     double startupTime_;
     bool disableValidation_{false};

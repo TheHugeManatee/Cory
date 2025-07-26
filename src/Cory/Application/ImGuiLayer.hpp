@@ -6,8 +6,6 @@
 
 #pragma once
 
-#include <Magnum/Vk/Vk.h>
-
 #include <Cory/Application/ApplicationLayer.hpp>
 
 #include <cstdint>
@@ -23,7 +21,7 @@ class FrameContext;
 
 class ImGuiLayer : public ApplicationLayer {
   public:
-    ImGuiLayer(Window& window);
+    ImGuiLayer(Window &window);
     ~ImGuiLayer();
 
     void onAttach(Context &ctx, LayerAttachInfo info) override;
@@ -36,7 +34,8 @@ class ImGuiLayer : public ApplicationLayer {
 
     // this is mostly still public so we can use the layer in an
     // application that does not use a frame graph
-    void recordFrameCommands(Context &ctx, uint32_t frameIdx, Magnum::Vk::CommandBuffer &cmdBuffer);
+    void recordFrameCommands(Context &ctx, uint32_t frameIdx, KDGpu::CommandRecorder &cmdBuffer);
+
   private:
     void newFrame(Context &ctx);
 

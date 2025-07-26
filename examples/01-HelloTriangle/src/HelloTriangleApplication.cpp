@@ -10,6 +10,7 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <CLI/App.hpp>
@@ -139,9 +140,9 @@ void HelloTriangleApplication::run()
 
         layers().update();
 
-        ImGui::ShowDemoWindow();
+        // ImGui::ShowDemoWindow();
 
-        drawImguiControls();
+        // drawImguiControls();
 
         recordCommands(frameCtx);
 
@@ -149,6 +150,9 @@ void HelloTriangleApplication::run()
 
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
+
+        // Process KDGui events
+        processEvents(0);
     }
 
     // wait until last frame is finished rendering
@@ -167,20 +171,6 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     // Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
     glm::vec4 clearColor{0.0f, 0.0f, 0.0f, 1.0f};
 
-    // TODO - dynamic rendering extensions in KDGpu
-    // VkViewport viewport{};
-    // viewport.x = 0.0f;
-    // viewport.y = 0.0f;
-    // viewport.width = static_cast<float>(window_->dimensions().x);
-    // viewport.height = static_cast<float>(window_->dimensions().y);
-    // viewport.minDepth = 0.0f;
-    // viewport.maxDepth = 1.0f;
-    // VkRect2D scissor{{0, 0},
-    //                  {static_cast<uint32_t>(window_->dimensions().x),
-    //                   static_cast<uint32_t>(window_->dimensions().y)}};
-    // ctx().device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
-    // ctx().device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
-
     // TODO imgui
     // imguiLayer_->recordFrameCommands(ctx(), frameCtx.index, *frameCtx.commandBuffer);
 
@@ -198,6 +188,15 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     opaquePass.setPipeline(pipeline_->pipeline());
     opaquePass.setVertexBuffer(0, mesh_->vertexBuffer);
     opaquePass.setIndexBuffer(mesh_->indexBuffer);
+    opaquePass.setScissor({.offset = {0, 0},
+                           .extent = {static_cast<uint32_t>(window_->dimensions().x),
+                                      static_cast<uint32_t>(window_->dimensions().y)}});
+    opaquePass.setViewport({.x = 0.0f,
+                            .y = 0.0f,
+                            .width = static_cast<float>(window_->dimensions().x),
+                            .height = static_cast<float>(window_->dimensions().y),
+                            .minDepth = 0.0f,
+                            .maxDepth = 1.0f});
     const KDGpu::DrawIndexedCommand drawCmd = {.indexCount = 3};
 
     PushConstants pushData{};

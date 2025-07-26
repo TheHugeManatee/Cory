@@ -89,6 +89,9 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
             .depthWritesEnabled = true,
             .depthCompareOperation = KDGpu::CompareOperation::Less
         },
+        .primitive {
+            .cullMode = KDGpu::CullModeFlagBits::None,
+        },
         .multisample  = {
             .samples = window.samples(),
             .alphaToCoverageEnabled = false,

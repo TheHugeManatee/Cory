@@ -117,6 +117,7 @@ set(CORY_SOURCES
         Base/ValOptional.hpp
         Base/Function.hpp
         Renderer/KDGpuFwd.hpp
+        Renderer/FrameContext.hpp
 )
 
 # determine includes from CORY_SOURCES by the .hpp suffix
@@ -155,6 +156,7 @@ target_link_libraries(${TARGET_NAME}
         spdlog::spdlog
         KDGpu::KDGpu
         KDGpu::KDGpuKDGui
+        KDGpu::KDGpuUtils
         KDUtils::KDGui
 
         PRIVATE

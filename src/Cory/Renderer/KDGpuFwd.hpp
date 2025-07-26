@@ -29,6 +29,7 @@ struct Device;
 struct Fence;
 struct GpuSemaphore;
 struct Instance;
+class Swapchain;
 struct Texture;
 struct TextureView;
 using GraphicsApi = VulkanGraphicsApi;
@@ -40,4 +41,8 @@ struct VertexOptions;
 
 namespace KDGpuKDGui {
 class View;
+}
+
+namespace KDGpuUtils {
+class ResourceDeleter;
 }

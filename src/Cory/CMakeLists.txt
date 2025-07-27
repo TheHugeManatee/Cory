@@ -91,8 +91,8 @@ set(CORY_SOURCES
         Renderer/Shader.hpp
         Renderer/SingleShotCommandRecorder.cpp
         Renderer/SingleShotCommandRecorder.hpp
-        #Renderer/Swapchain.cpp
-        #Renderer/Swapchain.hpp
+        Renderer/Swapchain.cpp
+        Renderer/Swapchain.hpp
         #Renderer/Synchronization.cpp
         #Renderer/Synchronization.hpp
         #Renderer/UniformBufferObject.cpp
@@ -118,6 +118,8 @@ set(CORY_SOURCES
         Base/Function.hpp
         Renderer/KDGpuFwd.hpp
         Renderer/FrameContext.hpp
+        Base/GlmUtils.hpp
+        Base/Result.hpp
 )
 
 # determine includes from CORY_SOURCES by the .hpp suffix

@@ -19,8 +19,6 @@ class Context;
 
 class Window : NoCopy, NoMove {
   public:
-    static constexpr uint32_t FRAMES_IN_FLIGHT = 2;
-
     Window(Context &context,
            glm::i32vec2 dimensions,
            std::string windowName,
@@ -31,7 +29,7 @@ class Window : NoCopy, NoMove {
 
     [[nodiscard]] glm::i32vec2 dimensions() const;
 
-    [[nodiscard]] KDGpu::Swapchain &swapchain();
+    [[nodiscard]] Swapchain &swapchain();
 
     [[nodiscard]] FrameContext nextSwapchainImage();
     void submitAndPresent(FrameContext &frameCtx);
@@ -65,11 +63,6 @@ class Window : NoCopy, NoMove {
     KDBindings::Property<KDGpu::SampleCountFlagBits> samples;
 
   private:
-    // Use the device and surface to determine swapchainOptions
-    void determineSwapchainOptions();
-    [[nodiscard]] KDGpu::Swapchain createSwapchain();
-    // create the (multisampled) color images
-    void createColorAndDepthResources();
     void createWindow();
 
   private:

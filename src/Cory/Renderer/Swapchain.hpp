@@ -9,40 +9,44 @@
 
 #include <glm/vec2.hpp>
 
-#include <cstdint>
-#include <vector>
+#include <expected>
 
 namespace Cory {
 
-struct SwapchainSupportDetails {
-    static SwapchainSupportDetails query(Context &ctx, VkSurfaceKHR surface);
-
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat() const;
-    VkPresentModeKHR chooseSwapPresentMode() const;
-    VkExtent2D chooseSwapExtent(VkExtent2D windowExtent) const;
-    uint32_t chooseImageCount() const;
-
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
-
-    std::vector<uint32_t> presentFamilies;
+struct SwapchainCreateInfo {
+    std::string label;
+    glm::u32vec2 size;
+    KDGpu::SampleCountFlagBits samples;
 };
 
-class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
+enum class SwapchainError {
+    OutOfDate, ///< The swapchain is out of date and needs to be recreated
+    Lost,      ///< The swapchain has been lost and cannot be used anymore
+    Unknown,   ///< An unknown error occurred
+};
+
+/**
+ * @brief Swapchain wrapper that provides a high-level interface to the underlying KDGpu::Swapchain.
+ *
+ * This class manages image acquisition and presentation as well as the basic view resources
+ * required for a frame.
+ *
+ * It wraps the underlying swapchain, but also allocates and manages additional resources  for each
+ * frame, such as:
+ *  - multisampled color and depth images
+ *  - semaphores for synchronization
+ *  - fences to wait for the GPU to finish work on the swapchain image
+ *
+ */
+class Swapchain {
   public:
-    Swapchain(Context &ctx,
-              VkSurfaceKHR surface,
-              VkSwapchainCreateInfoKHR createInfo,
-              int32_t sampleCount);
+    Swapchain(Context &ctx, const KDGpu::Surface &surface, SwapchainCreateInfo createInfo);
     ~Swapchain();
 
-    [[nodiscard]] auto &images() const noexcept { return images_; }
-    [[nodiscard]] KDGpu::Format colorFormat() const noexcept { return imageFormat_; }
-    [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
-    [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
-    [[nodiscard]] size_t size() const noexcept { return images_.size(); }
-    [[nodiscard]] uint32_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
+    [[nodiscard]] KDGpu::Format colorFormat() const noexcept;
+    [[nodiscard]] KDGpu::Format depthFormat() const noexcept;
+    [[nodiscard]] glm::u32vec2 extent() const noexcept;
+    [[nodiscard]] size_t size() const noexcept; // number of images in the swapchain
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying
@@ -56,7 +60,7 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
      *  - signal the `rendered` semaphore with the last command buffer that writes to the image
      *  - signal the `in_flight` fence when submitting the last command buffer
      */
-    [[nodiscard]] FrameContext nextImage();
+    [[nodiscard]] std::expected<FrameContext, SwapchainError> nextImage();
 
     /**
      * call vkQueuePresentKHR for the current frame. note the requirements that have to be fulfilled
@@ -68,29 +72,8 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
     void present(FrameContext &fc);
 
   private:
-    void createImageViews();
-    void createSyncObjects();
-
-  private:
-    Context *ctx_{};
-
-    // general information about the swapchain setup
-    KDGpu::Format imageFormat_{};
-    int32_t sampleCount_{1};
-    glm::u32vec2 extent_{};
-    const uint32_t maxFramesInFlight_{};
-    uint64_t nextFrameNumber_{};
-
-    // these are images with memory owned by the swapchain
-    std::vector<KDGpu::Texture> images_{};
-    std::vector<KDGpu::TextureView> imageViews_{};
-
-    // for each frame in flight, we also keep a set of additional resources
-    std::vector<KDGpu::Fence> inFlightFences_{};
-    std::vector<KDGpu::Fence *> imageFences_{};
-    std::vector<Semaphore> imageAcquired_{};
-    std::vector<Semaphore> imageRendered_{};
-    std::vector<KDGpu::VulkanCommandRecorder> commandBuffers_{};
+    friend struct SwapchainPrivate;
+    std::unique_ptr<SwapchainPrivate> data_;
 };
 
 } // namespace Cory

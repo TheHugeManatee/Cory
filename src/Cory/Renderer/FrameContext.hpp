@@ -9,16 +9,18 @@
 namespace Cory {
 
 struct FrameContext {
-    uint32_t index{};                    ///< the current swapchain image index
-    uint32_t swapchainImageIndex{};      ///< the current swapchain image index
-    uint64_t frameNumber{};              ///< the (monotonically increasing) frame number
-    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
+    uint32_t index{};               ///< the current swapchain image index
+    uint32_t swapchainImageIndex{}; ///< the current swapchain image index
+    uint64_t frameNumber{};         ///< the (monotonically increasing) frame number
+
+    // The resources for the current frame
     const KDGpu::Texture *swapchainImage{};
     KDGpu::TextureView *swapchainImageView{};
     KDGpu::Texture *colorImage{};
     KDGpu::TextureView *colorImageView{};
     KDGpu::Texture *depthImage{};
     KDGpu::TextureView *depthImageView{};
+
     /// Fence to synchronize when the GPU has finished executing the commands associated with this
     /// frame, and its resources can be safely reused.
     KDGpu::Fence *inFlight{};

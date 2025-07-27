@@ -13,9 +13,10 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
+#include <KDGpu/buffer_options.h>
+
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
-#include <KDGpu/buffer_options.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
@@ -121,7 +122,7 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     window_->onSwapchainResized.connect(recreateSizedResources);
     recreateSizedResources({window_->dimensions()});
 
-    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::Window::FRAMES_IN_FLIGHT,
+    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
     // imguiLayer_ =
     //     &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));

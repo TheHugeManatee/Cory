@@ -16,6 +16,10 @@
 #include <cstdint>
 
 namespace Cory {
+
+// maximum number of frames in flight at a time
+static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
 // forward declared classes/structs
 class Context;
 struct ContextCreationInfo;

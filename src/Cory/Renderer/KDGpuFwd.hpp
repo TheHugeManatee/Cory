@@ -30,6 +30,7 @@ struct Fence;
 struct GpuSemaphore;
 struct Instance;
 class Swapchain;
+class Surface;
 struct Texture;
 struct TextureView;
 using GraphicsApi = VulkanGraphicsApi;

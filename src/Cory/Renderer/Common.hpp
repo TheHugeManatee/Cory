@@ -10,9 +10,6 @@
 #include <Cory/Renderer/Synchronization.hpp>
 #include <vulkan/vulkan.h>
 
-#include <KDGpu/gpu_core.h>
-
-#include <KDGpu/command_recorder.h>
 #include <cstdint>
 
 namespace Cory {

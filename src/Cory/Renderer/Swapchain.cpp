@@ -18,6 +18,8 @@
 #include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <utility>
+
 namespace Cory {
 
 struct SwapchainSetup {
@@ -334,6 +336,8 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
         case SurfaceLost:
         case OutOfMemory:
             return std::unexpected(SwapchainError::Lost);
+        default:
+            std::unreachable();
         }
     }
 
@@ -341,6 +345,7 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
         .index = nextFrameIndex,
         .swapchainImageIndex = swapchainImageIndex,
         .frameNumber = frameNumber,
+        .extent = glmu::u32vec2::from(swapchainSetup.extent),
         .swapchainImage = &swapchain.textures()[swapchainImageIndex],
         .swapchainImageView = &swapchainViews[swapchainImageIndex],
         .colorImage = &colorImages[nextFrameIndex],

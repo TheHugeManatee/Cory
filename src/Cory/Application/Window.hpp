@@ -59,7 +59,7 @@ class Window : NoCopy, NoMove {
     /// emitted when a keyboard key is called
     KDBindings::Signal<KeyEvent> onKeyCallback;
 
-    // The sample count of the window
+    /// The sample count of the window
     KDBindings::Property<KDGpu::SampleCountFlagBits> samples;
 
   private:

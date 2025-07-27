@@ -64,12 +64,18 @@ class Swapchain {
 
     /**
      * call vkQueuePresentKHR for the current frame. note the requirements that have to be fulfilled
-     * for the synchronization objects of the passed @b fc.
-     * present will wait for the semaphore @b fc.rendered for correct ordering.
+     * for the synchronization objects of the passed @b frameCtx.
+     *
+     * This will submit the current render commands stored in frameCtx.commandBuffer to the
+     * queue, and then present the swapchain image to the surface.
+     *
+     * Command submission will wait for the @b frameCtx.acquired semaphore to execute the commands
+     * only when the swapchain image is actually available. Present will wait for the semaphore
+     * @b frameCtx.rendered for correct ordering.
      *
      * @see nextImage()
      */
-    void present(FrameContext &fc);
+    void present(FrameContext &frameCtx);
 
   private:
     friend struct SwapchainPrivate;

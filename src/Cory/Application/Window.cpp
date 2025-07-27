@@ -38,6 +38,8 @@ struct WindowPrivate {
     std::unique_ptr<Swapchain> swapchain;
 
     LapTimer fpsCounter{std::chrono::milliseconds{2000}};
+
+    void recreateSwapchain();
 };
 
 Window::Window(Context &context,
@@ -88,39 +90,51 @@ FrameContext Window::nextSwapchainImage()
     const Cory::ScopeTimer s{"Window/NextSwapchainImage"};
 
     auto nextImageResult = data_->swapchain->nextImage();
-    if (!nextImageResult.has_value()) {
-        CO_CORE_ASSERT(false, "Swapchain resizing not implemented yet!");
+    const auto dims = dimensions();
+    if (!nextImageResult.has_value() && (dims.x == 0 || dims.y == 0)) {
+        auto error = nextImageResult.error();
+        if (error == SwapchainError::Unknown) {
+            throw std::runtime_error(
+                fmt::format("Failed to acquire next swapchain image for window '{}': {}",
+                            data_->windowName,
+                            error));
+        }
+
+        // // wait until the surface dimensions are non-zero - this might happen
+        // // while the app is minimized or the window has been resized to zero height
+        // // or width, in which case we don't render anything
+        // do {
+        //     glfwPollEvents();
+        //     VkSurfaceCapabilitiesKHR capabilities{};
+        //     ctx_.instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
+        //         ctx_.physicalDevice(), surface_, &capabilities);
+        //     dimensions_ = {capabilities.currentExtent.width, capabilities.currentExtent.height};
+        //     std::this_thread::yield();
+        // } while (dimensions_.x == 0 || dimensions_.y == 0);
+
+        do {
+            KDFoundation::CoreApplication::instance()->processEvents(0);
+        } while (glm::any(glm::lessThanEqual(dimensions(), glm::i32vec2{0})));
+
+        // Hard sync to make sure no commands are in flight before recreating the swapchain
+        data_->ctx->device().waitUntilIdle();
+        // recreate the necessary resized resources and notify client code via
+        // the onSwaphcainResized callback
+        data_->swapchain.reset();
+        CO_CORE_INFO(
+            "Recreating swapchain for window {} with size {}", data_->windowName, dimensions());
+        data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
+                                                       data_->surface,
+                                                       SwapchainCreateInfo{
+                                                           .label = data_->windowName,
+                                                           .size = dimensions(),
+                                                           .samples = samples(),
+                                                       });
+        onSwapchainResized.emit(SwapchainResizedEvent{.size{dimensions()}});
+
+        // retry the whole thing
+        return nextSwapchainImage();
     }
-
-    //
-    // // if the swapchain needs resizing, we wait for
-    // if (frameCtx.shouldRecreateSwapchain) {
-
-    //     // wait until the surface dimensions are non-zero - this might happen
-    //     // while the app is minimized or the window has been resized to zero height
-    //     // or width, in which case we don't render anything
-    //     do {
-    //         glfwPollEvents();
-    //         VkSurfaceCapabilitiesKHR capabilities{};
-    //         ctx_.instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
-    //             ctx_.physicalDevice(), surface_, &capabilities);
-    //         dimensions_ = {capabilities.currentExtent.width,
-    //         capabilities.currentExtent.height}; std::this_thread::yield();
-    //     } while (dimensions_.x == 0 || dimensions_.y == 0);
-    //
-    //     // Hard sync to make sure no commands are in flight before recreating the swapchain
-    //     ctx_.device().waitUntilIdle();
-    //
-    //     // recreate the necessary resized resources and notify client code via
-    //     // the onSwaphcainResized callback
-    //     swapchain_ = {};
-    //     swapchain_ = createSwapchain();
-    //     createColorAndDepthResources();
-    //     onSwapchainResized.emit({.size{dimensions_}});
-    //
-    //     // retry the whole thing
-    //     return nextSwapchainImage();
-    //}
 
     return std::move(nextImageResult).value();
 }

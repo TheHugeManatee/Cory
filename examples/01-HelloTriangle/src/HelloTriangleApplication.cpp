@@ -5,6 +5,7 @@
 // #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
+#include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
@@ -23,7 +24,7 @@
 #include <glm/vec4.hpp>
 #include <gsl/gsl>
 #include <imgui.h>
-#include <range/v3/range/conversion.hpp>
+
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
@@ -137,6 +138,9 @@ void HelloTriangleApplication::run()
 {
     while (!window_->shouldClose()) {
 
+        // Process KDGui events
+        processEvents(0);
+
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
         layers().update();
@@ -151,9 +155,6 @@ void HelloTriangleApplication::run()
 
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
-
-        // Process KDGui events
-        processEvents(0);
     }
 
     // wait until last frame is finished rendering
@@ -189,13 +190,12 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
     opaquePass.setPipeline(pipeline_->pipeline());
     opaquePass.setVertexBuffer(0, mesh_->vertexBuffer);
     opaquePass.setIndexBuffer(mesh_->indexBuffer);
-    opaquePass.setScissor({.offset = {0, 0},
-                           .extent = {static_cast<uint32_t>(window_->dimensions().x),
-                                      static_cast<uint32_t>(window_->dimensions().y)}});
+    opaquePass.setScissor(
+        {.offset = {0, 0}, .extent = Cory::glmu::to<KDGpu::Extent2D>(frameCtx.extent)});
     opaquePass.setViewport({.x = 0.0f,
                             .y = 0.0f,
-                            .width = static_cast<float>(window_->dimensions().x),
-                            .height = static_cast<float>(window_->dimensions().y),
+                            .width = static_cast<float>(frameCtx.extent.x),
+                            .height = static_cast<float>(frameCtx.extent.y),
                             .minDepth = 0.0f,
                             .maxDepth = 1.0f});
     const KDGpu::DrawIndexedCommand drawCmd = {.indexCount = 3};

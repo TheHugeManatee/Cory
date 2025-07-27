@@ -30,8 +30,8 @@ set(CORY_SOURCES
         #Application/DynamicGeometry.cpp
         #Application/DynamicGeometry.hpp
         Application/Event.hpp
-        #Application/ImGuiLayer.cpp
-        #Application/ImGuiLayer.hpp
+        Application/ImGuiLayer.cpp
+        Application/ImGuiLayer.hpp
         Application/LayerStack.cpp
         Application/LayerStack.hpp
         Application/Window.cpp
@@ -159,6 +159,7 @@ target_link_libraries(${TARGET_NAME}
         KDGpu::KDGpu
         KDGpu::KDGpuKDGui
         KDGpu::KDGpuUtils
+        KDGpu::KDGpuExample
         KDUtils::KDGui
 
         PRIVATE

@@ -18,25 +18,26 @@ struct VulkanTexture;
 struct VulkanTextureView;
 
 class Adapter;
-struct AdapterProperties;
-class Buffer;
-class RenderPass;
-class PipelineLayout;
-class GraphicsPipeline;
 class BindGroup;
+class Buffer;
+class GraphicsPipeline;
 class Pipeline;
+class PipelineLayout;
+class RenderPass;
+class RenderPassCommandRecorder;
+class Surface;
+class Swapchain;
+struct AdapterProperties;
 struct Device;
 struct Fence;
 struct GpuSemaphore;
 struct Instance;
-class Swapchain;
-class Surface;
 struct Texture;
 struct TextureView;
-using GraphicsApi = VulkanGraphicsApi;
-using ResourceManager = VulkanResourceManager;
 struct VertexBufferLayout;
 struct VertexOptions;
+using GraphicsApi = VulkanGraphicsApi;
+using ResourceManager = VulkanResourceManager;
 
 } // namespace KDGpu
 

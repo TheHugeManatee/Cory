@@ -2,7 +2,7 @@
 
 #include "TrianglePipeline.hpp"
 
-// #include <Cory/Application/ImGuiLayer.hpp>
+#include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/GlmUtils.hpp>
@@ -125,8 +125,8 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
-    // imguiLayer_ =
-    //     &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+    imguiLayer_ =
+        &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 }
 
 HelloTriangleApplication::~HelloTriangleApplication()
@@ -145,8 +145,7 @@ void HelloTriangleApplication::run()
 
         layers().update();
 
-        // ImGui::ShowDemoWindow();
-
+        ImGui::ShowDemoWindow();
         // drawImguiControls();
 
         recordCommands(frameCtx);
@@ -161,20 +160,12 @@ void HelloTriangleApplication::run()
     ctx().device().waitUntilIdle();
 }
 
-void HelloTriangleApplication::createFramebuffers()
-{
-    // TODO
-}
-
 void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 {
     // do some color swirly thingy
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
     // Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
     glm::vec4 clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-
-    // TODO imgui
-    // imguiLayer_->recordFrameCommands(ctx(), frameCtx.index, *frameCtx.commandBuffer);
 
     auto opaquePassOptions = KDGpu::RenderPassCommandRecorderOptions{
         .colorAttachments = {{
@@ -219,25 +210,13 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
         opaquePass.drawIndexed(drawCmd);
     }
 
-    // renderImGuiOverlay(&opaquePass);
+    renderImGuiOverlay(&opaquePass);
     opaquePass.end();
 }
-
-// void HelloTriangleApplication::createFramebuffers()
-// {
-//     auto swapchainExtent = window_->swapchain().extent();
-//     Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
-//
-//     framebuffers_ = window_->depthViews() | ranges::views::transform([&](auto &depth) {
-//                         auto &color = window_->colorView();
-//
-//                         return Vk::Framebuffer(
-//                             ctx().device(),
-//                             Vk::FramebufferCreateInfo{
-//                                 pipeline_->mainRenderPass(), {color, depth}, framebufferSize});
-//                     }) |
-//                     ranges::to<std::vector<Vk::Framebuffer>>;
-// }
+void HelloTriangleApplication::createFramebuffers()
+{
+    // TODO recreate imgui?
+}
 
 void HelloTriangleApplication::createGeometry()
 {
@@ -310,6 +289,21 @@ void HelloTriangleApplication::createGeometry()
     // Ensure upload is finished.
     index_staging_buffer.fence.wait();
 }
+
+void HelloTriangleApplication::renderImGuiOverlay(KDGpu::RenderPassCommandRecorder *recorder,
+                                                  uint32_t inFlightIndex,
+                                                  KDGpu::RenderPass *currentRenderPass,
+                                                  int lastSubpassIndex)
+{
+    const auto dims = window_->dimensions();
+    KDGpu::Extent2D extent{.width = static_cast<uint32_t>(dims.x),
+                           .height = static_cast<uint32_t>(dims.y)};
+    // Updates the geometry buffers used by ImGui and records the commands needed to
+    // get the ui into a render target.
+    imguiLayer_->recordFrameCommands(
+        recorder, extent, inFlightIndex, currentRenderPass, lastSubpassIndex);
+}
+
 double HelloTriangleApplication::now() const
 {
     return std::chrono::duration<double>(
@@ -318,6 +312,7 @@ double HelloTriangleApplication::now() const
 }
 
 double HelloTriangleApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }
+
 void HelloTriangleApplication::drawImguiControls()
 {
     if (ImGui::Begin("Animation Params")) {

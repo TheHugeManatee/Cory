@@ -11,7 +11,7 @@
 namespace Cory {
 
 struct FrameContext {
-    uint32_t index{};               ///< the current swapchain image index
+    uint32_t inFlightIndex{};       ///< the current swapchain image index
     uint32_t swapchainImageIndex{}; ///< the current swapchain image index
     uint64_t frameNumber{};         ///< the (monotonically increasing) frame number
     glm::u32vec2 extent{};          ///< the size of the swapchain image in pixels

@@ -71,5 +71,8 @@ template <typename T> T to(glm::vec4 v) { return T{v.x, v.y, v.z, v.w}; }
 template <typename T> T to(glm::u32vec2 v) { return T{v.x, v.y}; }
 template <typename T> T to(glm::u32vec3 v) { return T{v.x, v.y, v.z}; }
 template <typename T> T to(glm::u32vec4 v) { return T{v.x, v.y, v.z, v.w}; }
+template <typename T> T to(glm::i32vec2 v) { return T{v.x, v.y}; }
+template <typename T> T to(glm::i32vec3 v) { return T{v.x, v.y, v.z}; }
+template <typename T> T to(glm::i32vec4 v) { return T{v.x, v.y, v.z, v.w}; }
 
 } // namespace Cory::glmu

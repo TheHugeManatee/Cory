@@ -342,7 +342,7 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
     }
 
     FrameContext frameCtx{
-        .index = nextFrameIndex,
+        .inFlightIndex = nextFrameIndex,
         .swapchainImageIndex = swapchainImageIndex,
         .frameNumber = frameNumber,
         .extent = glmu::u32vec2::from(swapchainSetup.extent),
@@ -379,7 +379,7 @@ void SwapchainPrivate::present(FrameContext &frameCtx)
         };
         ctx->graphicsQueue().submit(submitOptions);
 
-        commandBuffers[frameCtx.index] = std::move(command_buffer);
+        commandBuffers[frameCtx.inFlightIndex] = std::move(command_buffer);
     }
     {
         const ScopeTimer s{"Window/Present"};

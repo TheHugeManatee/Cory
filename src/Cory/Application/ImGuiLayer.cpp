@@ -4,132 +4,38 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Utils.hpp>
-#include <Cory/Framegraph/CommandList.hpp>
-#include <Cory/Framegraph/RenderTaskBuilder.hpp>
+// #include <Cory/Framegraph/CommandList.hpp>
+// #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/SingleShotCommandRecorder.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
-#include <Cory/Renderer/VulkanUtils.hpp>
 
-#include "imgui_impl_vulkan.h"
-#include <imgui.h>
-
-#include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
-#include "kdbindings/signal.h"
+#include <KDGpuExample/imgui_renderer.h>
 
-namespace Vk = Magnum::Vk;
+#include <Cory/Base/GlmUtils.hpp>
+#include <imgui.h>
 
 namespace Cory {
-
-namespace {
-
-[[nodiscard]] BasicVkObjectWrapper<VkDescriptorPool> createImguiDescriptorPool(Context &ctx)
-{
-    VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-                                         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-                                         {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-                                         {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-                                         {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-                                         {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
-
-    VkDescriptorPoolCreateInfo createInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-        .maxSets = 1000 * IM_ARRAYSIZE(pool_sizes),
-        .poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes),
-        .pPoolSizes = pool_sizes,
-    };
-    VkDescriptorPool descriptorPool;
-    ctx.device()->CreateDescriptorPool(ctx.device(), &createInfo, nullptr, &descriptorPool);
-    return {descriptorPool, [&device = ctx.device()](auto *ptr) {
-                device->DestroyDescriptorPool(device, ptr, nullptr);
-            }};
-}
-
-Vk::RenderPass createImguiRenderpass(Context &ctx, Vk::PixelFormat format, int32_t msaaSamples)
-{
-    return Vk::RenderPass(
-        ctx.device(),
-        Vk::RenderPassCreateInfo{}
-            .setAttachments(
-                // color
-                {Vk::AttachmentDescription{
-                     format,
-                     {Vk::AttachmentLoadOperation::Load, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
-                     Vk::ImageLayout::ColorAttachment, // initialLayout
-                     Vk::ImageLayout::ColorAttachment, // finalLayout
-                     msaaSamples},
-                 // resolve
-                 Vk::AttachmentDescription{
-                     format,
-                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
-                     Vk::ImageLayout::Undefined,                       // initialLayout
-                     Vk::ImageLayout{VK_IMAGE_LAYOUT_PRESENT_SRC_KHR}, // finalLayout
-                     1}})
-            .addSubpass(Vk::SubpassDescription{}.setColorAttachments(
-                {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}},
-                {Vk::AttachmentReference{1, Vk::ImageLayout::ColorAttachment}}))
-            .setDependencies({Vk::SubpassDependency{
-                Vk::SubpassDependency::External,          // srcSubpass
-                0,                                        // dstSubpass
-                Vk::PipelineStage::ColorAttachmentOutput, // srcStages
-                Vk::PipelineStage::ColorAttachmentOutput, // dstStages
-                Vk::Access::ColorAttachmentWrite,         // srcAccess
-                Vk::Access::ColorAttachmentWrite          // dstAccess
-            }}));
-}
-
-std::vector<Vk::Framebuffer>
-createFramebuffers(Context &ctx, Window &window, Vk::RenderPass &renderPass)
-{
-    const auto swapchainExtent = window.dimensions();
-    const Magnum::Vector3i framebufferSize(swapchainExtent.x, swapchainExtent.y, 1);
-
-    return window.swapchain().imageViews() | ranges::views::transform([&](auto &swapchainImage) {
-               auto &colorView = window.colorView();
-
-               return Vk::Framebuffer(ctx.device(),
-                                      Vk::FramebufferCreateInfo{renderPass,
-                                                                {colorView, swapchainImage},
-                                                                framebufferSize});
-           }) |
-           ranges::_to_::to<std::vector<Vk::Framebuffer>>;
-}
-
-} // namespace
 
 struct ImGuiLayer::Private {
     Context *ctx;
     Window *window;
-    Vk::RenderPass renderPass{Corrade::NoCreate};
-    BasicVkObjectWrapper<VkDescriptorPool> descriptorPool;
-    std::vector<Vk::Framebuffer> framebuffers;
-    Magnum::Color4 clearValue{};
+    std::unique_ptr<KDGpuExample::ImGuiRenderer> imguiRenderer;
+    ImGuiContext *context;
 };
-
-void check_vk_result(VkResult err)
-{
-    if (err == 0) { return; }
-    CO_CORE_ERROR("[ImGui] Vulkan Error: VkResult = {}\n", err);
-    if (err < 0) { abort(); }
-}
 
 ImGuiLayer::ImGuiLayer(Window &window)
     : ApplicationLayer("ImGui")
     , data_{std::make_unique<Private>()}
 {
-    data_->clearValue = {0.0f, 0.0f, 0.0f, 0.0f};
     data_->window = &window;
+
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    data_->context = ImGui::CreateContext();
 }
 
 ImGuiLayer::~ImGuiLayer()
@@ -144,13 +50,11 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
     data_->ctx = &ctx;
     auto &window = *data_->window;
 
-    data_->descriptorPool = createImguiDescriptorPool(ctx);
-    data_->renderPass = createImguiRenderpass(ctx, window.colorFormat(), window.sampleCount());
-    data_->framebuffers = createFramebuffers(ctx, window, data_->renderPass);
+    data_->imguiRenderer = std::make_unique<KDGpuExample::ImGuiRenderer>(
+        &ctx.device(), &ctx.graphicsQueue(), data_->context);
+    data_->imguiRenderer->initialize(
+        1.0f, window.samples(), window.colorFormat(), window.depthFormat());
 
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
 
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable
@@ -161,69 +65,15 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
 
-    ImGui_ImplGlfw_InitForVulkan(window.handle(), true);
-
-    ImGui_ImplVulkan_InitInfo info{};
-    info.Instance = ctx.instance();
-    info.PhysicalDevice = ctx.physicalDevice();
-    info.Device = ctx.device();
-    info.QueueFamily = ctx.graphicsQueueFamily();
-    info.Queue = ctx.graphicsQueue();
-    info.PipelineCache = nullptr; // TODO?
-    info.DescriptorPool = data_->descriptorPool;
-    info.Allocator = nullptr;
-    info.MinImageCount = 2;
-    info.ImageCount = static_cast<uint32_t>(window.swapchain().size());
-    info.Subpass = 0;
-    info.CheckVkResultFn = check_vk_result;
-    info.MSAASamples = (VkSampleCountFlagBits)window.sampleCount();
-
-    info.MinImageCount = 2;
-    ImGui_ImplVulkan_Init(&info, data_->renderPass);
-
-    // Load Fonts
-    // - If no fonts are loaded, dear imgui will use the default font. You can
-    // also load multiple fonts and use ImGui::PushFont()/PopFont() to select
-    // them.
-    // - AddFontFromFileTTF() will return the ImFont* so you can store it if you
-    // need to select the font among multiple.
-    // - If the file cannot be loaded, the function will return NULL. Please
-    // handle those errors in your application (e.g. use an assertion, or display
-    // an error and quit).
-    // - The fonts will be rasterized at a given size (w/ oversampling) and stored
-    // into a texture when calling ImFontAtlas::Build()/GetTexDataAsXXXX(), which
-    // ImGui_ImplXXXX_NewFrame below will call.
-    // - Read 'docs/FONTS.md' for more instructions and details.
-    // - Remember that in C/C++ if you want to include a backslash \ in a string
-    // literal you need to write a double backslash \\ !
-    // io.Fonts->AddFontDefault();
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Roboto-Medium.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/Cousine-Regular.ttf", 15.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
-    // io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f);
-    // ImFont* font =
-    // io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f,
-    // NULL, io.Fonts->GetGlyphRangesJapanese()); IM_ASSERT(font != NULL);
-
-    // Upload Fonts - the SingleShotCommandBuffer syncs implicitly on destruction
-    {
-        SingleShotCommandRecorder cmdBuff(ctx);
-        ImGui_ImplVulkan_CreateFontsTexture(cmdBuff);
-    }
-
-    ImGui_ImplVulkan_DestroyFontUploadObjects();
-
     // setupCustomColors();
 }
 
 void ImGuiLayer::onDetach(Context &ctx)
 {
     // free all buffers before destroying the imgui context
+    data_->imguiRenderer->cleanup();
+    ImGui::DestroyContext(data_->context);
     data_.reset();
-
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
 }
 
 bool ImGuiLayer::onEvent(Event event)
@@ -232,8 +82,8 @@ bool ImGuiLayer::onEvent(Event event)
         lambda_visitor{
             [](auto event) { return false; },
             [this](const SwapchainResizedEvent &event) {
-                data_->framebuffers =
-                    createFramebuffers(*data_->ctx, *data_->window, data_->renderPass);
+                // data_->framebuffers =
+                //     createFramebuffers(*data_->ctx, *data_->window, data_->renderPass);
                 return false;
             },
             // we just need to prevent lower layers from using the events, actual processing
@@ -247,54 +97,46 @@ bool ImGuiLayer::onEvent(Event event)
 
 void ImGuiLayer::onUpdate()
 {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
+    // Nothing more to do here
+
+    // Set frame time and display size.
+    ImGuiIO &io = ImGui::GetIO();
+    // io.DeltaTime = engine()->deltaTimeSeconds();
+    io.DeltaTime = 0.016f; // Assuming 60 FPS for simplicity, adjust as needed
+    io.DisplaySize = glmu::to<ImVec2>(glm::vec2{data_->window->dimensions()});
+
+    ImGui::SetCurrentContext(data_->context);
     ImGui::NewFrame();
 }
+//
+// RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(Cory::RenderTaskBuilder builder,
+//                                                                LayerPassOutputs previousLayer)
+// {
+//     auto [writtenColorHandle, colorInfo] =
+//         builder.readWrite(previousLayer.color, Cory::Sync::AccessType::ColorAttachmentWrite);
+//
+//     co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
+//     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+//
+//     Context &ctx = *renderApi.ctx;
+//     FrameContext &frameCtx = *renderApi.frameCtx;
+//
+//     // note - currently, we're letting imgui handle the final resolve and transition to
+//     // present_layout
+//     // recordFrameCommands(ctx, frameCtx.index, renderApi.cmd->handle());
+// }
 
-RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(Cory::RenderTaskBuilder builder,
-                                                               LayerPassOutputs previousLayer)
-{
-    auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(previousLayer.color, Cory::Sync::AccessType::ColorAttachmentWrite);
-
-    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
-
-    Context &ctx = *renderApi.ctx;
-    FrameContext &frameCtx = *renderApi.frameCtx;
-
-    // note - currently, we're letting imgui handle the final resolve and transition to
-    // present_layout
-    recordFrameCommands(ctx, frameCtx.index, renderApi.cmd->handle());
-}
-
-void ImGuiLayer::recordFrameCommands(Context &ctx,
-                                     uint32_t frameIdx,
-                                     Magnum::Vk::CommandBuffer &cmdBuffer)
+void ImGuiLayer::recordFrameCommands(KDGpu::RenderPassCommandRecorder *recorder,
+                                     KDGpu::Extent2D extent,
+                                     uint32_t inFlightIndex,
+                                     KDGpu::RenderPass *currentRenderPass,
+                                     int lastSubpassIndex)
 {
     ImGui::Render();
-
-    cmdBuffer.beginRenderPass(
-        Vk::RenderPassBeginInfo{data_->renderPass, data_->framebuffers[frameIdx]}
-            .clearColor(0, data_->clearValue)
-            .clearDepthStencil(1, 0.0f, 0));
-
-    auto windowDim = data_->window->dimensions();
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(windowDim.x);
-    viewport.height = static_cast<float>(windowDim.y);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    const VkRect2D scissor{
-        {0, 0}, {static_cast<uint32_t>(windowDim.x), static_cast<uint32_t>(windowDim.y)}};
-    ctx.device()->CmdSetViewport(cmdBuffer, 0, 1, &viewport);
-    ctx.device()->CmdSetScissor(cmdBuffer, 0, 1, &scissor);
-
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmdBuffer);
-    cmdBuffer.endRenderPass();
+    if (data_->imguiRenderer->updateGeometryBuffers(inFlightIndex)) {
+        data_->imguiRenderer->recordCommands(
+            recorder, extent, inFlightIndex, currentRenderPass, lastSubpassIndex);
+    }
 }
 
 void ImGuiLayer::setupCustomColors()

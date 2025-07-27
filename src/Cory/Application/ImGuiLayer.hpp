@@ -7,11 +7,10 @@
 #pragma once
 
 #include <Cory/Application/ApplicationLayer.hpp>
+#include <Cory/Renderer/KDGpuFwd.hpp>
 
 #include <cstdint>
 #include <memory>
-
-using VkImageView = struct VkImageView_T *;
 
 namespace Cory {
 
@@ -22,23 +21,25 @@ class FrameContext;
 class ImGuiLayer : public ApplicationLayer {
   public:
     ImGuiLayer(Window &window);
-    ~ImGuiLayer();
+    ~ImGuiLayer() override;
 
     void onAttach(Context &ctx, LayerAttachInfo info) override;
     void onDetach(Context &ctx) override;
     bool onEvent(Event event) override;
     void onUpdate() override;
     bool hasRenderTask() const override { return true; }
-    RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
-                                                       LayerPassOutputs previousLayer) override;
+    // RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
+    //                                                    LayerPassOutputs previousLayer) override;
 
     // this is mostly still public so we can use the layer in an
     // application that does not use a frame graph
-    void recordFrameCommands(Context &ctx, uint32_t frameIdx, KDGpu::CommandRecorder &cmdBuffer);
+    void recordFrameCommands(KDGpu::RenderPassCommandRecorder *recorder,
+                             KDGpu::Extent2D extent,
+                             uint32_t inFlightIndex,
+                             KDGpu::RenderPass *currentRenderPass,
+                             int lastSubpassIndex);
 
   private:
-    void newFrame(Context &ctx);
-
     struct Private;
     std::unique_ptr<Private> data_;
     void setupCustomColors();

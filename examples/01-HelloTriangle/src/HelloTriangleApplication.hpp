@@ -4,6 +4,7 @@
 
 #include <KDGpu/buffer.h>
 
+#include <KDGpu/command_recorder.h>
 #include <memory>
 
 class TrianglePipeline;
@@ -23,12 +24,15 @@ class HelloTriangleApplication : public Cory::Application {
     void run() override;
 
   private:
-    // create a framebuffer for each of the swap chain images
-    void createFramebuffers();
     // create the mesh to be rendered
     void createGeometry();
+    void renderImGuiOverlay(KDGpu::RenderPassCommandRecorder *opaque_pass,
+                            uint32_t inFlightIndex = 0,
+                            KDGpu::RenderPass *currentRenderPass = nullptr,
+                            int lastSubpassIndex = 0);
     // record commands for a new command buffer
     void recordCommands(Cory::FrameContext &frameCtx);
+    void createFramebuffers();
 
     double now() const;
     double getElapsedTimeSeconds() const;

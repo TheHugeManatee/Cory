@@ -120,6 +120,7 @@ set(CORY_SOURCES
         Renderer/FrameContext.hpp
         Base/GlmUtils.hpp
         Base/Result.hpp
+        Base/Primitives.hpp
 )
 
 # determine includes from CORY_SOURCES by the .hpp suffix

@@ -2,9 +2,6 @@
 
 #include <Cory/Application/Application.hpp>
 
-#include <KDGpu/buffer.h>
-
-#include <KDGpu/command_recorder.h>
 #include <memory>
 
 class TrianglePipeline;
@@ -19,7 +16,7 @@ struct Mesh;
 class HelloTriangleApplication : public Cory::Application {
   public:
     HelloTriangleApplication(int argc, char **argv);
-    ~HelloTriangleApplication();
+    ~HelloTriangleApplication() override;
 
     void run() override;
 
@@ -37,7 +34,6 @@ class HelloTriangleApplication : public Cory::Application {
     double now() const;
     double getElapsedTimeSeconds() const;
 
-  private:
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;

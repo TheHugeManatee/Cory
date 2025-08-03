@@ -70,9 +70,10 @@ bool CameraLayer::onEvent(Event event)
                       event);
 }
 
-void CameraLayer::onUpdate()
+void CameraLayer::onUpdate(const LogicUpdateContext &updateContext)
 {
     update();
+
     if (::ImGui::Begin("CameraLayer")) {
         CoImGui::Text("Mode: {}", state_->mode);
 

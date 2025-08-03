@@ -6,6 +6,8 @@
 #include <Cory/Base/Utils.hpp>
 // #include <Cory/Framegraph/CommandList.hpp>
 // #include <Cory/Framegraph/RenderTaskBuilder.hpp>
+#include <Cory/Base/GlmUtils.hpp>
+#include <Cory/Base/Primitives.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
@@ -15,7 +17,6 @@
 
 #include <KDGpuExample/imgui_renderer.h>
 
-#include <Cory/Base/GlmUtils.hpp>
 #include <imgui.h>
 
 namespace Cory {
@@ -25,6 +26,7 @@ struct ImGuiLayer::Private {
     Window *window;
     std::unique_ptr<KDGpuExample::ImGuiRenderer> imguiRenderer;
     ImGuiContext *context;
+    i32vec2 windowSize;
 };
 
 ImGuiLayer::ImGuiLayer(Window &window)
@@ -32,6 +34,7 @@ ImGuiLayer::ImGuiLayer(Window &window)
     , data_{std::make_unique<Private>()}
 {
     data_->window = &window;
+    data_->windowSize = window.dimensions();
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -57,7 +60,7 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
 
     ImGuiIO &io = ImGui::GetIO();
 
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
@@ -82,6 +85,7 @@ bool ImGuiLayer::onEvent(Event event)
         lambda_visitor{
             [](auto event) { return false; },
             [this](const SwapchainResizedEvent &event) {
+                data_->windowSize = event.size;
                 // data_->framebuffers =
                 //     createFramebuffers(*data_->ctx, *data_->window, data_->renderPass);
                 return false;
@@ -95,15 +99,15 @@ bool ImGuiLayer::onEvent(Event event)
         event);
 }
 
-void ImGuiLayer::onUpdate()
+void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
 {
     // Nothing more to do here
 
     // Set frame time and display size.
     ImGuiIO &io = ImGui::GetIO();
     // io.DeltaTime = engine()->deltaTimeSeconds();
-    io.DeltaTime = 0.016f; // Assuming 60 FPS for simplicity, adjust as needed
-    io.DisplaySize = glmu::to<ImVec2>(glm::vec2{data_->window->dimensions()});
+    io.DeltaTime = updateCtx.deltaTime;
+    io.DisplaySize = glmu::to<ImVec2>(glm::vec2{data_->windowSize});
 
     ImGui::SetCurrentContext(data_->context);
     ImGui::NewFrame();

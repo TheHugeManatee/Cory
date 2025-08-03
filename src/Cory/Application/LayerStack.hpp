@@ -49,7 +49,7 @@ class LayerStack {
     std::unique_ptr<ApplicationLayer> removePriorityLayer();
 
     /// update all layers
-    void update();
+    void update(const LogicUpdateContext &updateCtx);
 
     /// pass an event top-down to the first layer that accepts it
     bool processEvent(Event event);

@@ -29,9 +29,9 @@ void LayerStack::attachLayer(std::unique_ptr<ApplicationLayer> layer, LayerAttac
 
 std::unique_ptr<ApplicationLayer> LayerStack::detachLayer(const std::string &name)
 {
-    auto it = std::find_if(layers_.begin(), layers_.end(), [&](const auto &layer) {
-        return layer->name.get() == name;
-    });
+    auto it = std::find_if(
+        layers_.begin(), layers_.end(), [&](const auto &layer) { return layer->name() == name; });
+
     if (it == layers_.end()) { return nullptr; }
     auto layer = std::move(*it);
     layers_.erase(it);
@@ -44,11 +44,11 @@ std::unique_ptr<ApplicationLayer> LayerStack::removePriorityLayer()
     return std::exchange(priorityLayer_, nullptr);
 }
 
-void LayerStack::update()
+void LayerStack::update(const LogicUpdateContext &updateCtx)
 {
-    if (priorityLayer_) { priorityLayer_->onUpdate(); }
+    if (priorityLayer_) { priorityLayer_->onUpdate(updateCtx); }
     for (auto &layer : layers_) {
-        layer->onUpdate();
+        layer->onUpdate(updateCtx);
     }
 }
 

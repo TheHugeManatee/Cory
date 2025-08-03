@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Base/BitField.hpp>
+#include <Cory/Base/Primitives.hpp>
 
 #include <glm/vec2.hpp>
 
@@ -10,30 +11,30 @@
 namespace Cory {
 
 enum class MouseButton { None, Left, Middle, Right };
-enum class ModifierFlagBits : uint32_t { Shift = 1, Ctrl = 2, Alt = 4, Super = 8};
+enum class ModifierFlagBits : uint32_t { Shift = 1, Ctrl = 2, Alt = 4, Super = 8 };
 using ModifierFlags = BitField<ModifierFlagBits>;
 enum class ButtonAction { None, Release, Press, Repeat };
 
 struct SwapchainResizedEvent {
-    glm::i32vec2 size;
+    i32vec2 size;
 };
 
 struct MouseMovedEvent {
-    glm::vec2 position;
+    f32vec2 position;
     MouseButton button;
     ModifierFlags modifiers;
 };
 
 struct MouseButtonEvent {
-    glm::vec2 position;
+    f32vec2 position;
     MouseButton button;
     ButtonAction action;
     ModifierFlags modifiers;
 };
 
 struct ScrollEvent {
-    glm::vec2 position;
-    glm::vec2 scrollDelta;
+    f32vec2 position;
+    f32vec2 scrollDelta;
     ModifierFlags modifiers;
 };
 

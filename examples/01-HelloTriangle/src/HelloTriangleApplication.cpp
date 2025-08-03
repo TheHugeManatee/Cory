@@ -143,10 +143,13 @@ void HelloTriangleApplication::run()
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
-        layers().update();
+        layers().update(Cory::LogicUpdateContext{
+            .simulationTime = now(),
+            .deltaTime = getElapsedTimeSeconds(),
+        });
 
         ImGui::ShowDemoWindow();
-        // drawImguiControls();
+        drawImguiControls();
 
         recordCommands(frameCtx);
 

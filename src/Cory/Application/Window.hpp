@@ -10,9 +10,12 @@
 #include <kdbindings/signal.h>
 
 #include <glm/vec2.hpp>
+#include <gsl/gsl>
 
 #include <memory>
 #include <string>
+
+struct GLFWwindow;
 
 namespace Cory {
 
@@ -65,8 +68,12 @@ class Window : NoCopy, NoMove {
 
     KDBindings::Property<std::string> title{"Cory Window"};
 
+    gsl::not_null<GLFWwindow *> getGlfwWindow() const;
+
   private:
     void createWindow();
+    // Format the title out of the current window title and some stats/metadata
+    void updateTitle();
 
     friend struct WindowPrivate;
     std::unique_ptr<WindowPrivate> data_;

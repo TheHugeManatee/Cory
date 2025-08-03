@@ -18,6 +18,7 @@
 #include <KDGpuExample/imgui_renderer.h>
 
 #include <imgui.h>
+#include <imgui_impl_glfw.h>
 
 namespace Cory {
 
@@ -58,6 +59,8 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
     data_->imguiRenderer->initialize(
         1.0f, window.samples(), window.colorFormat(), window.depthFormat());
 
+    ImGui_ImplGlfw_InitForVulkan(window.getGlfwWindow(), true);
+
     ImGuiIO &io = ImGui::GetIO();
 
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
@@ -73,6 +76,7 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
 
 void ImGuiLayer::onDetach(Context &ctx)
 {
+    ImGui_ImplGlfw_Shutdown();
     // free all buffers before destroying the imgui context
     data_->imguiRenderer->cleanup();
     ImGui::DestroyContext(data_->context);
@@ -88,6 +92,7 @@ bool ImGuiLayer::onEvent(Event event)
                 data_->windowSize = event.size;
                 // data_->framebuffers =
                 //     createFramebuffers(*data_->ctx, *data_->window, data_->renderPass);
+                data_->imguiRenderer->updateScale(1.0f);
                 return false;
             },
             // we just need to prevent lower layers from using the events, actual processing

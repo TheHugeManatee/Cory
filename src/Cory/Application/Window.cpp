@@ -33,8 +33,9 @@ namespace Cory {
 
 struct WindowPrivate {
     Context *ctx;
-    std::string windowName;
     std::shared_ptr<GLFWwindow> window;
+    std::shared_ptr<VkSurfaceKHR_T> surfaceHandle; // The surface handle has to be stored and
+                                                   // destroyed separately from the KDGpu::Surface
     KDGpu::Surface surface{};
     std::unique_ptr<Swapchain> swapchain;
 
@@ -50,7 +51,7 @@ Window::Window(Context &context,
     : data_{std::make_unique<WindowPrivate>()}
 {
     data_->ctx = &context;
-    data_->windowName = std::move(windowName);
+    this->title = std::move(windowName);
 
     samples = static_cast<KDGpu::SampleCountFlagBits>(sampleCount);
 
@@ -68,16 +69,18 @@ Window::Window(Context &context,
     if (auto ret = glfwCreateWindowSurface(
             instance->instance, data_->window.get(), nullptr, &surfaceHandle);
         ret != VK_SUCCESS) {
-        CO_CORE_ERROR("Failed to create Vulkan window surface for window '{}', error code: {}",
-                      data_->windowName,
-                      ret);
-        throw std::runtime_error(
-            fmt::format("glfwCreateWindowSurface failed for window '{}', error code: {}",
-                        data_->windowName,
-                        ret));
+        CO_CORE_ERROR(
+            "Failed to create Vulkan window surface for window '{}', error code: {}", title(), ret);
+        throw std::runtime_error(fmt::format(
+            "glfwCreateWindowSurface failed for window '{}', error code: {}", title(), ret));
     }
+    data_->surfaceHandle = std::shared_ptr<VkSurfaceKHR_T>{
+        surfaceHandle, [instance = instance->instance](VkSurfaceKHR_T *surfaceHandle) {
+            CO_CORE_TRACE("Destroying GLFW surface");
+            if (surfaceHandle != nullptr) { vkDestroySurfaceKHR(instance, surfaceHandle, nullptr); }
+        }};
 
-    dimensions = dimensions;
+    this->dimensions = dimensions;
 
     data_->surface =
         context.graphicsApi().createSurfaceFromExistingVkSurface(instance_handle, surfaceHandle);
@@ -86,7 +89,7 @@ Window::Window(Context &context,
     data_->swapchain = std::make_unique<Swapchain>(context,
                                                    data_->surface,
                                                    SwapchainCreateInfo{
-                                                       .label = data_->windowName,
+                                                       .label = title(),
                                                        .size = dimensions,
                                                        .samples = samples(),
                                                    });
@@ -99,15 +102,10 @@ Window::Window(Context &context,
         })
         .release();
 
-    title.valueChanged().connect(
-        [wnd_weak = std::weak_ptr{data_->window}](const std::string_view newTitle) {
-            if (auto wnd = wnd_weak.lock(); wnd != nullptr) {
-                glfwSetWindowTitle(wnd.get(), newTitle.data());
-            }
-        });
+    title.valueChanged().connect([this](const std::string_view newTitle) { updateTitle(); });
 }
 
-Window::~Window() { CO_CORE_TRACE("Destroying Cory::Window {}", data_->windowName); }
+Window::~Window() { CO_CORE_TRACE("Destroying Cory::Window {}", title()); }
 
 bool Window::shouldClose() const { return glfwWindowShouldClose(data_->window.get()); }
 
@@ -119,38 +117,35 @@ FrameContext Window::nextSwapchainImage()
 
     auto nextImageResult = data_->swapchain->nextImage();
     const auto dims = dimensions();
-    if (!nextImageResult.has_value() && (dims.x == 0 || dims.y == 0)) {
+    if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
         auto error = nextImageResult.error();
         if (error == SwapchainError::Unknown) {
-            throw std::runtime_error(
-                fmt::format("Failed to acquire next swapchain image for window '{}': {}",
-                            data_->windowName,
-                            error));
+            throw std::runtime_error(fmt::format(
+                "Failed to acquire next swapchain image for window '{}': {}", title(), error));
         }
 
         // wait until the surface dimensions are non-zero - this might happen
         // while the app is minimized or the window has been resized to zero height
         // or width, in which case we don't render anything
-        do {
-            glfwPollEvents();
-            // VkSurfaceCapabilitiesKHR capabilities{};
-            // data_->ctx->instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
-            //     data_->ctx->physicalDevice(), surface_, &capabilities);
-            // size = {capabilities.currentExtent.width, capabilities.currentExtent.height};
-            std::this_thread::yield();
-        } while (dimensions().x == 0 || dimensions().y == 0);
+        // do {
+        //     glfwPollEvents();
+        //     // VkSurfaceCapabilitiesKHR capabilities{};
+        //     // data_->ctx->instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
+        //     //     data_->ctx->physicalDevice(), surface_, &capabilities);
+        //     // size = {capabilities.currentExtent.width, capabilities.currentExtent.height};
+        //     std::this_thread::yield();
+        // } while (dimensions().x == 0 || dimensions().y == 0);
 
         // Hard sync to make sure no commands are in flight before recreating the swapchain
         data_->ctx->device().waitUntilIdle();
         // recreate the necessary resized resources and notify client code via
         // the onSwaphcainResized callback
         data_->swapchain.reset();
-        CO_CORE_INFO(
-            "Recreating swapchain for window {} with size {}", data_->windowName, dimensions());
+        CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dimensions());
         data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
                                                        data_->surface,
                                                        SwapchainCreateInfo{
-                                                           .label = data_->windowName,
+                                                           .label = title(),
                                                            .size = dimensions(),
                                                            .samples = samples(),
                                                        });
@@ -168,18 +163,12 @@ void Window::submitAndPresent(FrameContext &frameCtx)
 
     data_->swapchain->present(frameCtx);
 
-    if (data_->fpsCounter.lap()) {
-        auto s = data_->fpsCounter.stats();
-        auto fps = fmt::format("{} FPS: {:3.2f} ({:3.2f} ms)",
-                               data_->windowName,
-                               float(1'000'000'000) / float(s.avg),
-                               float(s.avg) / 1'000'000);
-        CO_CORE_INFO(fps);
-        title = fps;
-    }
+    if (data_->fpsCounter.lap()) { updateTitle(); }
 }
 KDGpu::Format Window::colorFormat() const noexcept { return data_->swapchain->colorFormat(); }
 KDGpu::Format Window::depthFormat() const noexcept { return data_->swapchain->depthFormat(); }
+
+gsl::not_null<GLFWwindow *> Window::getGlfwWindow() const { return data_->window.get(); }
 
 void Window::createWindow()
 {
@@ -226,6 +215,19 @@ void Window::createWindow()
         });
 
     data_->window = std::move(window);
+}
+
+void Window::updateTitle()
+{
+    auto s = data_->fpsCounter.stats();
+    auto fpsTitle = fmt::format("{} {} FPS: {:3.2f} ({:3.2f} ms)",
+                                title(),
+                                dimensions(),
+                                float(1'000'000'000) / float(s.avg),
+                                float(s.avg) / 1'000'000);
+    CO_CORE_INFO(fpsTitle);
+
+    glfwSetWindowTitle(data_->window.get(), fpsTitle.data());
 }
 
 } // namespace Cory

@@ -123,6 +123,16 @@ set(CORY_SOURCES
         Base/Primitives.hpp
 )
 
+
+# Use ImGui GLFW backend from local imgui module's res/bindings folder
+set(IMGUI_BACKEND_DIR "${imgui_INCLUDE_DIR}/../res/bindings")
+set(IMGUI_GLFW_IMPL_CPP "${IMGUI_BACKEND_DIR}/imgui_impl_glfw.cpp")
+set(IMGUI_GLFW_IMPL_H "${IMGUI_BACKEND_DIR}/imgui_impl_glfw.h")
+
+list(APPEND CORY_SOURCES
+        ${IMGUI_GLFW_IMPL_CPP}
+)
+
 # determine includes from CORY_SOURCES by the .hpp suffix
 set(CORY_INCLUDES "")
 foreach (file ${CORY_SOURCES})
@@ -140,6 +150,8 @@ target_include_directories(${TARGET_NAME}
         ${VULKAN_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../>
         $<INSTALL_INTERFACE:include>
+        PRIVATE
+        ${IMGUI_BACKEND_DIR}
 )
 
 target_link_libraries(${TARGET_NAME}

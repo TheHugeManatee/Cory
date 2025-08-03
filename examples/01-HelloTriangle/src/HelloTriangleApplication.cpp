@@ -131,11 +131,15 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
 
 HelloTriangleApplication::~HelloTriangleApplication()
 {
+
     CO_APP_TRACE("Destroying HelloTriangleApplication");
 }
 
 void HelloTriangleApplication::run()
 {
+    // wait until last frame is finished rendering
+    auto final_sync = gsl::finally([this]() { ctx().device().waitUntilIdle(); });
+
     while (!window_->shouldClose()) {
 
         // Process KDGui events
@@ -158,9 +162,6 @@ void HelloTriangleApplication::run()
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
     }
-
-    // wait until last frame is finished rendering
-    ctx().device().waitUntilIdle();
 }
 
 void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)

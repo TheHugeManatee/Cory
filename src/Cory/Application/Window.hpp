@@ -2,6 +2,7 @@
 
 #include <Cory/Application/Event.hpp>
 #include <Cory/Base/Common.hpp>
+#include <Cory/Base/Primitives.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/KDGpuFwd.hpp>
 
@@ -26,8 +27,6 @@ class Window : NoCopy, NoMove {
     ~Window();
 
     [[nodiscard]] bool shouldClose() const;
-
-    [[nodiscard]] glm::i32vec2 dimensions() const;
 
     [[nodiscard]] Swapchain &swapchain();
 
@@ -62,10 +61,13 @@ class Window : NoCopy, NoMove {
     /// The sample count of the window
     KDBindings::Property<KDGpu::SampleCountFlagBits> samples;
 
+    KDBindings::Property<i32vec2> dimensions{i32vec2(1024, 768)};
+
+    KDBindings::Property<std::string> title{"Cory Window"};
+
   private:
     void createWindow();
 
-  private:
     friend struct WindowPrivate;
     std::unique_ptr<WindowPrivate> data_;
 };

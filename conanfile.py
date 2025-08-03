@@ -15,7 +15,7 @@ class CoryProjectConan(ConanFile):
         self.requires("cli11/2.2.0")
         self.requires("entt/3.11.1")
         self.requires("fmt/10.2.1")
-        self.requires("glew/2.2.0")
+        self.requires("glfw/3.4")
         self.requires("kdbindings/1.1.0")
         self.requires("glm/1.0.1")
         self.requires("imgui/1.91.8-docking")
@@ -25,7 +25,7 @@ class CoryProjectConan(ConanFile):
         self.requires("range-v3/0.12.0")
         self.requires("shaderc/2021.1")
         self.requires("spdlog/1.14.1")
-        self.requires("vulkan-headers/1.3.290.0")
+        self.requires("vulkan-headers/1.4.313.0")
 
     def generate(self):
         tc = CMakeToolchain(self, generator="Ninja")

@@ -46,7 +46,8 @@ class Context : NoCopy {
 
     bool isHeadless() const;
 
-    KDGpu::Surface createSurface(std::string_view name, KDGpuKDGui::View &view);
+    // Set up the device and queue for a given surface
+    void setupDevice(const KDGpu::Surface &surface);
     KDGpu::Instance &instance();
 
     KDGpu::GraphicsApi &graphicsApi();

@@ -2,9 +2,9 @@ set(TARGET_NAME Cory)
 # where the headers will be installed, relative to the project's header install directory
 set(TARGET_HEADER_SUBDIR "Cory/")
 
-find_package(Vulkan REQUIRED FATAL_ERROR)
+find_package(Vulkan REQUIRED)
 
-find_package(GLEW)
+find_package(glfw3 REQUIRED)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
@@ -146,7 +146,6 @@ target_link_libraries(${TARGET_NAME}
         PUBLIC
         ${VULKAN_LIBRARIES}
         Cory::ThirdParty
-        GLEW::GLEW
         Microsoft.GSL::GSL
         fmt::fmt
         glm::glm
@@ -158,7 +157,7 @@ target_link_libraries(${TARGET_NAME}
         shaderc::shaderc
         spdlog::spdlog
         KDGpu::KDGpu
-        KDGpu::KDGpuKDGui
+        glfw
         KDGpu::KDGpuUtils
         KDGpu::KDGpuExample
         KDUtils::KDGui

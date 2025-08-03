@@ -224,11 +224,12 @@ KDGpu::AdapterFeatures Context::getRequiredFeatures() const
     return features;
 }
 
-KDGpu::Surface Context::createSurface(std::string_view name, KDGpuKDGui::View &view)
+void Context::setupDevice(const KDGpu::Surface &surface)
 {
-    auto &instance = data_->instance;
     auto &device = data_->device;
-    auto surface = view.createSurface(instance);
+
+    CO_CORE_ASSERT(data_->adapter == nullptr,
+                   "Device already created! Multiple windows are not currently supported.");
 
     // Create a device and a queue to use
     auto defaultDevice = createDefaultDevice(surface);
@@ -238,8 +239,6 @@ KDGpu::Surface Context::createSurface(std::string_view name, KDGpuKDGui::View &v
     data_->queue = data_->device.queues()[0];
 
     data_->isHeadless = false;
-
-    return surface;
 }
 
 KDGpu::Instance &Context::instance() { return data_->instance; }

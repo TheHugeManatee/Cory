@@ -121,7 +121,10 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
                                                    std::filesystem::path{"simple_shader.vert"},
                                                    std::filesystem::path{"simple_shader.frag"});
 
-    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent) { createFramebuffers(); };
+    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
+        createFramebuffers();
+        layers().processEvent(e);
+    };
     window_->onSwapchainResized.connect(recreateSizedResources);
     recreateSizedResources({window_->dimensions()});
 
@@ -139,7 +142,7 @@ HelloTriangleApplication::~HelloTriangleApplication()
 
 void HelloTriangleApplication::run()
 {
-    // wait until last frame is finished rendering
+    // ensure we wait until last frame is finished rendering, even in exceptional cases
     auto final_sync = gsl::finally([this]() { ctx().device().waitUntilIdle(); });
 
     auto time = getElapsedTimeSeconds();

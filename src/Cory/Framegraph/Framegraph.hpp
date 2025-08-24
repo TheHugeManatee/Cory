@@ -1,18 +1,13 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
-
-#include <glm/vec3.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <cppcoro/generator.hpp>
 
-#include <concepts>
-#include <set>
 #include <string_view>
-#include <unordered_map>
 
 namespace Cory {
 
@@ -63,8 +58,8 @@ class Framegraph : NoCopy {
     /// declare an external texture as an input
     [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
                                                       Sync::AccessType lastWriteAccess,
-                                                      KDGpu::Texture &image,
-                                                      KDGpu::TextureView &imageView);
+                                                      Texture &image,
+                                                      TextureView &imageView);
 
     /**
      * declare that a resource is to be read afterwards. returns general
@@ -101,7 +96,7 @@ class Framegraph : NoCopy {
     resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
     [[nodiscard]] ExecutionInfo compile();
-    [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandList &cmd,
+    [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandRecorder &cmd,
                                                                          RenderTaskHandle handle);
 
     [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>

@@ -1,10 +1,14 @@
 #include "FramegraphVisualizer.h"
 
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/view/enumerate.hpp>
+
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_to_string.hpp>
 
 namespace Cory {
 
@@ -135,11 +139,12 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
         const std::string color = textureData.external    ? "blue"
                                   : textureData.allocated ? "black"
                                                           : "gray";
-        const std::string label = fmt::format("{} {}\\n[{} {}]",
-                                              make_label(textureData),
-                                              textureData.external ? " (ext)" : "",
-                                              textureData.info.size,
-                                              textureData.info.format);
+        const std::string label =
+            fmt::format("{} {}\\n[{} {}]",
+                        make_label(textureData),
+                        textureData.external ? " (ext)" : "",
+                        textureData.info.size,
+                        vk::to_string(static_cast<vk::Format>(textureData.info.format)));
         const float penWidth = textureData.output ? 3.0f : 1.0f;
         append("  \"{0}\" [shape=rectangle,label=\"{1}\",color={2},fontcolor={2},penwidth={3}]\n",
                make_label(textureData),

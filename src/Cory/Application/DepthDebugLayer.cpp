@@ -3,7 +3,6 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
-#include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/ImGui/Inputs.hpp>

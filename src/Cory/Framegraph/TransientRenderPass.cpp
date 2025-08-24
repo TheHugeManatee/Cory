@@ -1,11 +1,10 @@
 #include <Cory/Framegraph/TransientRenderPass.hpp>
 
-#include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
 
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
@@ -141,7 +140,7 @@ TransientRenderPass::~TransientRenderPass()
     }
 }
 
-void TransientRenderPass::begin(CommandList &cmd)
+void TransientRenderPass::begin(CommandRecorder &cmd)
 {
     hasBegun_ = true;
     auto getColorFormat = [&](const std::pair<TextureHandle, AttachmentKind> &h) {
@@ -201,7 +200,7 @@ void TransientRenderPass::begin(CommandList &cmd)
     cmd.setupDynamicStates(dynamicStates_);
 }
 
-void TransientRenderPass::end(CommandList &cmd)
+void TransientRenderPass::end(CommandRecorder &cmd)
 {
     cmd.endPass();
     hasBegun_ = false;

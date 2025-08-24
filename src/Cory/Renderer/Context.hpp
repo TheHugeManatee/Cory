@@ -1,8 +1,9 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
+#include <Cory/Base/Function.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/KDGpuFwd.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <KDGpu/instance.h>
 #include <KDGpu/surface.h>
@@ -41,31 +42,37 @@ class Context : NoCopy {
 
     std::string name() const;
 
-    [[nodiscard]] KDGpu::GpuSemaphore createSemaphore(std::string_view name = "");
-    [[nodiscard]] KDGpu::Fence createFence(std::string_view name = "", FenceCreateMode mode = {});
+    [[nodiscard]] Gpu::GpuSemaphore createSemaphore(std::string_view name = "");
+    [[nodiscard]] Gpu::Fence createFence(std::string_view name = "", FenceCreateMode mode = {});
+
+    /// register a callback that gets called on vulkan validation messages etc.
+    void onVulkanDebugMessageReceived(Function<void(const DebugMessageInfo &)> callback);
 
     bool isHeadless() const;
 
     // Set up the device and queue for a given surface
-    void setupDevice(const KDGpu::Surface &surface);
-    KDGpu::Instance &instance();
+    void setupDevice(const Gpu::Surface &surface);
+    Gpu::Instance &instance();
 
-    KDGpu::GraphicsApi &graphicsApi();
-    const KDGpu::AdapterProperties &physicalDevice();
-    KDGpu::Device &device();
+    Gpu::GraphicsApi &graphicsApi();
+    const Gpu::AdapterProperties &physicalDevice();
+    Gpu::Device &device();
 
-    KDGpu::Queue &graphicsQueue();
+    Gpu::Queue &graphicsQueue();
 
-    KDGpu::VulkanResourceManager &resources();
-    const KDGpu::VulkanResourceManager &resources() const;
+    Gpu::VulkanResourceManager &resources();
+    const Gpu::VulkanResourceManager &resources() const;
+
+    ShaderManager &shaders();
+    const ShaderManager &shaders() const;
 
   private:
-    KDGpu::AdapterAndDevice createDefaultDevice(
-        const KDGpu::Surface &surface,
-        DeviceFeatures features = DeviceFeatures::RequiredOnly,
-        KDGpu::AdapterDeviceType deviceType = KDGpu::AdapterDeviceType::Default) const;
+    Gpu::AdapterAndDevice
+    createDefaultDevice(const Gpu::Surface &surface,
+                        DeviceFeatures features = DeviceFeatures::RequiredOnly,
+                        Gpu::AdapterDeviceType deviceType = Gpu::AdapterDeviceType::Default) const;
 
-    KDGpu::AdapterFeatures getRequiredFeatures() const;
+    Gpu::AdapterFeatures getRequiredFeatures() const;
 
     std::unique_ptr<struct ContextPrivate> data_;
 };

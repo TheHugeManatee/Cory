@@ -11,7 +11,6 @@ struct RenderTaskExecutionAwaiter;
 class Framegraph;
 class RenderTaskBuilder;
 class TextureManager;
-class CommandList;
 class FramegraphVisualizer;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
@@ -53,8 +52,8 @@ enum class TextureMemoryStatus { Virtual, Allocated, External };
 struct TextureInfo {
     std::string name;
     glm::u32vec3 size;
-    KDGpu::Format format;
-    KDGpu::TextureUsageFlags usage;
+    Gpu::Format format;
+    Gpu::TextureUsageFlags usage;
     int32_t sampleCount{1};
 };
 

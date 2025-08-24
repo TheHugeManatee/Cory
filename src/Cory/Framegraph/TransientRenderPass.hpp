@@ -24,20 +24,20 @@ class TransientRenderPass : NoCopy {
   public:
     ~TransientRenderPass();
 
-    TransientRenderPass(TransientRenderPass&&) = default;
-    TransientRenderPass& operator= (TransientRenderPass&&) = default;
+    TransientRenderPass(TransientRenderPass &&) = default;
+    TransientRenderPass &operator=(TransientRenderPass &&) = default;
 
     /**
      * starts the rendering and sets up the render pass according to
      * the information described in the builder.
      *
-     *  1. Binds a pipeline with the required layout - 
+     *  1. Binds a pipeline with the required layout -
      *  2. Calls CmdBeginRendering with the attachments
      *  3. Set up the dynamic state (Depth test, cull mode, ...) as set up in the builder
      */
-    void begin(CommandList &cmd);
+    void begin(CommandRecorder &cmd);
 
-    void end(CommandList &cmd);
+    void end(CommandRecorder &cmd);
 
   private:
     friend class TransientRenderPassBuilder;
@@ -47,7 +47,7 @@ class TransientRenderPass : NoCopy {
     VkRenderingAttachmentInfo makeAttachmentInfo(TextureHandle handle,
                                                  AttachmentKind attachmentKind);
 
-    Context* ctx_;
+    Context *ctx_;
     std::string_view name_;
     TextureManager *textures_;
 
@@ -66,8 +66,7 @@ class TransientRenderPass : NoCopy {
 
 class TransientRenderPassBuilder : NoCopy, NoMove {
   public:
-    TransientRenderPassBuilder(Context &ctx,
-                               std::string_view name, TextureManager &textures);
+    TransientRenderPassBuilder(Context &ctx, std::string_view name, TextureManager &textures);
 
     ~TransientRenderPassBuilder();
 
@@ -87,7 +86,7 @@ class TransientRenderPassBuilder : NoCopy, NoMove {
                                               uint32_t clearValue);
 
     /// create a render pass that does not expect any mesh to be attached
-    TransientRenderPassBuilder & disableMeshInput();
+    TransientRenderPassBuilder &disableMeshInput();
 
     TransientRenderPass finish();
 

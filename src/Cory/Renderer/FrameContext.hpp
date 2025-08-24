@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Cory/Renderer/KDGpuFwd.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <KDGpu/command_recorder.h>
 
@@ -17,25 +17,25 @@ struct FrameContext {
     glm::u32vec2 extent{};          ///< the size of the swapchain image in pixels
 
     // The resources for the current frame
-    const KDGpu::Texture *swapchainImage{};
-    KDGpu::TextureView *swapchainImageView{};
-    KDGpu::Texture *colorImage{};
-    KDGpu::TextureView *colorImageView{};
-    KDGpu::Texture *depthImage{};
-    KDGpu::TextureView *depthImageView{};
+    const Texture *swapchainImage{};
+    TextureView *swapchainImageView{};
+    Texture *colorImage{};
+    TextureView *colorImageView{};
+    Texture *depthImage{};
+    TextureView *depthImageView{};
 
     /// Fence to synchronize when the GPU has finished executing the commands associated with this
     /// frame, and its resources can be safely reused.
-    KDGpu::Fence *inFlight{};
+    Fence *inFlight{};
     /// Semaphore will be signaled when the swapchain image has been acquired (i.e.
     /// when presentation engine has finished with a preceding "present" call
-    KDGpu::GpuSemaphore *acquired{};
+    GpuSemaphore *acquired{};
     /// Semaphore will be signaled when all rendering commands have been executed on the GPU
-    KDGpu::GpuSemaphore *rendered{};
+    GpuSemaphore *rendered{};
 
-    KDGpu::CommandRecorder commandBuffer;
-    KDGpuUtils::ResourceDeleter *resourceDeleter; /// Deleter to be enqueue resource destruction
-                                                  /// when the frame has finished.
+    CommandRecorder commandBuffer;
+    ResourceDeleter *resourceDeleter; /// Deleter to be enqueue resource destruction
+                                      /// when the frame has finished.
 };
 
 } // namespace Cory

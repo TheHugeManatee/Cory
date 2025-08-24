@@ -4,7 +4,7 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Primitives.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/KDGpuFwd.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <kdbindings/property.h>
 #include <kdbindings/signal.h>
@@ -37,9 +37,9 @@ class Window : NoCopy, NoMove {
     void submitAndPresent(FrameContext &frameCtx);
 
     /// pixel format of the offscreen color images
-    [[nodiscard]] KDGpu::Format colorFormat() const noexcept;
+    [[nodiscard]] Gpu::Format colorFormat() const noexcept;
     /// pixel format of the offscreen depth images
-    [[nodiscard]] KDGpu::Format depthFormat() const noexcept;
+    [[nodiscard]] Gpu::Format depthFormat() const noexcept;
 
     /**
      * This signal is emitted whenever the swapchain is resized and the application should
@@ -62,7 +62,7 @@ class Window : NoCopy, NoMove {
     KDBindings::Signal<KeyEvent> onKeyCallback;
 
     /// The sample count of the window
-    KDBindings::Property<KDGpu::SampleCountFlagBits> samples;
+    KDBindings::Property<Gpu::SampleCountFlagBits> samples;
 
     KDBindings::Property<i32vec2> dimensions{i32vec2(1024, 768)};
 

@@ -23,7 +23,7 @@ SingleShotCommandRecorder::~SingleShotCommandRecorder()
 
     auto fence = ctx_->device().createFence();
 
-    ctx_->graphicsQueue().submit(KDGpu::SubmitOptions{
+    ctx_->graphicsQueue().submit(Gpu::SubmitOptions{
         .commandBuffers = {command_buffer.handle()},
         .waitSemaphores = {},
         .signalSemaphores = {},

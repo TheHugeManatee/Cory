@@ -7,6 +7,9 @@ namespace Cory {
 
 template <typename Signature> class Function;
 
+/**
+ * @brief Minimal std::function replacement to avoid #include <functional>
+ */
 template <typename R, typename... Args> class Function<R(Args...)> {
     struct CallableBase {
         virtual R invoke(Args... args) = 0;

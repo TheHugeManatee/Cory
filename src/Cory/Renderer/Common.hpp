@@ -5,7 +5,7 @@
 
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
 
-#include <Cory/Renderer/KDGpuFwd.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
 #include <Cory/Renderer/Synchronization.hpp>
 #include <vulkan/vulkan.h>
@@ -22,8 +22,8 @@ class Context;
 struct ContextCreationInfo;
 class CpuBuffer;
 class RenderManager;
+class ShaderManager;
 class Shader;
-class ResourceManager;
 class SingleShotCommandRecorder;
 // Swapchain.hpp
 struct SwapchainSupportDetails;
@@ -80,14 +80,14 @@ enum class MemoryFlagBits : uint32_t {
 };
 using MemoryFlags = BitField<MemoryFlagBits>;
 
-using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
+using ShaderHandle = PrivateTypedHandle<Shader, ShaderManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
-using BufferHandle = PrivateTypedHandle<KDGpu::VulkanBuffer, ResourceManager>;
-using PipelineHandle = PrivateTypedHandle<KDGpu::VulkanPipeline, ResourceManager>;
-using ImageHandle = PrivateTypedHandle<KDGpu::VulkanTexture, ResourceManager>;
-using ImageViewHandle = PrivateTypedHandle<KDGpu::VulkanTextureView, ResourceManager>;
-using SamplerHandle = PrivateTypedHandle<KDGpu::VulkanSampler, ResourceManager>;
-using DescriptorSetLayoutHandle = PrivateTypedHandle<KDGpu::VulkanBindGroup, ResourceManager>;
+using BufferHandle = PrivateTypedHandle<Gpu::VulkanBuffer, ShaderManager>;
+using PipelineHandle = PrivateTypedHandle<Gpu::VulkanPipeline, ShaderManager>;
+using ImageHandle = PrivateTypedHandle<Gpu::VulkanTexture, ShaderManager>;
+using ImageViewHandle = PrivateTypedHandle<Gpu::VulkanTextureView, ShaderManager>;
+using SamplerHandle = PrivateTypedHandle<Gpu::VulkanSampler, ShaderManager>;
+using DescriptorSetLayoutHandle = PrivateTypedHandle<Gpu::VulkanBindGroup, ShaderManager>;
 
 } // namespace Cory
 

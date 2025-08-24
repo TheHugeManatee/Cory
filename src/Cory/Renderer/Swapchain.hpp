@@ -2,7 +2,7 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/KDGpuFwd.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Semaphore.hpp>
 
 #include <KDGpu/gpu_core.h>
@@ -16,7 +16,7 @@ namespace Cory {
 struct SwapchainCreateInfo {
     std::string label;
     glm::u32vec2 size;
-    KDGpu::SampleCountFlagBits samples;
+    Gpu::SampleCountFlagBits samples;
 };
 
 enum class SwapchainError {
@@ -26,7 +26,7 @@ enum class SwapchainError {
 };
 
 /**
- * @brief Swapchain wrapper that provides a high-level interface to the underlying KDGpu::Swapchain.
+ * @brief Swapchain wrapper that provides a high-level interface to the underlying Gpu::Swapchain.
  *
  * This class manages image acquisition and presentation as well as the basic view resources
  * required for a frame.
@@ -40,11 +40,11 @@ enum class SwapchainError {
  */
 class Swapchain {
   public:
-    Swapchain(Context &ctx, const KDGpu::Surface &surface, SwapchainCreateInfo createInfo);
+    Swapchain(Context &ctx, const Gpu::Surface &surface, SwapchainCreateInfo createInfo);
     ~Swapchain();
 
-    [[nodiscard]] KDGpu::Format colorFormat() const noexcept;
-    [[nodiscard]] KDGpu::Format depthFormat() const noexcept;
+    [[nodiscard]] Gpu::Format colorFormat() const noexcept;
+    [[nodiscard]] Gpu::Format depthFormat() const noexcept;
     [[nodiscard]] glm::u32vec2 extent() const noexcept;
     [[nodiscard]] size_t size() const noexcept; // number of images in the swapchain
 

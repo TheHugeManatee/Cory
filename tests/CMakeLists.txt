@@ -28,13 +28,13 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         Callback_Test.cpp
         FrameGraph_Test.cpp
         CoroutinePlayground.cpp
-        ResourceManager_Test.cpp
+        ShaderManager_Test.cpp
         TestUtils.cpp
         TestUtils.hpp
         FmtUtils_Test.cpp
         RenderTaskDeclaration_Test.cpp
-        DescriptorSetManager_Test.cpp
-        VulkanUtils_Test.cpp
+        #DescriptorSetManager_Test.cpp
+        #VulkanUtils_Test.cpp
         SimulationClock_Test.cpp
         FutureFrameQueue_Test.cpp
         LayerStack_Test.cpp

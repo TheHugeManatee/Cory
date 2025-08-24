@@ -23,27 +23,27 @@
 namespace Cory {
 
 struct SwapchainSetup {
-    KDGpu::Format format{KDGpu::Format::B8G8R8A8_UNORM};
-    KDGpu::CompositeAlphaFlagBits compositeAlpha{KDGpu::CompositeAlphaFlagBits::OpaqueBit};
-    KDGpu::TextureUsageFlags usageFlags{KDGpu::TextureUsageFlagBits::ColorAttachmentBit};
-    KDGpu::Format depthFormat;
-    KDGpu::TextureUsageFlags depthImageUsage_;
-    std::vector<KDGpu::SampleCountFlagBits> supportedSampleCounts;
+    Gpu::Format format{Gpu::Format::B8G8R8A8_UNORM};
+    Gpu::CompositeAlphaFlagBits compositeAlpha{Gpu::CompositeAlphaFlagBits::OpaqueBit};
+    Gpu::TextureUsageFlags usageFlags{Gpu::TextureUsageFlagBits::ColorAttachmentBit};
+    Gpu::Format depthFormat;
+    Gpu::TextureUsageFlags depthImageUsage_;
+    std::vector<Gpu::SampleCountFlagBits> supportedSampleCounts;
 
-    KDGpu::Extent2D extent;
+    Gpu::Extent2D extent;
     bool showSurfaceCapabilities{false};
     std::string capabilitiesString;
-    KDGpu::PresentMode presentMode;
+    Gpu::PresentMode presentMode;
 
-    static SwapchainSetup determineSwapchainSetup(const KDGpu::Device &device,
-                                                  const KDGpu::Surface &surface);
+    static SwapchainSetup determineSwapchainSetup(const Gpu::Device &device,
+                                                  const Gpu::Surface &surface);
 };
 
 struct SwapchainPrivate {
 
-    SwapchainPrivate(Context &ctx_, const KDGpu::Surface &surface, SwapchainCreateInfo createInfo);
+    SwapchainPrivate(Context &ctx_, const Gpu::Surface &surface, SwapchainCreateInfo createInfo);
 
-    void createColorAndDepthResources(KDGpu::SampleCountFlagBits samples);
+    void createColorAndDepthResources(Gpu::SampleCountFlagBits samples);
 
     std::expected<FrameContext, SwapchainError> nextImage();
     void present(FrameContext &fc);
@@ -55,27 +55,27 @@ struct SwapchainPrivate {
     uint64_t frameNumber{0};
 
     SwapchainSetup swapchainSetup;
-    KDGpu::Swapchain swapchain;
-    std::vector<KDGpu::TextureView> swapchainViews;
+    Gpu::Swapchain swapchain;
+    std::vector<TextureView> swapchainViews;
 
-    std::vector<KDGpu::Texture> colorImages;
-    std::vector<KDGpu::TextureView> colorImageViews;
-    std::vector<KDGpu::Texture> depthImages;
-    std::vector<KDGpu::TextureView> depthImageViews;
-    std::vector<KDGpu::GpuSemaphore> presentCompleteSemaphores;
-    std::vector<KDGpu::GpuSemaphore> renderCompleteSemaphores;
+    std::vector<Texture> colorImages;
+    std::vector<TextureView> colorImageViews;
+    std::vector<Texture> depthImages;
+    std::vector<TextureView> depthImageViews;
+    std::vector<Gpu::GpuSemaphore> presentCompleteSemaphores;
+    std::vector<Gpu::GpuSemaphore> renderCompleteSemaphores;
 
-    std::array<KDGpu::Fence, MAX_FRAMES_IN_FLIGHT> frameCompletedFences;
+    std::array<Gpu::Fence, MAX_FRAMES_IN_FLIGHT> frameCompletedFences;
     // Command buffers for each frame in flight - stored here so we can keep them alive
     // until the commands have executed
-    std::array<std::optional<KDGpu::CommandBuffer>, MAX_FRAMES_IN_FLIGHT> commandBuffers;
+    std::array<std::optional<Gpu::CommandBuffer>, MAX_FRAMES_IN_FLIGHT> commandBuffers;
     uint32_t currentSwapchainImageIndex_{0};
     uint32_t inFlightIndex_{0};
     std::unique_ptr<KDGpuUtils::ResourceDeleter> resourceDeleter;
 };
 
-SwapchainSetup SwapchainSetup::determineSwapchainSetup(const KDGpu::Device &device,
-                                                       const KDGpu::Surface &surface)
+SwapchainSetup SwapchainSetup::determineSwapchainSetup(const Gpu::Device &device,
+                                                       const Gpu::Surface &surface)
 {
     auto &adapter = *device.adapter();
     SwapchainSetup swapchainSetup;
@@ -174,7 +174,7 @@ SwapchainSetup SwapchainSetup::determineSwapchainSetup(const KDGpu::Device &devi
 }
 
 SwapchainPrivate::SwapchainPrivate(Context &ctx_,
-                                   const KDGpu::Surface &surface,
+                                   const Gpu::Surface &surface,
                                    SwapchainCreateInfo createInfo)
 {
     ctx = &ctx_;
@@ -245,7 +245,7 @@ SwapchainPrivate::SwapchainPrivate(Context &ctx_,
         std::make_unique<KDGpuUtils::ResourceDeleter>(&ctx->device(), MAX_FRAMES_IN_FLIGHT);
 }
 
-void SwapchainPrivate::createColorAndDepthResources(KDGpu::SampleCountFlagBits samples)
+void SwapchainPrivate::createColorAndDepthResources(Gpu::SampleCountFlagBits samples)
 {
     auto &device = ctx->device();
 
@@ -256,17 +256,17 @@ void SwapchainPrivate::createColorAndDepthResources(KDGpu::SampleCountFlagBits s
                   ranges::views::transform([&](auto idx) {
                       // Create a depth texture to use for depth-correct rendering
 
-                      return device.createTexture(KDGpu::TextureOptions{
+                      return device.createTexture(Gpu::TextureOptions{
                           .label = fmt::format("TEX_WndColor[{}] {} (IMG)", idx, extent),
-                          .type = KDGpu::TextureType::TextureType2D,
+                          .type = Gpu::TextureType::TextureType2D,
                           .format = swapchainSetup.format,
                           .extent = {swapchainSetup.extent.width, swapchainSetup.extent.height, 1},
                           .mipLevels = 1,
                           .samples = samples,
-                          .usage = KDGpu::TextureUsageFlagBits::ColorAttachmentBit |
-                                   KDGpu::TextureUsageFlagBits::TransferSrcBit |
-                                   KDGpu::TextureUsageFlagBits::SampledBit,
-                          .memoryUsage = KDGpu::MemoryUsage::GpuOnly,
+                          .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit |
+                                   Gpu::TextureUsageFlagBits::TransferSrcBit |
+                                   Gpu::TextureUsageFlagBits::SampledBit,
+                          .memoryUsage = Gpu::MemoryUsage::GpuOnly,
                       });
                   }) |
                   ranges::to<std::vector>;
@@ -275,7 +275,7 @@ void SwapchainPrivate::createColorAndDepthResources(KDGpu::SampleCountFlagBits s
                       ranges::views::transform([extent](auto it) {
                           auto [idx, depthImage] = it;
 
-                          return depthImage.createView(KDGpu::TextureViewOptions{
+                          return depthImage.createView(Gpu::TextureViewOptions{
                               .label = fmt::format("TEX_WndCol[{}] {} (VIEW)", idx, extent),
                           });
                       }) |
@@ -285,16 +285,16 @@ void SwapchainPrivate::createColorAndDepthResources(KDGpu::SampleCountFlagBits s
     depthImages = ranges::views::indices(swapchain.textures().size()) |
                   ranges::views::transform([&](auto idx) {
                       // Create a depth texture to use for depth-correct rendering
-                      return device.createTexture(KDGpu::TextureOptions{
+                      return device.createTexture(Gpu::TextureOptions{
                           .label = fmt::format("TEX_WndDepth[{}] {} (IMG)", idx, extent),
-                          .type = KDGpu::TextureType::TextureType2D,
+                          .type = Gpu::TextureType::TextureType2D,
                           .format = swapchainSetup.depthFormat,
                           .extent = {swapchainSetup.extent.width, swapchainSetup.extent.height, 1},
                           .mipLevels = 1,
                           .samples = samples,
-                          .usage = KDGpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
+                          .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
                                    swapchainSetup.depthImageUsage_,
-                          .memoryUsage = KDGpu::MemoryUsage::GpuOnly,
+                          .memoryUsage = Gpu::MemoryUsage::GpuOnly,
                       });
                   }) |
                   ranges::to<std::vector>;
@@ -303,7 +303,7 @@ void SwapchainPrivate::createColorAndDepthResources(KDGpu::SampleCountFlagBits s
                       ranges::views::transform([extent](auto it) {
                           auto [idx, depthImage] = it;
 
-                          return depthImage.createView(KDGpu::TextureViewOptions{
+                          return depthImage.createView(Gpu::TextureViewOptions{
                               .label = fmt::format("TEX_WndDepth[{}] {} (VIEW)", idx, extent),
                           });
                       }) |
@@ -314,10 +314,10 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
 {
     auto nextFrameIndex = static_cast<uint32_t>(frameNumber % MAX_FRAMES_IN_FLIGHT);
 
-    auto recorder = ctx->device().createCommandRecorder(KDGpu::CommandRecorderOptions{
+    auto recorder = ctx->device().createCommandRecorder(Gpu::CommandRecorderOptions{
         .label = fmt::format("CMD-{}-[{}]", frameNumber, nextFrameIndex),
         .queue = ctx->graphicsQueue().handle(),
-        .level = KDGpu::CommandBufferLevel::Primary,
+        .level = Gpu::CommandBufferLevel::Primary,
     });
 
     frameCompletedFences[nextFrameIndex].wait();
@@ -325,12 +325,12 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
     // Todo clear up resources here via resource deleter
 
     uint32_t swapchainImageIndex{};
-    const KDGpu::AcquireImageResult result =
+    const Gpu::AcquireImageResult result =
         swapchain.getNextImageIndex(swapchainImageIndex, presentCompleteSemaphores[nextFrameIndex]);
 
-    if (result != KDGpu::PresentResult::Success) {
+    if (result != Gpu::PresentResult::Success) {
         switch (result) {
-            using enum KDGpu::PresentResult;
+            using enum Gpu::PresentResult;
         case OutOfDate:
             return std::unexpected(SwapchainError::OutOfDate);
         case DeviceLost:
@@ -372,7 +372,7 @@ void SwapchainPrivate::present(FrameContext &frameCtx)
 
         auto command_buffer = frameCtx.commandBuffer.finish();
 
-        KDGpu::SubmitOptions submitOptions{
+        Gpu::SubmitOptions submitOptions{
             .commandBuffers = {command_buffer},
             .waitSemaphores = {*frameCtx.acquired},
             .signalSemaphores = {*frameCtx.rendered},
@@ -385,7 +385,7 @@ void SwapchainPrivate::present(FrameContext &frameCtx)
     {
         const ScopeTimer s{"Window/Present"};
 
-        KDGpu::PresentOptions presentOptions = {.waitSemaphores = {*frameCtx.rendered},
+        Gpu::PresentOptions presentOptions = {.waitSemaphores = {*frameCtx.rendered},
                                                 .swapchainInfos = {{
                                                     .swapchain = swapchain,
                                                     .imageIndex = frameCtx.swapchainImageIndex,
@@ -395,13 +395,13 @@ void SwapchainPrivate::present(FrameContext &frameCtx)
     }
 }
 
-Swapchain::Swapchain(Context &ctx, const KDGpu::Surface &surface, SwapchainCreateInfo createInfo)
+Swapchain::Swapchain(Context &ctx, const Gpu::Surface &surface, SwapchainCreateInfo createInfo)
     : data_{std::make_unique<SwapchainPrivate>(ctx, surface, createInfo)}
 {
 }
 Swapchain::~Swapchain() { CO_CORE_TRACE("Destroying Cory::Swapchain."); }
-KDGpu::Format Swapchain::colorFormat() const noexcept { return data_->swapchainSetup.format; }
-KDGpu::Format Swapchain::depthFormat() const noexcept { return data_->swapchainSetup.depthFormat; }
+Gpu::Format Swapchain::colorFormat() const noexcept { return data_->swapchainSetup.format; }
+Gpu::Format Swapchain::depthFormat() const noexcept { return data_->swapchainSetup.depthFormat; }
 glm::u32vec2 Swapchain::extent() const noexcept
 {
     return glmu::u32vec2::from(data_->swapchainSetup.extent);

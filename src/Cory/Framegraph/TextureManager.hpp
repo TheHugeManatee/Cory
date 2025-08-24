@@ -38,8 +38,8 @@ class TextureManager : NoCopy {
 
     TextureHandle registerExternal(TextureInfo info,
                                    Sync::AccessType lastWriteAccess,
-                                   KDGpu::Texture &resource,
-                                   KDGpu::TextureView &resourceView);
+                                   Texture &resource,
+                                   TextureView &resourceView);
 
     void allocate(const std::vector<TextureHandle> &handles);
 

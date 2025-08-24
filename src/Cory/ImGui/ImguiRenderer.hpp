@@ -45,7 +45,7 @@ namespace Cory {
  */
 class ImGuiRenderer {
   public:
-    ImGuiRenderer(KDGpu::Device *device, KDGpu::Queue *queue, ImGuiContext *imGuiContext);
+    ImGuiRenderer(Gpu::Device *device, Gpu::Queue *queue, ImGuiContext *imGuiContext);
     ~ImGuiRenderer();
 
     ImGuiRenderer(const ImGuiRenderer &other) noexcept = delete;
@@ -55,36 +55,36 @@ class ImGuiRenderer {
     ImGuiRenderer &operator=(ImGuiRenderer &&other) noexcept = default;
 
     void initialize(float scaleFactor,
-                    KDGpu::SampleCountFlagBits samples,
-                    KDGpu::Format colorFormat,
-                    KDGpu::Format depthFormat);
+                    Gpu::SampleCountFlagBits samples,
+                    Gpu::Format colorFormat,
+                    Gpu::Format depthFormat);
     void updateScale(float scaleFactor);
     void cleanup();
 
     bool updateGeometryBuffers(FrameContext &frameCtx);
-    void recordCommands(FrameContext &frameCtx, KDGpu::RenderPassCommandRecorder *recorder);
+    void recordCommands(FrameContext &frameCtx, Gpu::RenderPassCommandRecorder *recorder);
 
   private:
     void initializeFontData(float scaleFactor);
 
     struct MeshData {
-        KDGpu::Buffer vertices;
-        KDGpu::Buffer indexBuffer;
+        Gpu::Buffer vertices;
+        Gpu::Buffer indexBuffer;
         bool isIndexed{false};
         uint32_t vertexCount{0};
         uint32_t indexCount{0};
-        KDGpu::IndexType indexType{KDGpu::IndexType::Uint32};
+        Gpu::IndexType indexType{Gpu::IndexType::Uint32};
     };
 
     // TODO: Handle multiple frames in flight
     std::vector<MeshData> m_meshes;
     MeshData *m_mesh{nullptr};
 
-    KDGpu::BindGroupLayout m_bindGroupLayout;
-    KDGpu::BindGroup m_bindGroup;
-    KDGpu::Texture m_texture;
-    KDGpu::TextureView m_textureView;
-    KDGpu::Sampler m_sampler;
+    Gpu::BindGroupLayout m_bindGroupLayout;
+    Gpu::BindGroup m_bindGroup;
+    Texture m_texture;
+    TextureView m_textureView;
+    Gpu::Sampler m_sampler;
 
     struct PushConstantBlock {
         float scale[2];
@@ -92,15 +92,15 @@ class ImGuiRenderer {
     };
     PushConstantBlock m_pushConstantBlock;
 
-    KDGpu::Device *m_device{nullptr};
-    KDGpu::Queue *m_queue{nullptr};
+    Gpu::Device *m_device{nullptr};
+    Gpu::Queue *m_queue{nullptr};
     ImGuiContext *m_imGuiContext{nullptr};
 
-    KDGpu::ShaderModule m_vertexShader;
-    KDGpu::ShaderModule m_fragmentShader;
-    KDGpu::GraphicsPipeline m_pipeline;
-    KDGpu::GraphicsPipelineOptions m_pipelineInfo;
-    KDGpu::PipelineLayout m_pipelineLayout;
+    Gpu::ShaderModule m_vertexShader;
+    Gpu::ShaderModule m_fragmentShader;
+    Gpu::GraphicsPipeline m_pipeline;
+    Gpu::GraphicsPipelineOptions m_pipelineInfo;
+    Gpu::PipelineLayout m_pipelineLayout;
 
     float m_oldScaleFactor = 1.0f;
 };

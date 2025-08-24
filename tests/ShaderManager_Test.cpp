@@ -1,11 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
-
-#include <Magnum/Vk/Buffer.h>
+#include <Cory/Renderer/ShaderManager.hpp>
 
 #include "TestUtils.hpp"
+
+static_assert(!std::copyable<Cory::ShaderManager>, "ShaderManager is not designed to be copyable");
+static_assert(std::movable<Cory::ShaderManager>, "ShaderManager is designed to be movable");
 
 static constexpr auto testVertexShader = R"(
 #version 450
@@ -28,36 +29,16 @@ TEST_CASE("ResourceManager", "[Cory/Renderer]")
 {
     testing::VulkanTester t;
 
-    ResourceManager mgr;
+    ShaderManager mgr;
     mgr.setContext(t.ctx());
 
-    auto rsrcInUse = mgr.resourcesInUse();
-    CHECK(rsrcInUse[ResourceType::Buffer] == 0);
-    CHECK(rsrcInUse[ResourceType::Shader] == 0);
-
-    SECTION("Buffers")
-    {
-        BufferHandle buffer = mgr.createBuffer("Test Buffer",
-                                               1024,
-                                               Cory::BufferUsageBits::StorageBuffer,
-                                               MemoryFlagBits::HostCoherent);
-        CHECK(mgr.resourcesInUse()[ResourceType::Buffer] == 1);
-
-        CHECK(mgr[buffer].dedicatedMemory().size() == 1024);
-
-        BufferHandle invalidHandle;
-        CHECK_THROWS(mgr[invalidHandle]);
-
-        mgr.release(buffer);
-        CHECK_THROWS(mgr[buffer]);
-        CHECK(mgr.resourcesInUse()[ResourceType::Buffer] == 0);
-    }
+    CHECK(mgr.shadersInUse() == 0);
 
     SECTION("Shaders")
     {
         ShaderHandle shader =
             mgr.createShader(testVertexShader, Cory::ShaderType::eVertex, "testVertexShader.vert");
-        CHECK(mgr.resourcesInUse()[ResourceType::Shader] == 1);
+        CHECK(mgr.shadersInUse() == 1);
         CHECK(mgr[shader].valid());
         CHECK(mgr[shader].size() > 0);
         CHECK(mgr[shader].type() == Cory::ShaderType::eVertex);
@@ -70,6 +51,6 @@ TEST_CASE("ResourceManager", "[Cory/Renderer]")
 
         mgr.release(shader);
         CHECK_THROWS(mgr[shader]);
-        CHECK(mgr.resourcesInUse()[ResourceType::Shader] == 0);
+        CHECK(mgr.shadersInUse() == 0);
     }
 }

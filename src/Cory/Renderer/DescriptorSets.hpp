@@ -57,7 +57,7 @@ class DescriptorSets {
      * @a instances is usually equal to the number of frames in flight.
      */
     void init(Magnum::Vk::Device &device,
-              ResourceManager &resourceManager,
+              ShaderManager &resourceManager,
               Magnum::Vk::DescriptorSetLayoutCreateInfo defaultLayout,
               uint32_t instances);
 

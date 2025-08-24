@@ -1,6 +1,9 @@
 #pragma once
 
+#include <KDGpu/gpu_core.h>
+
 namespace KDGpu {
+
 class VulkanGraphicsApi;
 class VulkanResourceManager;
 struct VulkanBindGroup;
@@ -20,6 +23,7 @@ struct VulkanTextureView;
 class Adapter;
 class BindGroup;
 class Buffer;
+class CommandRecorder;
 class GraphicsPipeline;
 class Pipeline;
 class PipelineLayout;
@@ -41,10 +45,21 @@ using ResourceManager = VulkanResourceManager;
 
 } // namespace KDGpu
 
-namespace KDGpuKDGui {
-class View;
-}
-
 namespace KDGpuUtils {
 class ResourceDeleter;
 }
+
+namespace Gpu = KDGpu;
+// import a few short-hands directly into the Cory namespace
+namespace Cory {
+using CommandRecorder = Gpu::CommandRecorder;
+using Device = Gpu::Device;
+using Fence = Gpu::Fence;
+using GpuSemaphore = Gpu::GpuSemaphore;
+using Surface = Gpu::Surface;
+using Texture = Gpu::Texture;
+using TextureView = Gpu::TextureView;
+using ResourceDeleter = KDGpuUtils::ResourceDeleter;
+
+using TextureFormat = Gpu::Format;
+} // namespace Cory

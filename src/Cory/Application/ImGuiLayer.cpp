@@ -4,7 +4,6 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Utils.hpp>
-// #include <Cory/Framegraph/CommandList.hpp>
 // #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Primitives.hpp>
@@ -133,11 +132,11 @@ void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
 // }
 
 void ImGuiLayer::recordFrameCommands(FrameContext &frameCtx,
-                                     KDGpu::RenderPassCommandRecorder *recorder)
+                                     Gpu::RenderPassCommandRecorder *recorder)
 {
     ImGui::Render();
     if (data_->imguiRenderer->updateGeometryBuffers(frameCtx.inFlightIndex)) {
-        auto extent = glmu::to<KDGpu::Extent2D>(frameCtx.extent);
+        auto extent = glmu::to<Gpu::Extent2D>(frameCtx.extent);
         data_->imguiRenderer->recordCommands(recorder, extent, frameCtx.inFlightIndex);
     }
 }

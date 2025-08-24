@@ -684,7 +684,7 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier, VkImageMemoryBar
         pVkBarrier->dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
 }
 
-void CmdPipelineBarrier(KDGpu::VulkanDevice &device,
+void CmdPipelineBarrier(Gpu::VulkanDevice &device,
                         VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
                         std::span<const BufferBarrier> bufferBarriers,
@@ -740,7 +740,7 @@ void CmdPipelineBarrier(KDGpu::VulkanDevice &device,
     SYNC_TEMP_FREE(pImageMemoryBarriers);
 }
 
-void CmdSetEvent(KDGpu::VulkanDevice &device,
+void CmdSetEvent(Gpu::VulkanDevice &device,
                  VkCommandBuffer commandBuffer,
                  VkEvent event,
                  std::span<const AccessType> prevAccesses)
@@ -762,7 +762,7 @@ void CmdSetEvent(KDGpu::VulkanDevice &device,
     vkCmdSetEvent(commandBuffer, event, stageMask);
 }
 
-void CmdResetEvent(KDGpu::VulkanDevice &device,
+void CmdResetEvent(Gpu::VulkanDevice &device,
                    VkCommandBuffer commandBuffer,
                    VkEvent event,
                    std::span<const AccessType> prevAccesses)
@@ -784,7 +784,7 @@ void CmdResetEvent(KDGpu::VulkanDevice &device,
     vkCmdResetEvent2(commandBuffer, event, stageMask);
 }
 
-void CmdWaitEvents(KDGpu::VulkanDevice &device,
+void CmdWaitEvents(Gpu::VulkanDevice &device,
                    VkCommandBuffer commandBuffer,
                    std::span<const VkEvent> events,
                    const GlobalBarrier *pGlobalBarrier,

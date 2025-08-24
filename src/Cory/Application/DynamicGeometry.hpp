@@ -9,8 +9,8 @@
 namespace Cory {
 
 struct Mesh {
-    KDGpu::Buffer vertexBuffer;
-    KDGpu::Buffer indexBuffer;
+    Gpu::Buffer vertexBuffer;
+    Gpu::Buffer indexBuffer;
     size_t vertexCount;
     size_t indexCount;
 };

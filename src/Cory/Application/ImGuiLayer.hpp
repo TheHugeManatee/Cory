@@ -7,7 +7,7 @@
 #pragma once
 
 #include <Cory/Application/ApplicationLayer.hpp>
-#include <Cory/Renderer/KDGpuFwd.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <cstdint>
 #include <memory>
@@ -33,7 +33,7 @@ class ImGuiLayer : public ApplicationLayer {
 
     // this is mostly still public so we can use the layer in an
     // application that does not use a frame graph
-    void recordFrameCommands(FrameContext &frameCtx, KDGpu::RenderPassCommandRecorder *recorder);
+    void recordFrameCommands(FrameContext &frameCtx, Gpu::RenderPassCommandRecorder *recorder);
 
   private:
     struct Private;

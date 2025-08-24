@@ -1,7 +1,9 @@
+
 #include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <KDGpu/graphics_api.h>
@@ -10,61 +12,64 @@
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
 #include <KDGpuKDGui/view.h>
 #include <KDGui/gui_application.h>
+
 #include <vulkan/vulkan_win32.h>
 
 namespace Cory {
 
-using InstanceHandle = KDGpu::Handle<KDGpu::Instance_t>;
-using DeviceHandle = KDGpu::Handle<KDGpu::Device_t>;
-using AdapterHandle = KDGpu::Handle<KDGpu::Adapter_t>;
-using QueueHandle = KDGpu::Handle<KDGpu::Queue_t>;
-using SwapchainHandle = KDGpu::Handle<KDGpu::Swapchain_t>;
-using SurfaceHandle = KDGpu::Handle<KDGpu::Surface_t>;
-using TextureHandle = KDGpu::Handle<KDGpu::Texture_t>;
-using TextureViewHandle = KDGpu::Handle<KDGpu::TextureView_t>;
-using ShaderModuleHandle = KDGpu::Handle<KDGpu::ShaderModule_t>;
-using RenderPassHandle = KDGpu::Handle<KDGpu::RenderPass_t>;
-using PipelineLayoutHandle = KDGpu::Handle<KDGpu::PipelineLayout_t>;
-using GraphicsPipelineHandle = KDGpu::Handle<KDGpu::GraphicsPipeline_t>;
-using ComputePipelineHandle = KDGpu::Handle<KDGpu::ComputePipeline_t>;
-using RenderPassCommandRecorderHandle = KDGpu::Handle<KDGpu::RenderPassCommandRecorder_t>;
-using GpuSemaphoreHandle = KDGpu::Handle<KDGpu::GpuSemaphore_t>;
-using ComputePassCommandRecorderHandle = KDGpu::Handle<KDGpu::ComputePassCommandRecorder_t>;
-using CommandBufferHandle = KDGpu::Handle<KDGpu::CommandBuffer_t>;
-using BindGroupHandle = KDGpu::Handle<KDGpu::BindGroup_t>;
-using BindGroupLayoutHandle = KDGpu::Handle<KDGpu::BindGroupLayout_t>;
-using FenceHandle = KDGpu::Handle<KDGpu::Fence_t>;
+using InstanceHandle = Gpu::Handle<Gpu::Instance_t>;
+using DeviceHandle = Gpu::Handle<Gpu::Device_t>;
+using AdapterHandle = Gpu::Handle<Gpu::Adapter_t>;
+using QueueHandle = Gpu::Handle<Gpu::Queue_t>;
+using SwapchainHandle = Gpu::Handle<Gpu::Swapchain_t>;
+using SurfaceHandle = Gpu::Handle<Gpu::Surface_t>;
+using TextureHandle = Gpu::Handle<Gpu::Texture_t>;
+using TextureViewHandle = Gpu::Handle<Gpu::TextureView_t>;
+using ShaderModuleHandle = Gpu::Handle<Gpu::ShaderModule_t>;
+using RenderPassHandle = Gpu::Handle<Gpu::RenderPass_t>;
+using PipelineLayoutHandle = Gpu::Handle<Gpu::PipelineLayout_t>;
+using GraphicsPipelineHandle = Gpu::Handle<Gpu::GraphicsPipeline_t>;
+using ComputePipelineHandle = Gpu::Handle<Gpu::ComputePipeline_t>;
+using RenderPassCommandRecorderHandle = Gpu::Handle<Gpu::RenderPassCommandRecorder_t>;
+using GpuSemaphoreHandle = Gpu::Handle<Gpu::GpuSemaphore_t>;
+using ComputePassCommandRecorderHandle = Gpu::Handle<Gpu::ComputePassCommandRecorder_t>;
+using CommandBufferHandle = Gpu::Handle<Gpu::CommandBuffer_t>;
+using BindGroupHandle = Gpu::Handle<Gpu::BindGroup_t>;
+using BindGroupLayoutHandle = Gpu::Handle<Gpu::BindGroupLayout_t>;
+using FenceHandle = Gpu::Handle<Gpu::Fence_t>;
 
 struct ContextPrivate {
     std::string name;
     bool isHeadless{true};
 
-    KDGpu::GraphicsApi api;
-    KDGpu::Instance instance;
+    Gpu::GraphicsApi api;
+    Gpu::Instance instance;
 
-    KDGpu::Surface surface;
-    KDGpu::Adapter *adapter;
-    KDGpu::Device device;
-    KDGpu::Queue queue;
+    Gpu::Surface surface;
+    Gpu::Adapter *adapter;
+    Gpu::Device device;
+    Gpu::Queue queue;
 
-    BasicVkObjectWrapper<VkDebugUtilsMessengerEXT> debugMessenger{};
+    ShaderManager shaders;
 
-    void receiveDebugUtilsMessage(DebugMessageSeverity severity,
-                                  DebugMessageType messageType,
-                                  const VkDebugUtilsMessengerCallbackDataEXT *callbackData);
+    static Function<void(const DebugMessageInfo &)> validationMessageCallback;
+
+    static void receiveDebugUtilsMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                         VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+                                         const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData);
 };
 
 Context::Context(ContextCreationInfo creationInfo)
     : data_{std::make_unique<ContextPrivate>()}
 {
     data_->name = "CCtx";
- const auto app_name{"Cory-based Vulkan Application"};
+    const auto app_name{"Cory-based Vulkan Application"};
 
     // for dynamic rendering, we need:
     //  - KHR_get_physical_device_properties2 instance extension
     //  - KHR_dynamic_rendering device extension
     //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
-    KDGpu::InstanceOptions instanceOptions = {
+    Gpu::InstanceOptions instanceOptions = {
         .applicationName = app_name,
         .applicationVersion = KDGPU_MAKE_API_VERSION(0, 1, 0, 0),
         .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
@@ -95,33 +100,39 @@ Context::~Context()
 
 std::string Context::name() const { return data_->name; }
 
-KDGpu::GpuSemaphore Context::createSemaphore(std::string_view name)
+Gpu::GpuSemaphore Context::createSemaphore(std::string_view name)
 {
     auto &device = data_->device;
-    KDGpu::GpuSemaphoreOptions options{
+    Gpu::GpuSemaphoreOptions options{
         .label = name,
     };
 
     return device.createGpuSemaphore(options);
 }
 
-KDGpu::Fence Context::createFence(std::string_view name, FenceCreateMode mode)
+Gpu::Fence Context::createFence(std::string_view name, FenceCreateMode mode)
 {
     auto &device = data_->device;
 
-    KDGpu::FenceOptions options{
+    Gpu::FenceOptions options{
         .label = name,
         .createSignalled = (mode == FenceCreateMode::Signaled),
-        .externalFenceHandleType{KDGpu::ExternalFenceHandleTypeFlagBits::None},
+        .externalFenceHandleType{Gpu::ExternalFenceHandleTypeFlagBits::None},
     };
     return device.createFence(options);
 }
 
+void Context::onVulkanDebugMessageReceived(Function<void(const DebugMessageInfo &)> callback)
+{
+    ContextPrivate::validationMessageCallback = std::move(callback);
+    Gpu::VulkanGraphicsApi::setCustomValidationHandler(ContextPrivate::receiveDebugUtilsMessage);
+}
+
 bool Context::isHeadless() const { return data_->isHeadless; }
 
-KDGpu::AdapterAndDevice Context::createDefaultDevice(const KDGpu::Surface &surface,
-                                                     DeviceFeatures features,
-                                                     KDGpu::AdapterDeviceType deviceType) const
+Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
+                                                   DeviceFeatures features,
+                                                   Gpu::AdapterDeviceType deviceType) const
 {
     using namespace KDGpu;
 
@@ -202,9 +213,9 @@ KDGpu::AdapterAndDevice Context::createDefaultDevice(const KDGpu::Surface &surfa
 
     return {selectedAdapter, std::move(device)};
 }
-KDGpu::AdapterFeatures Context::getRequiredFeatures() const
+Gpu::AdapterFeatures Context::getRequiredFeatures() const
 {
-    KDGpu::AdapterFeatures features{};
+    Gpu::AdapterFeatures features{};
     features.sampleRateShading = true;
     // synchronization2 is automatically enabled by kdgpu
 
@@ -223,7 +234,7 @@ KDGpu::AdapterFeatures Context::getRequiredFeatures() const
     return features;
 }
 
-void Context::setupDevice(const KDGpu::Surface &surface)
+void Context::setupDevice(const Gpu::Surface &surface)
 {
     auto &device = data_->device;
 
@@ -240,17 +251,33 @@ void Context::setupDevice(const KDGpu::Surface &surface)
     data_->isHeadless = false;
 }
 
-KDGpu::Instance &Context::instance() { return data_->instance; }
-KDGpu::GraphicsApi &Context::graphicsApi() { return data_->api; }
-const KDGpu::AdapterProperties &Context::physicalDevice() { return data_->adapter->properties(); }
-KDGpu::Device &Context::device() { return data_->device; }
+Gpu::Instance &Context::instance() { return data_->instance; }
+Gpu::GraphicsApi &Context::graphicsApi() { return data_->api; }
+const Gpu::AdapterProperties &Context::physicalDevice() { return data_->adapter->properties(); }
+Gpu::Device &Context::device() { return data_->device; }
 
-KDGpu::Queue &Context::graphicsQueue() { return data_->queue; }
+Gpu::Queue &Context::graphicsQueue() { return data_->queue; }
 
-KDGpu::VulkanResourceManager &Context::resources() { return *data_->api.resourceManager(); }
-const KDGpu::VulkanResourceManager &Context::resources() const
+Gpu::VulkanResourceManager &Context::resources() { return *data_->api.resourceManager(); }
+const Gpu::VulkanResourceManager &Context::resources() const
 {
     return *data_->api.resourceManager();
+}
+ShaderManager &Context::shaders() { return data_->shaders; }
+const ShaderManager &Context::shaders() const { return data_->shaders; }
+
+void ContextPrivate::receiveDebugUtilsMessage(
+    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData)
+{
+    if (!validationMessageCallback) { return; }
+
+    DebugMessageInfo info{.severity = static_cast<DebugMessageSeverity>(messageSeverity),
+                          .messageType = static_cast<DebugMessageType>(messageTypes),
+                          .messageIdNumber = pCallbackData->messageIdNumber,
+                          .message = pCallbackData->pMessage ? pCallbackData->pMessage : ""};
+    validationMessageCallback(info);
 }
 
 } // namespace Cory

@@ -88,7 +88,7 @@ struct VertexImGui {
         return VertexBufferLayout{
             .binding = 0,
             .stride = sizeof(ImDrawVert),
-            .inputRate = KDGpu::VertexRate::Vertex,
+            .inputRate = Gpu::VertexRate::Vertex,
         };
     }
 
@@ -98,17 +98,17 @@ struct VertexImGui {
         static std::vector<VertexAttribute> attributes = {{
             .location = 0,
             .binding = 0,
-            .format = KDGpu::Format::R32G32_SFLOAT,
+            .format = Gpu::Format::R32G32_SFLOAT,
             .offset = offsetof(ImDrawVert, pos),
         }, {
             .location = 1,
             .binding = 0,
-            .format = KDGpu::Format::R32G32_SFLOAT,
+            .format = Gpu::Format::R32G32_SFLOAT,
             .offset = offsetof(ImDrawVert, uv),
         }, {
             .location = 2,
             .binding = 0,
-            .format = KDGpu::Format::R8G8B8A8_UNORM,
+            .format = Gpu::Format::R8G8B8A8_UNORM,
             .offset = offsetof(ImDrawVert, col),
         }};
         // clang-format on
@@ -130,7 +130,7 @@ std::vector<uint32_t> readShaderFileFromCmrc(cmrc::embedded_filesystem &fs,
 
 namespace Cory {
 
-ImGuiRenderer::ImGuiRenderer(KDGpu::Device *device, KDGpu::Queue *queue, ImGuiContext *imGuiContext)
+ImGuiRenderer::ImGuiRenderer(Gpu::Device *device, Gpu::Queue *queue, ImGuiContext *imGuiContext)
     : m_device(device)
     , m_queue(queue)
     , m_imGuiContext(imGuiContext)
@@ -158,9 +158,9 @@ ImGuiRenderer::ImGuiRenderer(KDGpu::Device *device, KDGpu::Queue *queue, ImGuiCo
 ImGuiRenderer::~ImGuiRenderer() {}
 
 void ImGuiRenderer::initialize(float scaleFactor,
-                               KDGpu::SampleCountFlagBits samples,
-                               KDGpu::Format colorFormat,
-                               KDGpu::Format depthFormat)
+                               Gpu::SampleCountFlagBits samples,
+                               Gpu::Format colorFormat,
+                               Gpu::Format depthFormat)
 {
     {
         const auto vertShaderCode = Shader::CompileToSpv(
@@ -331,7 +331,7 @@ bool ImGuiRenderer::updateGeometryBuffers(FrameContext &frameCtx)
     return m_mesh->vertexCount != 0;
 }
 void ImGuiRenderer::recordCommands(FrameContext &frameCtx,
-                                   KDGpu::RenderPassCommandRecorder *recorder)
+                                   Gpu::RenderPassCommandRecorder *recorder)
 {
     ImDrawData *imDrawData = ImGui::GetDrawData();
 
@@ -363,7 +363,7 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx,
         &m_pushConstantBlock);
 
     // Set Viewport and scissor rect
-    recorder->setViewport(KDGpu::Viewport{
+    recorder->setViewport(Gpu::Viewport{
         .x = 0.0f,
         .y = 0.0f,
         .width = static_cast<float>(frameCtx.extent.x),
@@ -372,7 +372,7 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx,
         .maxDepth = 1.0f,
     });
 
-    recorder->setScissor(KDGpu::Rect2D{
+    recorder->setScissor(Gpu::Rect2D{
         .offset = {0, 0},
         .extent = {frameCtx.extent.x, frameCtx.extent.y},
     });
@@ -388,7 +388,7 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx,
             const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[j];
 
             // Set the scissor rect
-            recorder->setScissor(KDGpu::Rect2D{
+            recorder->setScissor(Gpu::Rect2D{
                 .offset =
                     {
                         .x = std::max(static_cast<int32_t>(pcmd->ClipRect.x), 0),

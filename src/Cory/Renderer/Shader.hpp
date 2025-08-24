@@ -66,7 +66,7 @@ class Shader {
     Shader(Shader &&rhs) = default;
     Shader &operator=(Shader &&rhs) = default;
 
-    KDGpu::ShaderModule &module() { return *module_; }
+    Gpu::ShaderModule &module() { return *module_; }
     ShaderType type() const { return type_; }
     bool valid() const;
 
@@ -80,7 +80,7 @@ class Shader {
     ShaderSource source_;
     ShaderType type_{};
     size_t size_{};
-    std::shared_ptr<KDGpu::ShaderModule> module_;
+    std::shared_ptr<Gpu::ShaderModule> module_;
 
     std::string preprocessShader();
 

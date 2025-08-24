@@ -4,9 +4,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
 
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/Instance.h>
-
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 #include <catch2/catch_test_macros.hpp>
 #include <range/v3/algorithm/equal.hpp>
 
@@ -31,7 +29,7 @@ struct VulkanTestContextPrivate {
 VulkanTester::VulkanTester()
     : data_{std::make_unique<VulkanTestContextPrivate>()}
 {
-    data_->ctx.onVulkanDebugMessageReceived([data = data_.get()](DebugMessageInfo info) {
+    data_->ctx.onVulkanDebugMessageReceived([data = data_.get()](const DebugMessageInfo &info) {
         if (info.severity == Cory::DebugMessageSeverity::Error) {
             std::lock_guard lck{data->debugMessagesMtx};
             data->debugMessages.push_back(info);
@@ -41,7 +39,8 @@ VulkanTester::VulkanTester()
 VulkanTester::~VulkanTester()
 {
     // ensure all commands have finished
-    data_->ctx.device()->DeviceWaitIdle(data_->ctx.device());
+    data_->ctx.device().waitUntilIdle();
+
     // clear vulkan debug callback
     data_->ctx.onVulkanDebugMessageReceived([](auto) {});
 
@@ -89,10 +88,13 @@ TEST_CASE("VulkanTester")
 
     const std::string message{"Test Error message"};
     messageCallbackData.pMessage = message.c_str();
-    t.ctx().instance()->SubmitDebugUtilsMessageEXT(t.ctx().instance(),
-                                                   VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-                                                   VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
-                                                   &messageCallbackData);
+
+    auto ih = t.ctx().instance().handle();
+    VkInstance inst = t.ctx().resources().getInstance(ih)->instance;
+    vkSubmitDebugUtilsMessageEXT(inst,
+                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+                                 VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
+                                 &messageCallbackData);
 
     REQUIRE(t.errors().size() == 1);
     CHECK(t.errors()[0].messageType == Cory::DebugMessageType::General);

@@ -62,15 +62,13 @@ set(CORY_SOURCES
         Cory.cpp
         Cory.hpp
         #        Framegraph/Builder.cpp
-        #        Framegraph/CommandList.cpp
-        #        Framegraph/CommandList.hpp
         #        Framegraph/Common.hpp
-        #        Framegraph/Framegraph.cpp
-        #        Framegraph/Framegraph.hpp
-        #        Framegraph/FramegraphVisualizer.cpp
-        #        Framegraph/FramegraphVisualizer.h
-        #        Framegraph/RenderTaskBuilder.hpp
-        #        Framegraph/RenderTaskDeclaration.hpp
+        Framegraph/Framegraph.cpp
+        Framegraph/Framegraph.hpp
+        Framegraph/FramegraphVisualizer.cpp
+        Framegraph/FramegraphVisualizer.h
+        Framegraph/RenderTaskBuilder.hpp
+        Framegraph/RenderTaskDeclaration.hpp
         #        Framegraph/TextureManager.cpp
         #        Framegraph/TextureManager.hpp
         #        Framegraph/TransientRenderPass.cpp
@@ -118,7 +116,7 @@ set(CORY_SOURCES
         Base/WorkContractGroup.hpp
         Base/ValOptional.hpp
         Base/Function.hpp
-        Renderer/KDGpuFwd.hpp
+        Renderer/Gpu.hpp
         Renderer/FrameContext.hpp
         Base/GlmUtils.hpp
         Base/Result.hpp

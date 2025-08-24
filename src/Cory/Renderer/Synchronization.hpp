@@ -526,7 +526,7 @@ barriers to be passed to vkCmdPipelineBarrier.
 
 commandBuffer is passed unmodified to vkCmdPipelineBarrier.
 */
-void CmdPipelineBarrier(KDGpu::VulkanDevice &device,
+void CmdPipelineBarrier(Gpu::VulkanDevice &device,
                         VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
                         std::span<const BufferBarrier> bufferBarriers,
@@ -539,7 +539,7 @@ void CmdPipelineBarrier(KDGpu::VulkanDevice &device,
 //
 // commandBuffer and event are passed unmodified to vkCmdSetEvent.
 // */
-// void CmdSetEvent(KDGpu::VulkanDevice &device,
+// void CmdSetEvent(Gpu::VulkanDevice &device,
 //                  VkCommandBuffer commandBuffer,
 //                  VkEvent event,
 //                  std::span<const AccessType> prevAccesses);
@@ -551,7 +551,7 @@ void CmdPipelineBarrier(KDGpu::VulkanDevice &device,
 //
 // commandBuffer and event are passed unmodified to vkCmdResetEvent.
 // */
-// void CmdResetEvent(KDGpu::VulkanDevice &device,
+// void CmdResetEvent(Gpu::VulkanDevice &device,
 //                    VkCommandBuffer commandBuffer,
 //                    VkEvent event,
 //                    std::span<const AccessType> prevAccesses);
@@ -566,7 +566,7 @@ void CmdPipelineBarrier(KDGpu::VulkanDevice &device,
 // commandBuffer, eventCount, and pEvents are passed unmodified to
 // vkCmdWaitEvents.
 // */
-// void CmdWaitEvents(KDGpu::VulkanDevice &device,
+// void CmdWaitEvents(Gpu::VulkanDevice &device,
 //                    VkCommandBuffer commandBuffer,
 //                    std::span<const VkEvent> events,
 //                    const GlobalBarrier *pGlobalBarrier,

@@ -3,11 +3,9 @@
 #include "FramegraphVisualizer.h"
 
 #include <Cory/Base/Profiling.hpp>
-#include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/Renderer/Context.hpp>
-
-#include <Magnum/Vk/CommandBuffer.h>
+#include <Cory/Renderer/FrameContext.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -15,6 +13,8 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
+
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 #include <deque>
 #include <unordered_map>
@@ -35,7 +35,7 @@ struct FramegraphPrivate {
     std::vector<TransientTextureHandle> outputs;
 
     SlotMap<RenderTaskInfo> renderTasks;
-    CommandList *commandListInProgress{};
+    CommandRecorder *commandListInProgress{};
     FrameContext *currentFrameCtx{};
 };
 
@@ -72,15 +72,14 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
     auto executionInfo = compile();
 
     const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
-    CommandList cmd{*data_->ctx, *frameCtx.commandBuffer};
 
-    data_->commandListInProgress = &cmd;
+    data_->commandListInProgress = &frameCtx.commandBuffer;
     data_->currentFrameCtx = &frameCtx;
 
     auto resetCmdList = gsl::finally([this]() { data_->commandListInProgress = nullptr; });
 
     for (const auto &handle : executionInfo.tasks) {
-        auto transitions = executePass(cmd, handle);
+        auto transitions = executePass(*data_->commandListInProgress, handle);
         executionInfo.transitions.insert(
             executionInfo.transitions.end(), transitions.begin(), transitions.end());
     }
@@ -99,7 +98,7 @@ void Framegraph::resetForNextFrame()
     data_->renderTasks.clear();
 }
 
-std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &cmd,
+std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandRecorder &cmd,
                                                                    RenderTaskHandle handle)
 {
     std::vector<ExecutionInfo::TransitionInfo> transitions;
@@ -129,7 +128,10 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
     const std::vector<Sync::ImageBarrier> imageBarriers =
         rpInfo.dependencies | ranges::views::transform(emitBarrier) | ranges::to<std::vector>;
 
-    Sync::CmdPipelineBarrier(data_->ctx->device(), cmd.handle(), nullptr, {}, imageBarriers);
+    const auto &rsrc = data_->ctx->resources();
+    auto device = rsrc.getDevice(data_->ctx->device());
+    auto commandBuffer = rsrc.getCommandRecorder(cmd);
+    Sync::CmdPipelineBarrier(*device, commandBuffer->commandBuffer, nullptr, {}, imageBarriers);
 
     CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
     const auto &coroHandle = rpInfo.coroHandle;
@@ -145,8 +147,8 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandList &
 
 TransientTextureHandle Framegraph::declareInput(TextureInfo info,
                                                 Sync::AccessType lastWriteAccess,
-                                                Vk::Image &image,
-                                                Vk::ImageView &imageView)
+                                                Gpu::Texture &image,
+                                                Gpu::TextureView &imageView)
 {
     auto handle =
         data_->resources.registerExternal(std::move(info), lastWriteAccess, image, imageView);
@@ -310,7 +312,7 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
         .ctx = data_->ctx,
         .frameCtx = data_->currentFrameCtx,
         .resources = &data_->resources,
-        .descriptors = &data_->ctx->descriptorSets(),
+        .descriptors = nullptr, // TODO???? &data_->ctx->descriptorSets(),
         .cmd = data_->commandListInProgress,
     };
 }

@@ -36,8 +36,8 @@ struct WindowPrivate {
     Context *ctx;
     std::shared_ptr<GLFWwindow> window;
     std::shared_ptr<VkSurfaceKHR_T> surfaceHandle; // The surface handle has to be stored and
-                                                   // destroyed separately from the KDGpu::Surface
-    KDGpu::Surface surface{};
+                                                   // destroyed separately from the Gpu::Surface
+    Gpu::Surface surface{};
     std::unique_ptr<Swapchain> swapchain;
 
     LapTimer fpsCounter{std::chrono::milliseconds{2000}};
@@ -55,7 +55,7 @@ Window::Window(Context &context,
     this->title = std::move(windowName);
     this->dimensions = dimensions;
 
-    samples = static_cast<KDGpu::SampleCountFlagBits>(sampleCount);
+    samples = static_cast<Gpu::SampleCountFlagBits>(sampleCount);
 
     glfwInit();
 
@@ -174,8 +174,8 @@ void Window::submitAndPresent(FrameContext &frameCtx)
 
     if (data_->fpsCounter.lap()) { updateTitle(); }
 }
-KDGpu::Format Window::colorFormat() const noexcept { return data_->swapchain->colorFormat(); }
-KDGpu::Format Window::depthFormat() const noexcept { return data_->swapchain->depthFormat(); }
+Gpu::Format Window::colorFormat() const noexcept { return data_->swapchain->colorFormat(); }
+Gpu::Format Window::depthFormat() const noexcept { return data_->swapchain->depthFormat(); }
 
 gsl::not_null<GLFWwindow *> Window::getGlfwWindow() const { return data_->window.get(); }
 

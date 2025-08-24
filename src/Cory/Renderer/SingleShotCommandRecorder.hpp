@@ -28,15 +28,15 @@ class SingleShotCommandRecorder : NoCopy {
     SingleShotCommandRecorder(SingleShotCommandRecorder &&) = default;
     SingleShotCommandRecorder &operator=(SingleShotCommandRecorder &&) = default;
 
-    operator KDGpu::CommandRecorder &() { return buffer(); }
+    operator CommandRecorder &() { return buffer(); }
 
-    KDGpu::CommandRecorder &buffer() { return commandRecorder_; }
+    CommandRecorder &buffer() { return commandRecorder_; }
 
-    KDGpu::CommandRecorder *operator->() { return &commandRecorder_; };
+    CommandRecorder *operator->() { return &commandRecorder_; };
 
   private:
     Context *ctx_;
-    KDGpu::CommandRecorder commandRecorder_;
+    CommandRecorder commandRecorder_;
 };
 static_assert(std::movable<SingleShotCommandRecorder>);
 

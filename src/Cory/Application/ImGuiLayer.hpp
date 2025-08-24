@@ -33,11 +33,7 @@ class ImGuiLayer : public ApplicationLayer {
 
     // this is mostly still public so we can use the layer in an
     // application that does not use a frame graph
-    void recordFrameCommands(KDGpu::RenderPassCommandRecorder *recorder,
-                             KDGpu::Extent2D extent,
-                             uint32_t inFlightIndex,
-                             KDGpu::RenderPass *currentRenderPass,
-                             int lastSubpassIndex);
+    void recordFrameCommands(FrameContext &frameCtx, KDGpu::RenderPassCommandRecorder *recorder);
 
   private:
     struct Private;

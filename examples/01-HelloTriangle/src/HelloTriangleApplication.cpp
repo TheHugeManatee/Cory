@@ -87,6 +87,8 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
 {
     Cory::Init();
 
+    // Cory::Log::SetCoreLevel(spdlog::level::trace);
+
     CLI::App app{"HelloTriangle"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
@@ -140,6 +142,8 @@ void HelloTriangleApplication::run()
     // wait until last frame is finished rendering
     auto final_sync = gsl::finally([this]() { ctx().device().waitUntilIdle(); });
 
+    auto time = getElapsedTimeSeconds();
+
     while (!window_->shouldClose()) {
 
         // Process KDGui events
@@ -147,9 +151,14 @@ void HelloTriangleApplication::run()
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
+        // Update time
+        auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
+        auto delta = time - previousFrameTime;
+
+        // Update layers
         layers().update(Cory::LogicUpdateContext{
-            .simulationTime = now(),
-            .deltaTime = getElapsedTimeSeconds(),
+            .simulationTime = time,
+            .deltaTime = delta,
         });
 
         ImGui::ShowDemoWindow();
@@ -214,7 +223,7 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
         opaquePass.drawIndexed(drawCmd);
     }
 
-    renderImGuiOverlay(&opaquePass);
+    renderImGuiOverlay(frameCtx, &opaquePass);
     opaquePass.end();
 }
 void HelloTriangleApplication::createFramebuffers()
@@ -294,18 +303,12 @@ void HelloTriangleApplication::createGeometry()
     index_staging_buffer.fence.wait();
 }
 
-void HelloTriangleApplication::renderImGuiOverlay(KDGpu::RenderPassCommandRecorder *recorder,
-                                                  uint32_t inFlightIndex,
-                                                  KDGpu::RenderPass *currentRenderPass,
-                                                  int lastSubpassIndex)
+void HelloTriangleApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx,
+                                                  KDGpu::RenderPassCommandRecorder *recorder)
 {
-    const auto dims = window_->dimensions();
-    KDGpu::Extent2D extent{.width = static_cast<uint32_t>(dims.x),
-                           .height = static_cast<uint32_t>(dims.y)};
     // Updates the geometry buffers used by ImGui and records the commands needed to
     // get the ui into a render target.
-    imguiLayer_->recordFrameCommands(
-        recorder, extent, inFlightIndex, currentRenderPass, lastSubpassIndex);
+    imguiLayer_->recordFrameCommands(frameCtx, recorder);
 }
 
 double HelloTriangleApplication::now() const

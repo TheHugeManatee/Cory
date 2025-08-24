@@ -78,6 +78,8 @@ set(CORY_SOURCES
         ImGui/Inputs.hpp
         ImGui/Widgets.cpp
         ImGui/Widgets.hpp
+        ImGui/ImguiRenderer.cpp
+        ImGui/ImguiRenderer.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
         Renderer/Context.cpp
@@ -171,10 +173,13 @@ target_link_libraries(${TARGET_NAME}
         KDGpu::KDGpu
         glfw
         KDGpu::KDGpuUtils
-        KDGpu::KDGpuExample
         KDUtils::KDGui
 
         PRIVATE
+
+        KDGpu::KDGpuExample
+        KDGpuExample::Resources # for the embedded roboto font
+        KDGpuExample::ShaderResources # for the embedded imgui shaders
         Cory::project_warnings
         Cory::project_options
 )

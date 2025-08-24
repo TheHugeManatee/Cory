@@ -23,10 +23,8 @@ class HelloTriangleApplication : public Cory::Application {
   private:
     // create the mesh to be rendered
     void createGeometry();
-    void renderImGuiOverlay(KDGpu::RenderPassCommandRecorder *opaque_pass,
-                            uint32_t inFlightIndex = 0,
-                            KDGpu::RenderPass *currentRenderPass = nullptr,
-                            int lastSubpassIndex = 0);
+    void renderImGuiOverlay(Cory::FrameContext &frameCtx,
+                            KDGpu::RenderPassCommandRecorder *recorder);
     // record commands for a new command buffer
     void recordCommands(Cory::FrameContext &frameCtx);
     void createFramebuffers();

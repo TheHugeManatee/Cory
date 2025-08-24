@@ -58,8 +58,7 @@ Context::Context(ContextCreationInfo creationInfo)
     : data_{std::make_unique<ContextPrivate>()}
 {
     data_->name = "CCtx";
-
-    const auto app_name{"Cory-based Vulkan Application"};
+ const auto app_name{"Cory-based Vulkan Application"};
 
     // for dynamic rendering, we need:
     //  - KHR_get_physical_device_properties2 instance extension

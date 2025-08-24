@@ -26,6 +26,7 @@
 #include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <glm/gtc/type_ptr.hpp>
 #include <optional>
 #include <thread>
 
@@ -52,6 +53,7 @@ Window::Window(Context &context,
 {
     data_->ctx = &context;
     this->title = std::move(windowName);
+    this->dimensions = dimensions;
 
     samples = static_cast<KDGpu::SampleCountFlagBits>(sampleCount);
 
@@ -79,8 +81,6 @@ Window::Window(Context &context,
             CO_CORE_TRACE("Destroying GLFW surface");
             if (surfaceHandle != nullptr) { vkDestroySurfaceKHR(instance, surfaceHandle, nullptr); }
         }};
-
-    this->dimensions = dimensions;
 
     data_->surface =
         context.graphicsApi().createSurfaceFromExistingVkSurface(instance_handle, surfaceHandle);
@@ -113,10 +113,10 @@ Swapchain &Window::swapchain() { return *data_->swapchain; }
 
 FrameContext Window::nextSwapchainImage()
 {
-    const Cory::ScopeTimer s{"Window/NextSwapchainImage"};
+    const ScopeTimer s{"Window/NextSwapchainImage"};
 
     auto nextImageResult = data_->swapchain->nextImage();
-    const auto dims = dimensions();
+    auto dims = dimensions();
     if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
         auto error = nextImageResult.error();
         if (error == SwapchainError::Unknown) {
@@ -136,30 +136,39 @@ FrameContext Window::nextSwapchainImage()
         //     std::this_thread::yield();
         // } while (dimensions().x == 0 || dimensions().y == 0);
 
+        glfwGetWindowSize(data_->window.get(), &dims.x, &dims.y);
+        dimensions = dims;
+
         // Hard sync to make sure no commands are in flight before recreating the swapchain
         data_->ctx->device().waitUntilIdle();
         // recreate the necessary resized resources and notify client code via
         // the onSwaphcainResized callback
         data_->swapchain.reset();
-        CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dimensions());
+        CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dims);
         data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
                                                        data_->surface,
                                                        SwapchainCreateInfo{
                                                            .label = title(),
-                                                           .size = dimensions(),
+                                                           .size = dims,
                                                            .samples = samples(),
                                                        });
-        onSwapchainResized.emit(SwapchainResizedEvent{.size{dimensions()}});
+        onSwapchainResized.emit(SwapchainResizedEvent{.size{dims}});
 
         // retry the whole thing
         return nextSwapchainImage();
     }
 
-    return std::move(nextImageResult).value();
+    FrameContext frameCtx = std::move(nextImageResult).value();
+    CO_CORE_TRACE("Acquired swapchain image {} for frame {}",
+                  frameCtx.swapchainImageIndex,
+                  frameCtx.frameNumber);
+
+    return frameCtx;
 }
 
 void Window::submitAndPresent(FrameContext &frameCtx)
 {
+    CO_CORE_TRACE("Submitting frame {}", frameCtx.frameNumber);
 
     data_->swapchain->present(frameCtx);
 

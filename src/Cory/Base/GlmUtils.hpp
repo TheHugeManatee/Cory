@@ -4,6 +4,8 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <KDGpu/gpu_core.h>
+
 namespace Cory::glmu {
 
 // ~~~~~~~~~~~~~~~~~~ VEC2 ~~~~~~~~~~~~~~~~~~

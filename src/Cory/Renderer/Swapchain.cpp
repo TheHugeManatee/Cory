@@ -315,6 +315,7 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
     auto nextFrameIndex = static_cast<uint32_t>(frameNumber % MAX_FRAMES_IN_FLIGHT);
 
     auto recorder = ctx->device().createCommandRecorder(KDGpu::CommandRecorderOptions{
+        .label = fmt::format("CMD-{}-[{}]", frameNumber, nextFrameIndex),
         .queue = ctx->graphicsQueue().handle(),
         .level = KDGpu::CommandBufferLevel::Primary,
     });

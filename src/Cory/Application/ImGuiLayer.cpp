@@ -8,14 +8,14 @@
 // #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Primitives.hpp>
+#include <Cory/ImGui/ImguiRenderer.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
+
+#include <KDGpuExample/imgui_renderer.h>
 
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
-
-#include <KDGpuExample/imgui_renderer.h>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -35,7 +35,6 @@ ImGuiLayer::ImGuiLayer(Window &window)
     , data_{std::make_unique<Private>()}
 {
     data_->window = &window;
-    data_->windowSize = window.dimensions();
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
@@ -58,6 +57,7 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
         &ctx.device(), &ctx.graphicsQueue(), data_->context);
     data_->imguiRenderer->initialize(
         1.0f, window.samples(), window.colorFormat(), window.depthFormat());
+    data_->windowSize = attachInfo.viewportDimensions;
 
     ImGui_ImplGlfw_InitForVulkan(window.getGlfwWindow(), true);
 
@@ -90,9 +90,8 @@ bool ImGuiLayer::onEvent(Event event)
             [](auto event) { return false; },
             [this](const SwapchainResizedEvent &event) {
                 data_->windowSize = event.size;
-                // data_->framebuffers =
-                //     createFramebuffers(*data_->ctx, *data_->window, data_->renderPass);
-                data_->imguiRenderer->updateScale(1.0f);
+
+                // data_->imguiRenderer->updateScale(1.0f);
                 return false;
             },
             // we just need to prevent lower layers from using the events, actual processing
@@ -106,15 +105,13 @@ bool ImGuiLayer::onEvent(Event event)
 
 void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
 {
-    // Nothing more to do here
-
+    ImGui::SetCurrentContext(data_->context);
     // Set frame time and display size.
     ImGuiIO &io = ImGui::GetIO();
-    // io.DeltaTime = engine()->deltaTimeSeconds();
-    io.DeltaTime = updateCtx.deltaTime;
-    io.DisplaySize = glmu::to<ImVec2>(glm::vec2{data_->windowSize});
+    io.DeltaTime = gsl::narrow_cast<float>(updateCtx.deltaTime);
+    io.DisplaySize =
+        ImVec2{static_cast<float>(data_->windowSize.x), static_cast<float>(data_->windowSize.y)};
 
-    ImGui::SetCurrentContext(data_->context);
     ImGui::NewFrame();
 }
 //
@@ -135,16 +132,13 @@ void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
 //     // recordFrameCommands(ctx, frameCtx.index, renderApi.cmd->handle());
 // }
 
-void ImGuiLayer::recordFrameCommands(KDGpu::RenderPassCommandRecorder *recorder,
-                                     KDGpu::Extent2D extent,
-                                     uint32_t inFlightIndex,
-                                     KDGpu::RenderPass *currentRenderPass,
-                                     int lastSubpassIndex)
+void ImGuiLayer::recordFrameCommands(FrameContext &frameCtx,
+                                     KDGpu::RenderPassCommandRecorder *recorder)
 {
     ImGui::Render();
-    if (data_->imguiRenderer->updateGeometryBuffers(inFlightIndex)) {
-        data_->imguiRenderer->recordCommands(
-            recorder, extent, inFlightIndex, currentRenderPass, lastSubpassIndex);
+    if (data_->imguiRenderer->updateGeometryBuffers(frameCtx.inFlightIndex)) {
+        auto extent = glmu::to<KDGpu::Extent2D>(frameCtx.extent);
+        data_->imguiRenderer->recordCommands(recorder, extent, frameCtx.inFlightIndex);
     }
 }
 

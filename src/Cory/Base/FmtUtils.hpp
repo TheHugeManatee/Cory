@@ -61,7 +61,7 @@ struct fmt::formatter<
 // formatters for glm vector types
 template <typename glm::length_t L, typename ElementType>
 struct fmt::formatter<glm::vec<L, ElementType>> : public fmt::formatter<ElementType> {
-    auto format(glm::vec<L, ElementType> c, format_context &ctx)
+    auto format(glm::vec<L, ElementType> c, format_context &ctx) const
     {
         auto out = ctx.out();
         *out = '(';

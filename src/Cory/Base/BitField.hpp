@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <magic_enum.hpp>
 
 #include <vector>

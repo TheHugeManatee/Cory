@@ -14,6 +14,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(KDGpu)
 
+#include(${KDGpu_SOURCE_DIR}/cmake/CMakeRC.cmake)
 
 ## This is where you put and configure external dependencies
 ## A couple of options are:

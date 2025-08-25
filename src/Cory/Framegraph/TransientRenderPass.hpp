@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <string_view>
 #include <vector>
@@ -9,9 +10,9 @@ namespace Cory {
 
 struct TransientRenderPassInfo {
     int32_t sampleCount;
-    std::vector<TextureHandle> colorAttachments;
-    TextureHandle depthAttachment;
-    TextureHandle stencilAttachment;
+    std::vector<Gpu::TextureHandle> colorAttachments;
+    Gpu::TextureHandle depthAttachment;
+    Gpu::TextureHandle stencilAttachment;
 };
 
 struct AttachmentKind {
@@ -44,7 +45,7 @@ class TransientRenderPass : NoCopy {
     TransientRenderPass(Context &ctx, std::string_view name, TextureManager &textures);
 
     int32_t determineSampleCount() const;
-    VkRenderingAttachmentInfo makeAttachmentInfo(TextureHandle handle,
+    VkRenderingAttachmentInfo makeAttachmentInfo(Gpu::TextureHandle handle,
                                                  AttachmentKind attachmentKind);
 
     Context *ctx_;
@@ -52,14 +53,14 @@ class TransientRenderPass : NoCopy {
     TextureManager *textures_;
 
     std::vector<ShaderHandle> shaders_;
-    std::vector<std::pair<TextureHandle, AttachmentKind>> colorAttachments_;
-    std::optional<std::pair<TextureHandle, AttachmentKind>> depthAttachment_;
-    std::optional<std::pair<TextureHandle, AttachmentKind>> stencilAttachment_;
+    std::vector<std::pair<Gpu::TextureHandle, AttachmentKind>> colorAttachments_;
+    std::optional<std::pair<Gpu::TextureHandle, AttachmentKind>> depthAttachment_;
+    std::optional<std::pair<Gpu::TextureHandle, AttachmentKind>> stencilAttachment_;
 
     DynamicStates dynamicStates_;
     bool hasMeshInput_{true}; // by default, uses the default mesh layout
 
-    PipelineHandle handle_;
+    Gpu::GraphicsPipelineHandle handle_;
     bool hasBegun_{false}; ///< only needed for diagnostics
     VkRect2D determineRenderArea();
 };

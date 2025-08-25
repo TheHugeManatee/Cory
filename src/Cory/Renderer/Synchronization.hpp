@@ -198,7 +198,9 @@ ISSUES
     via a pull request yourself if you're so inclined.
 */
 
+#include <Cory/Renderer/Gpu.hpp>
 #include <KDGpu/vulkan/vulkan_device.h>
+
 #include <vulkan/vulkan.h>
 
 #include <cstdint>

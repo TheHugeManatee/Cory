@@ -9,21 +9,11 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 
-#include <Corrade/Containers/ArrayView.h>
-#include <Magnum/Vk/ImageView.h>
-#include <Magnum/Vk/PipelineLayout.h>
-#include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
-#include <Magnum/Vk/Shader.h>
-#include <Magnum/Vk/ShaderCreateInfo.h>
-#include <Magnum/Vk/ShaderSet.h>
-
 #include <gsl/narrow>
 
 #include <unordered_map>
 
 #include <Cory/Base/Math.hpp>
-
-namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
@@ -43,7 +33,7 @@ struct PipelineDescriptor {
 
 class PipelineCache {
   public:
-    PipelineHandle query(Context &ctx, std::string_view name, PipelineDescriptor &info)
+    Gpu::GraphicsPipelineHandle query(Context &ctx, std::string_view name, PipelineDescriptor &info)
     {
         if (auto it = cache_.find(info); it != cache_.end()) { return it->second; }
         auto handle = create(ctx, name, info);
@@ -52,7 +42,8 @@ class PipelineCache {
     }
 
   private:
-    PipelineHandle create(Context &ctx, std::string_view name, PipelineDescriptor &info)
+    Gpu::GraphicsPipelineHandle
+    create(Context &ctx, std::string_view name, PipelineDescriptor &info)
     {
         CO_CORE_INFO("Creating new pipeline for '{}' ({:X})", name, info.hash());
         // set up shaders
@@ -121,7 +112,7 @@ class PipelineCache {
         return ctx.resources().createPipeline(name, pipelineCreateInfo);
     }
     using DescriptorHasher = decltype([](const PipelineDescriptor &d) { return d.hash(); });
-    std::unordered_map<PipelineDescriptor, PipelineHandle, DescriptorHasher> cache_;
+    std::unordered_map<PipelineDescriptor, Gpu::GraphicsPipelineHandle, DescriptorHasher> cache_;
 };
 
 TransientRenderPass::TransientRenderPass(Context &ctx,
@@ -143,7 +134,7 @@ TransientRenderPass::~TransientRenderPass()
 void TransientRenderPass::begin(CommandRecorder &cmd)
 {
     hasBegun_ = true;
-    auto getColorFormat = [&](const std::pair<TextureHandle, AttachmentKind> &h) {
+    auto getColorFormat = [&](const std::pair<FramegraphTextureHandle, AttachmentKind> &h) {
         return toVk(textures_->info(h.first).format);
     };
 
@@ -170,7 +161,7 @@ void TransientRenderPass::begin(CommandRecorder &cmd)
 
     auto pipelineHandle = cache.query(*ctx_, name_, descriptor);
 
-    auto toAttachment = [&](const std::pair<TextureHandle, AttachmentKind> &p) {
+    auto toAttachment = [&](const std::pair<FramegraphTextureHandle, AttachmentKind> &p) {
         return makeAttachmentInfo(p.first, p.second);
     };
 

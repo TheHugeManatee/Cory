@@ -61,18 +61,18 @@ set(CORY_SOURCES
         Base/Utils.hpp
         Cory.cpp
         Cory.hpp
-        #        Framegraph/Builder.cpp
-        #        Framegraph/Common.hpp
+        Framegraph/Builder.cpp
+        Framegraph/Common.hpp
         Framegraph/Framegraph.cpp
         Framegraph/Framegraph.hpp
         Framegraph/FramegraphVisualizer.cpp
         Framegraph/FramegraphVisualizer.h
         Framegraph/RenderTaskBuilder.hpp
         Framegraph/RenderTaskDeclaration.hpp
-        #        Framegraph/TextureManager.cpp
-        #        Framegraph/TextureManager.hpp
-        #        Framegraph/TransientRenderPass.cpp
-        #        Framegraph/TransientRenderPass.hpp
+        Framegraph/TextureManager.cpp
+        Framegraph/TextureManager.hpp
+        Framegraph/TransientRenderPass.cpp
+        Framegraph/TransientRenderPass.hpp
         ImGui/Inputs.hpp
         ImGui/Widgets.cpp
         ImGui/Widgets.hpp
@@ -84,8 +84,8 @@ set(CORY_SOURCES
         Renderer/Context.hpp
         #Renderer/DescriptorSets.cpp
         #Renderer/DescriptorSets.hpp
-        #Renderer/ResourceManager.cpp
-        #Renderer/ResourceManager.hpp
+        Renderer/ShaderManager.cpp
+        Renderer/ShaderManager.hpp
         #Renderer/Semaphore.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
@@ -93,12 +93,10 @@ set(CORY_SOURCES
         Renderer/SingleShotCommandRecorder.hpp
         Renderer/Swapchain.cpp
         Renderer/Swapchain.hpp
-        #Renderer/Synchronization.cpp
-        #Renderer/Synchronization.hpp
+        Renderer/Synchronization.cpp
+        Renderer/Synchronization.hpp
         #Renderer/UniformBufferObject.cpp
         #Renderer/UniformBufferObject.hpp
-        #Renderer/VulkanUtils.cpp
-        #Renderer/VulkanUtils.hpp
 
         SceneGraph/Common.hpp
         SceneGraph/SceneGraph.cpp
@@ -121,6 +119,7 @@ set(CORY_SOURCES
         Base/GlmUtils.hpp
         Base/Result.hpp
         Base/Primitives.hpp
+        Renderer/Gpu.cpp
 )
 
 

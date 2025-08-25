@@ -3,19 +3,20 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
+#include <KDGpu/texture_options.h>
+
+#include <KDGpu/utils/formatters.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 #include <gsl/narrow>
-
-namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
 struct TextureResource {
     TextureInfo info;
     TextureState state;
-    ImageHandle image;
-    ImageViewHandle view;
+    Gpu::TextureHandle image;
+    Gpu::TextureViewHandle view;
 };
 
 struct TextureManagerPrivate {
@@ -30,10 +31,10 @@ TextureManager::TextureManager(Context &ctx)
 }
 
 TextureManager::~TextureManager() = default;
-TextureManager::TextureManager(TextureManager &&) = default;
-TextureManager &TextureManager::operator=(TextureManager &&) = default;
+TextureManager::TextureManager(TextureManager &&) noexcept = default;
+TextureManager &TextureManager::operator=(TextureManager &&) noexcept = default;
 
-TextureHandle TextureManager::declareTexture(TextureInfo info)
+FramegraphTextureHandle TextureManager::declareTexture(TextureInfo info)
 {
     CO_CORE_DEBUG("Declaring '{}' of {} ({}, {} samples)",
                   info.name,
@@ -44,62 +45,98 @@ TextureHandle TextureManager::declareTexture(TextureInfo info)
     auto handle = data_->textureResources_.emplace(TextureResource{
         info,
         TextureState{.lastAccess = Sync::AccessType::None, .status = TextureMemoryStatus::Virtual},
-        NullHandle,
-        NullHandle});
+        Gpu::Texture{},
+        Gpu::TextureView{}});
     return handle;
 }
 
-TextureHandle TextureManager::registerExternal(TextureInfo info,
-                                               Sync::AccessType lastWriteAccess,
-                                               Magnum::Vk::Image &resource,
-                                               Magnum::Vk::ImageView &resourceView)
+FramegraphTextureHandle TextureManager::registerExternal(TextureInfo info,
+                                                         Sync::AccessType lastWriteAccess,
+                                                         Gpu::TextureHandle &resource,
+                                                         Gpu::TextureViewHandle &resourceView)
 {
-    auto &resources = data_->ctx_->resources();
     auto handle = data_->textureResources_.emplace(
         TextureResource{.info = info,
                         .state = TextureState{.lastAccess = lastWriteAccess,
                                               .status = TextureMemoryStatus::External},
-                        .image = resources.wrapImage(info.name, resource),
-                        .view = resources.wrapImageView(info.name, resourceView)});
+                        .image = resource,
+                        .view = resourceView});
 
     return handle;
 }
 
-void TextureManager::allocate(TextureHandle handle)
+void TextureManager::allocate(FramegraphTextureHandle handle)
 {
     TextureResource &res = data_->textureResources_[handle];
+    Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
     auto &resources = data_->ctx_->resources();
     CO_CORE_DEBUG("Allocating '{}' of {} ({})", res.info.name, res.info.size, res.info.format);
 
-    // TODO allocate from a big buffer instead of individual allocations
-    {
-        const auto size = Magnum::Vector2i{gsl::narrow<int32_t>(res.info.size.x),
-                                           gsl::narrow<int32_t>(res.info.size.y)};
-        static const int32_t levels = 1;
-        static const Magnum::Vk::ImageLayout initialLayout{Magnum::Vk::ImageLayout::Undefined};
+    // {
+    //     const auto size = Magnum::Vector2i{gsl::narrow<int32_t>(res.info.size.x),
+    //                                        gsl::narrow<int32_t>(res.info.size.y)};
+    //     static const int32_t levels = 1;
+    //     static const Magnum::Vk::ImageLayout initialLayout{Magnum::Vk::ImageLayout::Undefined};
+    //
+    //     Vk::ImageUsages usage{};
+    //     usage |= isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
+    //                                             : Vk::ImageUsage::ColorAttachment;
+    //     usage |= Vk::ImageUsage::Sampled;
+    //     usage |= Vk::ImageUsage::InputAttachment;
+    //
+    //     const Vk::ImageCreateInfo2D createInfo{
+    //         usage, res.info.format, size, levels, res.info.sampleCount, initialLayout};
+    //
+    //     // todo eventually want to externalize these memory flags
+    //     res.image = resources.createImage(
+    //         fmt::format("{} (IMG)", res.info.name), createInfo, Vk::MemoryFlag::DeviceLocal);
+    // }
+    //
+    // {
+    //     const Vk::ImageViewCreateInfo2D createInfo{resources[res.image]};
+    //     res.view = resources.createImageView(fmt::format("{} (VIEW)", res.info.name),
+    //     createInfo);
+    // }
 
-        Vk::ImageUsages usage{};
-        usage |= isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
-                                                : Vk::ImageUsage::ColorAttachment;
-        usage |= Vk::ImageUsage::Sampled;
-        usage |= Vk::ImageUsage::InputAttachment;
+    auto extent = Gpu::Extent3D{
+        .width = gsl::narrow<uint32_t>(res.info.size.x),
+        .height = gsl::narrow<uint32_t>(res.info.size.y),
+        .depth = gsl::narrow<uint32_t>(res.info.size.z),
+    };
 
-        const Vk::ImageCreateInfo2D createInfo{
-            usage, res.info.format, size, levels, res.info.sampleCount, initialLayout};
+    // Create the texture (image)
+    res.image = resources.createTexture(
+        deviceHandle,
+        Gpu::TextureOptions{.label = fmt::format("{} (IMG)", res.info.name),
+                            .type = Gpu::TextureType::TextureType2D,
+                            .format = res.info.format,
+                            .extent = extent,
+                            .mipLevels = 1,
+                            .samples = res.info.sampleCount,
+                            .usage = res.info.usage,
+                            .memoryUsage = Gpu::MemoryUsage::GpuOnly,
+                            .sharingMode = Gpu::SharingMode::Exclusive,
+                            .queueTypeIndices = {},
+                            .initialLayout = Gpu::TextureLayout::Undefined,
+                            .externalMemoryHandleType =
+                                KDGpu::ExternalMemoryHandleTypeFlagBits::None,
+                            .drmFormatModifiers = {},
+                            .createFlags = {}});
 
-        // todo eventually want to externalize these memory flags
-        res.image = resources.createImage(
-            fmt::format("{} (IMG)", res.info.name), createInfo, Vk::MemoryFlag::DeviceLocal);
-    }
+    // Create the view
+    res.view = resources.createTextureView(
+        deviceHandle,
+        res.image,
+        Gpu::TextureViewOptions{.label = fmt::format("{} (VIEW)", res.info.name),
+                                .viewType = Gpu::ViewType::ViewType2D,
+                                .format = res.info.format,
+                                .range = {},
+                                .yCbCrConversion = {}});
 
-    {
-        const Vk::ImageViewCreateInfo2D createInfo{resources[res.image]};
-        res.view = resources.createImageView(fmt::format("{} (VIEW)", res.info.name), createInfo);
-    }
     res.state.status = TextureMemoryStatus::Allocated;
 }
 
-void TextureManager::allocate(const std::vector<TextureHandle> &handles)
+void TextureManager::allocate(const std::vector<FramegraphTextureHandle> &handles)
 {
     for (const auto &handle : handles) {
         auto &res = data_->textureResources_[handle];
@@ -110,14 +147,15 @@ void TextureManager::allocate(const std::vector<TextureHandle> &handles)
     }
 }
 
-Sync::ImageBarrier TextureManager::synchronizeTexture(TextureHandle handle,
+Sync::ImageBarrier TextureManager::synchronizeTexture(FramegraphTextureHandle handle,
                                                       Sync::AccessType access,
                                                       ImageContents contentsMode)
 {
     const auto &info = data_->textureResources_[handle].info;
-    auto aspectMask = VkImageAspectFlags(imageAspectsFor(info.format));
+    auto aspectMask = flagsForFormat(info.format);
     auto &state = data_->textureResources_[handle].state;
 
+    VkImage vkImageHandle = data_->ctx_->resources().getTexture(image(handle))->image;
     const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
     Sync::ImageBarrier barrier{.prevAccesses{state.lastAccess},
                                .nextAccesses{access},
@@ -127,9 +165,9 @@ Sync::ImageBarrier TextureManager::synchronizeTexture(TextureHandle handle,
                                // todo: probably problematic once we actually use more queues
                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                               .image = data_->ctx_->resources()[image(handle)],
+                               .image = vkImageHandle,
                                .subresourceRange = {
-                                   .aspectMask = aspectMask,
+                                   .aspectMask = aspectMask.toInt(),
                                    .baseMipLevel = 0,
                                    .levelCount = 1,
                                    .baseArrayLayer = 0,
@@ -146,22 +184,22 @@ Sync::ImageBarrier TextureManager::synchronizeTexture(TextureHandle handle,
     return barrier;
 }
 
-const TextureInfo &TextureManager::info(TextureHandle handle) const
+const TextureInfo &TextureManager::info(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].info;
 }
 
-ImageHandle TextureManager::image(TextureHandle handle) const
+Gpu::TextureHandle TextureManager::image(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].image;
 }
 
-ImageViewHandle TextureManager::imageView(TextureHandle handle) const
+Gpu::TextureViewHandle TextureManager::imageView(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].view;
 }
 
-TextureState TextureManager::state(TextureHandle handle) const
+TextureState TextureManager::state(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].state;
 }
@@ -170,8 +208,8 @@ void TextureManager::clear()
 {
     for (auto &res : data_->textureResources_) {
         if (res.state.status != TextureMemoryStatus::Virtual) {
-            data_->ctx_->resources().release(res.image);
-            data_->ctx_->resources().release(res.view);
+            data_->ctx_->resources().deleteTexture(res.image);
+            data_->ctx_->resources().deleteTextureView(res.view);
         }
     }
     data_->textureResources_.clear();

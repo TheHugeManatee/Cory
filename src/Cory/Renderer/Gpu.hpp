@@ -43,6 +43,16 @@ struct VertexOptions;
 using GraphicsApi = VulkanGraphicsApi;
 using ResourceManager = VulkanResourceManager;
 
+template <typename T> class Handle;
+// typedefs for the various handle types used by the VulkanResourceManager
+using DeviceHandle = Handle<struct Device_t>;
+using TextureHandle = Handle<struct Texture_t>;
+using TextureViewHandle = Handle<struct TextureView_t>;
+using BufferHandle = Handle<struct Buffer_t>;
+using CommandBufferHandle = Handle<struct CommandBuffer_t>;
+using CommandRecorderHandle = Handle<struct CommandRecorder_t>;
+using GraphicsPipelineHandle = Handle<struct Pipeline_t>;
+
 } // namespace KDGpu
 
 namespace KDGpuUtils {
@@ -62,4 +72,7 @@ using TextureView = Gpu::TextureView;
 using ResourceDeleter = KDGpuUtils::ResourceDeleter;
 
 using TextureFormat = Gpu::Format;
+
+[[nodiscard]] Gpu::TextureAspectFlags flagsForFormat(TextureFormat format);
+
 } // namespace Cory

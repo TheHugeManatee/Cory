@@ -9,8 +9,6 @@
 
 namespace Cory {
 
-namespace Vk = Magnum::Vk;
-
 template <typename T> struct ResourceStorage {
     const std::string name;
     const std::source_location loc;

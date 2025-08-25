@@ -4,8 +4,6 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
 
-#include <Magnum/Vk/Image.h>
-
 namespace Cory {
 
 // <editor-fold desc="RenderTaskExecutionAwaiter">
@@ -22,7 +20,9 @@ void RenderTaskExecutionAwaiter::await_suspend(
 // </editor-fold>
 
 // <editor-fold desc="RenderTaskBuilder">
-RenderTaskBuilder::RenderTaskBuilder(Context &ctx, Framegraph &framegraph, std::string_view taskName)
+RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
+                                     Framegraph &framegraph,
+                                     std::string_view taskName)
     : ctx_{ctx}
     , info_{}
     , framegraph_{framegraph}
@@ -39,9 +39,9 @@ RenderTaskExecutionAwaiter RenderTaskBuilder::finishDeclaration()
 }
 
 TransientTextureHandle RenderTaskBuilder::create(std::string name,
-                                       glm::u32vec3 size,
-                                       PixelFormat format,
-                                       Sync::AccessType writeAccess)
+                                                 glm::u32vec3 size,
+                                                 TextureFormat format,
+                                                 Sync::AccessType writeAccess)
 {
     const TextureInfo info{.name = std::move(name), .size = size, .format = format};
 
@@ -63,8 +63,7 @@ TextureInfo RenderTaskBuilder::read(TransientTextureHandle &handle, Sync::Access
 }
 
 std::pair<TransientTextureHandle, TextureInfo>
-RenderTaskBuilder::write(TransientTextureHandle handle,
-                                                              Sync::AccessType writeAccess)
+RenderTaskBuilder::write(TransientTextureHandle handle, Sync::AccessType writeAccess)
 {
     // increase the version of the texture handle to record the modification
     auto outputHandle = handle + 1;
@@ -78,8 +77,7 @@ RenderTaskBuilder::write(TransientTextureHandle handle,
 }
 
 std::pair<TransientTextureHandle, TextureInfo>
-RenderTaskBuilder::readWrite(TransientTextureHandle handle,
-                                                                  Sync::AccessType readWriteAccess)
+RenderTaskBuilder::readWrite(TransientTextureHandle handle, Sync::AccessType readWriteAccess)
 {
     info_.dependencies.push_back({
         .kind = TaskDependencyKindBits::Read,

@@ -82,12 +82,6 @@ using MemoryFlags = BitField<MemoryFlagBits>;
 
 using ShaderHandle = PrivateTypedHandle<Shader, ShaderManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
-using BufferHandle = PrivateTypedHandle<Gpu::VulkanBuffer, ShaderManager>;
-using PipelineHandle = PrivateTypedHandle<Gpu::VulkanPipeline, ShaderManager>;
-using ImageHandle = PrivateTypedHandle<Gpu::VulkanTexture, ShaderManager>;
-using ImageViewHandle = PrivateTypedHandle<Gpu::VulkanTextureView, ShaderManager>;
-using SamplerHandle = PrivateTypedHandle<Gpu::VulkanSampler, ShaderManager>;
-using DescriptorSetLayoutHandle = PrivateTypedHandle<Gpu::VulkanBindGroup, ShaderManager>;
 
 } // namespace Cory
 

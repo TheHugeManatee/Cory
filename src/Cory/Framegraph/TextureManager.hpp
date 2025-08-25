@@ -3,11 +3,6 @@
 #include <Cory/Base/SlotMap.hpp>
 #include <Cory/Framegraph/Common.hpp>
 
-#include <glm/vec3.hpp>
-
-#include <cstdint>
-#include <string>
-
 namespace Cory {
 
 /**
@@ -34,14 +29,17 @@ class TextureManager : NoCopy {
     explicit TextureManager(TextureManager &&) noexcept;
     TextureManager &operator=(TextureManager &&) noexcept;
 
-    TextureHandle declareTexture(TextureInfo info);
+    // Declare a new texture - will only create the metadata, not allocate the actual resource
+    FramegraphTextureHandle declareTexture(TextureInfo info);
 
-    TextureHandle registerExternal(TextureInfo info,
-                                   Sync::AccessType lastWriteAccess,
-                                   Texture &resource,
-                                   TextureView &resourceView);
+    // Adopt an external texture (e.g. a swapchain image) into the framegraph - will participate
+    // in synchronization, but will not be destroyed by the framegraph
+    FramegraphTextureHandle registerExternal(TextureInfo info,
+                                             Sync::AccessType lastWriteAccess,
+                                             Gpu::TextureHandle &resource,
+                                             Gpu::TextureViewHandle &resourceView);
 
-    void allocate(const std::vector<TextureHandle> &handles);
+    void allocate(const std::vector<FramegraphTextureHandle> &handles);
 
     /**
      * @brief create a synchronization barrier object to sync subsequent reads
@@ -52,18 +50,19 @@ class TextureManager : NoCopy {
      *
      * Will store the given @a access to sync subsequent accesses to the texture
      */
-    Sync::ImageBarrier
-    synchronizeTexture(TextureHandle handle, Sync::AccessType access, ImageContents contentsMode);
+    Sync::ImageBarrier synchronizeTexture(FramegraphTextureHandle handle,
+                                          Sync::AccessType access,
+                                          ImageContents contentsMode);
 
-    [[nodiscard]] const TextureInfo &info(TextureHandle handle) const;
-    [[nodiscard]] ImageHandle image(TextureHandle handle) const;
-    [[nodiscard]] ImageViewHandle imageView(TextureHandle handle) const;
-    [[nodiscard]] TextureState state(TextureHandle handle) const;
+    [[nodiscard]] const TextureInfo &info(FramegraphTextureHandle handle) const;
+    [[nodiscard]] Gpu::TextureHandle image(FramegraphTextureHandle handle) const;
+    [[nodiscard]] Gpu::TextureViewHandle imageView(FramegraphTextureHandle handle) const;
+    [[nodiscard]] TextureState state(FramegraphTextureHandle handle) const;
 
     void clear();
 
   private:
-    void allocate(TextureHandle handle);
+    void allocate(FramegraphTextureHandle handle);
     std::unique_ptr<struct TextureManagerPrivate> data_;
 };
 

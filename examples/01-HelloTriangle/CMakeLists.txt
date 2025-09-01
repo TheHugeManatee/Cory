@@ -1,7 +1,6 @@
 set(TARGET_NAME "HelloTriangle")
 
 find_package(Vulkan REQUIRED)
-find_package(GLEW REQUIRED)
 find_package(range-v3 REQUIRED)
 find_package(CLI11 REQUIRED)
 
@@ -29,7 +28,6 @@ target_link_libraries(${TARGET_NAME}
         Cory::Cory
         Cory::ThirdParty
         Vulkan::Vulkan
-        GLEW::GLEW
         range-v3::range-v3
         CLI11::CLI11
 )

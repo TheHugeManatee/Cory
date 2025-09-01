@@ -55,13 +55,6 @@ void ShaderManager::setContext(Context &ctx)
     data_->ctx = &ctx;
 }
 
-std::unordered_map<ResourceType, size_t> ShaderManager::resourcesInUse() const
-{
-    return {
-        {ResourceType::Shader, data_->shaders.size()},
-    };
-}
-
 // SHADERS
 ShaderHandle ShaderManager::createShader(std::filesystem::path filePath,
                                          ShaderType type,

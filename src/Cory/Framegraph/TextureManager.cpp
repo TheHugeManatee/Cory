@@ -52,8 +52,8 @@ FramegraphTextureHandle TextureManager::declareTexture(TextureInfo info)
 
 FramegraphTextureHandle TextureManager::registerExternal(TextureInfo info,
                                                          Sync::AccessType lastWriteAccess,
-                                                         Gpu::TextureHandle &resource,
-                                                         Gpu::TextureViewHandle &resourceView)
+                                                         Gpu::TextureHandle resource,
+                                                         Gpu::TextureViewHandle resourceView)
 {
     auto handle = data_->textureResources_.emplace(
         TextureResource{.info = info,

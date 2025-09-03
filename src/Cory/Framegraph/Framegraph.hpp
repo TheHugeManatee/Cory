@@ -20,7 +20,7 @@ struct ExecutionInfo {
         Sync::AccessType stateAfter;
     };
     std::vector<RenderTaskHandle> tasks;
-    std::vector<Gpu::TextureHandle> resources;
+    std::vector<FramegraphTextureHandle> resources;
     std::vector<TransitionInfo> transitions;
 };
 

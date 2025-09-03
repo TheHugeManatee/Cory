@@ -15,6 +15,8 @@
 #include <range/v3/view/transform.hpp>
 
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
+#include <KDGpu/texture.h>
+#include <KDGpu/texture_view.h>
 
 #include <deque>
 #include <unordered_map>
@@ -228,7 +230,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         }
     }
 
-    std::vector<TextureHandle> requiredResources; // collects all actually required resources
+    std::vector<FramegraphTextureHandle> requiredResources; // collects all actually required resources
 
     // flood-fill the graph starting at the resources requested from the outside
     std::deque<TransientTextureHandle> nextResourcesToResolve{requestedResources.cbegin(),

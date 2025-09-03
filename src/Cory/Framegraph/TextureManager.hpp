@@ -36,8 +36,8 @@ class TextureManager : NoCopy {
     // in synchronization, but will not be destroyed by the framegraph
     FramegraphTextureHandle registerExternal(TextureInfo info,
                                              Sync::AccessType lastWriteAccess,
-                                             Gpu::TextureHandle &resource,
-                                             Gpu::TextureViewHandle &resourceView);
+                                             Gpu::TextureHandle resource,
+                                             Gpu::TextureViewHandle resourceView);
 
     void allocate(const std::vector<FramegraphTextureHandle> &handles);
 

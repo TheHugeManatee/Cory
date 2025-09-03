@@ -54,6 +54,10 @@ void ShaderManager::setContext(Context &ctx)
     CO_CORE_ASSERT(data_->ctx == nullptr, "Context already initialized!");
     data_->ctx = &ctx;
 }
+size_t ShaderManager::shadersInUse() const
+{
+    return data_->shaders.size();
+}
 
 // SHADERS
 ShaderHandle ShaderManager::createShader(std::filesystem::path filePath,

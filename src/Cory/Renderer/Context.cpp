@@ -52,7 +52,7 @@ struct ContextPrivate {
 
     ShaderManager shaders;
 
-    static Function<void(const DebugMessageInfo &)> validationMessageCallback;
+    inline static Function<void(const DebugMessageInfo &)> validationMessageCallback;
 
     static void receiveDebugUtilsMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                          VkDebugUtilsMessageTypeFlagsEXT messageTypes,

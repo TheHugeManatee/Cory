@@ -1,0 +1,101 @@
+#include "PipelineCache.hpp"
+
+#include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/Gpu.hpp>
+#include <Cory/Renderer/Shader.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
+#include <KDGpu/graphics_pipeline_options.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
+
+namespace Cory {
+
+namespace {
+Gpu::GraphicsPipelineHandle
+createPipeline(Context &ctx, std::string_view name, const PipelineDescriptor &info)
+{
+    CO_CORE_INFO("Creating new pipeline for '{}' ({:X})", name, info.hash());
+
+    // 1) Shaders -> KDGpu::ShaderStage list
+    std::vector<Gpu::ShaderStage> shaderStages;
+    shaderStages.reserve(info.shaders.size());
+    for (auto shaderHandle : info.shaders) {
+        const auto &s = ctx.shaders()[shaderHandle];
+        shaderStages.push_back(Gpu::ShaderStage{
+            .shaderModule = s.module(),
+            .stage = s.type(),
+            .entryPoint = "main",
+        });
+    }
+
+    std::vector<Gpu::RenderTargetOptions> rtos;
+    rtos.reserve(info.colorFormats.size());
+    for (auto fmt : info.colorFormats) {
+        rtos.push_back(Gpu::RenderTargetOptions{.format = fmt});
+    }
+
+    // 8) Build pipeline options
+    const Gpu::GraphicsPipelineOptions gpOpts = {
+        .label = name,
+        .shaderStages = std::move(shaderStages),
+        .layout = info.pipelineLayout,
+        .vertex = info.vertexOptions,
+        .renderTargets = std::move(rtos),
+        .depthStencil =
+            Gpu::DepthStencilOptions{
+                // VK_PIPELINE_RENDERING_CREATE_INFO::depthAttachmentFormat
+                .format = info.depthFormat,
+                .depthTestEnabled = true, // was set via dynamic state, but default true here
+                .depthWritesEnabled = true,
+                .depthCompareOperation = Gpu::CompareOperation::Less,
+            },
+        // ds.depthBoundsTestEnabled / ds.minDepthBounds / ds.maxDepthBounds if you actually use
+        // bounds,
+        .primitive = Gpu::PrimitiveOptions{},
+        .multisample =
+            Gpu::MultisampleOptions{
+                .samples = info.sampleCount,
+                // .sampleShadingEnabled = true; // currently not supported in KDGpu
+            },
+        .dynamicState =
+            Gpu::DynamicStateOptions{
+                // TODO: Need to actually extend KDGPU further to provide the necessary
+                // functions on RenderPassCommandRecorder
+                .enabledDynamicStates = {Gpu::DynamicState::Viewport,
+                                         Gpu::DynamicState::Scissor,
+                                         Gpu::DynamicState::CullMode,
+                                         Gpu::DynamicState::DepthTestEnable,
+                                         Gpu::DynamicState::DepthWriteEnable,
+                                         Gpu::DynamicState::DepthCompareOp},
+            }
+        // If you target a predefined RenderPass instead of dynamic rendering:
+        // .renderPass = myRenderPass, .subpassIndex = 0
+    };
+
+    return ctx.resources().createGraphicsPipeline(ctx.device(), gpOpts);
+}
+
+} // namespace
+
+struct PipelineCachePrivate {
+    Context *ctx;
+    using DescriptorHasher = decltype([](const PipelineDescriptor &d) { return d.hash(); });
+    std::unordered_map<PipelineDescriptor, Gpu::GraphicsPipelineHandle, DescriptorHasher> cache;
+
+    Gpu::GraphicsPipelineHandle create(std::string_view name, PipelineDescriptor &info);
+};
+
+Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name, const PipelineDescriptor &info)
+{
+    if (auto it = data_->cache.find(info); it != data_->cache.end()) { return it->second; }
+    auto handle = createPipeline(*data_->ctx, name, info);
+    data_->cache.insert({info, handle});
+    return handle;
+}
+
+PipelineCache::PipelineCache(Context &ctx)
+    : data_{std::make_unique<PipelineCachePrivate>()}
+{
+    data_->ctx = &ctx;
+}
+PipelineCache::~PipelineCache() {}
+} // namespace Cory

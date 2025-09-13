@@ -5,17 +5,15 @@
 
 #include <KDGpu/shader_module.h>
 
-#include <cstdint>
 #include <filesystem>
 #include <map>
-#include <string_view>
 #include <vector>
 
 namespace Cory {
 
 class ShaderSource {
   public:
-    ShaderSource(std::string source, ShaderType type, std::filesystem::path filePath = "Unknown");
+    ShaderSource(std::string source, Gpu::ShaderStageFlagBits type, std::filesystem::path filePath = "Unknown");
 
     /**
      * Loads a shader from a file. If type is not specified, will try to guess the
@@ -25,7 +23,7 @@ class ShaderSource {
      *  - *.frag: Fragment Shader
      *  - *.comp: Compute Shader
      */
-    ShaderSource(std::filesystem::path filePath, ShaderType type = ShaderType::eUnknown);
+    ShaderSource(std::filesystem::path filePath, Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN);
 
     // copyable
     ShaderSource(const ShaderSource &rhs) = default;
@@ -48,7 +46,7 @@ class ShaderSource {
   private:
     std::filesystem::path filename_{"Unknown"};
     std::string source_;
-    ShaderType type_;
+    Gpu::ShaderStageFlagBits type_;
     std::map<std::string, std::string> macroDefinitions_;
 };
 
@@ -67,7 +65,8 @@ class Shader {
     Shader &operator=(Shader &&rhs) = default;
 
     Gpu::ShaderModule &module() { return *module_; }
-    ShaderType type() const { return type_; }
+    const Gpu::ShaderModule &module() const { return *module_; }
+    Gpu::ShaderStageFlagBits type() const { return type_; }
     bool valid() const;
 
     // vk::PipelineShaderStageCreateInfo stageCreateInfo();
@@ -78,7 +77,7 @@ class Shader {
   private:
     Context *ctx_{};
     ShaderSource source_;
-    ShaderType type_{};
+    Gpu::ShaderStageFlagBits type_{};
     size_t size_{};
     std::shared_ptr<Gpu::ShaderModule> module_;
 

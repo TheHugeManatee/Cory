@@ -27,9 +27,9 @@ enum class DepthWrite { Enabled, Disabled };
 
 class TransientRenderPass;
 /// for this value value, framegraph will automatically fit the render area to the frame buffer
-static constexpr VkRect2D RENDER_AREA_AUTO{{0, 0}, {0, 0}};
+static constexpr Gpu::Rect2D RENDER_AREA_AUTO{{0, 0}, {0, 0}};
 struct DynamicStates {
-    VkRect2D renderArea{RENDER_AREA_AUTO};
+    Gpu::Rect2D renderArea{RENDER_AREA_AUTO};
     CullMode cullMode{CullMode::Back};
     DepthTest depthTest{DepthTest::Less};
     DepthWrite depthWrite{DepthWrite::Enabled};

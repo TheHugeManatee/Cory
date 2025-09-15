@@ -57,7 +57,9 @@ struct PipelineDescriptor {
 
 class PipelineCache {
   public:
-    explicit PipelineCache(Context &ctx);
+    explicit PipelineCache(Gpu::VulkanResourceManager *resourceManager,
+                           Gpu::DeviceHandle device,
+                           ShaderManager *shaderManager);
     ~PipelineCache();
 
     Gpu::GraphicsPipelineHandle query(std::string_view name, const PipelineDescriptor &info);

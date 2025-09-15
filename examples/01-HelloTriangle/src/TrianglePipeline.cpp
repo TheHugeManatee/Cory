@@ -40,12 +40,15 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
 
     CO_APP_TRACE("Starting shader compilation for {} and {}", vertFile.string(), fragFile.string());
     const auto vertexFile = Cory::ResourceLocator::Locate(vertFile);
-    const auto vertexShaderSource = Cory::ShaderSource{vertexFile, Cory::ShaderType::eVertex};
+
+    const auto vertexShaderSource =
+        Cory::ShaderSource{vertexFile, Gpu::ShaderStageFlagBits::VertexBit};
     auto vertexShader =
         device.createShaderModule(Cory::Shader::CompileToSpv(vertexShaderSource, false));
 
     const auto fragmentFile = Cory::ResourceLocator::Locate(fragFile);
-    const auto fragmentShaderSource = Cory::ShaderSource{fragmentFile, Cory::ShaderType::eFragment};
+    const auto fragmentShaderSource =
+        Cory::ShaderSource{fragmentFile, Gpu::ShaderStageFlagBits::FragmentBit};
     auto fragmentShader =
         device.createShaderModule(Cory::Shader::CompileToSpv(fragmentShaderSource, false));
 

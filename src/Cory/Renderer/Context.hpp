@@ -52,6 +52,9 @@ class Context : NoCopy {
 
     // Set up the device and queue for a given surface
     void setupDevice(const Gpu::Surface &surface);
+    // Set up a headless device, i.e. a device not tied to a specific surface
+    void setupHeadlessDevice();
+
     Gpu::Instance &instance();
 
     Gpu::GraphicsApi &graphicsApi();
@@ -62,6 +65,8 @@ class Context : NoCopy {
 
     Gpu::VulkanResourceManager &resources();
     const Gpu::VulkanResourceManager &resources() const;
+
+    PipelineCache &pipelineCache();
 
     ShaderManager &shaders();
     const ShaderManager &shaders() const;

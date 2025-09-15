@@ -58,8 +58,8 @@ class Framegraph : NoCopy {
     /// declare an external texture as an input
     [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
                                                       Sync::AccessType lastWriteAccess,
-                                                      Texture &image,
-                                                      TextureView &imageView);
+                                                      const Texture &image,
+                                                      const TextureView &imageView);
 
     /**
      * declare that a resource is to be read afterwards. returns general

@@ -1,8 +1,8 @@
-
 #include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
@@ -51,6 +51,7 @@ struct ContextPrivate {
     Gpu::Queue queue;
 
     ShaderManager shaders;
+    std::unique_ptr<PipelineCache> pipelineCache;
 
     inline static Function<void(const DebugMessageInfo &)> validationMessageCallback;
 
@@ -84,6 +85,7 @@ Context::Context(ContextCreationInfo creationInfo)
         instanceOptions.extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
     data_->instance = data_->api.createInstance(instanceOptions);
+    data_->shaders.setContext(*this);
 }
 
 Context::Context(Context &&rhs) noexcept { std::swap(rhs.data_, data_); }
@@ -249,6 +251,68 @@ void Context::setupDevice(const Gpu::Surface &surface)
     data_->queue = data_->device.queues()[0];
 
     data_->isHeadless = false;
+
+    data_->pipelineCache = std::make_unique<PipelineCache>(
+        data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+}
+
+void Context::setupHeadlessDevice()
+{
+    CO_CORE_ASSERT(data_->adapter == nullptr,
+                   "Device already created! Multiple devices are not currently supported.");
+
+    // Enumerate all adapters
+    auto adapters = data_->instance.adapters();
+    if (adapters.empty()) {
+        CO_CORE_FATAL("No adapters found. Aborting...");
+        return;
+    }
+
+    // Prefer discrete GPU, otherwise pick the first adapter
+    Gpu::Adapter *selectedAdapter = nullptr;
+    for (auto &adapter : adapters) {
+        if (adapter->properties().deviceType == Gpu::AdapterDeviceType::DiscreteGpu) {
+            selectedAdapter = adapter;
+            break;
+        }
+    }
+    if (!selectedAdapter) { selectedAdapter = adapters[0]; }
+
+    CO_CORE_INFO("Selected adapter: {}", selectedAdapter->properties().deviceName);
+
+    auto queueTypes = selectedAdapter->queueTypes();
+    const bool hasGraphicsAndCompute =
+        queueTypes[0].supportsFeature(Gpu::QueueFlags(Gpu::QueueFlagBits::GraphicsBit) |
+                                      Gpu::QueueFlags(Gpu::QueueFlagBits::ComputeBit));
+    CO_CORE_INFO("Queue family 0 graphics and compute support: {}", hasGraphicsAndCompute);
+
+    if (!hasGraphicsAndCompute) {
+        CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
+        return;
+    }
+
+    // Create device
+    auto device = selectedAdapter->createDevice(Gpu::DeviceOptions{
+        .label = "Headless Device",
+        .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
+        .layers = {},
+        .extensions = {VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+                       VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
+                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME},
+        .queues = {},
+        .requestedFeatures = getRequiredFeatures(),
+        .adapterGroup = {},
+    });
+
+    data_->adapter = selectedAdapter;
+    data_->device = std::move(device);
+    CO_CORE_ASSERT(!data_->device.queues().empty(), "Device has no queues!");
+    data_->queue = data_->device.queues()[0];
+
+    data_->isHeadless = true;
+
+    data_->pipelineCache = std::make_unique<PipelineCache>(
+        data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
 }
 
 Gpu::Instance &Context::instance() { return data_->instance; }
@@ -262,6 +326,12 @@ Gpu::VulkanResourceManager &Context::resources() { return *data_->api.resourceMa
 const Gpu::VulkanResourceManager &Context::resources() const
 {
     return *data_->api.resourceManager();
+}
+PipelineCache &Context::pipelineCache()
+{
+    CO_CORE_ASSERT(data_->pipelineCache,
+                   "Pipeline cache not ready - likely device was not created yet");
+    return *data_->pipelineCache;
 }
 ShaderManager &Context::shaders() { return data_->shaders; }
 const ShaderManager &Context::shaders() const { return data_->shaders; }

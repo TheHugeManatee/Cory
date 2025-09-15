@@ -10,12 +10,8 @@ add_executable(${TARGET_NAME}
         src/HelloTriangleApplication.cpp
         src/HelloTriangleApplication.hpp
         src/TrianglePipeline.cpp
-        src/TrianglePipeline.hpp)
-
-# add headers as sources automatically - this makes them show up in some IDEs
-# but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
-file(GLOB_RECURSE HEADERS "include/*.h")
-target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
+        src/TrianglePipeline.hpp
+)
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 

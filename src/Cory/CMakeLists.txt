@@ -120,6 +120,8 @@ set(CORY_SOURCES
         Base/Result.hpp
         Base/Primitives.hpp
         Renderer/Gpu.cpp
+        Renderer/PipelineCache.cpp
+        Renderer/PipelineCache.hpp
 )
 
 

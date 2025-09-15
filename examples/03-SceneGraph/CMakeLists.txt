@@ -17,9 +17,13 @@ add_executable(${TARGET_NAME}
         src/CubeAnimationSystem.cpp
 )
 
-# add headers as sources automatically - this makes them show up in some IDEs
-# but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
-file(GLOB_RECURSE HEADERS "include/*.h")
+# Replace GLOB_RECURSE for HEADERS with explicit file list
+set(HEADERS
+        include/SceneGraph/SceneGraph.h
+        include/SceneGraph/Node.h
+        include/SceneGraph/Transform.h
+)
+
 target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -33,12 +37,12 @@ target_link_libraries(${TARGET_NAME}
         Cory::Cory
         Cory::ThirdParty
         CLI11::CLI11
-        )
+)
 
-if(CORY_BUILD_TESTS)
+if (CORY_BUILD_TESTS)
     enable_testing()
     add_test(NAME Smoketests.SceneGraph COMMAND ${TARGET_NAME} --frames=100)
-endif()
+endif ()
 
 # Install in the desired folder
 install(TARGETS ${TARGET_NAME}

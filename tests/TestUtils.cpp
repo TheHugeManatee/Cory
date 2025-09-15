@@ -16,6 +16,7 @@ namespace Cory::testing {
 Context &getTestContext()
 {
     static Context testContext;
+    testContext.setupHeadlessDevice();
     return testContext;
 }
 
@@ -91,10 +92,15 @@ TEST_CASE("VulkanTester")
 
     auto ih = t.ctx().instance().handle();
     VkInstance inst = t.ctx().resources().getInstance(ih)->instance;
-    vkSubmitDebugUtilsMessageEXT(inst,
-                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-                                 VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
-                                 &messageCallbackData);
+
+    auto submitDebugUtilsMessageEXT = (PFN_vkSubmitDebugUtilsMessageEXT)vkGetInstanceProcAddr(
+        inst, "vkSubmitDebugUtilsMessageEXT");
+    REQUIRE(submitDebugUtilsMessageEXT != nullptr);
+
+    submitDebugUtilsMessageEXT(inst,
+                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+                               VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
+                               &messageCallbackData);
 
     REQUIRE(t.errors().size() == 1);
     CHECK(t.errors()[0].messageType == Cory::DebugMessageType::General);

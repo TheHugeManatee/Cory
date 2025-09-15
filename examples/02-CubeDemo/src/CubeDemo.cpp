@@ -290,7 +290,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
-
+    
     auto cubePass = builder.declareRenderPass("PASS_Cubes")
                         .shaders({vertexShader_, fragmentShader_})
                         .attach(colorTarget,

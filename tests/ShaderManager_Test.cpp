@@ -36,15 +36,16 @@ TEST_CASE("ResourceManager", "[Cory/Renderer]")
 
     SECTION("Shaders")
     {
-        ShaderHandle shader =
-            mgr.createShader(testVertexShader, Cory::ShaderType::eVertex, "testVertexShader.vert");
+        ShaderHandle shader = mgr.createShader(
+            testVertexShader, Gpu::ShaderStageFlagBits::VertexBit, "testVertexShader.vert");
         CHECK(mgr.shadersInUse() == 1);
         CHECK(mgr[shader].valid());
         CHECK(mgr[shader].size() > 0);
-        CHECK(mgr[shader].type() == Cory::ShaderType::eVertex);
+        CHECK(mgr[shader].type() == Gpu::ShaderStageFlagBits::VertexBit);
 
-        CHECK_THROWS(mgr.createShader(
-            testInvalidVertexShader, Cory::ShaderType::eVertex, "testInvalidVertexShader.vert"));
+        CHECK_THROWS(mgr.createShader(testInvalidVertexShader,
+                                      Gpu::ShaderStageFlagBits::VertexBit,
+                                      "testInvalidVertexShader.vert"));
 
         ShaderHandle invalidHandle;
         CHECK_THROWS(mgr[invalidHandle]);

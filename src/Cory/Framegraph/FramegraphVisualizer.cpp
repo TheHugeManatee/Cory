@@ -39,64 +39,64 @@ struct Index {
 
 void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInfo) const
 {
-    auto findTransitionInfo =
-        [&](TransientTextureHandle resource,
-            RenderTaskHandle task) -> std::optional<ExecutionInfo::TransitionInfo> {
-        auto it = ranges::find_if(executionInfo.transitions,
-                                  [&](const ExecutionInfo::TransitionInfo &info) {
-                                      return info.resource == resource && info.task == task;
-                                  });
-        if (it == executionInfo.transitions.end()) { return std::nullopt; }
-        return *it;
-    };
-
-    for (const auto &[taskHandle, passInfo] : graph_.renderTasks()) {
-        index.tasks[taskHandle].info = passInfo;
-        index.tasks[taskHandle].executed = ranges::contains(executionInfo.tasks, taskHandle);
-
-        for (const RenderTaskInfo::Dependency &dependency : passInfo.dependencies) {
-            auto info = graph_.resources().info(dependency.handle);
-
-            index.textures[dependency.handle].handle = dependency.handle;
-            index.textures[dependency.handle].info = info;
-
-            std::vector<Index::DependencyInfo> &dependencyList =
-                (dependency.kind.is_set(TaskDependencyKindBits::Create)
-                     ? index.createDependencies
-                     : (dependency.kind.is_set(TaskDependencyKindBits::Write)
-                            ? index.outputDependencies
-                            : index.inputDependencies));
-
-            dependencyList.emplace_back(Index::DependencyInfo{
-                .resource = dependency.handle,
-                .task = taskHandle,
-                .transitionInfo = findTransitionInfo(dependency.handle, taskHandle)});
-        }
-    }
-    // mark all external inputs
-    for (auto externalInput : graph_.externalInputs()) {
-        if (index.textures.contains(externalInput)) {
-            index.textures.at(externalInput).external = true;
-        }
-        else {
-            auto inputInfo = graph_.resources().info(externalInput);
-            index.textures.insert(
-                std::make_pair(externalInput,
-                               Index::TextureData{.handle = externalInput,
-                                                  .info = graph_.resources().info(externalInput),
-                                                  .external = true}));
-        }
-    }
-    // mark all output resources
-    for (auto externalOutput : graph_.outputs()) {
-        index.textures.at(externalOutput).output = true;
-    }
-    // mark all texture entries that refer to an allocated resource as allocated
-    for (auto allocated : executionInfo.resources) {
-        for (auto &[h, data] : index.textures) {
-            if (data.handle.texture() == allocated) { data.allocated = true; }
-        }
-    }
+    // auto findTransitionInfo =
+    //     [&](TransientTextureHandle resource,
+    //         RenderTaskHandle task) -> std::optional<ExecutionInfo::TransitionInfo> {
+    //     auto it = ranges::find_if(executionInfo.transitions,
+    //                               [&](const ExecutionInfo::TransitionInfo &info) {
+    //                                   return info.resource == resource && info.task == task;
+    //                               });
+    //     if (it == executionInfo.transitions.end()) { return std::nullopt; }
+    //     return *it;
+    // };
+    //
+    // for (const auto &[taskHandle, passInfo] : graph_.renderTasks()) {
+    //     index.tasks[taskHandle].info = passInfo;
+    //     index.tasks[taskHandle].executed = ranges::contains(executionInfo.tasks, taskHandle);
+    //
+    //     for (const RenderTaskInfo::Dependency &dependency : passInfo.dependencies) {
+    //         auto info = graph_.resources().info(dependency.handle);
+    //
+    //         index.textures[dependency.handle].handle = dependency.handle;
+    //         index.textures[dependency.handle].info = info;
+    //
+    //         std::vector<Index::DependencyInfo> &dependencyList =
+    //             (dependency.kind.is_set(TaskDependencyKindBits::Create)
+    //                  ? index.createDependencies
+    //                  : (dependency.kind.is_set(TaskDependencyKindBits::Write)
+    //                         ? index.outputDependencies
+    //                         : index.inputDependencies));
+    //
+    //         dependencyList.emplace_back(Index::DependencyInfo{
+    //             .resource = dependency.handle,
+    //             .task = taskHandle,
+    //             .transitionInfo = findTransitionInfo(dependency.handle, taskHandle)});
+    //     }
+    // }
+    // // mark all external inputs
+    // for (auto externalInput : graph_.externalInputs()) {
+    //     if (index.textures.contains(externalInput)) {
+    //         index.textures.at(externalInput).external = true;
+    //     }
+    //     else {
+    //         auto inputInfo = graph_.resources().info(externalInput);
+    //         index.textures.insert(
+    //             std::make_pair(externalInput,
+    //                            Index::TextureData{.handle = externalInput,
+    //                                               .info = graph_.resources().info(externalInput),
+    //                                               .external = true}));
+    //     }
+    // }
+    // // mark all output resources
+    // for (auto externalOutput : graph_.outputs()) {
+    //     index.textures.at(externalOutput).output = true;
+    // }
+    // // mark all texture entries that refer to an allocated resource as allocated
+    // for (auto allocated : executionInfo.resources) {
+    //     for (auto &[h, data] : index.textures) {
+    //         if (data.handle.texture() == allocated) { data.allocated = true; }
+    //     }
+    // }
 }
 
 #define append(...) fmt::format_to(std::back_inserter(out), __VA_ARGS__)

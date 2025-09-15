@@ -9,9 +9,39 @@
 
 namespace Cory {
 
-namespace {
-Gpu::GraphicsPipelineHandle
-createPipeline(Context &ctx, std::string_view name, const PipelineDescriptor &info)
+struct PipelineCachePrivate {
+    Gpu::VulkanResourceManager *resourceManager;
+    Gpu::DeviceHandle device;
+    ShaderManager *shaderManager;
+
+    using DescriptorHasher = decltype([](const PipelineDescriptor &d) { return d.hash(); });
+    std::unordered_map<PipelineDescriptor, Gpu::GraphicsPipelineHandle, DescriptorHasher> cache;
+
+    Gpu::GraphicsPipelineHandle create(std::string_view name, const PipelineDescriptor &info);
+};
+
+Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name,
+                                                 const PipelineDescriptor &info)
+{
+    if (auto it = data_->cache.find(info); it != data_->cache.end()) { return it->second; }
+    auto handle = data_->create(name, info);
+    data_->cache.insert({info, handle});
+    return handle;
+}
+
+PipelineCache::PipelineCache(Gpu::VulkanResourceManager *resourceManager,
+                             Gpu::DeviceHandle device,
+                             ShaderManager *shaderManager)
+    : data_{std::make_unique<PipelineCachePrivate>()}
+{
+    data_->resourceManager = resourceManager;
+    data_->device = device;
+    data_->shaderManager = shaderManager;
+}
+PipelineCache::~PipelineCache() {}
+
+Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
+                                                         const PipelineDescriptor &info)
 {
     CO_CORE_INFO("Creating new pipeline for '{}' ({:X})", name, info.hash());
 
@@ -19,7 +49,7 @@ createPipeline(Context &ctx, std::string_view name, const PipelineDescriptor &in
     std::vector<Gpu::ShaderStage> shaderStages;
     shaderStages.reserve(info.shaders.size());
     for (auto shaderHandle : info.shaders) {
-        const auto &s = ctx.shaders()[shaderHandle];
+        const auto &s = (*shaderManager)[shaderHandle];
         shaderStages.push_back(Gpu::ShaderStage{
             .shaderModule = s.module(),
             .stage = s.type(),
@@ -71,31 +101,7 @@ createPipeline(Context &ctx, std::string_view name, const PipelineDescriptor &in
         // .renderPass = myRenderPass, .subpassIndex = 0
     };
 
-    return ctx.resources().createGraphicsPipeline(ctx.device(), gpOpts);
+    return resourceManager->createGraphicsPipeline(device, gpOpts);
 }
 
-} // namespace
-
-struct PipelineCachePrivate {
-    Context *ctx;
-    using DescriptorHasher = decltype([](const PipelineDescriptor &d) { return d.hash(); });
-    std::unordered_map<PipelineDescriptor, Gpu::GraphicsPipelineHandle, DescriptorHasher> cache;
-
-    Gpu::GraphicsPipelineHandle create(std::string_view name, PipelineDescriptor &info);
-};
-
-Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name, const PipelineDescriptor &info)
-{
-    if (auto it = data_->cache.find(info); it != data_->cache.end()) { return it->second; }
-    auto handle = createPipeline(*data_->ctx, name, info);
-    data_->cache.insert({info, handle});
-    return handle;
-}
-
-PipelineCache::PipelineCache(Context &ctx)
-    : data_{std::make_unique<PipelineCachePrivate>()}
-{
-    data_->ctx = &ctx;
-}
-PipelineCache::~PipelineCache() {}
 } // namespace Cory

@@ -39,7 +39,7 @@ void main() {
     gl_Position = vec4(inPosition, 1.0);
 }
 )glsl",
-        ShaderType::eVertex,
+        Gpu::ShaderStageFlagBits::VertexBit,
         "depth.vert");
 
     static ShaderHandle fragmentShader = ctx.shaders().createShader(
@@ -49,21 +49,28 @@ void main() {
     outColor = gl_FragCoord;
 }
 )glsl",
-        ShaderType::eFragment,
+        Gpu::ShaderStageFlagBits::FragmentBit,
         "depth.frag");
 
-    auto depthPass =
-        builder.declareRenderPass()
-            .attachDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, 1.0f)
-            .shaders({vertexShader, fragmentShader})
-            .finish();
+    auto depthPass = builder.declareRenderPass(RenderPassDeclaration{
+        .name = "PASS_Depth",
+        .shaders = {vertexShader, fragmentShader},
+        .attachments = {},
+        .depthAttachment =
+            DepthStencilAttachment{
+                depth,
+                KDGpu::AttachmentLoadOperation::Clear,
+                KDGpu::AttachmentStoreOperation::Store,
+                1.0f,
+            },
+    });
 
     co_yield outputs;
     RenderInput render = co_await builder.finishDeclaration();
     CO_CORE_ASSERT(render.cmd != nullptr, "Uh-oh");
-    depthPass.begin(*render.cmd);
+    auto recorder = depthPass.begin(*render.cmd);
     CO_APP_INFO("[DepthPrepass] render commands executing");
-    depthPass.end(*render.cmd);
+    recorder.end();
 }
 
 struct DepthDebugOut {

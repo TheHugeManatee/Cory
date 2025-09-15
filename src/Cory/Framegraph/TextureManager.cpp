@@ -207,7 +207,7 @@ TextureState TextureManager::state(FramegraphTextureHandle handle) const
 void TextureManager::clear()
 {
     for (auto &res : data_->textureResources_) {
-        if (res.state.status != TextureMemoryStatus::Virtual) {
+        if (res.state.status == TextureMemoryStatus::Allocated) {
             data_->ctx_->resources().deleteTexture(res.image);
             data_->ctx_->resources().deleteTextureView(res.view);
         }

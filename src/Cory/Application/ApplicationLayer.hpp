@@ -1,11 +1,10 @@
 #pragma once
 
-#include "kdbindings/property.h"
 #include <Cory/Application/Common.hpp>
 #include <Cory/Application/Event.hpp>
 #include <Cory/Framegraph/Common.hpp>
-// #include <Cory/Framegraph/RenderTaskBuilder.hpp>
-// #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
+#include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 
 #include <string>
 
@@ -49,11 +48,11 @@ class ApplicationLayer {
      */
     virtual bool hasRenderTask() const { return false; }
     /// if hasRenderTask() returns true, this method will be called to get the coroutine render task
-    // virtual RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
-    //                                                            LayerPassOutputs previousLayer)
-    // {
-    //     co_return;
-    // }
+    virtual RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
+                                                               LayerPassOutputs previousLayer)
+    {
+        co_return;
+    }
 
     std::string_view name() const { return name_; }
 

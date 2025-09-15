@@ -97,10 +97,9 @@ RenderTaskBuilder::readWrite(TransientTextureHandle handle, Sync::AccessType rea
     return {outputHandle, framegraph_.resources().info(handle.texture())};
 }
 
-TransientRenderPassBuilder RenderTaskBuilder::declareRenderPass(std::string_view name)
+TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration passDeclaration)
 {
-    return TransientRenderPassBuilder{
-        ctx_, name.empty() ? info_.name : name, framegraph_.resources()};
+    return TransientRenderPass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
 }
 // </editor-fold>
 } // namespace Cory

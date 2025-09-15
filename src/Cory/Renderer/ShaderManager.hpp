@@ -6,7 +6,6 @@
 #include <filesystem>
 #include <memory>
 #include <source_location>
-#include <string_view>
 
 namespace Cory {
 
@@ -30,12 +29,12 @@ class ShaderManager : NoCopy {
     /// @see ShaderSource::ShaderSource(std::filesystem::path, ShaderType)
     [[nodiscard]] ShaderHandle
     createShader(std::filesystem::path filePath,
-                 ShaderType type = ShaderType::eUnknown,
+                 Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN,
                  std::source_location loc = std::source_location::current());
     /// @see ShaderSource::ShaderSource(std::string, ShaderType, std::filesystem::path)
     [[nodiscard]] ShaderHandle
     createShader(std::string source,
-                 ShaderType type,
+                 Gpu::ShaderStageFlagBits type,
                  std::filesystem::path filePath = "Unknown",
                  std::source_location loc = std::source_location::current());
     /// dereference a shader handle to access the shader. may throw!

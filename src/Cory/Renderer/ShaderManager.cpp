@@ -61,7 +61,7 @@ size_t ShaderManager::shadersInUse() const
 
 // SHADERS
 ShaderHandle ShaderManager::createShader(std::filesystem::path filePath,
-                                         ShaderType type,
+                                         Gpu::ShaderStageFlagBits type,
                                          std::source_location loc)
 {
     CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
@@ -71,7 +71,7 @@ ShaderHandle ShaderManager::createShader(std::filesystem::path filePath,
         .resource = {std::ref(*data_->ctx), ShaderSource{std::move(filePath), type}}});
 }
 ShaderHandle ShaderManager::createShader(std::string source,
-                                         ShaderType type,
+                                         Gpu::ShaderStageFlagBits type,
                                          std::filesystem::path filePath,
                                          std::source_location loc)
 {

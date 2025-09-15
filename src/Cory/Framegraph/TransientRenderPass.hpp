@@ -8,6 +8,8 @@
 
 namespace Cory {
 
+enum class MeshInput { Enabled, Disabled };
+
 struct TransientRenderPassInfo {
     int32_t sampleCount;
     std::vector<Gpu::TextureHandle> colorAttachments;
@@ -15,14 +17,37 @@ struct TransientRenderPassInfo {
     Gpu::TextureHandle stencilAttachment;
 };
 
-struct AttachmentKind {
-    VkAttachmentLoadOp loadOp;
-    VkAttachmentStoreOp storeOp;
-    VkClearValue clearValue;
+struct ColorAttachment {
+    TransientTextureHandle target;
+    Gpu::AttachmentLoadOperation load;
+    Gpu::AttachmentStoreOperation store;
+    Gpu::ColorClearValue clearColor;
+};
+struct DepthStencilAttachment {
+    TransientTextureHandle target;
+    Gpu::AttachmentLoadOperation load;
+    Gpu::AttachmentStoreOperation store;
+    Gpu::DepthStencilClearValue clearDepthStencil;
+};
+struct RenderPassDeclaration {
+    std::string name;
+    std::vector<ShaderHandle> shaders;
+    std::vector<ColorAttachment> attachments;
+    std::optional<DepthStencilAttachment> depthAttachment;
+    std::optional<DepthStencilAttachment> stencilAttachment;
+    DynamicStates dynamicStates;
+    MeshInput meshInput{MeshInput::Enabled};
 };
 
+/// Transient render stores the information to set up and execute a render pass
 class TransientRenderPass : NoCopy {
   public:
+    explicit TransientRenderPass(Context &ctx, TextureManager &textures, RenderPassDeclaration pass)
+        : ctx_{&ctx}
+        , textures_{&textures}
+        , pass_{std::move(pass)}
+    {
+    }
     ~TransientRenderPass();
 
     TransientRenderPass(TransientRenderPass &&) = default;
@@ -33,66 +58,24 @@ class TransientRenderPass : NoCopy {
      * the information described in the builder.
      *
      *  1. Binds a pipeline with the required layout -
-     *  2. Calls CmdBeginRendering with the attachments
+     *  2. Calls begin() on the render pass with the attachments
      *  3. Set up the dynamic state (Depth test, cull mode, ...) as set up in the builder
      */
-    void begin(CommandRecorder &cmd);
-
-    void end(CommandRecorder &cmd);
+    Gpu::RenderPassCommandRecorder begin(CommandRecorder &cmd);
 
   private:
-    friend class TransientRenderPassBuilder;
-    TransientRenderPass(Context &ctx, std::string_view name, TextureManager &textures);
-
-    int32_t determineSampleCount() const;
-    VkRenderingAttachmentInfo makeAttachmentInfo(Gpu::TextureHandle handle,
-                                                 AttachmentKind attachmentKind);
+    Gpu::SampleCountFlagBits determineSampleCount() const;
+    Gpu::Rect2D determineRenderArea() const;
 
     Context *ctx_;
-    std::string_view name_;
     TextureManager *textures_;
 
-    std::vector<ShaderHandle> shaders_;
-    std::vector<std::pair<Gpu::TextureHandle, AttachmentKind>> colorAttachments_;
-    std::optional<std::pair<Gpu::TextureHandle, AttachmentKind>> depthAttachment_;
-    std::optional<std::pair<Gpu::TextureHandle, AttachmentKind>> stencilAttachment_;
+    RenderPassDeclaration pass_;
 
     DynamicStates dynamicStates_;
-    bool hasMeshInput_{true}; // by default, uses the default mesh layout
 
     Gpu::GraphicsPipelineHandle handle_;
     bool hasBegun_{false}; ///< only needed for diagnostics
-    VkRect2D determineRenderArea();
-};
-
-class TransientRenderPassBuilder : NoCopy, NoMove {
-  public:
-    TransientRenderPassBuilder(Context &ctx, std::string_view name, TextureManager &textures);
-
-    ~TransientRenderPassBuilder();
-
-    TransientRenderPassBuilder &shaders(std::vector<ShaderHandle> shaders);
-
-    TransientRenderPassBuilder &attach(TransientTextureHandle handle,
-                                       VkAttachmentLoadOp loadOp,
-                                       VkAttachmentStoreOp storeOp,
-                                       VkClearColorValue clearValue);
-    TransientRenderPassBuilder &attachDepth(TransientTextureHandle handle,
-                                            VkAttachmentLoadOp loadOp,
-                                            VkAttachmentStoreOp storeOp,
-                                            float clearValue);
-    TransientRenderPassBuilder &attachStencil(TransientTextureHandle handle,
-                                              VkAttachmentLoadOp loadOp,
-                                              VkAttachmentStoreOp storeOp,
-                                              uint32_t clearValue);
-
-    /// create a render pass that does not expect any mesh to be attached
-    TransientRenderPassBuilder &disableMeshInput();
-
-    TransientRenderPass finish();
-
-  private:
-    TransientRenderPass renderPass_;
 };
 
 } // namespace Cory

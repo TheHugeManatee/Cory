@@ -6,6 +6,9 @@ find_package(VulkanHeaders REQUIRED)
 find_package(imgui REQUIRED)
 find_package(glm REQUIRED)
 
+#set(KDGPU_BUILD_KDXR OFF)
+#set(KDGPU_OPENXR_SUPPORT OFF)
+
 FetchContent_Declare(
         KDGpu
         SOURCE_DIR "C:/dev/KDGpu"
@@ -30,16 +33,43 @@ add_library(${TARGET_NAME} STATIC
 )
 
 # optick
-file(GLOB_RECURSE OPTICK_SRC "src/optick/*.cpp")
+set(OPTICK_SRC
+        src/optick/optick_capi.cpp
+        src/optick/optick_core.cpp
+        src/optick/optick_gpu.cpp
+        src/optick/optick_gpu.d3d12.cpp
+        src/optick/optick_gpu.vulkan.cpp
+        src/optick/optick_message.cpp
+        src/optick/optick_miniz.cpp
+        src/optick/optick_serialization.cpp
+        src/optick/optick_server.cpp
+)
 target_sources(${TARGET_NAME} PRIVATE ${OPTICK_SRC})
 target_include_directories(${TARGET_NAME} PRIVATE "include/optick")
 if (WIN32)
     target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif ()
 
+# Corrected HEADERS file list
+set(HEADERS
+        include/optick/optick.config.h
+        include/optick/optick.h
+        include/optick/optick_capi.h
+        include/optick/optick_common.h
+        include/optick/optick_core.freebsd.h
+        include/optick/optick_core.h
+        include/optick/optick_core.linux.h
+        include/optick/optick_core.macos.h
+        include/optick/optick_core.platform.h
+        include/optick/optick_core.win.h
+        include/optick/optick_gpu.h
+        include/optick/optick_memory.h
+        include/optick/optick_message.h
+        include/optick/optick_miniz.h
+        include/optick/optick_serialization.h
+        include/optick/optick_server.h
+)
 
-# Headers
-file(GLOB_RECURSE HEADERS "include/*.h")
 target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
 

@@ -14,13 +14,11 @@ endif ()
 
 # ---- Dependencies ----
 
-set(TARGET_NAME Cory)
-
 find_package(Catch2 REQUIRED)
 
 include(Catch)
 
-add_library(${TARGET_NAME}_TestLib OBJECT
+add_library(Cory_TestLib OBJECT
         Cory_Test.cpp
         Utils_Test.cpp
         SlotMap_Test.cpp
@@ -49,21 +47,21 @@ add_library(${TARGET_NAME}_TestLib OBJECT
         Function_Test.cpp
 )
 
-target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Catch2::Catch2)
-target_link_libraries(${TARGET_NAME}_TestLib PRIVATE Cory::project_options)
-target_link_libraries(${TARGET_NAME}_TestLib PUBLIC Cory::${TARGET_NAME})
+target_link_libraries(Cory_TestLib PUBLIC Catch2::Catch2)
+target_link_libraries(Cory_TestLib PRIVATE Cory::project_options)
+target_link_libraries(Cory_TestLib PUBLIC Cory::Cory)
 
-add_executable(${TARGET_NAME}_Tests catch_main.cpp)
-target_link_libraries(${TARGET_NAME}_Tests PRIVATE
+add_executable(Cory_Tests catch_main.cpp)
+target_link_libraries(Cory_Tests PRIVATE
         Cory::project_warnings
         Cory::project_options
-        ${TARGET_NAME}_TestLib
+        Cory_TestLib
 )
 
 # automatically discover tests that are defined in catch based test files you can modify the unittests. Set TEST_PREFIX
 # to whatever you want, or use different for different binaries
 catch_discover_tests(
-        ${TARGET_NAME}_Tests
+        Cory_Tests
         TEST_PREFIX
         "unittests."
         OUTPUT_DIR

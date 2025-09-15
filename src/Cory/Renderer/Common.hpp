@@ -8,6 +8,7 @@
 #include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
 #include <Cory/Renderer/Synchronization.hpp>
+
 #include <vulkan/vulkan.h>
 
 #include <cstdint>
@@ -25,6 +26,7 @@ class RenderManager;
 class ShaderManager;
 class Shader;
 class SingleShotCommandRecorder;
+class PipelineCache;
 // Swapchain.hpp
 struct SwapchainSupportDetails;
 struct FrameContext;
@@ -36,13 +38,8 @@ class UniformBufferObject;
 class DescriptorSets;
 
 // enums
-enum class ShaderType : uint32_t {
-    eUnknown = 0,
-    eVertex = VK_SHADER_STAGE_VERTEX_BIT,
-    eGeometry = VK_SHADER_STAGE_GEOMETRY_BIT,
-    eFragment = VK_SHADER_STAGE_FRAGMENT_BIT,
-    eCompute = VK_SHADER_STAGE_COMPUTE_BIT,
-};
+static constexpr Gpu::ShaderStageFlagBits SHADER_TYPE_UNKNOWN = Gpu::ShaderStageFlagBits{};
+
 enum class DebugMessageSeverity : uint32_t {
     Verbose = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT,
     Info = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
@@ -85,7 +82,6 @@ static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
 
 } // namespace Cory
 
-DECLARE_ENUM_BITFIELD(Cory::ShaderType);
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
 DECLARE_ENUM_BITFIELD(Cory::BufferUsageBits);
 DECLARE_ENUM_BITFIELD(Cory::MemoryFlagBits);

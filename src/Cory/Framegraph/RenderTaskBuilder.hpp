@@ -87,10 +87,10 @@ class RenderTaskBuilder : NoCopy {
 
     /**
      * Declares a render pass with a default pipeline setup
-     * @param name              name of the render pass
+     * @param passDeclaration   the declaration of the pass
      * @return a builder class to set up the render pass. call finish() to obtain the pass object
      */
-    TransientRenderPassBuilder declareRenderPass(std::string_view name = "");
+    TransientRenderPass declareRenderPass(RenderPassDeclaration passDeclaration);
 
     /**
      * @brief Finish declaration of the render task.

@@ -32,12 +32,12 @@ class RenderPassCommandRecorder;
 class Surface;
 class Swapchain;
 struct AdapterProperties;
-struct Device;
-struct Fence;
-struct GpuSemaphore;
-struct Instance;
-struct Texture;
-struct TextureView;
+class Device;
+class Fence;
+class GpuSemaphore;
+class Instance;
+class Texture;
+class TextureView;
 struct VertexBufferLayout;
 struct VertexOptions;
 using GraphicsApi = VulkanGraphicsApi;
@@ -51,7 +51,8 @@ using TextureViewHandle = Handle<struct TextureView_t>;
 using BufferHandle = Handle<struct Buffer_t>;
 using CommandBufferHandle = Handle<struct CommandBuffer_t>;
 using CommandRecorderHandle = Handle<struct CommandRecorder_t>;
-using GraphicsPipelineHandle = Handle<struct Pipeline_t>;
+using GraphicsPipelineHandle = Handle<struct GraphicsPipeline_t>;
+using PipelineLayoutHandle = Handle<struct PipelineLayout_t>;
 
 } // namespace KDGpu
 

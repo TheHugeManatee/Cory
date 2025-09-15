@@ -14,9 +14,9 @@
 #include <range/v3/view/filter.hpp>
 #include <range/v3/view/transform.hpp>
 
-#include <KDGpu/vulkan/vulkan_resource_manager.h>
 #include <KDGpu/texture.h>
 #include <KDGpu/texture_view.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 #include <deque>
 #include <unordered_map>
@@ -149,8 +149,8 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandRecord
 
 TransientTextureHandle Framegraph::declareInput(TextureInfo info,
                                                 Sync::AccessType lastWriteAccess,
-                                                Gpu::Texture &image,
-                                                Gpu::TextureView &imageView)
+                                                const Texture &image,
+                                                const TextureView &imageView)
 {
     auto handle =
         data_->resources.registerExternal(std::move(info), lastWriteAccess, image, imageView);
@@ -230,7 +230,8 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         }
     }
 
-    std::vector<FramegraphTextureHandle> requiredResources; // collects all actually required resources
+    std::vector<FramegraphTextureHandle>
+        requiredResources; // collects all actually required resources
 
     // flood-fill the graph starting at the resources requested from the outside
     std::deque<TransientTextureHandle> nextResourcesToResolve{requestedResources.cbegin(),

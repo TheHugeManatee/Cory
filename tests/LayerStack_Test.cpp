@@ -39,12 +39,12 @@ class MockLayer : public Cory::ApplicationLayer {
         return false;
     }
 
-    // Cory::RenderTaskDeclaration<Cory::LayerPassOutputs>
-    // renderTask(Cory::RenderTaskBuilder builder, Cory::LayerPassOutputs previousLayer) override
-    // {
-    //     updatedIndex_ = counter++;
-    //     co_yield Cory::LayerPassOutputs{};
-    // }
+    Cory::RenderTaskDeclaration<Cory::LayerPassOutputs>
+    renderTask(Cory::RenderTaskBuilder builder, Cory::LayerPassOutputs previousLayer) override
+    {
+        updatedIndex_ = counter++;
+        co_yield Cory::LayerPassOutputs{};
+    }
 };
 
 TEST_CASE("LayerStack", "[LayerStack]")

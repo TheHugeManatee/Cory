@@ -15,8 +15,11 @@ namespace Cory::testing {
 
 Context &getTestContext()
 {
-    static Context testContext;
-    testContext.setupHeadlessDevice();
+    static Context testContext = [] {
+        Context ctx;
+        testContext.setupHeadlessDevice();
+        return ctx;
+    }();
     return testContext;
 }
 

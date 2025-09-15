@@ -104,6 +104,13 @@ void TextureManager::allocate(FramegraphTextureHandle handle)
         .depth = gsl::narrow<uint32_t>(res.info.size.z),
     };
 
+    // TODO: we should eventually infer the usage from the graph, not hardcode it here
+    Gpu::TextureUsageFlags usage = res.info.usage;
+    usage |= isDepthFormat(res.info.format) ? Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit
+                                            : Gpu::TextureUsageFlagBits::ColorAttachmentBit;
+    usage |= Gpu::TextureUsageFlagBits::SampledBit;
+    usage |= Gpu::TextureUsageFlagBits::InputAttachmentBit;
+
     // Create the texture (image)
     res.image = resources.createTexture(
         deviceHandle,
@@ -112,8 +119,9 @@ void TextureManager::allocate(FramegraphTextureHandle handle)
                             .format = res.info.format,
                             .extent = extent,
                             .mipLevels = 1,
+                            .arrayLayers = 1,
                             .samples = res.info.sampleCount,
-                            .usage = res.info.usage,
+                            .usage = usage,
                             .memoryUsage = Gpu::MemoryUsage::GpuOnly,
                             .sharingMode = Gpu::SharingMode::Exclusive,
                             .queueTypeIndices = {},

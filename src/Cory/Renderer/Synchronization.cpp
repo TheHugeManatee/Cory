@@ -565,7 +565,7 @@ void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
 
 void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier, VkImageMemoryBarrier2 *pVkBarrier)
 {
-    pVkBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    pVkBarrier->sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     pVkBarrier->pNext = nullptr;
     pVkBarrier->srcAccessMask = 0;
     pVkBarrier->dstAccessMask = 0;

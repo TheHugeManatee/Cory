@@ -86,6 +86,11 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
 
     auto renderArea = determineRenderArea();
 
+    // If we have color attachments, we keep the layers at 0 - this will make the framebuffer
+    // layers implicitly have as many layers as the first attachment. Otherwise, we set to 1
+    // as we assume it is a depth-only pass
+    const uint32_t fbArrayLayers = resolvedAttachments.empty() ? 1 : 0;
+
     Gpu::RenderPassCommandRecorderOptions renderPassOptions{
         .colorAttachments = std::move(resolvedAttachments),
         .depthStencilAttachment = depthStencilAttachment.value_or(Gpu::DepthStencilAttachment{}),
@@ -93,7 +98,7 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
         .viewCount = 1,
         .framebufferWidth = renderArea.extent.width,
         .framebufferHeight = renderArea.extent.height,
-        .framebufferArrayLayers = 0, // Default to first color attachment arrayLayer
+        .framebufferArrayLayers = fbArrayLayers,
     };
 
     auto renderPassRecorder = cmd.beginRenderPass(renderPassOptions);

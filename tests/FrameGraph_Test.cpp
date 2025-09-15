@@ -215,6 +215,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
         .format = TextureFormat::R8G8B8A8_SRGB,
         .extent = {1024, 768, 1},
         .mipLevels = 1,
+        .arrayLayers = 1,
         .samples = Gpu::SampleCountFlagBits::Samples1Bit,
         .usage =
             Gpu::TextureUsageFlagBits::ColorAttachmentBit | Gpu::TextureUsageFlagBits::SampledBit,

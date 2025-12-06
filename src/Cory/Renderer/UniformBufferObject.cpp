@@ -4,25 +4,20 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
 
-#include <Magnum/Vk/Buffer.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/Vulkan.h>
+#include <KDGpu/buffer_options.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 namespace Cory {
 
 namespace {
 size_t computeInstanceAlignment(Context &ctx, size_t instanceSize)
 {
-    const auto minOffsetAlignment =
-        ctx.device().properties().properties().properties.limits.minUniformBufferOffsetAlignment;
-    const auto atomSize =
-        ctx.device().properties().properties().properties.limits.nonCoherentAtomSize;
-
+    const auto minOffsetAlignment = ctx.physicalDevice().limits.minUniformBufferOffsetAlignment;
+    const auto atomSize = ctx.physicalDevice().limits.nonCoherentAtomSize;
     const auto alignment = std::lcm(minOffsetAlignment, atomSize);
 
+    // round up to nearest multiple of alignment
     if (alignment > 0) { return (instanceSize + alignment - 1) & ~(alignment - 1); }
     return instanceSize;
 }
@@ -36,22 +31,25 @@ UniformBufferObjectBase::UniformBufferObjectBase(Context &ctx,
     , alignedInstanceSize_{computeInstanceAlignment(ctx, instanceSize)}
     , instances_{instances}
 {
-    size_t size = instances_ * alignedInstanceSize_;
-    buffer_ = ctx_->resources().createBuffer(
-        "Uniform Buffer", size, BufferUsageBits::UniformBuffer, MemoryFlagBits::HostVisible);
+    auto &device = ctx_->device();
+    Gpu::DeviceSize size = instances_ * alignedInstanceSize_;
+    bufferHandle_ = device.createBuffer(KDGpu::BufferOptions{
+        .label = "Uniform Buffer",
+        .size = size,
+        .usage = Gpu::BufferUsageFlagBits::UniformBufferBit,
+        .memoryUsage = KDGpu::MemoryUsage::CpuToGpu,
+    });
 
-    // map the memory
-    VkDeviceMemory memory = ctx_->resources()[buffer_].dedicatedMemory();
-    VkResult r = ctx_->device()->MapMemory(
-        ctx_->device(), memory, 0, VK_WHOLE_SIZE, 0, (void **)&mappedMemory_);
-    THROW_ON_ERROR(r, "Mapping memory for uniform buffer failed");
+    // Map as long as the UBO object lives
+    mappedMemory_ =
+        reinterpret_cast<std::byte *>(ctx_->resources().getBuffer(bufferHandle_)->map());
 }
 
 void swap(UniformBufferObjectBase &lhs, UniformBufferObjectBase &rhs) noexcept
 {
     using std::swap;
     swap(lhs.ctx_, rhs.ctx_);
-    swap(lhs.buffer_, rhs.buffer_);
+    swap(lhs.bufferHandle_, rhs.bufferHandle_);
     swap(lhs.mappedMemory_, rhs.mappedMemory_);
     swap(lhs.instanceSize_, rhs.instanceSize_);
     swap(lhs.alignedInstanceSize_, rhs.alignedInstanceSize_);
@@ -72,35 +70,18 @@ UniformBufferObjectBase &UniformBufferObjectBase::operator=(UniformBufferObjectB
 
 UniformBufferObjectBase::~UniformBufferObjectBase()
 {
-    if (buffer_.valid()) {
-        // unmap memory
-        VkDeviceMemory memory = ctx_->resources()[buffer_].dedicatedMemory();
-        ctx_->device()->UnmapMemory(ctx_->device(), memory);
-        // release buffer
-        ctx_->resources().release(buffer_);
+    if (auto *buffer = ctx_->resources().getBuffer(bufferHandle_); buffer != nullptr) {
+        buffer->unmap();
+        ctx_->resources().deleteBuffer(bufferHandle_);
     }
 }
 
 void UniformBufferObjectBase::flushInternal()
 {
-    flushInternal(0, instances_ * alignedInstanceSize_);
-}
+    auto *buffer = ctx_->resources().getBuffer(bufferHandle_);
+    CO_CORE_ASSERT(buffer != nullptr, "UBO has invalid buffer handle!");
 
-void UniformBufferObjectBase::flushInternal(gsl::index instance)
-{
-    CO_CORE_ASSERT(instance < instances_, "Instance index out of range");
-    flushInternal(alignedInstanceSize_ * instance, alignedInstanceSize_);
-}
-
-void UniformBufferObjectBase::flushInternal(VkDeviceSize offset, VkDeviceSize size)
-{
-    VkDeviceMemory memory = ctx_->resources()[buffer_].dedicatedMemory();
-    VkMappedMemoryRange mappedRange = {.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-                                       .memory = memory,
-                                       .offset = offset,
-                                       .size = size};
-    auto r = ctx_->device()->FlushMappedMemoryRanges(ctx_->device(), 1, &mappedRange);
-    THROW_ON_ERROR(r, "Error flushing UBO memory!");
+    buffer->flush();
 }
 
 std::byte *UniformBufferObjectBase::instanceAt(gsl::index instance)
@@ -110,7 +91,10 @@ std::byte *UniformBufferObjectBase::instanceAt(gsl::index instance)
 }
 VkDescriptorBufferInfo UniformBufferObjectBase::descriptorInfo(gsl::index instance) const
 {
-    return VkDescriptorBufferInfo{.buffer = ctx_->resources()[buffer_].handle(),
+    auto *buffer = ctx_->resources().getBuffer(bufferHandle_);
+    CO_CORE_ASSERT(buffer != nullptr, "UBO has invalid buffer handle!");
+
+    return VkDescriptorBufferInfo{.buffer = buffer->buffer,
                                   .offset = instance * alignedInstanceSize_,
                                   .range = alignedInstanceSize_};
 }

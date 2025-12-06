@@ -27,8 +27,8 @@ set(CORY_SOURCES
         Application/Common.hpp
         #Application/DepthDebugLayer.cpp
         #Application/DepthDebugLayer.hpp
-        #Application/DynamicGeometry.cpp
-        #Application/DynamicGeometry.hpp
+        Application/DynamicGeometry.cpp
+        Application/DynamicGeometry.hpp
         Application/Event.hpp
         Application/ImGuiLayer.cpp
         Application/ImGuiLayer.hpp
@@ -95,8 +95,8 @@ set(CORY_SOURCES
         Renderer/Swapchain.hpp
         Renderer/Synchronization.cpp
         Renderer/Synchronization.hpp
-        #Renderer/UniformBufferObject.cpp
-        #Renderer/UniformBufferObject.hpp
+        Renderer/UniformBufferObject.cpp
+        Renderer/UniformBufferObject.hpp
 
         SceneGraph/Common.hpp
         SceneGraph/SceneGraph.cpp

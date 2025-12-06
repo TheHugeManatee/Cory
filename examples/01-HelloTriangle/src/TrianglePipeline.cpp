@@ -67,83 +67,46 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
     data_->layout = device.createPipelineLayout(pipelineLayoutOptions);
 
     // Create a pipeline
-    // clang-format off
     const KDGpu::GraphicsPipelineOptions pipelineOptions = {
         .label = "Triangle",
-        .shaderStages = {
-            { .shaderModule = vertexShader, .stage = KDGpu::ShaderStageFlagBits::VertexBit },
-            { .shaderModule = fragmentShader, .stage = KDGpu::ShaderStageFlagBits::FragmentBit }
-        },
-        .layout = data_->layout,
-        .vertex = {
-            .buffers = {
-                { .binding = 0, .stride = sizeof(KDGpu::VertexRate::Vertex) }
+        .shaderStages =
+            {
+                {.shaderModule = vertexShader, .stage = KDGpu::ShaderStageFlagBits::VertexBit},
+                {.shaderModule = fragmentShader, .stage = KDGpu::ShaderStageFlagBits::FragmentBit},
             },
-            .attributes = {
-                { .location = 0, .binding = 0, .format = KDGpu::Format::R32G32B32_SFLOAT }, // Position
-                { .location = 1, .binding = 0, .format = KDGpu::Format::R32G32B32_SFLOAT, .offset = sizeof(glm::vec3) } // Color
-            }
-        },
-        .renderTargets = {
-            { .format = window.colorFormat() }
-        },
-        .depthStencil = {
-            .format = window.depthFormat(),
-            .depthWritesEnabled = true,
-            .depthCompareOperation = KDGpu::CompareOperation::Less
-        },
-        .primitive {
+        .layout = data_->layout,
+        .vertex =
+            {
+                .buffers = {{.binding = 0, .stride = sizeof(KDGpu::VertexRate::Vertex)}},
+                .attributes = {{
+                                   // Position
+                                   .location = 0,
+                                   .binding = 0,
+                                   .format = KDGpu::Format::R32G32B32_SFLOAT,
+                               },
+                               {
+                                   // Color
+                                   .location = 1,
+                                   .binding = 0,
+                                   .format = KDGpu::Format::R32G32B32_SFLOAT,
+                                   .offset = sizeof(glm::vec3),
+                               }},
+            },
+        .renderTargets = {{.format = window.colorFormat()}},
+        .depthStencil =
+            {
+                .format = window.depthFormat(),
+                .depthWritesEnabled = true,
+                .depthCompareOperation = KDGpu::CompareOperation::Less,
+            },
+        .primitive{
             .cullMode = KDGpu::CullModeFlagBits::None,
         },
-        .multisample  = {
-            .samples = window.samples(),
-            .alphaToCoverageEnabled = false,
-        },
+        .multisample =
+            {
+                .samples = window.samples(),
+                .alphaToCoverageEnabled = false,
+            },
     };
-    // clang-format on
     data_->pipeline = device.createGraphicsPipeline(pipelineOptions);
-    //
-    // mainRenderPass_ = std::make_unique<Vk::RenderPass>(
-    //     ctx_.device(),
-    //     Vk::RenderPassCreateInfo{}
-    //         .setAttachments(
-    //             {// offscreen color
-    //              Vk::AttachmentDescription{
-    //                  colorFormat,
-    //                  {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-    //                  {Vk::AttachmentStoreOperation::Store,
-    //                  Vk::AttachmentStoreOperation::DontCare}, Vk::ImageLayout::Undefined,
-    //                  Vk::ImageLayout::ColorAttachment,
-    //                  sampleCount},
-    //              // offscreen depth
-    //              Vk::AttachmentDescription{
-    //                  depthFormat,
-    //                  {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-    //                  {Vk::AttachmentStoreOperation::DontCare,
-    //                   Vk::AttachmentStoreOperation::DontCare},
-    //                  Vk::ImageLayout::Undefined,
-    //                  Vk::ImageLayout::DepthStencilAttachment,
-    //                  sampleCount}})
-    //         .addSubpass(Vk::SubpassDescription{}
-    //                         .setColorAttachments(
-    //                             {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}})
-    //                         .setDepthStencilAttachment({Vk::AttachmentReference{
-    //                             1, Vk::ImageLayout::DepthStencilAttachment}}))
-    //         .setDependencies({Vk::SubpassDependency{
-    //             Vk::SubpassDependency::External, // srcSubpass
-    //             0,                               // dstSubpass
-    //             Vk::PipelineStage::ColorAttachmentOutput |
-    //                 Vk::PipelineStage::EarlyFragmentTests, // srcStages
-    //             Vk::PipelineStage::ColorAttachmentOutput |
-    //                 Vk::PipelineStage::EarlyFragmentTests, // dstStages
-    //             Vk::Access{},                              // srcAccess
-    //             Vk::Access::ColorAttachmentWrite |
-    //                 Vk::Access::DepthStencilAttachmentWrite, // dstAccess
-    //         }}));
-    //
-    //
-    //
-    // pipeline_ =
-    //     std::make_unique<Vk::Pipeline>(ctx_.device(),
-    //     std::move(rasterizationPipelineCreateInfo));
 }

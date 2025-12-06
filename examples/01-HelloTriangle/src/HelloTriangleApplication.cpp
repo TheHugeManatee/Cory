@@ -303,6 +303,7 @@ void HelloTriangleApplication::createGeometry()
         index_staging_buffer = ctx().graphicsQueue().uploadBufferData(uploadOptions);
     }
     // Ensure upload is finished.
+    vertex_staging_buffer.fence.wait();
     index_staging_buffer.fence.wait();
 }
 

@@ -82,8 +82,8 @@ set(CORY_SOURCES
         Renderer/Common.hpp
         Renderer/Context.cpp
         Renderer/Context.hpp
-        #Renderer/DescriptorSets.cpp
-        #Renderer/DescriptorSets.hpp
+        Renderer/DescriptorSets.cpp
+        Renderer/DescriptorSets.hpp
         Renderer/ShaderManager.cpp
         Renderer/ShaderManager.hpp
         #Renderer/Semaphore.hpp
@@ -122,6 +122,7 @@ set(CORY_SOURCES
         Renderer/Gpu.cpp
         Renderer/PipelineCache.cpp
         Renderer/PipelineCache.hpp
+        Base/EnumMap.hpp
 )
 
 

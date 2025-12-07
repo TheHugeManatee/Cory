@@ -1,8 +1,10 @@
 #pragma once
 
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
-#include <cstdint>
+#include <KDGpu/bind_group_layout_options.h>
+
 #include <memory>
 
 namespace Cory {
@@ -49,61 +51,48 @@ class DescriptorSets {
 
     /**
      * Initialize the descriptor set manager
-     * @param device            the device for which to allocate the layouts
-     * @param resourceManager   the resource manager to use for allocating resources
+     * @param device            the device to use
      * @param defaultLayout     the layout to use for the three sets
-     * @param instances         number of instances for each descriptor set.
-     *
-     * @a instances is usually equal to the number of frames in flight.
      */
-    void init(Magnum::Vk::Device &device,
-              ShaderManager &resourceManager,
-              Magnum::Vk::DescriptorSetLayoutCreateInfo defaultLayout,
-              uint32_t instances);
+    void init(Gpu::Device &device, Gpu::BindGroupLayoutOptions defaultLayout);
 
-    [[nodiscard]] DescriptorSetLayoutHandle layout();
-
-    /// the number of instances available
-    [[nodiscard]] uint32_t instances() const;
+    [[nodiscard]] const Gpu::BindGroupLayout &layout();
 
     /**
      * Record a descriptor write for updating an UBO reference
      * @param type
-     * @param instanceIndex
+     * @param frameInFlightIndex
      * @param ubo
      *
      * @note This write will not be issued until @b flushWrites() is called.
      */
     DescriptorSets &
-    write(SetType type, gsl::index instanceIndex, const UniformBufferObjectBase &ubo);
+    write(SetType type, gsl::index frameInFlightIndex, const UniformBufferObjectBase &ubo);
 
     /**
      * Record a descriptor write for updating image references
-     * @param type
-     * @param instanceIndex
-     * @param textures      the textures to update
      *
      * @note This write will not be issued until @b flushWrites() is called.
      */
-    DescriptorSets &write(DescriptorSets::SetType type,
-                          gsl::index instanceIndex,
-                          gsl::span<VkImageLayout> layouts,
-                          gsl::span<ImageViewHandle> images,
-                          gsl::span<SamplerHandle> samplers);
-
+    DescriptorSets &write(SetType type,
+                          gsl::index frameInFlightIndex,
+                          gsl::span<Gpu::TextureLayout> layouts,
+                          gsl::span<Gpu::TextureViewHandle> images,
+                          gsl::span<Gpu::TextureSamplerHandle> samplers);
     // TODO implement a write for the Buffers
 
     /**
-     * @brief flush all updates, calling vkUpdateDescriptorSets with the previously recorded writes
+     * @brief flush all updates, calling vkUpdateDescriptorSets with the previously recorded
+     writes
      */
     DescriptorSets &flushWrites();
 
-    [[nodiscard]] Magnum::Vk::DescriptorSet &get(SetType type, gsl::index instanceIndex);
+    [[nodiscard]] Gpu::BindGroup &get(SetType type, gsl::index instanceIndex);
 
     /// bind the given instance index
-    DescriptorSets &bind(Magnum::Vk::CommandBuffer &cmd,
+    DescriptorSets &bind(Gpu::RenderPassCommandRecorder &cmd,
                          gsl::index instanceIndex,
-                         Magnum::Vk::PipelineLayout &pipelineLayout);
+                         const Gpu::PipelineLayout &pipelineLayout);
 
   private:
     std::unique_ptr<struct DescriptorSetManagerPrivate> data_;

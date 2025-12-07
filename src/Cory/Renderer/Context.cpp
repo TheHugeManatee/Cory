@@ -1,3 +1,5 @@
+#include "DescriptorSets.hpp"
+
 #include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
@@ -51,6 +53,7 @@ struct ContextPrivate {
     Gpu::Queue queue;
 
     ShaderManager shaders;
+    DescriptorSets descriptorSets;
     std::unique_ptr<PipelineCache> pipelineCache;
 
     inline static Function<void(const DebugMessageInfo &)> validationMessageCallback;
@@ -254,6 +257,40 @@ void Context::setupDevice(const Gpu::Surface &surface)
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+
+    Gpu::ResourceBindingFlags bindless_flags;
+    bindless_flags |= Gpu::ResourceBindingFlagBits::PartiallyBoundBit;
+    bindless_flags |= Gpu::ResourceBindingFlagBits::UpdateAfterBindBit;
+
+    data_->descriptorSets.init(
+        data_->device,
+        Gpu::BindGroupLayoutOptions{
+            .label = "Default Bind Group Layout",
+            .bindings = {
+                {
+                    {
+                        .binding = 0,
+                        .count = 1,
+                        .resourceType = Gpu::ResourceBindingType::DynamicUniformBuffer,
+                        .shaderStages = Gpu::ShaderStageFlagBits::All,
+                        .flags = bindless_flags,
+                    },
+                    {
+                        .binding = 1,
+                        .count = 8,
+                        .resourceType = Gpu::ResourceBindingType::CombinedImageSampler,
+                        .shaderStages = Gpu::ShaderStageFlagBits::All,
+                        .flags = bindless_flags,
+                    },
+                    {
+                        .binding = 1,
+                        .count = 8,
+                        .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                        .shaderStages = Gpu::ShaderStageFlagBits::All,
+                        .flags = bindless_flags,
+                    },
+                },
+            }});
 }
 
 void Context::setupHeadlessDevice()

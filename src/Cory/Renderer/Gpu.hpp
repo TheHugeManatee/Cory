@@ -48,6 +48,7 @@ template <typename T> class Handle;
 using DeviceHandle = Handle<struct Device_t>;
 using TextureHandle = Handle<struct Texture_t>;
 using TextureViewHandle = Handle<struct TextureView_t>;
+using TextureSamplerHandle = Handle<struct Sampler_t>;
 using BufferHandle = Handle<struct Buffer_t>;
 using CommandBufferHandle = Handle<struct CommandBuffer_t>;
 using CommandRecorderHandle = Handle<struct CommandRecorder_t>;

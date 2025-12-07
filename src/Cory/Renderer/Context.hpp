@@ -71,6 +71,9 @@ class Context : NoCopy {
     ShaderManager &shaders();
     const ShaderManager &shaders() const;
 
+    DescriptorSets &descriptors();
+    const DescriptorSets &descriptors() const;
+
   private:
     Gpu::AdapterAndDevice
     createDefaultDevice(const Gpu::Surface &surface,

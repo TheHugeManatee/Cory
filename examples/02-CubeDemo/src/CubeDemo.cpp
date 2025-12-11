@@ -73,7 +73,10 @@ static struct AnimationData {
     glm::vec3 rotation{0.0f};
 } ad;
 
-void randomize(AnimationData::param &p) { p.val = Cory::RNG::Uniform(p.min, p.max); }
+void randomize(AnimationData::param &p)
+{
+    p.val = Cory::RNG::Uniform(p.min, p.max);
+}
 void randomize()
 {
     randomize(ad.ti);
@@ -235,7 +238,9 @@ void CubeDemoApplication::run()
         }
 
         // break if number of frames to render are reached
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
+        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+            break;
+        }
     }
 
     // wait until last frame is finished rendering
@@ -384,15 +389,24 @@ double CubeDemoApplication::now()
         .count();
 }
 
-double CubeDemoApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }
+double CubeDemoApplication::getElapsedTimeSeconds() const
+{
+    return now() - startupTime_;
+}
 void CubeDemoApplication::drawImguiControls()
 {
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
     if (ImGui::Begin("Animation Params")) {
-        if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
-        if (ImGui::Button("Restart")) { startupTime_ = now(); }
-        if (ImGui::Button("Randomize")) { randomize(); }
+        if (ImGui::Button("Dump Framegraph")) {
+            dumpNextFramegraph_ = true;
+        }
+        if (ImGui::Button("Restart")) {
+            startupTime_ = now();
+        }
+        if (ImGui::Button("Randomize")) {
+            randomize();
+        }
 
         CoImGui::Input("Cubes", ad.num_cubes, 1, 10000);
         CoImGui::Slider("blend", ad.blend, 0.0f, 1.0f);
@@ -424,7 +438,9 @@ void CubeDemoApplication::drawImguiControls()
         changed = CoImGui::Input("center", center, "%.3f") || changed;
         changed = CoImGui::Input("up", up, "%.3f") || changed;
 
-        if (changed) { camera_.setLookat(position, center, up); }
+        if (changed) {
+            camera_.setLookat(position, center, up);
+        }
 
         if (ImGui::CollapsingHeader("View Matrix")) {
             CoImGui::Input("r0", mat[0], "%.3f", ImGuiInputTextFlags_ReadOnly);
@@ -451,17 +467,23 @@ void CubeDemoApplication::setupCameraCallbacks()
     });
 
     window_->onMouseMoved.connect([this](Cory::MouseMovedEvent event) {
-        if (layers().processEvent(event)) { return; }
+        if (layers().processEvent(event)) {
+            return;
+        }
         if (event.button != Cory::MouseButton::None) {
             camera_.mouseMove(glm::ivec2(event.position), event.button, event.modifiers);
         }
     });
     window_->onMouseButton.connect([this](Cory::MouseButtonEvent event) {
-        if (layers().processEvent(event)) { return; }
+        if (layers().processEvent(event)) {
+            return;
+        }
         camera_.setMousePosition(event.position);
     });
     window_->onMouseScrolled.connect([this](Cory::ScrollEvent event) {
-        if (layers().processEvent(event)) { return; }
+        if (layers().processEvent(event)) {
+            return;
+        }
         camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
     });
 }

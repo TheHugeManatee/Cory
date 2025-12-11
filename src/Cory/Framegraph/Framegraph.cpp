@@ -137,7 +137,9 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandRecord
 
     CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
     const auto &coroHandle = rpInfo.coroHandle;
-    if (!coroHandle.done()) { coroHandle.resume(); }
+    if (!coroHandle.done()) {
+        coroHandle.resume();
+    }
 
     CO_CORE_ASSERT(coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
@@ -196,13 +198,22 @@ void Framegraph::enqueueRenderPass(RenderTaskHandle passHandle,
     data_->renderTasks[passHandle].coroHandle = coroHandle;
 }
 
-TextureManager &Framegraph::resources() { return data_->resources; }
-const TextureManager &Framegraph::resources() const { return data_->resources; }
+TextureManager &Framegraph::resources()
+{
+    return data_->resources;
+}
+const TextureManager &Framegraph::resources() const
+{
+    return data_->resources;
+}
 const std::vector<TransientTextureHandle> &Framegraph::externalInputs() const
 {
     return data_->externalInputs;
 }
-const std::vector<TransientTextureHandle> &Framegraph::outputs() const { return data_->outputs; }
+const std::vector<TransientTextureHandle> &Framegraph::outputs() const
+{
+    return data_->outputs;
+}
 
 ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResources)
 {
@@ -245,7 +256,9 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         auto writingTaskIt = resourceToTask.find(nextResource);
         if (writingTaskIt == resourceToTask.end()) {
             // if resource is external, we don't have to resolve it
-            if (ranges::contains(data_->externalInputs, nextResource)) { continue; }
+            if (ranges::contains(data_->externalInputs, nextResource)) {
+                continue;
+            }
 
             CO_CORE_ERROR(
                 "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not created "

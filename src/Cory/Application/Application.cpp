@@ -24,10 +24,22 @@ void Application::init(const ContextCreationInfo &info)
 }
 
 // <editor-fold desc="Accessors">
-Context &Application::ctx() { return data_->ctx; }
-const Context &Application::ctx() const { return data_->ctx; }
-LayerStack &Application::layers() { return data_->layers; }
-const LayerStack &Application::layers() const { return data_->layers; }
+Context &Application::ctx()
+{
+    return data_->ctx;
+}
+const Context &Application::ctx() const
+{
+    return data_->ctx;
+}
+LayerStack &Application::layers()
+{
+    return data_->layers;
+}
+const LayerStack &Application::layers() const
+{
+    return data_->layers;
+}
 // </editor-fold>
 
 Application::~Application() = default;

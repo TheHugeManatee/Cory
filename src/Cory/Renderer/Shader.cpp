@@ -210,6 +210,9 @@ std::string Shader::compileToAssembly(bool optimize /*= false*/)
 
     return {result.cbegin(), result.cend()};
 }
-bool Shader::valid() const { return ctx_ && type_ != SHADER_TYPE_UNKNOWN && module_ != nullptr; }
+bool Shader::valid() const
+{
+    return ctx_ && type_ != SHADER_TYPE_UNKNOWN && module_ != nullptr;
+}
 
 } // namespace Cory

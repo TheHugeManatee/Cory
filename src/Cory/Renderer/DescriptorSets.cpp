@@ -48,7 +48,10 @@ void DescriptorSets::init(Gpu::Device &device, Gpu::BindGroupLayoutOptions defau
     }
 }
 
-const Gpu::BindGroupLayout &DescriptorSets::layout() { return data_->layout; }
+const Gpu::BindGroupLayout &DescriptorSets::layout()
+{
+    return data_->layout;
+}
 
 Gpu::BindGroup &DescriptorSets::get(SetType type, gsl::index frameInFlightIndex)
 {

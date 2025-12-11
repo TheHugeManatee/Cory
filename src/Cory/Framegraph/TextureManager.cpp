@@ -149,7 +149,9 @@ void TextureManager::allocate(const std::vector<FramegraphTextureHandle> &handle
     for (const auto &handle : handles) {
         auto &res = data_->textureResources_[handle];
         // don't allocate external resources or resources that are already allocated
-        if (res.state.status != TextureMemoryStatus::Virtual) { continue; }
+        if (res.state.status != TextureMemoryStatus::Virtual) {
+            continue;
+        }
 
         allocate(handle);
     }

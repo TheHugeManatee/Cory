@@ -77,7 +77,7 @@ template <typename StoredType_> class SlotMap : NoCopy {
     [[nodiscard]] size_t capacity() const noexcept { return chunkTable_.size() * CHUNK_SIZE; }
 
     /// query if the slot map is empty
-    [[nodiscard]] bool empty() const { return size() == 0;}
+    [[nodiscard]] bool empty() const { return size() == 0; }
 
     /// check if a given handle is valid to dereference
     [[nodiscard]] bool isValid(SlotMapHandle id) const;
@@ -298,7 +298,9 @@ template <typename StoredType_> void SlotMap<StoredType_>::clear()
             const auto objectId = chunk.id[i];
             // if it's alive, destroy it and put into free list
             if (objectId.valid()) {
-                if constexpr (!std::is_trivial_v<StoredType>) { chunk.storage[i].~StoredType(); }
+                if constexpr (!std::is_trivial_v<StoredType>) {
+                    chunk.storage[i].~StoredType();
+                }
                 // clear free bit and increase version
                 chunk.id[i] = SlotMapHandle::setFreeBit(SlotMapHandle::nextVersion(objectId));
                 freeList_.push_back(chunk.id[i].index());
@@ -326,17 +328,23 @@ template <typename StoredType_> SlotMapHandle SlotMap<StoredType_>::update(SlotM
 
 template <typename StoredType_> bool SlotMap<StoredType_>::isValid(SlotMapHandle id) const
 {
-    if (!id.valid()) { return false; }
+    if (!id.valid()) {
+        return false;
+    }
 
     const uint32_t chunkIndex = id.index() / CHUNK_SIZE;
-    if (chunkIndex >= chunkTable_.size()) { return false; }
+    if (chunkIndex >= chunkTable_.size()) {
+        return false;
+    }
     auto object = objectAt(id.index());
     return object.id == id;
 }
 
 template <typename StoredType_> SlotMap<StoredType_>::~SlotMap()
 {
-    if constexpr (!std::is_trivial_v<StoredType>) { clear(); }
+    if constexpr (!std::is_trivial_v<StoredType>) {
+        clear();
+    }
     for (Chunk *chunkPtr : chunkTable_) {
         alloc_.deallocate(chunkPtr, 1);
     }
@@ -398,7 +406,9 @@ uint32_t SlotMap<StoredType_>::findNextAliveIndex(uint32_t start) const
     uint32_t cap = static_cast<uint32_t>(capacity());
     for (uint32_t index = start; index < cap; ++index) {
         ConstStoredInner object = objectAt(index);
-        if (object.id.valid()) { return index; }
+        if (object.id.valid()) {
+            return index;
+        }
     }
     return cap;
 }
@@ -410,7 +420,9 @@ cppcoro::generator<SlotMapHandle> SlotMap<StoredType_>::handles() const
         auto &chunk = *chunkPtr;
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
             auto handle = chunk.id[i];
-            if (handle.valid()) { co_yield handle; }
+            if (handle.valid()) {
+                co_yield handle;
+            }
         }
     }
 }

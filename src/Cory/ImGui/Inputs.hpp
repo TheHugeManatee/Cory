@@ -17,7 +17,10 @@ namespace CoImGui {
 namespace detail {
 static constexpr float LABEL_WIDTH{150.0f};
 
-inline float availableWidth() { return ::ImGui::GetContentRegionAvail().x; }
+inline float availableWidth()
+{
+    return ::ImGui::GetContentRegionAvail().x;
+}
 
 } // namespace detail
 

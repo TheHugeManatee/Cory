@@ -77,7 +77,9 @@ class BitField {
 
         for (unsigned int digit = NUM_BITS; digit > 0; --digit) {
             UnderlyingEnum bit{UnderlyingType(1) << (digit - 1)};
-            if (is_set(bit)) { setBits.push_back(bit); }
+            if (is_set(bit)) {
+                setBits.push_back(bit);
+            }
         }
         return setBits;
     }
@@ -93,7 +95,9 @@ struct fmt::formatter<Cory::BitField<E>, std::enable_if_t<std::is_enum_v<E>, cha
     : fmt::formatter<std::string_view, char> {
     auto format(Cory::BitField<E> e, format_context &ctx) const
     {
-        if (e.bits() == E{}) { return fmt::format_to(ctx.out(), "{}", E{}); }
+        if (e.bits() == E{}) {
+            return fmt::format_to(ctx.out(), "{}", E{});
+        }
         return fmt::format_to(ctx.out(), "{}", fmt::join(e.set_bits(), " | "));
     }
 };

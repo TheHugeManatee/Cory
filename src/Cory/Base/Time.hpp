@@ -51,5 +51,3 @@ using Timepoint = AppClock::time_point;
 } // namespace Cory
 
 // user-defined literals for convenience
-
-

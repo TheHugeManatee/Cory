@@ -23,7 +23,9 @@ struct PipelineCachePrivate {
 Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name,
                                                  const PipelineDescriptor &info)
 {
-    if (auto it = data_->cache.find(info); it != data_->cache.end()) { return it->second; }
+    if (auto it = data_->cache.find(info); it != data_->cache.end()) {
+        return it->second;
+    }
     auto handle = data_->create(name, info);
     data_->cache.insert({info, handle});
     return handle;

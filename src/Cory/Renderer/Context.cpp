@@ -86,24 +86,36 @@ Context::Context(ContextCreationInfo creationInfo)
     if (creationInfo.validation == ValidationLayers::Enabled) {
         instanceOptions.layers.push_back("VK_LAYER_KHRONOS_validation");
         instanceOptions.extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        Gpu::VulkanGraphicsApi::setCustomValidationHandler(
+            ContextPrivate::receiveDebugUtilsMessage);
     }
     data_->instance = data_->api.createInstance(instanceOptions);
     data_->shaders.setContext(*this);
 }
 
-Context::Context(Context &&rhs) noexcept { std::swap(rhs.data_, data_); }
+Context::Context(Context &&rhs) noexcept
+{
+    std::swap(rhs.data_, data_);
+}
 Context &Context::operator=(Context &&rhs) noexcept
 {
-    if (this != &rhs) { std::swap(rhs.data_, data_); }
+    if (this != &rhs) {
+        std::swap(rhs.data_, data_);
+    }
     return *this;
 }
 
 Context::~Context()
 {
-    if (data_) { CO_CORE_TRACE("Destroying Cory::Context {}", data_->name); }
+    if (data_) {
+        CO_CORE_TRACE("Destroying Cory::Context {}", data_->name);
+    }
 }
 
-std::string Context::name() const { return data_->name; }
+std::string Context::name() const
+{
+    return data_->name;
+}
 
 Gpu::GpuSemaphore Context::createSemaphore(std::string_view name)
 {
@@ -130,10 +142,12 @@ Gpu::Fence Context::createFence(std::string_view name, FenceCreateMode mode)
 void Context::onVulkanDebugMessageReceived(Function<void(const DebugMessageInfo &)> callback)
 {
     ContextPrivate::validationMessageCallback = std::move(callback);
-    Gpu::VulkanGraphicsApi::setCustomValidationHandler(ContextPrivate::receiveDebugUtilsMessage);
 }
 
-bool Context::isHeadless() const { return data_->isHeadless; }
+bool Context::isHeadless() const
+{
+    return data_->isHeadless;
+}
 
 Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
                                                    DeviceFeatures features,
@@ -313,7 +327,9 @@ void Context::setupHeadlessDevice()
             break;
         }
     }
-    if (!selectedAdapter) { selectedAdapter = adapters[0]; }
+    if (!selectedAdapter) {
+        selectedAdapter = adapters[0];
+    }
 
     CO_CORE_INFO("Selected adapter: {}", selectedAdapter->properties().deviceName);
 
@@ -352,14 +368,32 @@ void Context::setupHeadlessDevice()
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
 }
 
-Gpu::Instance &Context::instance() { return data_->instance; }
-Gpu::GraphicsApi &Context::graphicsApi() { return data_->api; }
-const Gpu::AdapterProperties &Context::physicalDevice() { return data_->adapter->properties(); }
-Gpu::Device &Context::device() { return data_->device; }
+Gpu::Instance &Context::instance()
+{
+    return data_->instance;
+}
+Gpu::GraphicsApi &Context::graphicsApi()
+{
+    return data_->api;
+}
+const Gpu::AdapterProperties &Context::physicalDevice()
+{
+    return data_->adapter->properties();
+}
+Gpu::Device &Context::device()
+{
+    return data_->device;
+}
 
-Gpu::Queue &Context::graphicsQueue() { return data_->queue; }
+Gpu::Queue &Context::graphicsQueue()
+{
+    return data_->queue;
+}
 
-Gpu::VulkanResourceManager &Context::resources() { return *data_->api.resourceManager(); }
+Gpu::VulkanResourceManager &Context::resources()
+{
+    return *data_->api.resourceManager();
+}
 const Gpu::VulkanResourceManager &Context::resources() const
 {
     return *data_->api.resourceManager();
@@ -371,18 +405,32 @@ PipelineCache &Context::pipelineCache()
     return *data_->pipelineCache;
 }
 
-ShaderManager &Context::shaders() { return data_->shaders; }
-const ShaderManager &Context::shaders() const { return data_->shaders; }
+ShaderManager &Context::shaders()
+{
+    return data_->shaders;
+}
+const ShaderManager &Context::shaders() const
+{
+    return data_->shaders;
+}
 
-DescriptorSets &Context::descriptors() { return data_->descriptorSets; }
-const DescriptorSets &Context::descriptors() const { return data_->descriptorSets; }
+DescriptorSets &Context::descriptors()
+{
+    return data_->descriptorSets;
+}
+const DescriptorSets &Context::descriptors() const
+{
+    return data_->descriptorSets;
+}
 
 void ContextPrivate::receiveDebugUtilsMessage(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageTypes,
     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData)
 {
-    if (!validationMessageCallback) { return; }
+    if (!validationMessageCallback) {
+        return;
+    }
 
     DebugMessageInfo info{.severity = static_cast<DebugMessageSeverity>(messageSeverity),
                           .messageType = static_cast<DebugMessageType>(messageTypes),

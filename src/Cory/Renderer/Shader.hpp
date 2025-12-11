@@ -13,7 +13,9 @@ namespace Cory {
 
 class ShaderSource {
   public:
-    ShaderSource(std::string source, Gpu::ShaderStageFlagBits type, std::filesystem::path filePath = "Unknown");
+    ShaderSource(std::string source,
+                 Gpu::ShaderStageFlagBits type,
+                 std::filesystem::path filePath = "Unknown");
 
     /**
      * Loads a shader from a file. If type is not specified, will try to guess the
@@ -23,7 +25,8 @@ class ShaderSource {
      *  - *.frag: Fragment Shader
      *  - *.comp: Compute Shader
      */
-    ShaderSource(std::filesystem::path filePath, Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN);
+    ShaderSource(std::filesystem::path filePath,
+                 Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN);
 
     // copyable
     ShaderSource(const ShaderSource &rhs) = default;

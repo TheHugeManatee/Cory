@@ -35,7 +35,9 @@ struct SignalTree::InternalNode {
         auto expected = count_.load();
         while (expected > 0) {
             auto desired = expected - 1;
-            if (count_.compare_exchange_weak(expected, desired)) { return true; }
+            if (count_.compare_exchange_weak(expected, desired)) {
+                return true;
+            }
         }
         return false;
     }
@@ -127,7 +129,9 @@ SignalTree::SignalTree(std::uint64_t signals, CreateMode createMode)
             --next_node;
         }
         counter_max *= 2;
-        if (nodes_per_level == 1) { break; }
+        if (nodes_per_level == 1) {
+            break;
+        }
     }
     // fill all leaf node bits to fully set
     leafNodeBlocks_.resize(leafNodesSize, LeafNodeBlock{~0ull});
@@ -147,7 +151,9 @@ bool SignalTree::set(SignalIdx index) noexcept
     for (auto internalNodeIdx = parent(internalNodes_.size() + *index);;
          internalNodeIdx = parent(internalNodeIdx)) {
         internalNodes_[internalNodeIdx].inc();
-        if (internalNodeIdx == ROOT_NODE_IDX) { break; }
+        if (internalNodeIdx == ROOT_NODE_IDX) {
+            break;
+        }
     }
     return true;
 }
@@ -169,10 +175,14 @@ SignalTree::SignalIdx SignalTree::select(uint64_t biasBits) noexcept
         auto firstNodeIdx = left(currentNodeIdx);
         auto secondNodeIdx = right(currentNodeIdx);
 
-        if (biasBits & 1) { std::swap(firstNodeIdx, secondNodeIdx); }
+        if (biasBits & 1) {
+            std::swap(firstNodeIdx, secondNodeIdx);
+        }
         biasBits >>= 1;
 
-        if (!isNodeInternal(firstNodeIdx)) { return selectLeafNode(firstNodeIdx, secondNodeIdx); }
+        if (!isNodeInternal(firstNodeIdx)) {
+            return selectLeafNode(firstNodeIdx, secondNodeIdx);
+        }
 
         currentNodeIdx = selectInternalNode(firstNodeIdx, secondNodeIdx);
     }
@@ -248,8 +258,12 @@ SignalTree::NodeIdx SignalTree::selectInternalNode(NodeIdx firstIdx, NodeIdx sec
     // It is not expected that this loop runs for longer than one or two iterations, but it
     // can theoretically run for longer i very unlucky cases of thread scheduling.
     while (true) {
-        if (internalNodes_[firstIdx].tryDec()) { return firstIdx; }
-        if (internalNodes_[secondIdx].tryDec()) { return secondIdx; }
+        if (internalNodes_[firstIdx].tryDec()) {
+            return firstIdx;
+        }
+        if (internalNodes_[secondIdx].tryDec()) {
+            return secondIdx;
+        }
     }
 }
 
@@ -264,8 +278,12 @@ SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondI
     // to it, while at the same time a producer has set the firstSignal after we
     // have checked it. To handle the case, we need to loop here.
     while (true) {
-        if (updateLeafSignal(firstSignalIdx, false)) { return firstSignalIdx; }
-        if (updateLeafSignal(secondSignalIdx, false)) { return secondSignalIdx; }
+        if (updateLeafSignal(firstSignalIdx, false)) {
+            return firstSignalIdx;
+        }
+        if (updateLeafSignal(secondSignalIdx, false)) {
+            return secondSignalIdx;
+        }
     }
 }
 
@@ -274,7 +292,9 @@ bool SignalTree::updateLeafSignal(SignalIdx signal, bool set)
     auto leafNodeBlockIndex = *signal / LeafNodeBlock::NUM_BITS;
     auto leafNodeBit = *signal % LeafNodeBlock::NUM_BITS;
 
-    if (set) { return leafNodeBlocks_[leafNodeBlockIndex].set(leafNodeBit); }
+    if (set) {
+        return leafNodeBlocks_[leafNodeBlockIndex].set(leafNodeBit);
+    }
 
     return leafNodeBlocks_[leafNodeBlockIndex].clear(leafNodeBit);
 }

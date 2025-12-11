@@ -6,7 +6,10 @@ namespace Cory {
 
 std::map<std::string, Profiler::Record> Profiler::s_records;
 
-void Profiler::PushCounter(std::string &name, int64_t deltaNs) { s_records[name].push(deltaNs); }
+void Profiler::PushCounter(std::string &name, int64_t deltaNs)
+{
+    s_records[name].push(deltaNs);
+}
 
 ScopeTimer::ScopeTimer(std::string name)
     : m_start{std::chrono::high_resolution_clock::now()}

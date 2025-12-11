@@ -285,7 +285,9 @@ bool ImGuiRenderer::updateGeometryBuffers(FrameContext &frameCtx)
     // Update buffers only if vertex or index count has been changed compared to current buffer size
     if ((vertexBufferSize == 0) || (indexBufferSize == 0)) return false;
 
-    if (m_meshes.size() <= frameCtx.inFlightIndex) { m_meshes.resize(frameCtx.inFlightIndex + 1); }
+    if (m_meshes.size() <= frameCtx.inFlightIndex) {
+        m_meshes.resize(frameCtx.inFlightIndex + 1);
+    }
     m_mesh = &m_meshes[frameCtx.inFlightIndex];
 
     // Vertex buffer

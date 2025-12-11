@@ -19,7 +19,9 @@ size_t computeInstanceAlignment(Context &ctx, size_t instanceSize)
     const auto alignment = std::lcm(minOffsetAlignment, atomSize);
 
     // round up to nearest multiple of alignment
-    if (alignment > 0) { return (instanceSize + alignment - 1) & ~(alignment - 1); }
+    if (alignment > 0) {
+        return (instanceSize + alignment - 1) & ~(alignment - 1);
+    }
     return instanceSize;
 }
 } // namespace
@@ -68,9 +70,15 @@ UniformBufferObjectBase &UniformBufferObjectBase::operator=(UniformBufferObjectB
     return *this;
 }
 
-UniformBufferObjectBase::~UniformBufferObjectBase() { buffer_.unmap(); }
+UniformBufferObjectBase::~UniformBufferObjectBase()
+{
+    buffer_.unmap();
+}
 
-void UniformBufferObjectBase::flushInternal() { buffer_.flush(); }
+void UniformBufferObjectBase::flushInternal()
+{
+    buffer_.flush();
+}
 
 std::byte *UniformBufferObjectBase::instanceAt(gsl::index instance)
 {

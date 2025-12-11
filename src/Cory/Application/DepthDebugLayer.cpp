@@ -64,7 +64,9 @@ void DepthDebugLayer::onDetach(Context &ctx)
 
 bool DepthDebugLayer::onEvent(Event event)
 {
-    if (!renderEnabled.get()) { return false; }
+    if (!renderEnabled.get()) {
+        return false;
+    }
     return std::visit(lambda_visitor{
                           [](auto event) { return false; },
                           [this](const SwapchainResizedEvent &event) {

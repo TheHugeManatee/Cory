@@ -43,6 +43,9 @@ stbi_image::stbi_image(const std::string &file)
     data = stbi_load(file.c_str(), &width, &height, &channels, STBI_rgb_alpha);
 }
 
-stbi_image::~stbi_image() { stbi_image_free(data); }
+stbi_image::~stbi_image()
+{
+    stbi_image_free(data);
+}
 
 } // namespace Cory

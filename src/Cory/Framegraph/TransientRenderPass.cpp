@@ -115,7 +115,9 @@ Gpu::SampleCountFlagBits TransientRenderPass::determineSampleCount() const
         return textures_->info(attachment.target).sampleCount;
     };
 
-    if (!pass_.attachments.empty()) { return sampleCount(pass_.attachments.front()); }
+    if (!pass_.attachments.empty()) {
+        return sampleCount(pass_.attachments.front());
+    }
     // sample count of one is returned if there is no attachment at all!
     return pass_.depthAttachment.transform(sampleCount)
         .value_or(KDGpu::SampleCountFlagBits::Samples1Bit);

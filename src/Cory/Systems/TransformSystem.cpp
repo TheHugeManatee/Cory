@@ -15,7 +15,9 @@ glm::mat4 parentTransform(SceneGraph &sg, Entity entity)
     // find the first ancestor that has a transform
     for (Entity ancestor : sg.ancestors(entity)) {
         auto *transform = sg.getComponent<Transform>(ancestor);
-        if (transform) { return transform->modelToWorld; }
+        if (transform) {
+            return transform->modelToWorld;
+        }
     }
     return glm::mat4{1.0f};
 }
@@ -35,7 +37,9 @@ void TransformSystem::update(SceneGraph &sg, TickInfo tickInfo, Entity entity, T
 {
     glm::mat4 parent{1.0f};
 
-    if (transform.mode == TransformMode::Local) { parent = parentTransform(sg, entity); }
+    if (transform.mode == TransformMode::Local) {
+        parent = parentTransform(sg, entity);
+    }
 
     transform.modelToWorld =
         parent * makeTransform(transform.position, transform.rotation, transform.scale);

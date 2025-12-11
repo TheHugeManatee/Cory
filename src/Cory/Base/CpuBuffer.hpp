@@ -12,7 +12,7 @@ class CpuBuffer {
     CpuBuffer(size_t size)
         : m_size{size}
         , m_data{std::make_unique<uint8_t[]>(m_size)} {};
-    ~CpuBuffer(){};
+    ~CpuBuffer() {};
 
     uint8_t *data() { return m_data.get(); };
     size_t size() { return m_size; }

@@ -19,7 +19,7 @@ class FramegraphVisualizer {
 
   private:
     friend struct Index;
-    void build(Index &index, const ExecutionInfo& executionInfo) const;
+    void build(Index &index, const ExecutionInfo &executionInfo) const;
     const Framegraph &graph_;
 };
 

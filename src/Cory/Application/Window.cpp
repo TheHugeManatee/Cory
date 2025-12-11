@@ -79,7 +79,9 @@ Window::Window(Context &context,
     data_->surfaceHandle = std::shared_ptr<VkSurfaceKHR_T>{
         surfaceHandle, [instance = instance->instance](VkSurfaceKHR_T *surfaceHandle) {
             CO_CORE_TRACE("Destroying GLFW surface");
-            if (surfaceHandle != nullptr) { vkDestroySurfaceKHR(instance, surfaceHandle, nullptr); }
+            if (surfaceHandle != nullptr) {
+                vkDestroySurfaceKHR(instance, surfaceHandle, nullptr);
+            }
         }};
 
     data_->surface =
@@ -105,11 +107,20 @@ Window::Window(Context &context,
     title.valueChanged().connect([this](const std::string_view newTitle) { updateTitle(); });
 }
 
-Window::~Window() { CO_CORE_TRACE("Destroying Cory::Window {}", title()); }
+Window::~Window()
+{
+    CO_CORE_TRACE("Destroying Cory::Window {}", title());
+}
 
-bool Window::shouldClose() const { return glfwWindowShouldClose(data_->window.get()); }
+bool Window::shouldClose() const
+{
+    return glfwWindowShouldClose(data_->window.get());
+}
 
-Swapchain &Window::swapchain() { return *data_->swapchain; }
+Swapchain &Window::swapchain()
+{
+    return *data_->swapchain;
+}
 
 FrameContext Window::nextSwapchainImage()
 {
@@ -172,12 +183,23 @@ void Window::submitAndPresent(FrameContext &frameCtx)
 
     data_->swapchain->present(frameCtx);
 
-    if (data_->fpsCounter.lap()) { updateTitle(); }
+    if (data_->fpsCounter.lap()) {
+        updateTitle();
+    }
 }
-Gpu::Format Window::colorFormat() const noexcept { return data_->swapchain->colorFormat(); }
-Gpu::Format Window::depthFormat() const noexcept { return data_->swapchain->depthFormat(); }
+Gpu::Format Window::colorFormat() const noexcept
+{
+    return data_->swapchain->colorFormat();
+}
+Gpu::Format Window::depthFormat() const noexcept
+{
+    return data_->swapchain->depthFormat();
+}
 
-gsl::not_null<GLFWwindow *> Window::getGlfwWindow() const { return data_->window.get(); }
+gsl::not_null<GLFWwindow *> Window::getGlfwWindow() const
+{
+    return data_->window.get();
+}
 
 void Window::createWindow()
 {

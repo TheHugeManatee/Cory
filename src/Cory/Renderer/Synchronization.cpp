@@ -701,7 +701,9 @@ void CmdPipelineBarrier(Gpu::VulkanDevice &device,
     VkImageMemoryBarrier2 *pImageMemoryBarriers = nullptr;
 
     // Global memory barrier
-    if (pGlobalBarrier != nullptr) { GetVulkanMemoryBarrier(*pGlobalBarrier, pMemoryBarriers); }
+    if (pGlobalBarrier != nullptr) {
+        GetVulkanMemoryBarrier(*pGlobalBarrier, pMemoryBarriers);
+    }
 
     // Buffer memory barriers
     if (bufferMemoryBarrierCount > 0) {
@@ -804,7 +806,9 @@ void CmdWaitEvents(Gpu::VulkanDevice &device,
     VkImageMemoryBarrier2 *pImageMemoryBarriers = nullptr;
 
     // Global memory barrier
-    if (pGlobalBarrier != nullptr) { GetVulkanMemoryBarrier(*pGlobalBarrier, pMemoryBarriers); }
+    if (pGlobalBarrier != nullptr) {
+        GetVulkanMemoryBarrier(*pGlobalBarrier, pMemoryBarriers);
+    }
 
     // Buffer memory barriers
     if (bufferMemoryBarrierCount > 0) {

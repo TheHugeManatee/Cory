@@ -386,10 +386,10 @@ void SwapchainPrivate::present(FrameContext &frameCtx)
         const ScopeTimer s{"Window/Present"};
 
         Gpu::PresentOptions presentOptions = {.waitSemaphores = {*frameCtx.rendered},
-                                                .swapchainInfos = {{
-                                                    .swapchain = swapchain,
-                                                    .imageIndex = frameCtx.swapchainImageIndex,
-                                                }}};
+                                              .swapchainInfos = {{
+                                                  .swapchain = swapchain,
+                                                  .imageIndex = frameCtx.swapchainImageIndex,
+                                              }}};
 
         ctx->graphicsQueue().present(presentOptions);
     }
@@ -399,17 +399,35 @@ Swapchain::Swapchain(Context &ctx, const Gpu::Surface &surface, SwapchainCreateI
     : data_{std::make_unique<SwapchainPrivate>(ctx, surface, createInfo)}
 {
 }
-Swapchain::~Swapchain() { CO_CORE_TRACE("Destroying Cory::Swapchain."); }
-Gpu::Format Swapchain::colorFormat() const noexcept { return data_->swapchainSetup.format; }
-Gpu::Format Swapchain::depthFormat() const noexcept { return data_->swapchainSetup.depthFormat; }
+Swapchain::~Swapchain()
+{
+    CO_CORE_TRACE("Destroying Cory::Swapchain.");
+}
+Gpu::Format Swapchain::colorFormat() const noexcept
+{
+    return data_->swapchainSetup.format;
+}
+Gpu::Format Swapchain::depthFormat() const noexcept
+{
+    return data_->swapchainSetup.depthFormat;
+}
 glm::u32vec2 Swapchain::extent() const noexcept
 {
     return glmu::u32vec2::from(data_->swapchainSetup.extent);
 }
-size_t Swapchain::size() const noexcept { return data_->swapchainViews.size(); }
+size_t Swapchain::size() const noexcept
+{
+    return data_->swapchainViews.size();
+}
 
-std::expected<FrameContext, SwapchainError> Swapchain::nextImage() { return data_->nextImage(); }
+std::expected<FrameContext, SwapchainError> Swapchain::nextImage()
+{
+    return data_->nextImage();
+}
 
-void Swapchain::present(FrameContext &fc) { data_->present(fc); }
+void Swapchain::present(FrameContext &fc)
+{
+    data_->present(fc);
+}
 
 } // namespace Cory

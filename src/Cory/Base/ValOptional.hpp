@@ -41,7 +41,9 @@ template <std::regular T, T INVALID = std::numeric_limits<T>::max()> class ValOp
 
     [[nodiscard]] constexpr T value() const
     {
-        if (value_ == InvalidValue) { throw BadValueOptional{}; }
+        if (value_ == InvalidValue) {
+            throw BadValueOptional{};
+        }
         return value_;
     }
 
@@ -60,7 +62,9 @@ template <std::regular T, T INVALID = std::numeric_limits<T>::max()> class ValOp
     template <typename F, typename R = std::remove_cvref_t<std::invoke_result_t<F, T>>>
     [[nodiscard]] ValOptional<R> and_then(F &&f)
     {
-        if (has_value()) { return std::invoke(std::forward<F>(f), value_); }
+        if (has_value()) {
+            return std::invoke(std::forward<F>(f), value_);
+        }
         return ValOptional<R>{};
     }
 

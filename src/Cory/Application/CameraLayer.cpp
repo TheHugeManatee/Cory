@@ -89,7 +89,6 @@ void CameraLayer::onUpdate(const LogicUpdateContext &updateContext)
 
 void CameraLayer::lookAt(glm::vec3 newPosition, glm::vec3 newFocus, glm::vec3 newUp)
 {
-
     viewToWorldMatrix = glm::lookAt(newPosition, newFocus, newUp);
 }
 

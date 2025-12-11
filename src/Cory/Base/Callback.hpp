@@ -19,7 +19,9 @@ template <typename... Args> class Callback {
     Callback(Callback &&rhs) noexcept { rhs.swap(*this); }
     Callback &operator=(Callback &&rhs) noexcept
     {
-        if (this != &rhs) { rhs.swap(*this); }
+        if (this != &rhs) {
+            rhs.swap(*this);
+        }
         return *this;
     }
 
@@ -39,7 +41,9 @@ template <typename... Args> class Callback {
             std::lock_guard lk{mtx_};
             fn = cb_;
         }
-        if (fn) { fn(args...); }
+        if (fn) {
+            fn(args...);
+        }
     }
 
     /// register a new callback function, replacing any previously registered functions
@@ -71,7 +75,9 @@ template <> class Callback<void> {
     Callback(Callback &&rhs) noexcept { rhs.swap(*this); }
     Callback &operator=(Callback &&rhs) noexcept
     {
-        if (this != &rhs) { rhs.swap(*this); }
+        if (this != &rhs) {
+            rhs.swap(*this);
+        }
         return *this;
     }
     void swap(Callback &rhs) noexcept
@@ -90,7 +96,9 @@ template <> class Callback<void> {
             std::lock_guard lk{mtx_};
             fn = cb_;
         }
-        if (fn) { fn(); }
+        if (fn) {
+            fn();
+        }
     }
 
     /// register a new callback function, replacing any previously registered functions

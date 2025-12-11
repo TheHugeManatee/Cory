@@ -59,6 +59,8 @@ set(CORY_SOURCES
         Base/Time.hpp
         Base/Utils.cpp
         Base/Utils.hpp
+        Base/Debugger.hpp
+        Base/Debugger.cpp
         Cory.cpp
         Cory.hpp
         Framegraph/Builder.cpp

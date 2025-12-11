@@ -115,13 +115,10 @@ DescriptorSets &DescriptorSets::flushWrites()
 }
 
 DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
-                                     gsl::index frameInFlightIndex,
-                                     const Gpu::PipelineLayout &pipelineLayout)
+                                     gsl::index frameInFlightIndex)
 {
     for (SetType type : magic_enum::enum_values<SetType>()) {
-        cmd.setBindGroup(static_cast<uint32_t>(SetType::Static),
-                         data_->bindGroups[type][frameInFlightIndex],
-                         pipelineLayout);
+        cmd.setBindGroup(static_cast<uint32_t>(type), data_->bindGroups[type][frameInFlightIndex]);
     }
     return *this;
 }

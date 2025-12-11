@@ -12,14 +12,6 @@ add_executable(${TARGET_NAME}
         src/CubeDemo.hpp
 )
 
-# Replace GLOB_RECURSE for HEADERS with explicit file list
-set(HEADERS
-        include/CubeDemo/Cube.h
-        include/CubeDemo/Demo.h
-)
-
-target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
-
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_compile_definitions(${TARGET_NAME} PRIVATE "CUBEDEMO_RESOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\"")
@@ -31,7 +23,6 @@ target_link_libraries(${TARGET_NAME}
         Cory::Cory
         Cory::ThirdParty
         Vulkan::Vulkan
-        GLEW::GLEW
         range-v3::range-v3
         CLI11::CLI11
 )

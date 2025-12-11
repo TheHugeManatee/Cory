@@ -27,7 +27,7 @@ class ImGuiLayer : public ApplicationLayer {
     void onDetach(Context &ctx) override;
     bool onEvent(Event event) override;
     void onUpdate(const LogicUpdateContext &updateCtx) override;
-    bool hasRenderTask() const override { return true; }
+    bool hasRenderTask() const override { return false; }
     // RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
     //                                                    LayerPassOutputs previousLayer) override;
 

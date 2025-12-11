@@ -90,9 +90,7 @@ class DescriptorSets {
     [[nodiscard]] Gpu::BindGroup &get(SetType type, gsl::index instanceIndex);
 
     /// bind the given instance index
-    DescriptorSets &bind(Gpu::RenderPassCommandRecorder &cmd,
-                         gsl::index instanceIndex,
-                         const Gpu::PipelineLayout &pipelineLayout);
+    DescriptorSets &bind(Gpu::RenderPassCommandRecorder &cmd, gsl::index instanceIndex);
 
   private:
     std::unique_ptr<struct DescriptorSetManagerPrivate> data_;

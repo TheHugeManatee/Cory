@@ -47,8 +47,8 @@ struct Mesh {
 
     Gpu::Buffer vertexBuffer;
     Gpu::Buffer indexBuffer;
-    size_t vertexCount;
-    size_t indexCount;
+    uint32_t vertexCount;
+    uint32_t indexCount;
 };
 
 class DynamicGeometry {

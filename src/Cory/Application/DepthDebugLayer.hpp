@@ -5,6 +5,8 @@
 
 #include "kdbindings/property.h"
 
+#include <Cory/Base/SimulationClock.hpp>
+
 namespace Cory {
 
 class DepthDebugLayer : public ApplicationLayer {
@@ -16,7 +18,7 @@ class DepthDebugLayer : public ApplicationLayer {
     void onAttach(Context &ctx, LayerAttachInfo info) override;
     void onDetach(Context &ctx) override;
     bool onEvent(Event event) override;
-    void onUpdate() override;
+    void onUpdate(const LogicUpdateContext &updateCtx) override;
 
     [[nodiscard]] bool hasRenderTask() const override { return renderEnabled.get(); }
 

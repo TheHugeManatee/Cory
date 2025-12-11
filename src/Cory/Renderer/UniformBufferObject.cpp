@@ -6,6 +6,7 @@
 #include <Cory/Renderer/Context.hpp>
 
 #include <KDGpu/buffer_options.h>
+#include <KDGpu/vulkan/vulkan_graphics_api.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 namespace Cory {
@@ -33,7 +34,7 @@ UniformBufferObjectBase::UniformBufferObjectBase(Context &ctx,
 {
     auto &device = ctx_->device();
     Gpu::DeviceSize size = instances_ * alignedInstanceSize_;
-    bufferHandle_ = device.createBuffer(KDGpu::BufferOptions{
+    buffer_ = device.createBuffer(KDGpu::BufferOptions{
         .label = "Uniform Buffer",
         .size = size,
         .usage = Gpu::BufferUsageFlagBits::UniformBufferBit,
@@ -41,15 +42,14 @@ UniformBufferObjectBase::UniformBufferObjectBase(Context &ctx,
     });
 
     // Map as long as the UBO object lives
-    mappedMemory_ =
-        reinterpret_cast<std::byte *>(ctx_->resources().getBuffer(bufferHandle_)->map());
+    mappedMemory_ = reinterpret_cast<std::byte *>(buffer_.map());
 }
 
 void swap(UniformBufferObjectBase &lhs, UniformBufferObjectBase &rhs) noexcept
 {
     using std::swap;
     swap(lhs.ctx_, rhs.ctx_);
-    swap(lhs.bufferHandle_, rhs.bufferHandle_);
+    swap(lhs.buffer_, rhs.buffer_);
     swap(lhs.mappedMemory_, rhs.mappedMemory_);
     swap(lhs.instanceSize_, rhs.instanceSize_);
     swap(lhs.alignedInstanceSize_, rhs.alignedInstanceSize_);
@@ -68,34 +68,13 @@ UniformBufferObjectBase &UniformBufferObjectBase::operator=(UniformBufferObjectB
     return *this;
 }
 
-UniformBufferObjectBase::~UniformBufferObjectBase()
-{
-    if (auto *buffer = ctx_->resources().getBuffer(bufferHandle_); buffer != nullptr) {
-        buffer->unmap();
-        ctx_->resources().deleteBuffer(bufferHandle_);
-    }
-}
+UniformBufferObjectBase::~UniformBufferObjectBase() { buffer_.unmap(); }
 
-void UniformBufferObjectBase::flushInternal()
-{
-    auto *buffer = ctx_->resources().getBuffer(bufferHandle_);
-    CO_CORE_ASSERT(buffer != nullptr, "UBO has invalid buffer handle!");
-
-    buffer->flush();
-}
+void UniformBufferObjectBase::flushInternal() { buffer_.flush(); }
 
 std::byte *UniformBufferObjectBase::instanceAt(gsl::index instance)
 {
     CO_CORE_ASSERT(instance < instances_, "Instance index out of range");
     return mappedMemory_ + instance * alignedInstanceSize_;
-}
-VkDescriptorBufferInfo UniformBufferObjectBase::descriptorInfo(gsl::index instance) const
-{
-    auto *buffer = ctx_->resources().getBuffer(bufferHandle_);
-    CO_CORE_ASSERT(buffer != nullptr, "UBO has invalid buffer handle!");
-
-    return VkDescriptorBufferInfo{.buffer = buffer->buffer,
-                                  .offset = instance * alignedInstanceSize_,
-                                  .range = alignedInstanceSize_};
 }
 } // namespace Cory

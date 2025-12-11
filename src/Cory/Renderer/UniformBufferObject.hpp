@@ -2,6 +2,8 @@
 
 #include <Cory/Renderer/Common.hpp>
 
+#include <KDGpu/buffer.h>
+
 #include <concepts>
 
 namespace Cory {
@@ -9,10 +11,9 @@ namespace Cory {
 /// lower-level UBO wrapper - not to be used directly, use UniformBufferObject<...> instead!
 class UniformBufferObjectBase : NoCopy {
   public:
-    Gpu::BufferHandle handle() const noexcept { return bufferHandle_; }
+    Gpu::BufferHandle handle() const noexcept { return buffer_.handle(); }
+    const Gpu::Buffer &buffer() const noexcept { return buffer_; }
     size_t instances() const noexcept { return instances_; }
-    /// access the descriptor info for the respective index
-    VkDescriptorBufferInfo descriptorInfo(gsl::index instance) const;
 
   protected:
     UniformBufferObjectBase(Context &ctx, size_t instances, size_t instanceSize);
@@ -32,7 +33,7 @@ class UniformBufferObjectBase : NoCopy {
   private:
     UniformBufferObjectBase() = default; // private, only used for swap
     Context *ctx_{};
-    Gpu::BufferHandle bufferHandle_{};
+    Gpu::Buffer buffer_{};
     std::byte *mappedMemory_{nullptr};
     size_t instanceSize_{};
     size_t alignedInstanceSize_{};

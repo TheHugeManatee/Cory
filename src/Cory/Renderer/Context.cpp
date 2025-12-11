@@ -167,9 +167,9 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     CO_CORE_INFO("Queue family 0 supports presentation: {}", supportsPresentation);
 
     const auto adapterExtensions = selectedAdapter->extensions();
-    CO_CORE_INFO("Supported adapter extensions:");
+    CO_CORE_TRACE("Supported adapter extensions:");
     for (const auto &extension : adapterExtensions) {
-        CO_CORE_INFO("  - {} Version {}", extension.name, extension.version);
+        CO_CORE_TRACE("  - {} Version {}", extension.name, extension.version);
     }
 
     if (!supportsPresentation || !hasGraphicsAndCompute) {
@@ -370,8 +370,12 @@ PipelineCache &Context::pipelineCache()
                    "Pipeline cache not ready - likely device was not created yet");
     return *data_->pipelineCache;
 }
+
 ShaderManager &Context::shaders() { return data_->shaders; }
 const ShaderManager &Context::shaders() const { return data_->shaders; }
+
+DescriptorSets &Context::descriptors() { return data_->descriptorSets; }
+const DescriptorSets &Context::descriptors() const { return data_->descriptorSets; }
 
 void ContextPrivate::receiveDebugUtilsMessage(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,

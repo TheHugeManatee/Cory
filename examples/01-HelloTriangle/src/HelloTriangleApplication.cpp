@@ -174,6 +174,8 @@ void HelloTriangleApplication::run()
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
     }
+    // wait until last frame is finished rendering
+    ctx().device().waitUntilIdle();
 }
 
 void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)

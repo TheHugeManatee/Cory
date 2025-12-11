@@ -1,7 +1,6 @@
 #include "CubeDemo.hpp"
 
-#include <Cory/Framegraph/TextureManager.hpp>
-#include <Cory/Application/DepthDebugLayer.hpp>
+// #include <Cory/Application/DepthDebugLayer.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
@@ -12,33 +11,17 @@
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
-#include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
+#include <Cory/Renderer/UniformBufferObject.hpp>
 
-#include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/ArrayView.h>
-#include <Corrade/Containers/Reference.h>
-#include <Magnum/Math/Color.h>
-#include <Magnum/Math/Vector3.h>
-#include <Magnum/Vk/BufferCreateInfo.h>
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/DescriptorPool.h>
-#include <Magnum/Vk/DescriptorSetLayout.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/FramebufferCreateInfo.h>
-#include <Magnum/Vk/Mesh.h>
-#include <Magnum/Vk/PipelineLayout.h>
-#include <Magnum/Vk/Queue.h>
-#include <Magnum/Vk/RenderPass.h>
-#include <Magnum/Vk/SamplerCreateInfo.h>
-#include <Magnum/Vk/VertexFormat.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
@@ -46,18 +29,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
-#include <imgui.h>
-
 #include <gsl/gsl>
 #include <gsl/narrow>
+#include <imgui.h>
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
 #include <algorithm>
 #include <chrono>
-
-namespace Vk = Magnum::Vk;
 
 struct PushConstants {
     glm::mat4 modelTransform{1.0f};
@@ -135,7 +115,7 @@ void animate(PushConstants &d, float t, float i)
     d.blend = ad.blend;
 }
 
-CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
+CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     : mesh_{}
     , startupTime_{now()}
 {
@@ -146,30 +126,36 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
 
-    init(Cory::ContextCreationInfo{
-        .validation =
-            disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
-    });
+    init(Cory::ContextCreationInfo{.validation = disableValidation_
+                                                     ? Cory::ValidationLayers::Disabled
+                                                     : Cory::ValidationLayers::Enabled,
+                                   .args = std::span{argv, gsl::narrow<std::size_t>(argc)}});
 
     // determine msaa sample count to use - for simplicity, we use either 8 or one sample
-    const auto &limits = ctx().physicalDevice().properties().properties.limits;
-    const VkSampleCountFlags counts =
-        limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
-    // 2 samples are guaranteed to be supported, but we'd rather have 8
-    const int msaaSamples = counts & VK_SAMPLE_COUNT_8_BIT ? 8 : 2;
-    CO_APP_INFO("MSAA sample count: {}", msaaSamples);
+    // const auto &limits = ctx().physicalDevice().limits;
+    // const Gpu::SampleCountFlags counts =
+    //     limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
+    // // 2 samples are guaranteed to be supported, but we'd rather have 8
+    // const auto msaaSamples = counts & Gpu::SampleCountFlagBits::Samples8Bit ? 8 : 2;
+    // CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", msaaSamples);
+    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 2);
 
     createGeometry();
     createShaders();
 
-    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
-                                              window_->swapchain().maxFramesInFlight(),
+    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
+        // createFramebuffers();
+        layers().processEvent(e);
+    };
+    window_->onSwapchainResized.connect(recreateSizedResources);
+    recreateSizedResources({window_->dimensions()});
+
+    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
-    layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
+    // layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 
     camera_.setMode(Cory::CameraManipulator::Mode::Fly);
@@ -182,23 +168,24 @@ CubeDemoApplication::CubeDemoApplication(int argc, char **argv)
 void CubeDemoApplication::createShaders()
 {
     const Cory::ScopeTimer st{"Init/Shaders"};
-    vertexShader_ = ctx().resources().createShader(Cory::ResourceLocator::Locate("cube.vert"));
-    fragmentShader_ = ctx().resources().createShader(Cory::ResourceLocator::Locate("cube.frag"));
+
+    vertexShader_ = ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.vert"));
+    fragmentShader_ = ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.frag"));
 }
 
 void CubeDemoApplication::createUBO()
 {
     // create and initialize descriptor sets for each frame in flight
     const Cory::ScopeTimer st{"Init/UBO"};
-    globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(
-        ctx(), window_->swapchain().maxFramesInFlight());
+    globalUbo_ =
+        std::make_unique<Cory::UniformBufferObject<CubeUBO>>(ctx(), Cory::MAX_FRAMES_IN_FLIGHT);
 }
 
 CubeDemoApplication::~CubeDemoApplication()
 {
-    auto &resources = ctx().resources();
-    resources.release(vertexShader_);
-    resources.release(fragmentShader_);
+    auto &shaders = ctx().shaders();
+    shaders.release(vertexShader_);
+    shaders.release(fragmentShader_);
     CO_APP_TRACE("Destroying CubeDemoApplication");
 }
 
@@ -206,29 +193,39 @@ void CubeDemoApplication::run()
 {
     // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
-    std::generate_n(std::back_inserter(framegraphs),
-                    window_->swapchain().maxFramesInFlight(),
-                    [&]() { return Cory::Framegraph(ctx()); });
+    std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
+        return Cory::Framegraph(ctx());
+    });
+
+    auto time = getElapsedTimeSeconds();
 
     while (!window_->shouldClose()) {
-        glfwPollEvents();
+        //        glfwPollEvents();
+        // Process KDGui events
+        processEvents(0);
 
-        layers().update();
+        // Update time
+        auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
+        auto delta = time - previousFrameTime;
+
+        // Update layers
+        layers().update(Cory::LogicUpdateContext{
+            .simulationTime = time,
+            .deltaTime = delta,
+        });
 
         drawImguiControls();
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
-        Cory::Framegraph &fg = framegraphs[frameCtx.index];
+        Cory::Framegraph &fg = framegraphs[frameCtx.inFlightIndex];
         // retire old resources from the last time this framegraph was
         // used - our frame synchronization ensures that the resources
         // are no longer in use
         fg.resetForNextFrame();
 
         defineRenderPasses(fg, frameCtx);
-        frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
-        auto execInfo = fg.record(frameCtx);
 
-        frameCtx.commandBuffer->end();
+        auto execInfo = fg.record(frameCtx);
 
         window_->submitAndPresent(frameCtx);
 
@@ -242,7 +239,7 @@ void CubeDemoApplication::run()
     }
 
     // wait until last frame is finished rendering
-    ctx().device()->DeviceWaitIdle(ctx().device());
+    ctx().device().waitUntilIdle();
 }
 
 void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
@@ -250,23 +247,27 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
 {
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
 
-    auto windowColorTarget =
-        framegraph.declareInput({.name = "TEX_SwapCh_Color",
-                                 .size = glm::u32vec3{window_->dimensions(), 1},
-                                 .format = frameCtx.colorImage->format(),
-                                 .sampleCount = window_->sampleCount()},
-                                Cory::Sync::AccessType::None,
-                                *frameCtx.colorImage,
-                                *frameCtx.colorImageView);
+    auto windowColorTarget = framegraph.declareInput(
+        {
+            .name = "TEX_SwapCh_Color",
+            .size = glm::u32vec3{window_->dimensions(), 1},
+            .format = window_->colorFormat(),
+            .sampleCount = window_->samples(),
+        },
+        Cory::Sync::AccessType::None,
+        *frameCtx.colorImage,
+        *frameCtx.colorImageView);
 
-    auto windowDepthTarget =
-        framegraph.declareInput({.name = "TEX_SwapCh_Depth",
-                                 .size = glm::u32vec3{window_->dimensions(), 1},
-                                 .format = frameCtx.depthImage->format(),
-                                 .sampleCount = window_->sampleCount()},
-                                Cory::Sync::AccessType::None,
-                                *frameCtx.depthImage,
-                                *frameCtx.depthImageView);
+    auto windowDepthTarget = framegraph.declareInput(
+        {
+            .name = "TEX_SwapCh_Depth",
+            .size = glm::u32vec3{window_->dimensions(), 1},
+            .format = window_->depthFormat(),
+            .sampleCount = window_->samples(),
+        },
+        Cory::Sync::AccessType::None,
+        *frameCtx.depthImage,
+        *frameCtx.depthImageView);
 
     auto mainPass =
         cubeRenderTask(framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget);
@@ -283,25 +284,34 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle depthTarget)
 {
 
-    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-    float clearDepth = 1.0f;
+    Gpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
     auto [writtenColorHandle, colorInfo] =
         builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
-    
-    auto cubePass = builder.declareRenderPass("PASS_Cubes")
-                        .shaders({vertexShader_, fragmentShader_})
-                        .attach(colorTarget,
-                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                VK_ATTACHMENT_STORE_OP_STORE,
-                                clearColor)
-                        .attachDepth(depthTarget,
-                                     VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                     VK_ATTACHMENT_STORE_OP_STORE,
-                                     clearDepth)
-                        .finish();
+
+    auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
+        .name = "PASS_Cubes",
+        .shaders = {vertexShader_, fragmentShader_},
+        .attachments = {{
+            {
+                // main color target
+                .target = colorTarget,
+                .load = Gpu::AttachmentLoadOperation::Clear,
+                .store = Gpu::AttachmentStoreOperation::Store,
+                .clearColor = clearColor,
+            },
+        }},
+        .depthAttachment =
+            Cory::DepthStencilAttachment{
+                .target = depthTarget,
+                .load = Gpu::AttachmentLoadOperation::Clear,
+                .store = Gpu::AttachmentStoreOperation::Store,
+                .clearDepthStencil = clearDepthStencil,
+            },
+    });
 
     co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
 
@@ -311,7 +321,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
 
-    cubePass.begin(*renderApi.cmd);
+    auto passRecorder = cubePass.begin(*renderApi.cmd);
 
     PushConstants pushData{};
 
@@ -324,18 +334,18 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
     // update the uniform buffer
-    CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
+    CubeUBO &ubo = (*globalUbo_)[frameCtx.inFlightIndex];
     ubo.view = viewMatrix;
     ubo.projection = projectionMatrix;
     ubo.viewProjection = viewProjection;
     // need explicit flush otherwise the mapped memory is not synced to the GPU
-    globalUbo_->flush(frameCtx.index);
+    globalUbo_->flush(frameCtx.inFlightIndex);
 
     ctx()
-        .descriptorSets()
-        .write(Cory::DescriptorSets::SetType::Static, frameCtx.index, *globalUbo_)
+        .descriptors()
+        .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
         .flushWrites()
-        .bind(renderApi.cmd->handle(), frameCtx.index, ctx().defaultPipelineLayout());
+        .bind(passRecorder, frameCtx.inFlightIndex);
 
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
@@ -343,25 +353,29 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                       : static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
 
         animate(pushData, t, i);
-
-        ctx().device()->CmdPushConstants(renderApi.cmd->handle(),
-                                         ctx().defaultPipelineLayout(),
-                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
-                                         0,
-                                         sizeof(pushData),
-                                         &pushData);
+        passRecorder.pushConstant(
+            Gpu::PushConstantRange{.offset = 0,
+                                   .size = sizeof(PushConstants),
+                                   .shaderStages = Gpu::ShaderStageFlagBits::AllGraphics},
+            &pushData);
 
         // draw our triangle mesh
-        renderApi.cmd->handle().draw(*mesh_);
+        passRecorder.drawIndexed(Gpu::DrawIndexedCommand{
+            .indexCount = mesh_->indexCount,
+            .instanceCount = 1,
+            .firstIndex = 0,
+            .vertexOffset = 0,
+            .firstInstance = 0,
+        });
     }
 
-    cubePass.end(*renderApi.cmd);
+    passRecorder.end(); // TODO do kdgpu passes auto-end?
 }
 
 void CubeDemoApplication::createGeometry()
 {
     const Cory::ScopeTimer st{"Init/Geometry"};
-    mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(ctx()));
+    mesh_ = std::make_unique<Cory::Mesh>(Cory::DynamicGeometry::createCube(ctx()));
 }
 double CubeDemoApplication::now()
 {
@@ -451,4 +465,3 @@ void CubeDemoApplication::setupCameraCallbacks()
         camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
     });
 }
-

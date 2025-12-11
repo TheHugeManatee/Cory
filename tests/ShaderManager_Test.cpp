@@ -25,7 +25,7 @@ void main() {
 })";
 
 using namespace Cory;
-TEST_CASE("ResourceManager", "[Cory/Renderer]")
+TEST_CASE("ShaderManager", "[Cory/Renderer]")
 {
     testing::VulkanTester t;
 

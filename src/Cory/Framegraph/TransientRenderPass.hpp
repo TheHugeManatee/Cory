@@ -3,6 +3,11 @@
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
+// Todo can live with forward decl only?
+#include <KDGpu/pipeline_layout_options.h>
+
+#include <KDGpu/pipeline_layout.h>
+
 #include <string_view>
 #include <vector>
 
@@ -35,6 +40,8 @@ struct RenderPassDeclaration {
     std::vector<ColorAttachment> attachments;
     std::optional<DepthStencilAttachment> depthAttachment;
     std::optional<DepthStencilAttachment> stencilAttachment;
+    std::vector<Gpu::PushConstantRange> pushConstantRanges;
+
     DynamicStates dynamicStates;
     MeshInput meshInput{MeshInput::Enabled};
 };
@@ -42,12 +49,9 @@ struct RenderPassDeclaration {
 /// Transient render stores the information to set up and execute a render pass
 class TransientRenderPass : NoCopy {
   public:
-    explicit TransientRenderPass(Context &ctx, TextureManager &textures, RenderPassDeclaration pass)
-        : ctx_{&ctx}
-        , textures_{&textures}
-        , pass_{std::move(pass)}
-    {
-    }
+    explicit TransientRenderPass(Context &ctx,
+                                 TextureManager &textures,
+                                 RenderPassDeclaration pass);
     ~TransientRenderPass();
 
     TransientRenderPass(TransientRenderPass &&) = default;
@@ -59,9 +63,16 @@ class TransientRenderPass : NoCopy {
      *
      *  1. Binds a pipeline with the required layout -
      *  2. Calls begin() on the render pass with the attachments
-     *  3. Set up the dynamic state (Depth test, cull mode, ...) as set up in the builder
+     *  3. Set up the dynamic state (Depth test, cull mode, ...) as set up in the builder TODO
      */
     Gpu::RenderPassCommandRecorder begin(CommandRecorder &cmd);
+
+    /// Obtain the pipeline layout handle. Creates the layout if necessary.
+    [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;
+
+    /// Obtain the pipeline handle for the graphics pipeline associated with this pass. Creates the
+    /// pipeline if necessary.
+    [[nodiscard]] Gpu::GraphicsPipelineHandle pipelineHandle() noexcept;
 
   private:
     Gpu::SampleCountFlagBits determineSampleCount() const;
@@ -74,8 +85,8 @@ class TransientRenderPass : NoCopy {
 
     DynamicStates dynamicStates_;
 
-    Gpu::GraphicsPipelineHandle handle_;
-    bool hasBegun_{false}; ///< only needed for diagnostics
+    Gpu::GraphicsPipelineHandle pipeline_;
+    Gpu::PipelineLayoutHandle pipelineLayout_;
 };
 
 } // namespace Cory

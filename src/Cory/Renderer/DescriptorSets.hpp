@@ -27,7 +27,7 @@ namespace Cory {
  */
 class DescriptorSets {
   public:
-    enum class SetType {
+    enum class SetType : uint32_t {
         /// data that updates only occasionally based e.g. on user input, static textures
         Static = 0,
         /// data that updates per-frame, e.g. time, material textures, camera matrix
@@ -56,7 +56,7 @@ class DescriptorSets {
      */
     void init(Gpu::Device &device, Gpu::BindGroupLayoutOptions defaultLayout);
 
-    [[nodiscard]] const Gpu::BindGroupLayout &layout();
+    [[nodiscard]] const std::vector<Gpu::BindGroupLayoutHandle> &layouts() const noexcept;
 
     /**
      * Record a descriptor write for updating an UBO reference

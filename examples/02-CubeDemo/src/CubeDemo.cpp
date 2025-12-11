@@ -297,26 +297,36 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
-        .name = "PASS_Cubes",
-        .shaders = {vertexShader_, fragmentShader_},
-        .attachments = {{
-            {
-                // main color target
-                .target = colorTarget,
-                .load = Gpu::AttachmentLoadOperation::Clear,
-                .store = Gpu::AttachmentStoreOperation::Store,
-                .clearColor = clearColor,
-            },
-        }},
-        .depthAttachment =
-            Cory::DepthStencilAttachment{
-                .target = depthTarget,
-                .load = Gpu::AttachmentLoadOperation::Clear,
-                .store = Gpu::AttachmentStoreOperation::Store,
-                .clearDepthStencil = clearDepthStencil,
-            },
-    });
+    auto pushRanges = std::array<Gpu::PushConstantRange, 1>{{
+        Gpu::PushConstantRange{
+            .offset = 0,
+            .size = sizeof(PushConstants),
+            .shaderStages = Gpu::ShaderStageFlagBits::AllGraphics,
+        },
+    }};
+    auto cubePass = builder.declareRenderPass(
+        Cory::RenderPassDeclaration{.name = "PASS_Cubes",
+                                    .shaders = {vertexShader_, fragmentShader_},
+                                    .attachments = {{
+                                        {
+                                            // main color target
+                                            .target = colorTarget,
+                                            .load = Gpu::AttachmentLoadOperation::Clear,
+                                            .store = Gpu::AttachmentStoreOperation::Store,
+                                            .clearColor = clearColor,
+                                        },
+                                    }},
+                                    .depthAttachment =
+                                        Cory::DepthStencilAttachment{
+                                            .target = depthTarget,
+                                            .load = Gpu::AttachmentLoadOperation::Clear,
+                                            .store = Gpu::AttachmentStoreOperation::Store,
+                                            .clearDepthStencil = clearDepthStencil,
+                                        },
+                                    .pushConstantRanges = {
+                                        pushRanges.begin(),
+                                        pushRanges.end(),
+                                    }});
 
     co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
 
@@ -352,17 +362,23 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         .flushWrites()
         .bind(passRecorder, frameCtx.inFlightIndex);
 
+    // Set dynamic states
+    passRecorder.setCullMode(KDGpu::CullModeFlagBits::BackBit);
+    passRecorder.setDepthTestEnabled(true);
+    passRecorder.setDepthWriteEnabled(true);
+    passRecorder.setDepthCompareOp(KDGpu::CompareOperation::Less);
+
+    // bind the mesh buffers
+    passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
+    passRecorder.setIndexBuffer(mesh_->indexBuffer);
+
     for (int idx = 0; idx < ad.num_cubes; ++idx) {
         float i = ad.num_cubes == 1
                       ? 1.0f
                       : static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
 
         animate(pushData, t, i);
-        passRecorder.pushConstant(
-            Gpu::PushConstantRange{.offset = 0,
-                                   .size = sizeof(PushConstants),
-                                   .shaderStages = Gpu::ShaderStageFlagBits::AllGraphics},
-            &pushData);
+        passRecorder.pushConstant(pushRanges[0], &pushData);
 
         // draw our triangle mesh
         passRecorder.drawIndexed(Gpu::DrawIndexedCommand{

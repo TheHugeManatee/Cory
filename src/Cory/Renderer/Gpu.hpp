@@ -54,6 +54,7 @@ using CommandBufferHandle = Handle<struct CommandBuffer_t>;
 using CommandRecorderHandle = Handle<struct CommandRecorder_t>;
 using GraphicsPipelineHandle = Handle<struct GraphicsPipeline_t>;
 using PipelineLayoutHandle = Handle<struct PipelineLayout_t>;
+using BindGroupLayoutHandle = Handle<struct BindGroupLayout_t>;
 
 } // namespace KDGpu
 

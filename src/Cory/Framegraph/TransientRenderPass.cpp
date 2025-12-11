@@ -14,24 +14,25 @@
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <Cory/Application/DynamicGeometry.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 #include <unordered_map>
 
 namespace Cory {
 
-TransientRenderPass::~TransientRenderPass()
+TransientRenderPass::TransientRenderPass(Context &ctx,
+                                         TextureManager &textures,
+                                         RenderPassDeclaration pass)
+    : ctx_{&ctx}
+    , textures_{&textures}
+    , pass_{std::move(pass)}
 {
-    if (hasBegun_) {
-        CO_APP_WARN("TransientRenderPass: It seems that begin() was called without end()!");
-    }
 }
+
+TransientRenderPass::~TransientRenderPass() {}
 
 Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
 {
-    hasBegun_ = true;
-    auto getColorFormat = [&](const auto &attachment) {
-        return textures_->info(attachment.target).format;
-    };
-
     // if a render area has not been set up explicitly, we determine it by checking the attachments
     if (dynamicStates_.renderArea.offset.x == 0 && dynamicStates_.renderArea.offset.y == 0 &&
         dynamicStates_.renderArea.extent.width == 0 &&
@@ -39,19 +40,6 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
 
         dynamicStates_.renderArea = determineRenderArea();
     }
-
-    // determine color formats for all attachments
-    PipelineDescriptor descriptor{
-        .shaders = pass_.shaders,
-        .sampleCount = determineSampleCount(),
-        .colorFormats =
-            pass_.attachments | ranges::views::transform(getColorFormat) | ranges::to<std::vector>,
-        .depthFormat =
-            pass_.depthAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
-        .stencilFormat =
-            pass_.stencilAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
-        .hasMeshInput = pass_.meshInput == MeshInput::Enabled};
-
     auto resolvedAttachments =
         pass_.attachments | ranges::views::transform([this](const ColorAttachment a) {
             const auto &state = textures_->state(a.target);
@@ -103,10 +91,63 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
 
     auto renderPassRecorder = cmd.beginRenderPass(renderPassOptions);
 
+    renderPassRecorder.setPipeline(pipelineHandle());
     // TODO - figure out whether we want to actually set dynamic states via the render pass
     // declaration or not
     // cmd.setupDynamicStates(dynamicStates_);
     return renderPassRecorder;
+}
+Gpu::PipelineLayoutHandle TransientRenderPass::pipelineLayoutHandle() noexcept
+{
+    if (pipelineLayout_.isValid()) {
+        return pipelineLayout_;
+    }
+
+    pipelineLayout_ = ctx_->pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
+        .label = fmt::format("Pipeline Layout {}", pass_.name),
+        .bindGroupLayouts = ctx_->descriptors().layouts(),
+        .pushConstantRanges = pass_.pushConstantRanges,
+    });
+
+    return pipelineLayout_;
+}
+
+KDGpu::GraphicsPipelineHandle TransientRenderPass::pipelineHandle() noexcept
+{
+    if (pipeline_.isValid()) {
+        return pipeline_;
+    }
+
+    auto getColorFormat = [&](const auto &attachment) {
+        return textures_->info(attachment.target).format;
+    };
+
+    // determine color formats for all attachments
+    const PipelineDescriptor pipelineDescriptor{
+        .shaders = pass_.shaders,
+        .sampleCount = determineSampleCount(),
+        .colorFormats =
+            pass_.attachments | ranges::views::transform(getColorFormat) | ranges::to<std::vector>,
+        .depthFormat =
+            pass_.depthAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
+        .stencilFormat =
+            pass_.stencilAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
+        .hasMeshInput = pass_.meshInput == MeshInput::Enabled,
+        .pipelineLayout = pipelineLayoutHandle(),
+        // TODO provide render pass API to define/customize vertex options
+        .vertexOptions =
+            Gpu::VertexOptions{
+                .buffers = {Gpu::VertexBufferLayout{
+                    .binding = 0,
+                    .stride = sizeof(Mesh::Vertex),
+                    .inputRate = Gpu::VertexRate::Vertex,
+                }},
+                .attributes = Mesh::vertexAttributes(),
+            },
+    };
+
+    pipeline_ = ctx_->pipelineCache().query(pass_.name, pipelineDescriptor);
+    return pipeline_;
 }
 
 Gpu::SampleCountFlagBits TransientRenderPass::determineSampleCount() const

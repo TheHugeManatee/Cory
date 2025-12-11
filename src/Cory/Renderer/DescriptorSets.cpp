@@ -20,6 +20,7 @@ namespace Cory {
 struct DescriptorSetManagerPrivate {
     Gpu::Device *device;
     Gpu::BindGroupLayout layout;
+    std::vector<Gpu::BindGroupLayoutHandle> layoutHandles;
     EnumMap<DescriptorSets::SetType, std::array<Gpu::BindGroup, MAX_FRAMES_IN_FLIGHT>> bindGroups;
     // // For each set, we have one vector of pending writes per frame in flight
     using PerSetWriteStorage = std::array<std::vector<Gpu::BindGroupEntry>, MAX_FRAMES_IN_FLIGHT>;
@@ -36,6 +37,8 @@ void DescriptorSets::init(Gpu::Device &device, Gpu::BindGroupLayoutOptions defau
     data_ = std::make_unique<DescriptorSetManagerPrivate>();
     data_->device = &device;
     data_->layout = device.createBindGroupLayout(defaultLayout);
+    // We use the same layout for each set type
+    data_->layoutHandles.resize(4, data_->layout.handle());
 
     for (SetType type : magic_enum::enum_values<SetType>()) {
         for (gsl::index i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -48,9 +51,9 @@ void DescriptorSets::init(Gpu::Device &device, Gpu::BindGroupLayoutOptions defau
     }
 }
 
-const Gpu::BindGroupLayout &DescriptorSets::layout()
+const std::vector<Gpu::BindGroupLayoutHandle> &DescriptorSets::layouts() const noexcept
 {
-    return data_->layout;
+    return data_->layoutHandles;
 }
 
 Gpu::BindGroup &DescriptorSets::get(SetType type, gsl::index frameInFlightIndex)

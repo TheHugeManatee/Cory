@@ -116,7 +116,10 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
     auto &device = ctx.device();
     KDGpu::UploadStagingBuffer vertex_staging_buffer;
     KDGpu::UploadStagingBuffer index_staging_buffer;
-    Mesh mesh;
+    Mesh mesh{
+        .vertexCount = gsl::narrow_cast<uint32_t>(vertexData.size()),
+        .indexCount = gsl::narrow_cast<uint32_t>(indexData.size()),
+    };
 
     {
         const KDGpu::DeviceSize dataByteSize = vertexData.size() * sizeof(Mesh::Vertex);

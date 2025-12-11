@@ -67,12 +67,10 @@ class Shader {
     Shader(Shader &&rhs) = default;
     Shader &operator=(Shader &&rhs) = default;
 
-    Gpu::ShaderModule &module() { return *module_; }
-    const Gpu::ShaderModule &module() const { return *module_; }
+    Gpu::ShaderModule &module() { return module_; }
+    const Gpu::ShaderModule &module() const { return module_; }
     Gpu::ShaderStageFlagBits type() const { return type_; }
     bool valid() const;
-
-    // vk::PipelineShaderStageCreateInfo stageCreateInfo();
 
     // the size in bytes of the compiled shader module
     size_t size() { return size_; }
@@ -82,7 +80,7 @@ class Shader {
     ShaderSource source_;
     Gpu::ShaderStageFlagBits type_{};
     size_t size_{};
-    std::shared_ptr<Gpu::ShaderModule> module_;
+    Gpu::ShaderModule module_;
 
     std::string preprocessShader();
 

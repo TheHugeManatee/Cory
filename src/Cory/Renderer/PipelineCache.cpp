@@ -16,8 +16,23 @@ struct PipelineCachePrivate {
 
     using DescriptorHasher = decltype([](const PipelineDescriptor &d) { return d.hash(); });
     std::unordered_map<PipelineDescriptor, Gpu::GraphicsPipelineHandle, DescriptorHasher> cache;
+    using LayoutOptionsHasher = decltype([](const Gpu::PipelineLayoutOptions &d) {
+        return hashCompose(0, d.label, d.pushConstantRanges, d.bindGroupLayouts);
+    });
+    using LayoutOptionsEq =
+        decltype([](const Gpu::PipelineLayoutOptions &a, const Gpu::PipelineLayoutOptions &b) {
+            return (a.label == b.label) && (a.pushConstantRanges == b.pushConstantRanges) &&
+                   (a.bindGroupLayouts == b.bindGroupLayouts);
+        });
+    std::unordered_map<Gpu::PipelineLayoutOptions,
+                       Gpu::PipelineLayoutHandle,
+                       LayoutOptionsHasher,
+                       LayoutOptionsEq>
+        layoutCache;
 
     Gpu::GraphicsPipelineHandle create(std::string_view name, const PipelineDescriptor &info);
+    Gpu::PipelineLayoutHandle
+    createLayout(std::string_view label, const Gpu::PipelineLayoutOptions &pipeline_layout_options);
 };
 
 Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name,
@@ -28,6 +43,17 @@ Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name,
     }
     auto handle = data_->create(name, info);
     data_->cache.insert({info, handle});
+    return handle;
+}
+
+Gpu::PipelineLayoutHandle
+PipelineCache::queryLayout(const Gpu::PipelineLayoutOptions &pipelineLayoutOptions)
+{
+    if (auto it = data_->layoutCache.find(pipelineLayoutOptions); it != data_->layoutCache.end()) {
+        return it->second;
+    }
+    auto handle = data_->createLayout(pipelineLayoutOptions.label, pipelineLayoutOptions);
+    data_->layoutCache.insert({pipelineLayoutOptions, handle});
     return handle;
 }
 
@@ -91,19 +117,30 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
         .dynamicState =
             Gpu::DynamicStateOptions{
                 // TODO: Need to actually extend KDGPU further to provide the necessary
-                // functions on RenderPassCommandRecorder
-                .enabledDynamicStates = {Gpu::DynamicState::Viewport,
-                                         Gpu::DynamicState::Scissor,
-                                         Gpu::DynamicState::CullMode,
-                                         Gpu::DynamicState::DepthTestEnable,
-                                         Gpu::DynamicState::DepthWriteEnable,
-                                         Gpu::DynamicState::DepthCompareOp},
+                // functions on RenderPassCommandRecorder. Note: Viewport and Scissor are
+                // automatically added by KDGpu..
+                .enabledDynamicStates =
+                    {/*Gpu::DynamicState::Viewport,
+                     Gpu::DynamicState::Scissor,*/
+                     Gpu::DynamicState::CullMode,
+                     Gpu::DynamicState::DepthTestEnable,
+                     Gpu::DynamicState::DepthWriteEnable,
+                     Gpu::DynamicState::DepthCompareOp},
             }
         // If you target a predefined RenderPass instead of dynamic rendering:
         // .renderPass = myRenderPass, .subpassIndex = 0
     };
 
     return resourceManager->createGraphicsPipeline(device, gpOpts);
+}
+
+Gpu::PipelineLayoutHandle
+PipelineCachePrivate::createLayout(std::string_view label,
+                                   const Gpu::PipelineLayoutOptions &pipeline_layout_options)
+{
+    CO_CORE_INFO("Creating new pipeline layout for '{}' ", label);
+
+    return resourceManager->createPipelineLayout(device, pipeline_layout_options);
 }
 
 } // namespace Cory

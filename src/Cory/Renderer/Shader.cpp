@@ -145,22 +145,11 @@ Shader::Shader(Context &ctx, ShaderSource source)
         throw std::runtime_error{"Could not compile shader source to SPIR-V"};
     }
 
-    // module_ = std::make_shared<Magnum::Vk::Shader>(ctx.device(), info);
+    module_ = ctx_->device().createShaderModule(spirvBinary);
     size_ = spirvBinary.size() * sizeof(uint32_t);
     // nameVulkanObject(
     //     ctx_->device(), *module_, fmt::format("SHDR_{}", source.filePath().filename().string()));
 }
-
-// vk::PipelineShaderStageCreateInfo Shader::stageCreateInfo()
-//{
-//     vk::PipelineShaderStageCreateInfo shaderStageInfo{};
-//     shaderStageInfo.stage = static_cast<vk::ShaderStageFlagBits>(type_);
-//     shaderStageInfo.module = *module_;
-//     // entry point -- means we can add multiple entry points in one module
-//     shaderStageInfo.pName = "main";
-//
-//     return shaderStageInfo;
-// }
 
 std::string Shader::preprocessShader()
 {
@@ -212,7 +201,7 @@ std::string Shader::compileToAssembly(bool optimize /*= false*/)
 }
 bool Shader::valid() const
 {
-    return ctx_ && type_ != SHADER_TYPE_UNKNOWN && module_ != nullptr;
+    return ctx_ && type_ != SHADER_TYPE_UNKNOWN && module_.isValid();
 }
 
 } // namespace Cory

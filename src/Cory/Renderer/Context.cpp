@@ -2,6 +2,7 @@
 
 #include <Cory/Renderer/Context.hpp>
 
+#include <Cory/Base/Debugger.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
@@ -18,27 +19,6 @@
 #include <vulkan/vulkan_win32.h>
 
 namespace Cory {
-
-using InstanceHandle = Gpu::Handle<Gpu::Instance_t>;
-using DeviceHandle = Gpu::Handle<Gpu::Device_t>;
-using AdapterHandle = Gpu::Handle<Gpu::Adapter_t>;
-using QueueHandle = Gpu::Handle<Gpu::Queue_t>;
-using SwapchainHandle = Gpu::Handle<Gpu::Swapchain_t>;
-using SurfaceHandle = Gpu::Handle<Gpu::Surface_t>;
-using TextureHandle = Gpu::Handle<Gpu::Texture_t>;
-using TextureViewHandle = Gpu::Handle<Gpu::TextureView_t>;
-using ShaderModuleHandle = Gpu::Handle<Gpu::ShaderModule_t>;
-using RenderPassHandle = Gpu::Handle<Gpu::RenderPass_t>;
-using PipelineLayoutHandle = Gpu::Handle<Gpu::PipelineLayout_t>;
-using GraphicsPipelineHandle = Gpu::Handle<Gpu::GraphicsPipeline_t>;
-using ComputePipelineHandle = Gpu::Handle<Gpu::ComputePipeline_t>;
-using RenderPassCommandRecorderHandle = Gpu::Handle<Gpu::RenderPassCommandRecorder_t>;
-using GpuSemaphoreHandle = Gpu::Handle<Gpu::GpuSemaphore_t>;
-using ComputePassCommandRecorderHandle = Gpu::Handle<Gpu::ComputePassCommandRecorder_t>;
-using CommandBufferHandle = Gpu::Handle<Gpu::CommandBuffer_t>;
-using BindGroupHandle = Gpu::Handle<Gpu::BindGroup_t>;
-using BindGroupLayoutHandle = Gpu::Handle<Gpu::BindGroupLayout_t>;
-using FenceHandle = Gpu::Handle<Gpu::Fence_t>;
 
 struct ContextPrivate {
     std::string name;
@@ -276,6 +256,8 @@ void Context::setupDevice(const Gpu::Surface &surface)
     bindless_flags |= Gpu::ResourceBindingFlagBits::PartiallyBoundBit;
     bindless_flags |= Gpu::ResourceBindingFlagBits::UpdateAfterBindBit;
 
+    using BindPoints = DescriptorSets::BindPoints;
+
     data_->descriptorSets.init(
         data_->device,
         Gpu::BindGroupLayoutOptions{
@@ -283,21 +265,21 @@ void Context::setupDevice(const Gpu::Surface &surface)
             .bindings = {
                 {
                     {
-                        .binding = 0,
+                        .binding = std::to_underlying(BindPoints::UniformBufferObject),
                         .count = 1,
-                        .resourceType = Gpu::ResourceBindingType::DynamicUniformBuffer,
+                        .resourceType = Gpu::ResourceBindingType::UniformBuffer,
                         .shaderStages = Gpu::ShaderStageFlagBits::All,
                         .flags = bindless_flags,
                     },
                     {
-                        .binding = 1,
+                        .binding = std::to_underlying(BindPoints::CombinedImageSampler),
                         .count = 8,
                         .resourceType = Gpu::ResourceBindingType::CombinedImageSampler,
                         .shaderStages = Gpu::ShaderStageFlagBits::All,
                         .flags = bindless_flags,
                     },
                     {
-                        .binding = 1,
+                        .binding = std::to_underlying(BindPoints::StorageBuffer),
                         .count = 8,
                         .resourceType = Gpu::ResourceBindingType::StorageBuffer,
                         .shaderStages = Gpu::ShaderStageFlagBits::All,
@@ -428,15 +410,31 @@ void ContextPrivate::receiveDebugUtilsMessage(
     VkDebugUtilsMessageTypeFlagsEXT messageTypes,
     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData)
 {
-    if (!validationMessageCallback) {
-        return;
-    }
-
     DebugMessageInfo info{.severity = static_cast<DebugMessageSeverity>(messageSeverity),
                           .messageType = static_cast<DebugMessageType>(messageTypes),
                           .messageIdNumber = pCallbackData->messageIdNumber,
                           .message = pCallbackData->pMessage ? pCallbackData->pMessage : ""};
-    validationMessageCallback(info);
+
+    if (validationMessageCallback) {
+        validationMessageCallback(info);
+        return;
+    }
+    switch (info.severity) {
+    case DebugMessageSeverity::Verbose:
+        CO_CORE_TRACE("Vulkan Validation: {}", pCallbackData->pMessage);
+        break;
+    case DebugMessageSeverity::Info:
+        CO_CORE_INFO("Vulkan Validation: {}", pCallbackData->pMessage);
+        break;
+    case DebugMessageSeverity::Warning:
+        CO_CORE_WARN("Vulkan Validation: {}", pCallbackData->pMessage);
+        BreakpointIfDebugging();
+        break;
+    case DebugMessageSeverity::Error:
+        CO_CORE_ERROR("Vulkan Validation: {}", pCallbackData->pMessage);
+        BreakpointIfDebugging();
+        break;
+    }
 }
 
 } // namespace Cory

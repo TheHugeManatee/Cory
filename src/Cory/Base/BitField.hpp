@@ -16,6 +16,22 @@ constexpr auto to_underlying(Enum auto value)
     return static_cast<std::underlying_type_t<decltype(value)>>(value);
 }
 
+/**
+ * Bitfield class for enum types
+ * @tparam UnderlyingEnum The underlying enum type defining the bits
+ *
+ * The underlying enum is assumed to have an enumerator for each bit, e.g.:
+ * ```cpp
+ * enum class MyBits : uint32_t {
+ *    Bit0 = 1 << 0,
+ *    Bit1 = 1 << 1,
+ *    Bit2 = 1 << 2,
+ *    // ...
+ * };
+ * ```
+ * This class provides methods to set, clear, toggle and query bits, as well as retrieve
+ * a list of all set bits.
+ */
 template <typename UnderlyingEnum>
     requires Enum<UnderlyingEnum>
 class BitField {

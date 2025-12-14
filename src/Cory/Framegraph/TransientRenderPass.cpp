@@ -1,10 +1,11 @@
 
 #include <Cory/Framegraph/TransientRenderPass.hpp>
 
-#include <Cory/Base/Math.hpp>
+#include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
@@ -13,10 +14,6 @@
 
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
-
-#include <Cory/Application/DynamicGeometry.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
-#include <unordered_map>
 
 namespace Cory {
 
@@ -91,7 +88,9 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
 
     auto renderPassRecorder = cmd.beginRenderPass(renderPassOptions);
 
-    renderPassRecorder.setPipeline(pipelineHandle());
+    if (!pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
+        renderPassRecorder.setPipeline(pipelineHandle());
+    }
     // TODO - figure out whether we want to actually set dynamic states via the render pass
     // declaration or not
     // cmd.setupDynamicStates(dynamicStates_);
@@ -132,7 +131,7 @@ KDGpu::GraphicsPipelineHandle TransientRenderPass::pipelineHandle() noexcept
             pass_.depthAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
         .stencilFormat =
             pass_.stencilAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
-        .hasMeshInput = pass_.meshInput == MeshInput::Enabled,
+        .hasMeshInput = !pass_.options.is_set(PassOptionFlagBits::DisableMeshInput),
         .pipelineLayout = pipelineLayoutHandle(),
         // TODO provide render pass API to define/customize vertex options
         .vertexOptions =

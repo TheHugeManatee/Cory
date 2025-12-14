@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Cory/Base/BitField.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
@@ -13,7 +14,16 @@
 
 namespace Cory {
 
-enum class MeshInput { Enabled, Disabled };
+// Options general options for the render pass
+enum class PassOptionFlagBits {
+    None = 0,
+    /// Skip creating/binding the pipeline on TransientRenderPass::begin(), in order to allow
+    /// custom pipeline binding/switching (mostly interop with other libraries, e.g. imgui)
+    SkipPipelineBind = 1 << 0,
+    // Disable binding of mesh input (vertex/index buffers) when beginning the render pass
+    DisableMeshInput = 2 << 1,
+};
+using PassOptionFlags = BitField<PassOptionFlagBits>;
 
 struct TransientRenderPassInfo {
     int32_t sampleCount;
@@ -36,14 +46,15 @@ struct DepthStencilAttachment {
 };
 struct RenderPassDeclaration {
     std::string name;
-    std::vector<ShaderHandle> shaders;
+    PassOptionFlags options{PassOptionFlagBits::None};
+
+    std::vector<ShaderHandle> shaders; // Unused if SkipPipelineBind is used
     std::vector<ColorAttachment> attachments;
     std::optional<DepthStencilAttachment> depthAttachment;
     std::optional<DepthStencilAttachment> stencilAttachment;
-    std::vector<Gpu::PushConstantRange> pushConstantRanges;
+    std::vector<Gpu::PushConstantRange> pushConstantRanges; // Unused if SkipPipelineBind is used
 
     DynamicStates dynamicStates;
-    MeshInput meshInput{MeshInput::Enabled};
 };
 
 /// Transient render stores the information to set up and execute a render pass

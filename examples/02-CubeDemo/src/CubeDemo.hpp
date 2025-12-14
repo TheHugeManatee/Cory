@@ -43,6 +43,14 @@ class CubeDemoApplication : public Cory::Application {
                    Cory::TransientTextureHandle colorTarget,
                    Cory::TransientTextureHandle depthTarget);
 
+    // Prepare the swapchain images for presentation:
+    // The render tasks have left the swapchain images in TransferRead state.
+    // To present them, we need to either blit or resolve them to the actual swapchain image.
+    Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
+    resolveTask(Cory::RenderTaskBuilder builder,
+                Cory::TransientTextureHandle windowColorImageHandle,
+                Cory::TransientTextureHandle swapchainImageHandle);
+
     static double now();
     [[nodiscard]] double getElapsedTimeSeconds() const;
 

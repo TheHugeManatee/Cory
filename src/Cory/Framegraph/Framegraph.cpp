@@ -39,6 +39,8 @@ struct FramegraphPrivate {
     SlotMap<RenderTaskInfo> renderTasks;
     CommandRecorder *commandListInProgress{};
     FrameContext *currentFrameCtx{};
+
+    std::unordered_map<TransientTextureHandle, Sync::AccessType> outputFinalAccesses;
 };
 
 RenderTaskBuilder Framegraph::declareTask(std::string_view name)
@@ -68,6 +70,39 @@ Framegraph::~Framegraph()
 Framegraph::Framegraph(Framegraph &&) noexcept = default;
 Framegraph &Framegraph::operator=(Framegraph &&) noexcept = default;
 
+void Framegraph::finalizeOutputs(ExecutionInfo executionInfo)
+{
+    // After all passes, ensure outputs are transitioned to their requested final access
+    std::vector<Sync::ImageBarrier> outputBarriers;
+    for (const auto &output : data_->outputs) {
+        auto it = data_->outputFinalAccesses.find(output);
+        if (it == data_->outputFinalAccesses.end()) continue;
+        Sync::AccessType requestedAccess = it->second;
+        auto currentState = data_->resources.state(output);
+        Sync::AccessType lastAccess = currentState.lastAccess;
+        // Only add a barrier if the access actually changes
+        if (lastAccess != requestedAccess) {
+            auto barrier =
+                data_->resources.synchronizeTexture(output, requestedAccess, ImageContents::Retain);
+            outputBarriers.push_back(barrier);
+            // Record the transition in the execution info
+            executionInfo.transitions.push_back(
+                ExecutionInfo::TransitionInfo{.kind = TaskDependencyKindBits::Write,
+                                              .task = {}, // not associated with a specific task
+                                              .resource = output,
+                                              .stateBefore = lastAccess,
+                                              .stateAfter = requestedAccess});
+        }
+    }
+    if (!outputBarriers.empty()) {
+        const auto &rsrc = data_->ctx->resources();
+        auto device = rsrc.getDevice(data_->ctx->device());
+        auto commandBuffer = rsrc.getCommandRecorder(*data_->commandListInProgress);
+        Sync::CmdPipelineBarrier(
+            *device, commandBuffer->commandBuffer, nullptr, {}, outputBarriers);
+    }
+}
+
 ExecutionInfo Framegraph::record(FrameContext &frameCtx)
 {
     const Cory::ScopeTimer s1{"Framegraph/Execute"};
@@ -85,6 +120,8 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
         executionInfo.transitions.insert(
             executionInfo.transitions.end(), transitions.begin(), transitions.end());
     }
+
+    finalizeOutputs(executionInfo);
     return executionInfo;
 }
 
@@ -135,7 +172,7 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandRecord
     auto commandBuffer = rsrc.getCommandRecorder(cmd);
     Sync::CmdPipelineBarrier(*device, commandBuffer->commandBuffer, nullptr, {}, imageBarriers);
 
-    CO_CORE_TRACE("Executing rendering commands for {}", rpInfo.name);
+    CO_CORE_TRACE("Recording rendering commands for {}", rpInfo.name);
     const auto &coroHandle = rpInfo.coroHandle;
     if (!coroHandle.done()) {
         coroHandle.resume();
@@ -163,9 +200,11 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
     return thandle;
 }
 
-std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureHandle handle)
+std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureHandle handle,
+                                                               Sync::AccessType finalAccess)
 {
     data_->outputs.push_back(handle);
+    data_->outputFinalAccesses[handle] = finalAccess;
     return {data_->resources.info(handle), data_->resources.state(handle)};
 }
 

@@ -1,12 +1,10 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 
 #include <Cory/Application/Window.hpp>
-#include <Cory/Base/FmtUtils.hpp>
-#include <Cory/Base/Log.hpp>
-#include <Cory/Base/Utils.hpp>
-// #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Base/GlmUtils.hpp>
+#include <Cory/Base/Log.hpp>
 #include <Cory/Base/Primitives.hpp>
+#include <Cory/Base/Utils.hpp>
 #include <Cory/ImGui/ImguiRenderer.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
@@ -113,23 +111,47 @@ void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
 
     ImGui::NewFrame();
 }
-//
-// RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(Cory::RenderTaskBuilder builder,
-//                                                                LayerPassOutputs previousLayer)
-// {
-//     auto [writtenColorHandle, colorInfo] =
-//         builder.readWrite(previousLayer.color, Cory::Sync::AccessType::ColorAttachmentWrite);
-//
-//     co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
-//     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
-//
-//     Context &ctx = *renderApi.ctx;
-//     FrameContext &frameCtx = *renderApi.frameCtx;
-//
-//     // note - currently, we're letting imgui handle the final resolve and transition to
-//     // present_layout
-//     // recordFrameCommands(ctx, frameCtx.index, renderApi.cmd->handle());
-// }
+
+RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder builder,
+                                                               LayerPassOutputs previousLayer)
+{
+    auto [writtenColorHandle, colorInfo] =
+        builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentWrite);
+    auto [writtenDepthHandle, depthInfo] =
+        builder.write(previousLayer.depth, Sync::AccessType::DepthStencilAttachmentWrite);
+
+    auto imguiPass = builder.declareRenderPass(
+        RenderPassDeclaration{.name = "PASS_ImGui",
+                              .options = PassOptionFlagBits::SkipPipelineBind,
+                              .shaders = {},
+                              .attachments = {{
+                                  {
+                                      // main color target
+                                      .target = writtenColorHandle,
+                                      .load = Gpu::AttachmentLoadOperation::Load,
+                                      .store = Gpu::AttachmentStoreOperation::Store,
+                                      .clearColor = {},
+                                  },
+                              }},
+                              .depthAttachment =
+                                  DepthStencilAttachment{
+                                      .target = writtenDepthHandle,
+                                      .load = Gpu::AttachmentLoadOperation::Load,
+                                      .store = Gpu::AttachmentStoreOperation::Store,
+                                      .clearDepthStencil = {},
+                                  },
+                              .pushConstantRanges = {}});
+
+    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle};
+    RenderInput renderApi = co_await builder.finishDeclaration();
+
+    FrameContext &frameCtx = *renderApi.frameCtx;
+
+    // note - currently, we're letting imgui handle the final resolve
+    auto renderPass = imguiPass.begin(frameCtx.commandBuffer);
+    recordFrameCommands(frameCtx, &renderPass);
+    renderPass.end();
+}
 
 void ImGuiLayer::recordFrameCommands(FrameContext &frameCtx,
                                      Gpu::RenderPassCommandRecorder *recorder)

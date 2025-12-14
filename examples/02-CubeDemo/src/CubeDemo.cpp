@@ -5,6 +5,7 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
+#include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Math.hpp>
 #include <Cory/Base/Profiling.hpp>
@@ -12,6 +13,7 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -32,9 +34,7 @@
 #include <gsl/gsl>
 #include <gsl/narrow>
 #include <imgui.h>
-#include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -252,27 +252,27 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
 {
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
 
+    auto samples = window_->samples();
+    auto colorFormat = window_->colorFormat();
+    auto depthFormat = window_->depthFormat();
+    auto size = glm::u32vec3{window_->dimensions(), 1};
     auto windowColorTarget = framegraph.declareInput(
-        {
-            .name = "TEX_SwapCh_Color",
-            .size = glm::u32vec3{window_->dimensions(), 1},
-            .format = window_->colorFormat(),
-            .sampleCount = window_->samples(),
-        },
+        {.name = "TEX_SwapCh_Color", .size = size, .format = colorFormat, .sampleCount = samples},
         Cory::Sync::AccessType::None,
         *frameCtx.colorImage,
         *frameCtx.colorImageView);
 
     auto windowDepthTarget = framegraph.declareInput(
-        {
-            .name = "TEX_SwapCh_Depth",
-            .size = glm::u32vec3{window_->dimensions(), 1},
-            .format = window_->depthFormat(),
-            .sampleCount = window_->samples(),
-        },
+        {.name = "TEX_SwapCh_Depth", .size = size, .format = depthFormat, .sampleCount = samples},
         Cory::Sync::AccessType::None,
         *frameCtx.depthImage,
         *frameCtx.depthImageView);
+
+    auto swapchainImageTarget = framegraph.declareInput(
+        {.name = "TEX_SwapCh_Present", .size = size, .format = colorFormat, .sampleCount = samples},
+        Cory::Sync::AccessType::None,
+        *frameCtx.swapchainImage,
+        *frameCtx.swapchainImageView);
 
     auto mainPass =
         cubeRenderTask(framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget);
@@ -280,7 +280,13 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto [outInfo, outState] = framegraph.declareOutput(layersOutput.color);
+    auto resolvedSwapchain = resolveTask(framegraph.declareTask("TASK_Resolve"),
+                                         layersOutput.color,
+                                         swapchainImageTarget)
+                                 .output();
+
+    auto [outInfo, outState] =
+        framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
 }
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
@@ -390,7 +396,57 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         });
     }
 
-    passRecorder.end(); // TODO do kdgpu passes auto-end?
+    passRecorder.end();
+}
+
+Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
+CubeDemoApplication::resolveTask(Cory::RenderTaskBuilder builder,
+                                 Cory::TransientTextureHandle windowColorImageHandle,
+                                 Cory::TransientTextureHandle swapchainImageHandle)
+{
+    auto colorInfo = builder.read(windowColorImageHandle, Cory::Sync::AccessType::TransferRead);
+    auto [swapchainImageWriteHandle, swapchainInfo] =
+        builder.write(swapchainImageHandle, Cory::Sync::AccessType::TransferWrite);
+
+    co_yield swapchainImageWriteHandle;
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+
+    auto extent = Cory::glmu::to<Gpu::Extent3D>(swapchainInfo.size);
+
+    // Get the actual resources from the FG resource manager
+    auto windowImage = renderApi.resources->image(windowColorImageHandle);
+    auto swapchainImage = renderApi.resources->image(swapchainImageWriteHandle);
+
+    // Depending on the MSAA state of the window image, either resolve or blit to the swapchain
+    if (colorInfo.sampleCount != KDGpu::SampleCountFlagBits::Samples1Bit) {
+        renderApi.cmd->resolveTexture(Gpu::TextureResolveOptions{
+            .srcTexture = windowImage,
+            .srcLayout = Gpu::TextureLayout::TransferSrcOptimal,
+            .dstTexture = swapchainImage,
+            .dstLayout = Gpu::TextureLayout::TransferDstOptimal,
+            .regions = {Gpu::TextureResolveRegion{
+                .srcSubresource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
+                .dstSubresource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
+                .extent = extent,
+            }}});
+    }
+    else {
+        // Blit the rendered image to the swapchain image
+        renderApi.cmd->blitTexture(
+            {.srcTexture = windowImage,
+             .srcLayout = Gpu::TextureLayout::TransferSrcOptimal,
+             .dstTexture = swapchainImage,
+             .dstLayout = Gpu::TextureLayout::TransferDstOptimal,
+             .regions = {Gpu::TextureBlitRegion{
+                 .srcSubresource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
+                 .srcOffset = {},
+                 .srcExtent = extent,
+                 .dstSubresource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
+                 .dstOffset = {0, 0, 0},
+                 .dstExtent = extent,
+             }},
+             .scalingFilter = KDGpu::FilterMode::Linear});
+    }
 }
 
 void CubeDemoApplication::createGeometry()

@@ -65,8 +65,11 @@ class Framegraph : NoCopy {
      * declare that a resource is to be read afterwards. returns general
      * information and synchronization state of the last write to the
      * texture so external code can synchronize with it
+     * @param finalAccess The desired final access type for the output resource
      */
-    std::pair<TextureInfo, TextureState> declareOutput(TransientTextureHandle handle);
+    std::pair<TextureInfo, TextureState>
+    declareOutput(TransientTextureHandle handle,
+                  Sync::AccessType finalAccess = Sync::AccessType::None);
 
     [[nodiscard]] const TextureManager &resources() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
@@ -101,6 +104,9 @@ class Framegraph : NoCopy {
 
     [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
     renderTasks() const;
+
+    /// Ensure that all output resources are transitioned to their final access states
+    void finalizeOutputs(ExecutionInfo executionInfo);
 
   private:                             /* members */
     friend RenderTaskBuilder;          // convenience so it can call finishTaskDeclaration

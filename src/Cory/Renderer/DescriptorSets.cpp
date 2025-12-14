@@ -1,6 +1,7 @@
 #include "DescriptorSets.hpp"
 
 #include <Cory/Base/EnumMap.hpp>
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -43,7 +44,7 @@ void DescriptorSets::init(Gpu::Device &device, Gpu::BindGroupLayoutOptions defau
     for (SetType type : magic_enum::enum_values<SetType>()) {
         for (gsl::index i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
             data_->bindGroups[type][i] = device.createBindGroup(Gpu::BindGroupOptions{
-                .label = fmt::format("Static Descriptor Set {}", i),
+                .label = fmt::format("{} Descriptor Set Frame {}", type, i),
                 .layout = data_->layout,
                 .resources = {},
             });

@@ -25,7 +25,8 @@ namespace Cory {
 struct SwapchainSetup {
     Gpu::Format format{Gpu::Format::B8G8R8A8_UNORM};
     Gpu::CompositeAlphaFlagBits compositeAlpha{Gpu::CompositeAlphaFlagBits::OpaqueBit};
-    Gpu::TextureUsageFlags usageFlags{Gpu::TextureUsageFlagBits::ColorAttachmentBit};
+    Gpu::TextureUsageFlags usageFlags{Gpu::TextureUsageFlagBits::ColorAttachmentBit |
+                                      Gpu::TextureUsageFlagBits::TransferDstBit};
     Gpu::Format depthFormat;
     Gpu::TextureUsageFlags depthImageUsage_;
     std::vector<Gpu::SampleCountFlagBits> supportedSampleCounts;
@@ -239,7 +240,7 @@ SwapchainPrivate::SwapchainPrivate(Context &ctx_,
             {.label = fmt::format("RENDER-COMPLETE-{}-{}", swapchainName, i)}));
     }
 
-    createColorAndDepthResources(createInfo.samples);
+    this->createColorAndDepthResources(createInfo.samples);
 
     resourceDeleter =
         std::make_unique<KDGpuUtils::ResourceDeleter>(&ctx->device(), MAX_FRAMES_IN_FLIGHT);
@@ -254,8 +255,6 @@ void SwapchainPrivate::createColorAndDepthResources(Gpu::SampleCountFlagBits sam
     // COLOR images (multisampled)
     colorImages = ranges::views::indices(swapchain.textures().size()) |
                   ranges::views::transform([&](auto idx) {
-                      // Create a depth texture to use for depth-correct rendering
-
                       return device.createTexture(Gpu::TextureOptions{
                           .label = fmt::format("TEX_WndColor[{}] {} (IMG)", idx, extent),
                           .type = Gpu::TextureType::TextureType2D,
@@ -315,7 +314,7 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
     auto nextFrameIndex = static_cast<uint32_t>(frameNumber % MAX_FRAMES_IN_FLIGHT);
 
     auto recorder = ctx->device().createCommandRecorder(Gpu::CommandRecorderOptions{
-        .label = fmt::format("CMD-{}-[{}]", frameNumber, nextFrameIndex),
+        .label = fmt::format("CMD-Frame{:03}-[{}]", frameNumber, nextFrameIndex),
         .queue = ctx->graphicsQueue().handle(),
         .level = Gpu::CommandBufferLevel::Primary,
     });

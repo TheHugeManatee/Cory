@@ -5,10 +5,7 @@
 
 #include <glm/gtx/transform.hpp>
 
-void CubeAnimationSystem::beforeUpdate(Cory::SceneGraph &sg)
-{
-
-}
+void CubeAnimationSystem::beforeUpdate(Cory::SceneGraph &sg) {}
 
 void CubeAnimationSystem::update(Cory::SceneGraph &sg,
                                  Cory::TickInfo tick,
@@ -17,18 +14,20 @@ void CubeAnimationSystem::update(Cory::SceneGraph &sg,
                                  Cory::Components::Transform &transform)
 {
     // update only entities with non-negative entityIndex
-    if(anim.entityIndex < 0.0f) {
+    if (anim.entityIndex < 0.0f) {
         return;
     }
     auto now = gsl::narrow_cast<float>(tick.now.time_since_epoch().count());
-    animate(anim, transform, now);
+    animate(anim, transform, now * 100.0f);
 }
 
 void CubeAnimationSystem::drawImguiControls()
 {
     if (ImGui::Begin("Animation Params")) {
 
-        if (ImGui::Button("Randomize")) { randomize(ad_); }
+        if (ImGui::Button("Randomize")) {
+            randomize(ad_);
+        }
 
         CoImGui::Slider("blend", ad_.blend, 0.0f, 1.0f);
         CoImGui::Slider("translation", ad_.translation, -3.0f, 3.0f);
@@ -61,9 +60,9 @@ void CubeAnimationSystem::animate(AnimationComponent &d,
     const float tsf = ad_.tsf / 2.0f + ad_.tsf * sin(t / 10.0f);
     const glm::vec3 translation{sin(i * tsf) * i * ad_.tsi, cos(i * tsf) * i * ad_.tsi, i * ad_.ti};
 
-    //transform.position = ad_.translation + translation;
+    // transform.position = ad_.translation + translation;
     transform.rotation = ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f};
-    //transform.scale = glm::vec3{scale};
+    // transform.scale = glm::vec3{scale};
 
     const float colorFreq = 1.0f / (ad_.cf0 + ad_.cfi * i);
     const float brightness = i + 0.2f * abs(sin(t + i));

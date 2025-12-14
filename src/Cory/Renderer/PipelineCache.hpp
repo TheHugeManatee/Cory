@@ -68,6 +68,13 @@ struct PipelineDescriptor {
     bool operator==(const PipelineDescriptor &rhs) const = default;
 };
 
+struct PipelineLayoutDescriptor {
+    std::vector<Gpu::BindGroupLayoutHandle> bindGroupLayouts;
+    std::vector<Gpu::PushConstantRange> pushConstantRanges;
+
+    bool operator==(const PipelineLayoutDescriptor &rhs) const = default;
+};
+
 class PipelineCache {
   public:
     explicit PipelineCache(Gpu::VulkanResourceManager *resourceManager,

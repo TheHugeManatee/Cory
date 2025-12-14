@@ -181,7 +181,7 @@ void SceneGraphDemoApplication::run()
         return Cory::Framegraph(ctx());
     });
     auto time = Cory::AppClock::now();
-    while (!window_->shouldClose()) {
+ while (!window_->shouldClose()) {
         processEvents(0);
 
         // Update time

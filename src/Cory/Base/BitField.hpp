@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <magic_enum.hpp>
 
 #include <vector>
@@ -15,6 +16,22 @@ constexpr auto to_underlying(Enum auto value)
     return static_cast<std::underlying_type_t<decltype(value)>>(value);
 }
 
+/**
+ * Bitfield class for enum types
+ * @tparam UnderlyingEnum The underlying enum type defining the bits
+ *
+ * The underlying enum is assumed to have an enumerator for each bit, e.g.:
+ * ```cpp
+ * enum class MyBits : uint32_t {
+ *    Bit0 = 1 << 0,
+ *    Bit1 = 1 << 1,
+ *    Bit2 = 1 << 2,
+ *    // ...
+ * };
+ * ```
+ * This class provides methods to set, clear, toggle and query bits, as well as retrieve
+ * a list of all set bits.
+ */
 template <typename UnderlyingEnum>
     requires Enum<UnderlyingEnum>
 class BitField {
@@ -76,7 +93,9 @@ class BitField {
 
         for (unsigned int digit = NUM_BITS; digit > 0; --digit) {
             UnderlyingEnum bit{UnderlyingType(1) << (digit - 1)};
-            if (is_set(bit)) { setBits.push_back(bit); }
+            if (is_set(bit)) {
+                setBits.push_back(bit);
+            }
         }
         return setBits;
     }
@@ -92,7 +111,9 @@ struct fmt::formatter<Cory::BitField<E>, std::enable_if_t<std::is_enum_v<E>, cha
     : fmt::formatter<std::string_view, char> {
     auto format(Cory::BitField<E> e, format_context &ctx) const
     {
-        if (e.bits() == E{}) { return fmt::format_to(ctx.out(), "{}", E{}); }
+        if (e.bits() == E{}) {
+            return fmt::format_to(ctx.out(), "{}", E{});
+        }
         return fmt::format_to(ctx.out(), "{}", fmt::join(e.set_bits(), " | "));
     }
 };

@@ -2,15 +2,13 @@ set(TARGET_NAME Cory)
 # where the headers will be installed, relative to the project's header install directory
 set(TARGET_HEADER_SUBDIR "Cory/")
 
-find_package(Vulkan REQUIRED FATAL_ERROR)
+find_package(Vulkan REQUIRED)
 
-find_package(GLEW)
-find_package(Magnum REQUIRED Vk)
+find_package(glfw3 REQUIRED)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
 find_package(EnTT REQUIRED)
-find_package(glfw3)
 find_package(glm REQUIRED)
 find_package(imgui REQUIRED)
 find_package(magic_enum REQUIRED)
@@ -27,8 +25,8 @@ set(CORY_SOURCES
         Application/CameraManipulator.cpp
         Application/CameraManipulator.hpp
         Application/Common.hpp
-        Application/DepthDebugLayer.cpp
-        Application/DepthDebugLayer.hpp
+        #Application/DepthDebugLayer.cpp
+        #Application/DepthDebugLayer.hpp
         Application/DynamicGeometry.cpp
         Application/DynamicGeometry.hpp
         Application/Event.hpp
@@ -61,11 +59,11 @@ set(CORY_SOURCES
         Base/Time.hpp
         Base/Utils.cpp
         Base/Utils.hpp
+        Base/Debugger.hpp
+        Base/Debugger.cpp
         Cory.cpp
         Cory.hpp
         Framegraph/Builder.cpp
-        Framegraph/CommandList.cpp
-        Framegraph/CommandList.hpp
         Framegraph/Common.hpp
         Framegraph/Framegraph.cpp
         Framegraph/Framegraph.hpp
@@ -80,29 +78,28 @@ set(CORY_SOURCES
         ImGui/Inputs.hpp
         ImGui/Widgets.cpp
         ImGui/Widgets.hpp
-        Renderer/APIConversion.hpp
+        ImGui/ImguiRenderer.cpp
+        ImGui/ImguiRenderer.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
         Renderer/Context.cpp
         Renderer/Context.hpp
         Renderer/DescriptorSets.cpp
         Renderer/DescriptorSets.hpp
-        Renderer/ResourceManager.cpp
-        Renderer/ResourceManager.hpp
-        Renderer/Semaphore.hpp
+        Renderer/ShaderManager.cpp
+        Renderer/ShaderManager.hpp
+        #Renderer/Semaphore.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
-        Renderer/SingleShotCommandBuffer.cpp
-        Renderer/SingleShotCommandBuffer.hpp
+        Renderer/SingleShotCommandRecorder.cpp
+        Renderer/SingleShotCommandRecorder.hpp
         Renderer/Swapchain.cpp
         Renderer/Swapchain.hpp
         Renderer/Synchronization.cpp
         Renderer/Synchronization.hpp
         Renderer/UniformBufferObject.cpp
         Renderer/UniformBufferObject.hpp
-        Renderer/VulkanUtils.cpp
-        Renderer/VulkanUtils.hpp
-        Renderer/flextVkExt.h
+
         SceneGraph/Common.hpp
         SceneGraph/SceneGraph.cpp
         SceneGraph/SceneGraph.hpp
@@ -119,6 +116,27 @@ set(CORY_SOURCES
         Base/WorkContractGroup.hpp
         Base/ValOptional.hpp
         Base/Function.hpp
+        Renderer/Gpu.hpp
+        Renderer/FrameContext.hpp
+        Base/GlmUtils.hpp
+        Base/Result.hpp
+        Base/Primitives.hpp
+        Renderer/Gpu.cpp
+        Renderer/PipelineCache.cpp
+        Renderer/PipelineCache.hpp
+        Base/EnumMap.hpp
+        RenderTasks/StandardRenderTasks.cpp
+        RenderTasks/StandardRenderTasks.hpp
+)
+
+
+# Use ImGui GLFW backend from local imgui module's res/bindings folder
+set(IMGUI_BACKEND_DIR "${imgui_INCLUDE_DIR}/../res/bindings")
+set(IMGUI_GLFW_IMPL_CPP "${IMGUI_BACKEND_DIR}/imgui_impl_glfw.cpp")
+set(IMGUI_GLFW_IMPL_H "${IMGUI_BACKEND_DIR}/imgui_impl_glfw.h")
+
+list(APPEND CORY_SOURCES
+        ${IMGUI_GLFW_IMPL_CPP}
 )
 
 # determine includes from CORY_SOURCES by the .hpp suffix
@@ -138,17 +156,16 @@ target_include_directories(${TARGET_NAME}
         ${VULKAN_INCLUDE_DIRS}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../>
         $<INSTALL_INTERFACE:include>
+        PRIVATE
+        ${IMGUI_BACKEND_DIR}
 )
 
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         ${VULKAN_LIBRARIES}
         Cory::ThirdParty
-        GLEW::GLEW
-        Magnum::Vk
         Microsoft.GSL::GSL
         fmt::fmt
-        glfw::glfw
         glm::glm
         imgui::imgui
         EnTT::EnTT
@@ -157,8 +174,16 @@ target_link_libraries(${TARGET_NAME}
         cppcoro::cppcoro
         shaderc::shaderc
         spdlog::spdlog
+        KDGpu::KDGpu
+        glfw
+        KDGpu::KDGpuUtils
+        KDUtils::KDGui
 
         PRIVATE
+
+        KDGpu::KDGpuExample
+        KDGpuExample::Resources # for the embedded roboto font
+        KDGpuExample::ShaderResources # for the embedded imgui shaders
         Cory::project_warnings
         Cory::project_options
 )

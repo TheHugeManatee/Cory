@@ -1,34 +1,75 @@
+## KDGPU Does not support conan yet
+include(FetchContent)
+
+find_package(KDBindings REQUIRED)
+find_package(VulkanHeaders REQUIRED)
+find_package(imgui REQUIRED)
+find_package(glm REQUIRED)
+
+#set(KDGPU_BUILD_KDXR OFF)
+#set(KDGPU_OPENXR_SUPPORT OFF)
+
+FetchContent_Declare(
+        KDGpu
+        SOURCE_DIR "C:/dev/KDGpu"
+        #GIT_REPOSITORY https://github.com/KDAB/KDGpu.git
+        #GIT_TAG v0.8.0
+)
+FetchContent_MakeAvailable(KDGpu)
+
+#include(${KDGpu_SOURCE_DIR}/cmake/CMakeRC.cmake)
+
 ## This is where you put and configure external dependencies
 ## A couple of options are:
 # * Header-only libraries: Just include directly into your repository
 
 set(TARGET_NAME ThirdPartyLibs)
 
-find_package(VulkanHeaders)
-find_package(imgui)
-find_package(glfw3)
-find_package(glm)
-
 add_library(${TARGET_NAME} STATIC
         src/stb_image.cpp
         src/tiny_obj_loader.cpp
         src/vk_mem_alloc.cpp
-        src/imgui_impl_vulkan.cpp
-        src/imgui_impl_glfw.cpp
         src/imGuIZMOquat.cpp
-        )
+)
 
 # optick
-file(GLOB_RECURSE OPTICK_SRC "src/optick/*.cpp")
+set(OPTICK_SRC
+        src/optick/optick_capi.cpp
+        src/optick/optick_core.cpp
+        src/optick/optick_gpu.cpp
+        src/optick/optick_gpu.d3d12.cpp
+        src/optick/optick_gpu.vulkan.cpp
+        src/optick/optick_message.cpp
+        src/optick/optick_miniz.cpp
+        src/optick/optick_serialization.cpp
+        src/optick/optick_server.cpp
+)
 target_sources(${TARGET_NAME} PRIVATE ${OPTICK_SRC})
 target_include_directories(${TARGET_NAME} PRIVATE "include/optick")
 if (WIN32)
     target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif ()
 
+# Corrected HEADERS file list
+set(HEADERS
+        include/optick/optick.config.h
+        include/optick/optick.h
+        include/optick/optick_capi.h
+        include/optick/optick_common.h
+        include/optick/optick_core.freebsd.h
+        include/optick/optick_core.h
+        include/optick/optick_core.linux.h
+        include/optick/optick_core.macos.h
+        include/optick/optick_core.platform.h
+        include/optick/optick_core.win.h
+        include/optick/optick_gpu.h
+        include/optick/optick_memory.h
+        include/optick/optick_message.h
+        include/optick/optick_miniz.h
+        include/optick/optick_serialization.h
+        include/optick/optick_server.h
+)
 
-# Headers
-file(GLOB_RECURSE HEADERS "include/*.h")
 target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
 
@@ -39,11 +80,10 @@ target_include_directories(${TARGET_NAME} PUBLIC
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         imgui::imgui
-        glfw::glfw
         glm::glm
         PRIVATE
         Vulkan::Headers
-        )
+)
 
 add_library(Cory::ThirdParty ALIAS ThirdPartyLibs)
 

@@ -22,7 +22,7 @@
 # SOFTWARE.
 
 
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.10)
 
 option(ENABLE_WARNINGS_SETTINGS "Allow target_set_warnings to add flags and defines. Set this to OFF if you want to provide your own warning parameters." ON)
 
@@ -83,7 +83,7 @@ function(target_set_warnings)
                     -Wdouble-promotion # warn if float is implicit promoted to double
                     -Wformat=2 # warn on security issues around functions that format output
                     # (ie printf)
-                    )
+            )
         endif ()
     elseif (NOT ${disable_all} EQUAL -1)
         set(SystemIncludes TRUE) # Treat includes as if coming from system
@@ -109,6 +109,8 @@ function(target_set_warnings)
             #list(APPEND WarningFlags "/wd4365") # conversion from A to B, signed/unsigned mismatch
             list(APPEND WarningFlags "/wd4018") # '>=': signed/unsigned mismatch
             #list(APPEND WarningFlags "/wd4668") # is not defined as a preprocessor macro, replacing with '0' for
+            list(APPEND WarningFlags "/wd4251") # class 'A' needs to have dll-interface to be used by clients of class 'B'
+
 
         elseif (WGCC OR WCLANG)
             list(APPEND WarningFlags -Wno-switch-enum)
@@ -146,7 +148,7 @@ function(target_set_warnings)
             target_link_options(${target} INTERFACE
                     # Disable linker warning 4099 (missing pdb file), since conan packages don't bring the pdbs
                     /ignore:4099
-                    )
+            )
         endif ()
     endforeach ()
 endfunction(target_set_warnings)

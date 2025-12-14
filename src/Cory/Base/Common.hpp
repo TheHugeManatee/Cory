@@ -16,6 +16,8 @@ template <typename T> using Span = gsl::span<T>;
 template <typename StoredType> class SlotMap;
 template <int64_t RECORD_HISTORY_SIZE = 64> class ProfilerRecord;
 
+using Color = glm::vec4;
+
 class Profiler;
 class ScopeTimer;
 class LapTimer;

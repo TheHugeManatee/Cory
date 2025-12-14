@@ -5,25 +5,28 @@
 
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
 
-#include <Corrade/Containers/StringStlView.h>
-#include <Magnum/Vk/Vk.h> // forward declaration header
-#include <Magnum/Vk/Vulkan.h>
-
+#include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
 #include <Cory/Renderer/Synchronization.hpp>
-#include <Cory/Renderer/flextVkExt.h> // extensions
+
+#include <vulkan/vulkan.h>
 
 #include <cstdint>
 
 namespace Cory {
+
+// maximum number of frames in flight at a time
+static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
 // forward declared classes/structs
 class Context;
 struct ContextCreationInfo;
 class CpuBuffer;
 class RenderManager;
+class ShaderManager;
 class Shader;
-class ResourceManager;
-class SingleShotCommandBuffer;
+class SingleShotCommandRecorder;
+class PipelineCache;
 // Swapchain.hpp
 struct SwapchainSupportDetails;
 struct FrameContext;
@@ -34,19 +37,9 @@ template <typename BufferStruct>
 class UniformBufferObject;
 class DescriptorSets;
 
-using PixelFormat = Magnum::Vk::PixelFormat;
-bool isColorFormat(PixelFormat format);
-bool isDepthFormat(PixelFormat format);
-bool isStencilFormat(PixelFormat format);
-
 // enums
-enum class ShaderType : uint32_t {
-    eUnknown = 0,
-    eVertex = VK_SHADER_STAGE_VERTEX_BIT,
-    eGeometry = VK_SHADER_STAGE_GEOMETRY_BIT,
-    eFragment = VK_SHADER_STAGE_FRAGMENT_BIT,
-    eCompute = VK_SHADER_STAGE_COMPUTE_BIT,
-};
+static constexpr Gpu::ShaderStageFlagBits SHADER_TYPE_UNKNOWN = Gpu::ShaderStageFlagBits{};
+
 enum class DebugMessageSeverity : uint32_t {
     Verbose = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT,
     Info = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
@@ -84,35 +77,11 @@ enum class MemoryFlagBits : uint32_t {
 };
 using MemoryFlags = BitField<MemoryFlagBits>;
 
-using ShaderHandle = PrivateTypedHandle<Shader, ResourceManager>;
+using ShaderHandle = PrivateTypedHandle<Shader, ShaderManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
-using BufferHandle = PrivateTypedHandle<Magnum::Vk::Buffer, ResourceManager>;
-using PipelineHandle = PrivateTypedHandle<Magnum::Vk::Pipeline, ResourceManager>;
-using ImageHandle = PrivateTypedHandle<Magnum::Vk::Image, ResourceManager>;
-using ImageViewHandle = PrivateTypedHandle<Magnum::Vk::ImageView, ResourceManager>;
-using SamplerHandle = PrivateTypedHandle<Magnum::Vk::Sampler, ResourceManager>;
-using DescriptorSetLayoutHandle =
-    PrivateTypedHandle<Magnum::Vk::DescriptorSetLayout, ResourceManager>;
-
-struct FrameContext {
-    uint32_t index{};                    ///< the current swapchain image index
-    uint64_t frameNumber{};              ///< the (monotically increasing) frame number
-    bool shouldRecreateSwapchain{false}; ///< set when window has been resized
-    Magnum::Vk::Image *swapchainImage{};
-    Magnum::Vk::ImageView *swapchainImageView{};
-    Magnum::Vk::Image *colorImage{};
-    Magnum::Vk::ImageView *colorImageView{};
-    Magnum::Vk::Image *depthImage{};
-    Magnum::Vk::ImageView *depthImageView{};
-    Magnum::Vk::Fence *inFlight{};
-    Semaphore *acquired{};
-    Semaphore *rendered{};
-    Magnum::Vk::CommandBuffer *commandBuffer{};
-};
 
 } // namespace Cory
 
-DECLARE_ENUM_BITFIELD(Cory::ShaderType);
 DECLARE_ENUM_BITFIELD(Cory::DebugMessageType);
 DECLARE_ENUM_BITFIELD(Cory::BufferUsageBits);
 DECLARE_ENUM_BITFIELD(Cory::MemoryFlagBits);

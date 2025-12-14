@@ -3,14 +3,11 @@
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/CameraManipulator.hpp>
 #include <Cory/Application/Common.hpp>
+#include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/Swapchain.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
-#include <Magnum/Vk/DescriptorSet.h>
-#include <Magnum/Vk/Framebuffer.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
@@ -25,7 +22,7 @@ struct CubeUBO {
 
 class CubeDemoApplication : public Cory::Application {
   public:
-    CubeDemoApplication(int argc, char **argv);
+    CubeDemoApplication(int argc, const char **argv);
     ~CubeDemoApplication();
 
     void run() override;
@@ -58,13 +55,12 @@ class CubeDemoApplication : public Cory::Application {
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
 
-    Cory::SamplerHandle defaultSampler_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
-    std::unique_ptr<Magnum::Vk::Mesh> mesh_;
+    std::unique_ptr<Cory::Mesh> mesh_;
 
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
-    std::vector<Magnum::Vk::DescriptorSet> descriptorSets_;
+    std::vector<Gpu::BindGroup> bindGroups_;
     double startupTime_;
     bool dumpNextFramegraph_{false};
 

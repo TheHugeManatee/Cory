@@ -1,6 +1,5 @@
 #pragma once
 
-#include "kdbindings/property.h"
 #include <Cory/Application/Common.hpp>
 #include <Cory/Application/Event.hpp>
 #include <Cory/Framegraph/Common.hpp>
@@ -10,6 +9,11 @@
 #include <string>
 
 namespace Cory {
+
+struct LogicUpdateContext {
+    double simulationTime; ///< the time in seconds since the start of the simulation
+    double deltaTime;      ///< time since the last update
+};
 
 /**
  * a base class for application layers
@@ -21,7 +25,7 @@ namespace Cory {
 class ApplicationLayer {
   public:
     ApplicationLayer(std::string name)
-        : name(name)
+        : name_(std::move(name))
     {
     }
 
@@ -36,7 +40,7 @@ class ApplicationLayer {
     virtual bool onEvent(Event event) { return false; }
 
     /// called once per frame. use to update any state
-    virtual void onUpdate() {}
+    virtual void onUpdate(const LogicUpdateContext &updateCtx) {}
 
     /**
      * used to query whether the layer has a render task. if this returns true, the renderTask
@@ -50,7 +54,10 @@ class ApplicationLayer {
         co_return;
     }
 
-    kdb::Property<std::string> name;
+    std::string_view name() const { return name_; }
+
+  private:
+    std::string name_;
 };
 
 } // namespace Cory

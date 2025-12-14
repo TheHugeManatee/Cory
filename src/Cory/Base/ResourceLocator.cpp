@@ -19,7 +19,9 @@ std::filesystem::path ResourceLocator::Locate(std::filesystem::path resourcePath
 {
     for (const auto &searchPath : searchPaths_) {
         auto combined = searchPath / resourcePath;
-        if (exists(combined)) { return absolute(combined); }
+        if (exists(combined)) {
+            return absolute(combined);
+        }
     }
     throw ResourceNotFound{fmt::format("Resource could not be found: {}", resourcePath.string())};
 }

@@ -1,131 +1,168 @@
 #include <Cory/Application/DynamicGeometry.hpp>
 
 #include <Cory/Renderer/Context.hpp>
+#include <KDGpu/buffer_options.h>
 
 #include <glm/trigonometric.hpp> // for glm::radians
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
-#include <Corrade/Containers/Array.h>
-#include <Magnum/Vk/Buffer.h>
-#include <Magnum/Vk/BufferCreateInfo.h>
-#include <Magnum/Vk/Mesh.h>
-#include <Magnum/Vk/VertexFormat.h>
-
 #include <gsl/narrow>
 
 namespace Cory {
-namespace Vk = Magnum::Vk;
 
-Vk::Mesh DynamicGeometry::createTriangle(Context &ctx, uint32_t binding)
+Mesh DynamicGeometry::createTriangle(Context &ctx, uint32_t binding)
 {
-    Vk::Mesh mesh(ctx.defaultMeshLayout());
 
-    const uint64_t numVertices = 4;
-    Vk::Buffer vBuffer{
-        ctx.device(),
-        Vk::BufferCreateInfo{Vk::BufferUsage::VertexBuffer, numVertices * sizeof(Vertex)},
-        Magnum::Vk::MemoryFlag::HostCoherent | Magnum::Vk::MemoryFlag::HostVisible};
+    // const uint64_t numVertices = 4;
+    // Vk::Buffer vBuffer{
+    //     ctx.device(),
+    //     Vk::BufferCreateInfo{Vk::BufferUsage::VertexBuffer, numVertices * sizeof(Vertex)},
+    //     Magnum::Vk::MemoryFlag::HostCoherent | Magnum::Vk::MemoryFlag::HostVisible};
+    //
+    // Corrade::Containers::Array<char, Vk::MemoryMapDeleter> data =
+    // vBuffer.dedicatedMemory().map();
+    //
+    // auto &view = reinterpret_cast<std::array<Vertex, 3> &>(*data.data());
+    // glm::vec2 p0{0, 0.5f};
+    // glm::vec2 p1{
+    //     p0.x * cos(glm::radians(120.0f)) - p0.y * sin(glm::radians(120.0f)),
+    //     p0.x * sin(glm::radians(120.0f)) + p0.y * cos(glm::radians(120.0f)),
+    // };
+    // glm::vec2 p2{
+    //     p0.x * cos(glm::radians(240.0f)) - p0.y * sin(glm::radians(240.0f)),
+    //     p0.x * sin(glm::radians(240.0f)) + p0.y * cos(glm::radians(240.0f)),
+    // };
+    // view[0] = Vertex{{p0.x, p0.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
+    // view[1] = Vertex{{p1.x, p1.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
+    // view[2] = Vertex{{p2.x, p2.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
+    // mesh.addVertexBuffer(0, std::move(vBuffer), 0).setCount(numVertices);
 
-    Corrade::Containers::Array<char, Vk::MemoryMapDeleter> data = vBuffer.dedicatedMemory().map();
-
-    auto &view = reinterpret_cast<std::array<Vertex, 3> &>(*data.data());
-    glm::vec2 p0{0, 0.5f};
-    glm::vec2 p1{
-        p0.x * cos(glm::radians(120.0f)) - p0.y * sin(glm::radians(120.0f)),
-        p0.x * sin(glm::radians(120.0f)) + p0.y * cos(glm::radians(120.0f)),
-    };
-    glm::vec2 p2{
-        p0.x * cos(glm::radians(240.0f)) - p0.y * sin(glm::radians(240.0f)),
-        p0.x * sin(glm::radians(240.0f)) + p0.y * cos(glm::radians(240.0f)),
-    };
-    view[0] = Vertex{{p0.x, p0.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
-    view[1] = Vertex{{p1.x, p1.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
-    view[2] = Vertex{{p2.x, p2.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
-    mesh.addVertexBuffer(0, std::move(vBuffer), 0).setCount(numVertices);
-
-    return mesh;
+    return {};
 }
 
-Vk::Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t binding)
+Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t binding)
 {
-    struct VertexTemp {
-        glm::vec3 pos;
-        glm::vec3 norm;
-        glm::vec3 col;
-    };
-    std::vector<VertexTemp> vertices{
+    std::vector<Mesh::Vertex> vertices{
         // left face (white)
-        {{-.5f, -.5f, -.5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f}},
-        {{-.5f, -.5f, .5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f}},
-        {{-.5f, .5f, .5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f}},
-        {{-.5f, -.5f, -.5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f}},
-        {{-.5f, .5f, .5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f}},
-        {{-.5f, .5f, -.5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f}},
+        {{-.5f, -.5f, -.5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f, 1.0f}},
+        {{-.5f, -.5f, .5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f, 1.0f}},
+        {{-.5f, .5f, .5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f, 1.0f}},
+        {{-.5f, -.5f, -.5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f, 1.0f}},
+        {{-.5f, .5f, .5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f, 1.0f}},
+        {{-.5f, .5f, -.5f}, {-1.0f, 0.0f, 0.0f}, {.9f, .9f, .9f, 1.0f}},
 
         // right face (yellow)
-        {{.5f, -.5f, -.5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f}},
-        {{.5f, .5f, .5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f}},
-        {{.5f, -.5f, .5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f}},
-        {{.5f, -.5f, -.5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f}},
-        {{.5f, .5f, -.5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f}},
-        {{.5f, .5f, .5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f}},
+        {{.5f, -.5f, -.5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f, 1.0f}},
+        {{.5f, .5f, .5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f, 1.0f}},
+        {{.5f, -.5f, .5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f, 1.0f}},
+        {{.5f, -.5f, -.5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f, 1.0f}},
+        {{.5f, .5f, -.5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f, 1.0f}},
+        {{.5f, .5f, .5f}, {1.0f, 0.0f, 0.0f}, {.8f, .8f, .1f, 1.0f}},
 
         // top face (orange, remember y axis points down)
-        {{-.5f, -.5f, -.5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f}},
-        {{.5f, -.5f, .5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f}},
-        {{-.5f, -.5f, .5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f}},
-        {{-.5f, -.5f, -.5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f}},
-        {{.5f, -.5f, -.5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f}},
-        {{.5f, -.5f, .5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f}},
+        {{-.5f, -.5f, -.5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f, 1.0f}},
+        {{.5f, -.5f, .5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f, 1.0f}},
+        {{-.5f, -.5f, .5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f, 1.0f}},
+        {{-.5f, -.5f, -.5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f, 1.0f}},
+        {{.5f, -.5f, -.5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f, 1.0f}},
+        {{.5f, -.5f, .5f}, {0.0f, -1.0f, 0.0f}, {.9f, .6f, .1f, 1.0f}},
 
         // bottom face (red)
-        {{-.5f, .5f, -.5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f}},
-        {{-.5f, .5f, .5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f}},
-        {{.5f, .5f, .5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f}},
-        {{-.5f, .5f, -.5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f}},
-        {{.5f, .5f, .5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f}},
-        {{.5f, .5f, -.5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f}},
+        {{-.5f, .5f, -.5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f, 1.0f}},
+        {{-.5f, .5f, .5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f, 1.0f}},
+        {{.5f, .5f, .5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f, 1.0f}},
+        {{-.5f, .5f, -.5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f, 1.0f}},
+        {{.5f, .5f, .5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f, 1.0f}},
+        {{.5f, .5f, -.5f}, {0.0f, 1.0f, 0.0f}, {.8f, .1f, .1f, 1.0f}},
 
         // nose face (blue)
-        {{-.5f, -.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f}},
-        {{.5f, .5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f}},
-        {{-.5f, .5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f}},
-        {{-.5f, -.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f}},
-        {{.5f, -.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f}},
-        {{.5f, .5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f}},
+        {{-.5f, -.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f, 1.0f}},
+        {{.5f, .5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f, 1.0f}},
+        {{-.5f, .5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f, 1.0f}},
+        {{-.5f, -.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f, 1.0f}},
+        {{.5f, -.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f, 1.0f}},
+        {{.5f, .5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {.1f, .1f, .8f, 1.0f}},
 
         // tail face (green)
-        {{-.5f, -.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f}},
-        {{-.5f, .5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f}},
-        {{.5f, .5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f}},
-        {{-.5f, -.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f}},
-        {{.5f, .5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f}},
-        {{.5f, -.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f}},
+        {{-.5f, -.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f, 1.0f}},
+        {{-.5f, .5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f, 1.0f}},
+        {{.5f, .5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f, 1.0f}},
+        {{-.5f, -.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f, 1.0f}},
+        {{.5f, .5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f, 1.0f}},
+        {{.5f, -.5f, -0.5f}, {0.0f, 0.0f, -1.0f}, {.1f, .8f, .1f, 1.0f}},
 
     };
+    // 36 vertices, 12 triangles (2 per face), each triangle needs 3 indices
+    std::vector<uint32_t> indices;
+    for (uint32_t i = 0; i < vertices.size(); i += 3) {
+        indices.push_back(i);
+        indices.push_back(i + 1);
+        indices.push_back(i + 2);
+    }
+    // apply offset
     for (auto &v : vertices) {
         v.pos += offset;
     }
 
-    Vk::Mesh mesh(ctx.defaultMeshLayout());
+    return createFromCpuBuffers(ctx, vertices, indices);
+}
 
-    Vk::Buffer vBuffer{
-        ctx.device(),
-        Vk::BufferCreateInfo{Vk::BufferUsage::VertexBuffer, vertices.size() * sizeof(Vertex)},
-        Magnum::Vk::MemoryFlag::HostCoherent | Magnum::Vk::MemoryFlag::HostVisible};
+Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
+                                           std::span<const Mesh::Vertex> vertexData,
+                                           std::span<const uint32_t> indexData)
+{
+    auto &device = ctx.device();
+    KDGpu::UploadStagingBuffer vertex_staging_buffer;
+    KDGpu::UploadStagingBuffer index_staging_buffer;
+    Mesh mesh{
+        .vertexCount = gsl::narrow_cast<uint32_t>(vertexData.size()),
+        .indexCount = gsl::narrow_cast<uint32_t>(indexData.size()),
+    };
 
-    Corrade::Containers::Array<char, Vk::MemoryMapDeleter> data = vBuffer.dedicatedMemory().map();
+    {
+        const KDGpu::DeviceSize dataByteSize = vertexData.size() * sizeof(Mesh::Vertex);
+        const KDGpu::BufferOptions bufferOptions = {
+            .label = "Vertex Buffer",
+            .size = dataByteSize,
+            .usage = KDGpu::BufferUsageFlagBits::VertexBufferBit |
+                     KDGpu::BufferUsageFlagBits::TransferDstBit,
+            .memoryUsage = KDGpu::MemoryUsage::GpuOnly};
 
-    auto view = reinterpret_cast<Vertex *>(data.data());
-    for (gsl::index i = 0; i < vertices.size(); ++i) {
-        view[i] = Vertex{.pos = vertices[i].pos + offset,
-                         .normal = vertices[i].norm,
-                         .col = glm::vec4{vertices[i].col, 1.0f}};
+        mesh.vertexBuffer = device.createBuffer(bufferOptions);
+
+        const KDGpu::BufferUploadOptions uploadOptions = {
+            .destinationBuffer = mesh.vertexBuffer,
+            .dstStages = KDGpu::PipelineStageFlagBit::VertexAttributeInputBit,
+            .dstMask = KDGpu::AccessFlagBit::VertexAttributeReadBit,
+            .data = vertexData.data(),
+            .byteSize = dataByteSize};
+
+        vertex_staging_buffer = ctx.graphicsQueue().uploadBufferData(uploadOptions);
+    }
+    // Create a buffer to hold the geometry index data
+    {
+        const KDGpu::DeviceSize dataByteSize = indexData.size() * sizeof(uint32_t);
+        const KDGpu::BufferOptions bufferOptions = {.label = "Index Buffer",
+                                                    .size = dataByteSize,
+                                                    .usage =
+                                                        KDGpu::BufferUsageFlagBits::IndexBufferBit |
+                                                        KDGpu::BufferUsageFlagBits::TransferDstBit,
+                                                    .memoryUsage = KDGpu::MemoryUsage::GpuOnly};
+        mesh.indexBuffer = device.createBuffer(bufferOptions);
+        const KDGpu::BufferUploadOptions uploadOptions = {
+            .destinationBuffer = mesh.indexBuffer,
+            .dstStages = KDGpu::PipelineStageFlagBit::IndexInputBit,
+            .dstMask = KDGpu::AccessFlagBit::IndexReadBit,
+            .data = indexData.data(),
+            .byteSize = dataByteSize};
+        index_staging_buffer = ctx.graphicsQueue().uploadBufferData(uploadOptions);
     }
 
-    mesh.addVertexBuffer(0, std::move(vBuffer), 0).setCount(gsl::narrow<uint32_t>(vertices.size()));
+    // Ensure upload is finished.
+    vertex_staging_buffer.fence.wait();
+    index_staging_buffer.fence.wait();
 
     return mesh;
 }

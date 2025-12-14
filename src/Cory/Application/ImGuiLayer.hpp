@@ -6,14 +6,11 @@
 
 #pragma once
 
-#include <Magnum/Vk/Vk.h>
-
 #include <Cory/Application/ApplicationLayer.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <cstdint>
 #include <memory>
-
-using VkImageView = struct VkImageView_T *;
 
 namespace Cory {
 
@@ -23,23 +20,22 @@ class FrameContext;
 
 class ImGuiLayer : public ApplicationLayer {
   public:
-    ImGuiLayer(Window& window);
-    ~ImGuiLayer();
+    ImGuiLayer(Window &window);
+    ~ImGuiLayer() override;
 
     void onAttach(Context &ctx, LayerAttachInfo info) override;
     void onDetach(Context &ctx) override;
     bool onEvent(Event event) override;
-    void onUpdate() override;
+    void onUpdate(const LogicUpdateContext &updateCtx) override;
     bool hasRenderTask() const override { return true; }
-    RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
+    RenderTaskDeclaration<LayerPassOutputs> renderTask(RenderTaskBuilder builder,
                                                        LayerPassOutputs previousLayer) override;
 
     // this is mostly still public so we can use the layer in an
     // application that does not use a frame graph
-    void recordFrameCommands(Context &ctx, uint32_t frameIdx, Magnum::Vk::CommandBuffer &cmdBuffer);
-  private:
-    void newFrame(Context &ctx);
+    void recordFrameCommands(FrameContext &frameCtx, Gpu::RenderPassCommandRecorder *recorder);
 
+  private:
     struct Private;
     std::unique_ptr<Private> data_;
     void setupCustomColors();

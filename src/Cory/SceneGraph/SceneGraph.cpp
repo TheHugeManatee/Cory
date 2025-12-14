@@ -31,7 +31,10 @@ SceneGraph::SceneGraph()
 
 SceneGraph::~SceneGraph() {}
 
-Entity SceneGraph::root() const { return self().root; }
+Entity SceneGraph::root() const
+{
+    return self().root;
+}
 
 const EntityMetaData &SceneGraph::data(Entity entity) const
 {
@@ -39,7 +42,10 @@ const EntityMetaData &SceneGraph::data(Entity entity) const
 
     return registry().get<EntityMetaData>(entity);
 }
-Entity SceneGraph::parent(Entity entity) const { return data(entity).parent; }
+Entity SceneGraph::parent(Entity entity) const
+{
+    return data(entity).parent;
+}
 
 Entity SceneGraph::createEntity(Entity parent, std::string name)
 {
@@ -61,8 +67,12 @@ Entity SceneGraph::createEntity(Entity parent, std::string name)
 
 void SceneGraph::removeEntity(Entity entity)
 {
-    if (!registry().valid(entity)) { throw EntityException{"Entity does not exist"}; }
-    if (entity == self().root) { throw EntityException{"Cannot destroy root entity"}; }
+    if (!registry().valid(entity)) {
+        throw EntityException{"Entity does not exist"};
+    }
+    if (entity == self().root) {
+        throw EntityException{"Cannot destroy root entity"};
+    }
 
     // first, recursively remove all children
     // note: this is probably super inefficient for larger subgraphs
@@ -81,9 +91,18 @@ void SceneGraph::removeEntity(Entity entity)
     registry().destroy(entity);
 }
 
-SceneGraph::Registry &SceneGraph::registry() { return self().registry; }
-const SceneGraph::Registry &SceneGraph::registry() const { return self().registry; }
-bool SceneGraph::valid(Entity e) const { return registry().valid(e); }
+SceneGraph::Registry &SceneGraph::registry()
+{
+    return self().registry;
+}
+const SceneGraph::Registry &SceneGraph::registry() const
+{
+    return self().registry;
+}
+bool SceneGraph::valid(Entity e) const
+{
+    return registry().valid(e);
+}
 
 cppcoro::generator<Entity> SceneGraph::depthFirstTraversal() const
 {

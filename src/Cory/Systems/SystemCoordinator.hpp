@@ -21,7 +21,6 @@ class SystemCoordinator {
     std::vector<std::unique_ptr<SystemBase>> systems_;
 };
 
-
 /** ====================================== Implementation ====================================== **/
 
 namespace {

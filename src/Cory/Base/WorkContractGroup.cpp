@@ -48,7 +48,9 @@ WorkContractGroup::WorkContractGroup(size_t capacity)
 bool WorkContractGroup::executeNext(uint64_t biasBits)
 {
     auto id = contractsScheduled_.select(biasBits);
-    if (!id.has_value()) { return false; }
+    if (!id.has_value()) {
+        return false;
+    }
 
     auto &contract = contracts_[*id];
 
@@ -67,7 +69,9 @@ bool WorkContractGroup::executeNext(uint64_t biasBits)
         prev_flags & ContractFlagScheduleRequested) {
 
         // still needs to be atomic, as another thread could have scheduled it in the meantime
-        if (!contract.setBits(ContractFlagScheduled)) { contractsScheduled_.set(*id); }
+        if (!contract.setBits(ContractFlagScheduled)) {
+            contractsScheduled_.set(*id);
+        }
     }
 
     return true;

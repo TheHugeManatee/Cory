@@ -4,129 +4,109 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
-#include <Corrade/Containers/StringStlView.h>
-#include <Magnum/Math/Range.h>
-#include <Magnum/Vk/Image.h> // for Vk::ImageLayout
-#include <Magnum/Vk/Mesh.h>
-#include <Magnum/Vk/MeshLayout.h>
-#include <Magnum/Vk/Pipeline.h>
-#include <Magnum/Vk/PipelineLayoutCreateInfo.h>
-#include <Magnum/Vk/PixelFormat.h>
-#include <Magnum/Vk/RasterizationPipelineCreateInfo.h>
-#include <Magnum/Vk/RenderPassCreateInfo.h>
-#include <Magnum/Vk/ShaderSet.h>
+#include <KDGpu/graphics_pipeline_options.h>
 
-namespace Vk = Magnum::Vk;
+struct TrianglePipeline::PrivateData {
+    Cory::Context *ctx;
+    KDGpu::GraphicsPipeline pipeline;
+    KDGpu::PipelineLayout layout;
+    KDGpu::RenderPass mainRenderPass;
+};
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
                                    const Cory::Window &window,
-                                   const Magnum::Vk::Mesh &mesh,
+                                   const Mesh &mesh,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
-    : ctx_{context}
+    : data_{std::make_unique<PrivateData>()}
 {
+    data_->ctx = &context;
     createGraphicsPipeline(window, mesh, std::move(vertFile), std::move(fragFile));
 }
 
-TrianglePipeline::~TrianglePipeline()
-{
-    Cory::ResourceManager &resources = ctx_.resources();
-    resources.release(vertexShader_);
-    resources.release(fragmentShader_);
-};
+TrianglePipeline::~TrianglePipeline() {}
+KDGpu::RenderPass &TrianglePipeline::mainRenderPass() { return data_->mainRenderPass; }
+KDGpu::GraphicsPipeline &TrianglePipeline::pipeline() { return data_->pipeline; }
+KDGpu::PipelineLayout &TrianglePipeline::layout() { return data_->layout; }
 
 void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
-                                              const Magnum::Vk::Mesh &mesh,
+                                              const Mesh &mesh,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
 {
-    Cory::ResourceManager &resources = ctx_.resources();
+    auto &device = data_->ctx->device();
+
     CO_APP_TRACE("Starting shader compilation for {} and {}", vertFile.string(), fragFile.string());
-    vertexShader_ = resources.createShader(Cory::ResourceLocator::Locate(vertFile));
-    CO_APP_TRACE("Vertex shader code size: {}", resources[vertexShader_].size());
-    fragmentShader_ = ctx_.resources().createShader(Cory::ResourceLocator::Locate(fragFile));
-    CO_APP_TRACE("Fragment shader code size: {}", resources[fragmentShader_].size());
+    const auto vertexFile = Cory::ResourceLocator::Locate(vertFile);
 
-    Vk::ShaderSet shaderSet{};
-    shaderSet.addShader(Vk::ShaderStage::Vertex, resources[vertexShader_].module(), "main");
-    shaderSet.addShader(Vk::ShaderStage::Fragment, resources[fragmentShader_].module(), "main");
+    const auto vertexShaderSource =
+        Cory::ShaderSource{vertexFile, Gpu::ShaderStageFlagBits::VertexBit};
+    auto vertexShader =
+        device.createShaderModule(Cory::Shader::CompileToSpv(vertexShaderSource, false));
 
-    // use max guaranteed memory of 128 bytes, for all shaders
-    VkPushConstantRange pushConstantRange{
-        .stageFlags = VkShaderStageFlagBits::VK_SHADER_STAGE_ALL, .offset = 0, .size = 128};
-    Vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
-    pipelineLayoutCreateInfo->pushConstantRangeCount = 1;
-    pipelineLayoutCreateInfo->pPushConstantRanges = &pushConstantRange;
+    const auto fragmentFile = Cory::ResourceLocator::Locate(fragFile);
+    const auto fragmentShaderSource =
+        Cory::ShaderSource{fragmentFile, Gpu::ShaderStageFlagBits::FragmentBit};
+    auto fragmentShader =
+        device.createShaderModule(Cory::Shader::CompileToSpv(fragmentShaderSource, false));
 
-    layout_ = std::make_unique<Vk::PipelineLayout>(ctx_.device(), pipelineLayoutCreateInfo);
-
-    Vk::PixelFormat colorFormat = window.colorFormat();
-    Vk::PixelFormat depthFormat = window.depthFormat();
-
-    int32_t sampleCount = window.sampleCount();
-
-    mainRenderPass_ = std::make_unique<Vk::RenderPass>(
-        ctx_.device(),
-        Vk::RenderPassCreateInfo{}
-            .setAttachments(
-                {// offscreen color
-                 Vk::AttachmentDescription{
-                     colorFormat,
-                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::Store, Vk::AttachmentStoreOperation::DontCare},
-                     Vk::ImageLayout::Undefined,
-                     Vk::ImageLayout::ColorAttachment,
-                     sampleCount},
-                 // offscreen depth
-                 Vk::AttachmentDescription{
-                     depthFormat,
-                     {Vk::AttachmentLoadOperation::Clear, Vk::AttachmentLoadOperation::DontCare},
-                     {Vk::AttachmentStoreOperation::DontCare,
-                      Vk::AttachmentStoreOperation::DontCare},
-                     Vk::ImageLayout::Undefined,
-                     Vk::ImageLayout::DepthStencilAttachment,
-                     sampleCount}})
-            .addSubpass(Vk::SubpassDescription{}
-                            .setColorAttachments(
-                                {Vk::AttachmentReference{0, Vk::ImageLayout::ColorAttachment}})
-                            .setDepthStencilAttachment({Vk::AttachmentReference{
-                                1, Vk::ImageLayout::DepthStencilAttachment}}))
-            .setDependencies({Vk::SubpassDependency{
-                Vk::SubpassDependency::External, // srcSubpass
-                0,                               // dstSubpass
-                Vk::PipelineStage::ColorAttachmentOutput |
-                    Vk::PipelineStage::EarlyFragmentTests, // srcStages
-                Vk::PipelineStage::ColorAttachmentOutput |
-                    Vk::PipelineStage::EarlyFragmentTests, // dstStages
-                Vk::Access{},                              // srcAccess
-                Vk::Access::ColorAttachmentWrite |
-                    Vk::Access::DepthStencilAttachmentWrite, // dstAccess
-            }}));
-
-    Vk::RasterizationPipelineCreateInfo rasterizationPipelineCreateInfo{
-        shaderSet, mesh.layout(), *layout_, *mainRenderPass_, 0, 1};
-
-    // configure dynamic state - one viewport and scissor configured but no dimensions specified
-    rasterizationPipelineCreateInfo.setDynamicStates(Vk::DynamicRasterizationState::Viewport |
-                                                     Vk::DynamicRasterizationState::Scissor);
-    VkPipelineViewportStateCreateInfo viewportState{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-        .viewportCount = 1,
-        .scissorCount = 1,
+    // Create a pipeline layout (array of bind group layouts)
+    const KDGpu::PipelineLayoutOptions pipelineLayoutOptions = {
+        .label = "Triangle",
+        .bindGroupLayouts = {},
+        .pushConstantRanges =
+            {
+                {.offset = 0,
+                 .size = 128,
+                 .shaderStages = KDGpu::ShaderStageFlagBits::VertexBit |
+                                 KDGpu::ShaderStageFlagBits::FragmentBit},
+            },
     };
-    rasterizationPipelineCreateInfo->pViewportState = &viewportState;
+    data_->layout = device.createPipelineLayout(pipelineLayoutOptions);
 
-    // multisampling setup
-    VkPipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.sampleShadingEnable = VK_FALSE;
-    multisampling.rasterizationSamples = (VkSampleCountFlagBits)window.sampleCount();
-
-    rasterizationPipelineCreateInfo->pMultisampleState = &multisampling;
-
-    pipeline_ =
-        std::make_unique<Vk::Pipeline>(ctx_.device(), std::move(rasterizationPipelineCreateInfo));
+    // Create a pipeline
+    const KDGpu::GraphicsPipelineOptions pipelineOptions = {
+        .label = "Triangle",
+        .shaderStages =
+            {
+                {.shaderModule = vertexShader, .stage = KDGpu::ShaderStageFlagBits::VertexBit},
+                {.shaderModule = fragmentShader, .stage = KDGpu::ShaderStageFlagBits::FragmentBit},
+            },
+        .layout = data_->layout,
+        .vertex =
+            {
+                .buffers = {{.binding = 0, .stride = sizeof(KDGpu::VertexRate::Vertex)}},
+                .attributes = {{
+                                   // Position
+                                   .location = 0,
+                                   .binding = 0,
+                                   .format = KDGpu::Format::R32G32B32_SFLOAT,
+                               },
+                               {
+                                   // Color
+                                   .location = 1,
+                                   .binding = 0,
+                                   .format = KDGpu::Format::R32G32B32_SFLOAT,
+                                   .offset = sizeof(glm::vec3),
+                               }},
+            },
+        .renderTargets = {{.format = window.colorFormat()}},
+        .depthStencil =
+            {
+                .format = window.depthFormat(),
+                .depthWritesEnabled = true,
+                .depthCompareOperation = KDGpu::CompareOperation::Less,
+            },
+        .primitive{
+            .cullMode = KDGpu::CullModeFlagBits::None,
+        },
+        .multisample =
+            {
+                .samples = window.samples(),
+                .alphaToCoverageEnabled = false,
+            },
+    };
+    data_->pipeline = device.createGraphicsPipeline(pipelineOptions);
 }

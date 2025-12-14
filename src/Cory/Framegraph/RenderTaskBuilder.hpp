@@ -18,11 +18,11 @@ namespace Cory {
  */
 struct RenderInput {
     Context *ctx{};
-    FrameContext* frameCtx{};
+    FrameContext *frameCtx{};
     TextureManager *resources{};
-    DescriptorSets * descriptors{};
+    DescriptorSets *descriptors{};
     // eventually, add accessors modify descriptors, push constants etc
-    CommandList *cmd{};
+    CommandRecorder *cmd{};
 };
 
 /**
@@ -72,7 +72,7 @@ class RenderTaskBuilder : NoCopy {
 
     /// declare that a render pass creates a certain texture
     TransientTextureHandle
-    create(std::string name, glm::u32vec3 size, PixelFormat format, Sync::AccessType writeAccess);
+    create(std::string name, glm::u32vec3 size, Gpu::Format format, Sync::AccessType writeAccess);
 
     /// declares a dependency to the named resource
     TextureInfo read(TransientTextureHandle &h, Sync::AccessType readAccess);
@@ -87,10 +87,10 @@ class RenderTaskBuilder : NoCopy {
 
     /**
      * Declares a render pass with a default pipeline setup
-     * @param name              name of the render pass
+     * @param passDeclaration   the declaration of the pass
      * @return a builder class to set up the render pass. call finish() to obtain the pass object
      */
-    TransientRenderPassBuilder declareRenderPass(std::string_view name = "");
+    TransientRenderPass declareRenderPass(RenderPassDeclaration passDeclaration);
 
     /**
      * @brief Finish declaration of the render task.

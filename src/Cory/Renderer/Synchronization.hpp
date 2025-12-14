@@ -198,12 +198,14 @@ ISSUES
     via a pull request yourself if you're so inclined.
 */
 
-#include <Magnum/Vk/Vk.h>
-#include <Magnum/Vk/Vulkan.h>
+#include <Cory/Renderer/Gpu.hpp>
+#include <KDGpu/vulkan/vulkan_device.h>
+
+#include <vulkan/vulkan.h>
 
 #include <cstdint>
-#include <vector>
 #include <span>
+#include <vector>
 
 namespace Cory::Sync {
 
@@ -500,10 +502,7 @@ Mapping function that translates a global barrier into a set of source and
 destination pipeline stages, and a VkMemoryBarrier, that can be used with
 Vulkan's synchronization methods.
 */
-void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier,
-                            VkPipelineStageFlags *pSrcStages,
-                            VkPipelineStageFlags *pDstStages,
-                            VkMemoryBarrier *pVkBarrier);
+void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier, VkMemoryBarrier2 *pVkBarrier);
 
 /**
 Mapping function that translates a buffer barrier into a set of source and
@@ -511,19 +510,14 @@ destination pipeline stages, and a VkBufferMemoryBarrier, that can be used
 with Vulkan's synchronization methods.
 */
 void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
-                                  VkPipelineStageFlags *pSrcStages,
-                                  VkPipelineStageFlags *pDstStages,
-                                  VkBufferMemoryBarrier *pVkBarrier);
+                                  VkBufferMemoryBarrier2 *pVkBarrier);
 
 /**
 Mapping function that translates an image barrier into a set of source and
 destination pipeline stages, and a VkBufferMemoryBarrier, that can be used
 with Vulkan's synchronization methods.
 */
-void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier,
-                                 VkPipelineStageFlags *pSrcStages,
-                                 VkPipelineStageFlags *pDstStages,
-                                 VkImageMemoryBarrier *pVkBarrier);
+void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier, VkImageMemoryBarrier2 *pVkBarrier);
 
 /**
 Simplified wrapper around vkCmdPipelineBarrier.
@@ -534,50 +528,50 @@ barriers to be passed to vkCmdPipelineBarrier.
 
 commandBuffer is passed unmodified to vkCmdPipelineBarrier.
 */
-void CmdPipelineBarrier(Magnum::Vk::Device &device,
+void CmdPipelineBarrier(Gpu::VulkanDevice &device,
                         VkCommandBuffer commandBuffer,
                         const GlobalBarrier *pGlobalBarrier,
                         std::span<const BufferBarrier> bufferBarriers,
                         std::span<const ImageBarrier> imageBarriers);
 
-/**
-Wrapper around vkCmdSetEvent.
-
-Sets an event when the accesses defined by pPrevAccesses are completed.
-
-commandBuffer and event are passed unmodified to vkCmdSetEvent.
-*/
-void CmdSetEvent(Magnum::Vk::Device &device,
-                 VkCommandBuffer commandBuffer,
-                 VkEvent event,
-                 std::span<const AccessType> prevAccesses);
-
-/**
-Wrapper around vkCmdResetEvent.
-
-Resets an event when the accesses defined by pPrevAccesses are completed.
-
-commandBuffer and event are passed unmodified to vkCmdResetEvent.
-*/
-void CmdResetEvent(Magnum::Vk::Device &device,
-                   VkCommandBuffer commandBuffer,
-                   VkEvent event,
-                   std::span<const AccessType> prevAccesses);
-
-/**
-Simplified wrapper around vkCmdWaitEvents.
-
-The mapping functions defined above are used to translate the passed in
-barrier definitions into a set of pipeline stages and native Vulkan memory
-barriers to be passed to vkCmdPipelineBarrier.
-
-commandBuffer, eventCount, and pEvents are passed unmodified to
-vkCmdWaitEvents.
-*/
-void CmdWaitEvents(Magnum::Vk::Device &device,
-                   VkCommandBuffer commandBuffer,
-                   std::span<const VkEvent> events,
-                   const GlobalBarrier *pGlobalBarrier,
-                   std::span<const BufferBarrier> bufferBarriers,
-                   std::span<const ImageBarrier> imageBarriers);
+// /**
+// Wrapper around vkCmdSetEvent.
+//
+// Sets an event when the accesses defined by pPrevAccesses are completed.
+//
+// commandBuffer and event are passed unmodified to vkCmdSetEvent.
+// */
+// void CmdSetEvent(Gpu::VulkanDevice &device,
+//                  VkCommandBuffer commandBuffer,
+//                  VkEvent event,
+//                  std::span<const AccessType> prevAccesses);
+//
+// /**
+// Wrapper around vkCmdResetEvent.
+//
+// Resets an event when the accesses defined by pPrevAccesses are completed.
+//
+// commandBuffer and event are passed unmodified to vkCmdResetEvent.
+// */
+// void CmdResetEvent(Gpu::VulkanDevice &device,
+//                    VkCommandBuffer commandBuffer,
+//                    VkEvent event,
+//                    std::span<const AccessType> prevAccesses);
+//
+// /**
+// Simplified wrapper around vkCmdWaitEvents.
+//
+// The mapping functions defined above are used to translate the passed in
+// barrier definitions into a set of pipeline stages and native Vulkan memory
+// barriers to be passed to vkCmdPipelineBarrier.
+//
+// commandBuffer, eventCount, and pEvents are passed unmodified to
+// vkCmdWaitEvents.
+// */
+// void CmdWaitEvents(Gpu::VulkanDevice &device,
+//                    VkCommandBuffer commandBuffer,
+//                    std::span<const VkEvent> events,
+//                    const GlobalBarrier *pGlobalBarrier,
+//                    std::span<const BufferBarrier> bufferBarriers,
+//                    std::span<const ImageBarrier> imageBarriers);
 } // namespace Cory::Sync

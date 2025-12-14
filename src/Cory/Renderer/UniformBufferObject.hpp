@@ -2,6 +2,8 @@
 
 #include <Cory/Renderer/Common.hpp>
 
+#include <KDGpu/buffer.h>
+
 #include <concepts>
 
 namespace Cory {
@@ -9,10 +11,9 @@ namespace Cory {
 /// lower-level UBO wrapper - not to be used directly, use UniformBufferObject<...> instead!
 class UniformBufferObjectBase : NoCopy {
   public:
-    BufferHandle handle() const noexcept { return buffer_; }
+    Gpu::BufferHandle handle() const noexcept { return buffer_.handle(); }
+    const Gpu::Buffer &buffer() const noexcept { return buffer_; }
     size_t instances() const noexcept { return instances_; }
-    /// access the descriptor info for the respective index
-    VkDescriptorBufferInfo descriptorInfo(gsl::index instance) const;
 
   protected:
     UniformBufferObjectBase(Context &ctx, size_t instances, size_t instanceSize);
@@ -26,17 +27,13 @@ class UniformBufferObjectBase : NoCopy {
 
     // flush the whole buffer
     void flushInternal();
-    // flush helper
-    void flushInternal(VkDeviceSize offset, VkDeviceSize size);
-    // flush instance
-    void flushInternal(gsl::index instance);
     // get pointer to aligned instance
     std::byte *instanceAt(gsl::index instance);
 
   private:
     UniformBufferObjectBase() = default; // private, only used for swap
     Context *ctx_{};
-    BufferHandle buffer_{NullHandle};
+    Gpu::Buffer buffer_{};
     std::byte *mappedMemory_{nullptr};
     size_t instanceSize_{};
     size_t alignedInstanceSize_{};
@@ -73,7 +70,7 @@ class UniformBufferObject : public UniformBufferObjectBase {
     }
 
     /// flush a specific instance to make it available on the GPU
-    void flush(gsl::index instance) { UniformBufferObjectBase::flushInternal(instance); }
+    void flush(gsl::index instance) { UniformBufferObjectBase::flushInternal(); }
 
     /// update the cpu data and flush it to the GPU
     void writeAndFlush(gsl::index instance, const BufferStruct &data)

@@ -28,7 +28,9 @@ class ContractFunctor {
 
         void invoke(ContractToken &arg) override
         {
-            if constexpr (requires { f(arg); }) { f(arg); }
+            if constexpr (requires { f(arg); }) {
+                f(arg);
+            }
             else {
                 f();
             }

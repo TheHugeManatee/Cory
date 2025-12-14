@@ -5,9 +5,12 @@
 #include <cstdlib>
 #include <stdexcept>
 
+#include <gsl/gsl>
 #include <spdlog/spdlog.h>
 
-int main(int argc, char** argv)
+#include <span>
+
+int main(int argc, const char **argv)
 {
     try {
         Cory::Init();

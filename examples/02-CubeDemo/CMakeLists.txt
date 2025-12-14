@@ -10,12 +10,7 @@ add_executable(${TARGET_NAME}
         src/main.cpp
         src/CubeDemo.cpp
         src/CubeDemo.hpp
-        )
-
-# add headers as sources automatically - this makes them show up in some IDEs
-# but is not strictly necessary (unless you are using CMAKE_AUTOMOC)
-file(GLOB_RECURSE HEADERS "include/*.h")
-target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
+)
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -28,15 +23,14 @@ target_link_libraries(${TARGET_NAME}
         Cory::Cory
         Cory::ThirdParty
         Vulkan::Vulkan
-        GLEW::GLEW
         range-v3::range-v3
         CLI11::CLI11
-        )
+)
 
-if(CORY_BUILD_TESTS)
+if (CORY_BUILD_TESTS)
     enable_testing()
     add_test(NAME Smoketests.CubeDemo COMMAND ${TARGET_NAME} --frames=100)
-endif()
+endif ()
 
 # Install in the desired folder
 install(TARGETS ${TARGET_NAME}

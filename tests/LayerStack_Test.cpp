@@ -27,7 +27,7 @@ class MockLayer : public Cory::ApplicationLayer {
     bool hasRenderTask() const override { return hasRenderTask_; }
     void onAttach(Cory::Context &ctx, Cory::LayerAttachInfo info) override { attached_ = true; }
     void onDetach(Cory::Context &ctx) override { detached_ = true; }
-    void onUpdate() override { updatedIndex_ = counter++; }
+    void onUpdate(const Cory::LogicUpdateContext &) override { updatedIndex_ = counter++; }
 
     bool onEvent(Cory::Event event) override
     {
@@ -66,9 +66,9 @@ TEST_CASE("LayerStack", "[LayerStack]")
 
             THEN("The layers are initialized correctly")
             {
-                REQUIRE(layer1.name.get() == "Layer 1");
-                REQUIRE(layer2.name.get() == "Layer 2");
-                REQUIRE(layer3.name.get() == "Layer 3");
+                REQUIRE(layer1.name() == "Layer 1");
+                REQUIRE(layer2.name() == "Layer 2");
+                REQUIRE(layer3.name() == "Layer 3");
             }
 
             THEN("The layers are attached correctly")
@@ -106,7 +106,9 @@ TEST_CASE("LayerStack", "[LayerStack]")
 
         WHEN("Updating the stack")
         {
-            stack.update();
+            Cory::LogicUpdateContext updateCtx;
+
+            stack.update(updateCtx);
             THEN("The layers are updated in the correct order")
             {
                 REQUIRE(layer1.updatedIndex_ == 0);

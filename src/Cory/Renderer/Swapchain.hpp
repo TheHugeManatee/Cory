@@ -2,50 +2,51 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Semaphore.hpp>
 
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Fence.h>
-#include <Magnum/Vk/Image.h>
-#include <Magnum/Vk/ImageView.h>
-#include <Magnum/Vk/Vulkan.h>
+#include <KDGpu/gpu_core.h>
 
 #include <glm/vec2.hpp>
 
-#include <cstdint>
-#include <vector>
+#include <expected>
 
 namespace Cory {
 
-struct SwapchainSupportDetails {
-    static SwapchainSupportDetails query(Context &ctx, VkSurfaceKHR surface);
-
-    VkSurfaceFormatKHR chooseSwapSurfaceFormat() const;
-    VkPresentModeKHR chooseSwapPresentMode() const;
-    VkExtent2D chooseSwapExtent(VkExtent2D windowExtent) const;
-    uint32_t chooseImageCount() const;
-
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
-
-    std::vector<uint32_t> presentFamilies;
+struct SwapchainCreateInfo {
+    std::string label;
+    glm::u32vec2 size;
+    Gpu::SampleCountFlagBits samples;
 };
 
-class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
+enum class SwapchainError {
+    OutOfDate, ///< The swapchain is out of date and needs to be recreated
+    Lost,      ///< The swapchain has been lost and cannot be used anymore
+    Unknown,   ///< An unknown error occurred
+};
+
+/**
+ * @brief Swapchain wrapper that provides a high-level interface to the underlying Gpu::Swapchain.
+ *
+ * This class manages image acquisition and presentation as well as the basic view resources
+ * required for a frame.
+ *
+ * It wraps the underlying swapchain, but also allocates and manages additional resources  for each
+ * frame, such as:
+ *  - multisampled color and depth images
+ *  - semaphores for synchronization
+ *  - fences to wait for the GPU to finish work on the swapchain image
+ *
+ */
+class Swapchain {
   public:
-    Swapchain(Context &ctx,
-              VkSurfaceKHR surface,
-              VkSwapchainCreateInfoKHR createInfo,
-              int32_t sampleCount);
+    Swapchain(Context &ctx, const Gpu::Surface &surface, SwapchainCreateInfo createInfo);
     ~Swapchain();
 
-    [[nodiscard]] auto &images() const noexcept { return images_; }
-    [[nodiscard]] Magnum::Vk::PixelFormat colorFormat() const noexcept { return imageFormat_; }
-    [[nodiscard]] auto &imageViews() noexcept { return imageViews_; }
-    [[nodiscard]] glm::u32vec2 extent() const noexcept { return extent_; }
-    [[nodiscard]] size_t size() const noexcept { return images_.size(); }
-    [[nodiscard]] uint32_t maxFramesInFlight() const noexcept { return maxFramesInFlight_; };
+    [[nodiscard]] Gpu::Format colorFormat() const noexcept;
+    [[nodiscard]] Gpu::Format depthFormat() const noexcept;
+    [[nodiscard]] glm::u32vec2 extent() const noexcept;
+    [[nodiscard]] size_t size() const noexcept; // number of images in the swapchain
 
     /**
      * acquire the next image. this method will obtain a Swapchain image index from the underlying
@@ -59,41 +60,26 @@ class Swapchain : public BasicVkObjectWrapper<VkSwapchainKHR> {
      *  - signal the `rendered` semaphore with the last command buffer that writes to the image
      *  - signal the `in_flight` fence when submitting the last command buffer
      */
-    [[nodiscard]] FrameContext nextImage();
+    [[nodiscard]] std::expected<FrameContext, SwapchainError> nextImage();
 
     /**
      * call vkQueuePresentKHR for the current frame. note the requirements that have to be fulfilled
-     * for the synchronization objects of the passed @b fc.
-     * present will wait for the semaphore @b fc.rendered for correct ordering.
+     * for the synchronization objects of the passed @b frameCtx.
+     *
+     * This will submit the current render commands stored in frameCtx.commandBuffer to the
+     * queue, and then present the swapchain image to the surface.
+     *
+     * Command submission will wait for the @b frameCtx.acquired semaphore to execute the commands
+     * only when the swapchain image is actually available. Present will wait for the semaphore
+     * @b frameCtx.rendered for correct ordering.
      *
      * @see nextImage()
      */
-    void present(FrameContext &fc);
+    void present(FrameContext &frameCtx);
 
   private:
-    void createImageViews();
-    void createSyncObjects();
-
-  private:
-    Context *ctx_{};
-
-    // general information about the swapchain setup
-    Magnum::Vk::PixelFormat imageFormat_{};
-    int32_t sampleCount_{1};
-    glm::u32vec2 extent_{};
-    const uint32_t maxFramesInFlight_{};
-    uint64_t nextFrameNumber_{};
-
-    // these are images with memory owned by the swapchain
-    std::vector<Magnum::Vk::Image> images_{};
-    std::vector<Magnum::Vk::ImageView> imageViews_{};
-
-    // for each frame in flight, we also keep a set of additional resources
-    std::vector<Magnum::Vk::Fence> inFlightFences_{};
-    std::vector<Magnum::Vk::Fence *> imageFences_{};
-    std::vector<Semaphore> imageAcquired_{};
-    std::vector<Semaphore> imageRendered_{};
-    std::vector<Magnum::Vk::CommandBuffer> commandBuffers_{};
+    friend struct SwapchainPrivate;
+    std::unique_ptr<SwapchainPrivate> data_;
 };
 
 } // namespace Cory

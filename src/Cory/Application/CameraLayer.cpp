@@ -4,7 +4,6 @@
 #include <Cory/Base/Utils.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -71,9 +70,10 @@ bool CameraLayer::onEvent(Event event)
                       event);
 }
 
-void CameraLayer::onUpdate()
+void CameraLayer::onUpdate(const LogicUpdateContext &updateContext)
 {
     update();
+
     if (::ImGui::Begin("CameraLayer")) {
         CoImGui::Text("Mode: {}", state_->mode);
 
@@ -89,7 +89,6 @@ void CameraLayer::onUpdate()
 
 void CameraLayer::lookAt(glm::vec3 newPosition, glm::vec3 newFocus, glm::vec3 newUp)
 {
-
     viewToWorldMatrix = glm::lookAt(newPosition, newFocus, newUp);
 }
 

@@ -18,7 +18,9 @@ LayerStack::~LayerStack()
     for (auto &layer : layers_) {
         layer->onDetach(ctx_);
     }
-    if (priorityLayer_) { priorityLayer_->onDetach(ctx_); }
+    if (priorityLayer_) {
+        priorityLayer_->onDetach(ctx_);
+    }
 }
 
 void LayerStack::attachLayer(std::unique_ptr<ApplicationLayer> layer, LayerAttachInfo attachInfo)
@@ -29,10 +31,12 @@ void LayerStack::attachLayer(std::unique_ptr<ApplicationLayer> layer, LayerAttac
 
 std::unique_ptr<ApplicationLayer> LayerStack::detachLayer(const std::string &name)
 {
-    auto it = std::find_if(layers_.begin(), layers_.end(), [&](const auto &layer) {
-        return layer->name.get() == name;
-    });
-    if (it == layers_.end()) { return nullptr; }
+    auto it = std::find_if(
+        layers_.begin(), layers_.end(), [&](const auto &layer) { return layer->name() == name; });
+
+    if (it == layers_.end()) {
+        return nullptr;
+    }
     auto layer = std::move(*it);
     layers_.erase(it);
     layer->onDetach(ctx_);
@@ -44,19 +48,25 @@ std::unique_ptr<ApplicationLayer> LayerStack::removePriorityLayer()
     return std::exchange(priorityLayer_, nullptr);
 }
 
-void LayerStack::update()
+void LayerStack::update(const LogicUpdateContext &updateCtx)
 {
-    if (priorityLayer_) { priorityLayer_->onUpdate(); }
+    if (priorityLayer_) {
+        priorityLayer_->onUpdate(updateCtx);
+    }
     for (auto &layer : layers_) {
-        layer->onUpdate();
+        layer->onUpdate(updateCtx);
     }
 }
 
 bool LayerStack::processEvent(Event event)
 {
-    if (priorityLayer_ && priorityLayer_->onEvent(event)) { return true; }
+    if (priorityLayer_ && priorityLayer_->onEvent(event)) {
+        return true;
+    }
     for (auto &layer : ranges::views::reverse(layers_)) {
-        if (layer->onEvent(event)) { return true; }
+        if (layer->onEvent(event)) {
+            return true;
+        }
     }
     return false;
 }
@@ -68,7 +78,8 @@ LayerPassOutputs LayerStack::declareRenderTasks(Framegraph &framegraph,
         if (layer->hasRenderTask()) {
             previousLayer =
                 layer
-                    ->renderTask(framegraph.declareTask("TASK_" + layer->name.get()), previousLayer)
+                    ->renderTask(framegraph.declareTask("TASK_" + std::string{layer->name()}),
+                                 previousLayer)
                     .output();
         }
     }
@@ -76,7 +87,7 @@ LayerPassOutputs LayerStack::declareRenderTasks(Framegraph &framegraph,
     if (priorityLayer_ && priorityLayer_->hasRenderTask()) {
         previousLayer =
             priorityLayer_
-                ->renderTask(framegraph.declareTask("TASK_" + priorityLayer_->name.get()),
+                ->renderTask(framegraph.declareTask("TASK_" + std::string{priorityLayer_->name()}),
                              previousLayer)
                 .output();
     }

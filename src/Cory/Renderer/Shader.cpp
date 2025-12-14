@@ -6,8 +6,6 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
-#include <Corrade/Containers/ArrayViewStl.h>
-#include <Magnum/Vk/ShaderCreateInfo.h>
 #include <shaderc/shaderc.hpp>
 
 #include <fstream>
@@ -57,46 +55,49 @@ class FileIncludeHandler : public shaderc::CompileOptions::IncluderInterface {
     virtual ~FileIncludeHandler() = default;
 };
 
-shaderc_shader_kind ShaderTypeToShaderKind(ShaderType type)
+shaderc_shader_kind ShaderTypeToShaderKind(Gpu::ShaderStageFlagBits type)
 {
     switch (type) {
-    case ShaderType::eVertex:
+        using enum Gpu::ShaderStageFlagBits;
+    case VertexBit:
         return shaderc_shader_kind::shaderc_vertex_shader;
-    case ShaderType::eGeometry:
+    case GeometryBit:
         return shaderc_shader_kind::shaderc_geometry_shader;
-    case ShaderType::eFragment:
+    case FragmentBit:
         return shaderc_shader_kind::shaderc_fragment_shader;
-    case ShaderType::eCompute:
+    case ComputeBit:
         return shaderc_shader_kind::shaderc_compute_shader;
     default:
         throw std::runtime_error("Unknown/Unrecognized shader type!");
     }
 }
 
-ShaderSource::ShaderSource(std::string source, ShaderType type, std::filesystem::path filePath)
+ShaderSource::ShaderSource(std::string source,
+                           Gpu::ShaderStageFlagBits type,
+                           std::filesystem::path filePath)
     : filename_{filePath}
     , source_{std::move(source)}
     , type_{type}
 {
 }
 
-ShaderSource::ShaderSource(std::filesystem::path filePath, ShaderType type)
+ShaderSource::ShaderSource(std::filesystem::path filePath, Gpu::ShaderStageFlagBits type)
     : type_{type}
     , filename_{std::move(filePath)}
 {
     auto fileBytes = readFile(filename_);
     source_ = std::string{fileBytes.begin(), fileBytes.end()};
 
-    if (type_ == ShaderType::eUnknown) {
+    if (type_ == SHADER_TYPE_UNKNOWN) {
         auto ext = filename_.extension();
         if (ext == ".vert")
-            type_ = ShaderType::eVertex;
+            type_ = Gpu::ShaderStageFlagBits::VertexBit;
         else if (ext == ".geom")
-            type_ = ShaderType::eGeometry;
+            type_ = Gpu::ShaderStageFlagBits::GeometryBit;
         else if (ext == ".frag")
-            type_ = ShaderType::eFragment;
+            type_ = Gpu::ShaderStageFlagBits::FragmentBit;
         else if (ext == ".comp")
-            type_ = ShaderType::eCompute;
+            type_ = Gpu::ShaderStageFlagBits::ComputeBit;
     }
 }
 
@@ -130,7 +131,7 @@ std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool opti
 
 // default is an empty (invalid) shader
 Shader::Shader()
-    : source_{"", ShaderType::eUnknown, ""}
+    : source_{"", SHADER_TYPE_UNKNOWN, ""}
 {
 }
 
@@ -144,24 +145,11 @@ Shader::Shader(Context &ctx, ShaderSource source)
         throw std::runtime_error{"Could not compile shader source to SPIR-V"};
     }
 
-    Magnum::Vk::ShaderCreateInfo info{Corrade::Containers::ArrayView<uint32_t>{spirvBinary}};
-
-    module_ = std::make_shared<Magnum::Vk::Shader>(ctx.device(), info);
+    module_ = ctx_->device().createShaderModule(spirvBinary);
     size_ = spirvBinary.size() * sizeof(uint32_t);
-    nameVulkanObject(
-        ctx_->device(), *module_, fmt::format("SHDR_{}", source.filePath().filename().string()));
+    // nameVulkanObject(
+    //     ctx_->device(), *module_, fmt::format("SHDR_{}", source.filePath().filename().string()));
 }
-
-// vk::PipelineShaderStageCreateInfo Shader::stageCreateInfo()
-//{
-//     vk::PipelineShaderStageCreateInfo shaderStageInfo{};
-//     shaderStageInfo.stage = static_cast<vk::ShaderStageFlagBits>(type_);
-//     shaderStageInfo.module = *module_;
-//     // entry point -- means we can add multiple entry points in one module
-//     shaderStageInfo.pName = "main";
-//
-//     return shaderStageInfo;
-// }
 
 std::string Shader::preprocessShader()
 {
@@ -211,6 +199,9 @@ std::string Shader::compileToAssembly(bool optimize /*= false*/)
 
     return {result.cbegin(), result.cend()};
 }
-bool Shader::valid() const { return ctx_ && type_ != ShaderType::eUnknown && module_ != nullptr; }
+bool Shader::valid() const
+{
+    return ctx_ && type_ != SHADER_TYPE_UNKNOWN && module_.isValid();
+}
 
 } // namespace Cory

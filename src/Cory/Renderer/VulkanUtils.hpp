@@ -41,7 +41,7 @@ void nameVulkanObject(DeviceHandle &device,
                       MagnumVulkanObjectHandle &handle,
                       std::string_view name);
 
-std::string getVulkanObjectName(void* vulkanObject);
+std::string getVulkanObjectName(void *vulkanObject);
 
 #define THROW_ON_ERROR(x, err)                                                                     \
     do {                                                                                           \
@@ -132,5 +132,12 @@ template <size_t MAX_CHAIN_SIZE = 10> class PNextChain : NoCopy {
     gsl::index current_{};
     void *head_{};
 };
+
+constexpr bool isDepthFormat(Gpu::Format format)
+{
+    return format == Gpu::Format::D16_UNORM || format == Gpu::Format::X8_D24_UNORM_PACK32 ||
+           format == Gpu::Format::D32_SFLOAT || format == Gpu::Format::D16_UNORM_S8_UINT ||
+           format == Gpu::Format::D24_UNORM_S8_UINT || format == Gpu::Format::D32_SFLOAT_S8_UINT;
+}
 
 } // namespace Cory

@@ -1,400 +1,264 @@
 #include <Cory/Application/Window.hpp>
 
+#include <Cory/Application/GLFWUtils.hpp>
+#include <Cory/Base/Callback.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Renderer/APIConversion.hpp>
+#include <Cory/Base/Primitives.hpp>
+#include <Cory/Base/Profiling.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/SingleShotCommandBuffer.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/SingleShotCommandRecorder.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/ImageCreateInfo.h>
-#include <Magnum/Vk/ImageViewCreateInfo.h>
-#include <Magnum/Vk/Instance.h>
-#include <Magnum/Vk/Queue.h>
+#include <KDGpu/instance.h>
+#include <KDGpu/surface.h>
+#include <KDGpu/texture_options.h>
+#include <KDGpu/vulkan/vulkan_graphics_api.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 // clang-format off
-#include <Magnum/Vk/Vulkan.h>
-#define VK_VERSION_1_0
+#include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 // clang-format on
 
 #include <range/v3/algorithm/contains.hpp>
-#include <range/v3/range/conversion.hpp>
-#include <range/v3/view/enumerate.hpp>
 #include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <glm/gtc/type_ptr.hpp>
+#include <optional>
 #include <thread>
-
-namespace Vk = Magnum::Vk;
 
 namespace Cory {
 
-namespace detail {
-MouseButton getMouseButtonState(GLFWwindow *window);
-ModifierFlags getModifierState(GLFWwindow *window);
-} // namespace detail
+struct WindowPrivate {
+    Context *ctx;
+    std::shared_ptr<GLFWwindow> window;
+    std::shared_ptr<VkSurfaceKHR_T> surfaceHandle; // The surface handle has to be stored and
+                                                   // destroyed separately from the Gpu::Surface
+    Gpu::Surface surface{};
+    std::unique_ptr<Swapchain> swapchain;
+
+    LapTimer fpsCounter{std::chrono::milliseconds{2000}};
+
+    void recreateSwapchain();
+};
 
 Window::Window(Context &context,
                glm::i32vec2 dimensions,
                std::string windowName,
                int32_t sampleCount)
-    : ctx_{context}
-    , sampleCount_{sampleCount}
-    , dimensions_(dimensions)
-    , windowName_{std::move(windowName)}
-    , fpsCounter_{std::chrono::milliseconds{2000}}
+    : data_{std::make_unique<WindowPrivate>()}
 {
-    CO_CORE_ASSERT(!ctx_.isHeadless(), "Cannot initialize window with a headless context!");
+    data_->ctx = &context;
+    this->title = std::move(windowName);
+    this->dimensions = dimensions;
+
+    samples = static_cast<Gpu::SampleCountFlagBits>(sampleCount);
 
     glfwInit();
 
     // prevent OpenGL usage - vulkan all the way baybeee
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    createGlfwWindow();
+    createWindow();
 
-    surface_ = createSurface();
-    swapchain_ = createSwapchain();
+    VkSurfaceKHR surfaceHandle;
+    auto instance_handle = context.instance().handle();
+    auto *instance = context.resources().getInstance(instance_handle);
 
-    colorFormat_ = swapchain_->colorFormat();
-    depthFormat_ = Vk::PixelFormat::Depth32F; // TODO implement dynamic selection instead
-                                              //      of hardcoded format
-    createColorAndDepthResources();
+    if (auto ret = glfwCreateWindowSurface(
+            instance->instance, data_->window.get(), nullptr, &surfaceHandle);
+        ret != VK_SUCCESS) {
+        CO_CORE_ERROR(
+            "Failed to create Vulkan window surface for window '{}', error code: {}", title(), ret);
+        throw std::runtime_error(fmt::format(
+            "glfwCreateWindowSurface failed for window '{}', error code: {}", title(), ret));
+    }
+    data_->surfaceHandle = std::shared_ptr<VkSurfaceKHR_T>{
+        surfaceHandle, [instance = instance->instance](VkSurfaceKHR_T *surfaceHandle) {
+            CO_CORE_TRACE("Destroying GLFW surface");
+            if (surfaceHandle != nullptr) {
+                vkDestroySurfaceKHR(instance, surfaceHandle, nullptr);
+            }
+        }};
+
+    data_->surface =
+        context.graphicsApi().createSurfaceFromExistingVkSurface(instance_handle, surfaceHandle);
+    context.setupDevice(data_->surface);
+
+    data_->swapchain = std::make_unique<Swapchain>(context,
+                                                   data_->surface,
+                                                   SwapchainCreateInfo{
+                                                       .label = title(),
+                                                       .size = dimensions,
+                                                       .samples = samples(),
+                                                   });
+
+    samples.valueChanged()
+        .connect([this]() {
+            CO_CORE_INFO("Samples changed to {}", samples());
+            CO_CORE_FATAL("Changing sample count dynamically is not implemented yet!");
+            // createColorAndDepthResources();
+        })
+        .release();
+
+    title.valueChanged().connect([this](const std::string_view newTitle) { updateTitle(); });
 }
 
-Window::~Window() { CO_CORE_TRACE("Destroying Cory::Window {}", windowName_); }
+Window::~Window()
+{
+    CO_CORE_TRACE("Destroying Cory::Window {}", title());
+}
 
 bool Window::shouldClose() const
 {
-    return glfwWindowShouldClose(const_cast<GLFWwindow *>(handle()));
+    return glfwWindowShouldClose(data_->window.get());
 }
 
-BasicVkObjectWrapper<VkSurfaceKHR> Window::createSurface()
+Swapchain &Window::swapchain()
 {
-    VkSurfaceKHR surfaceHandle;
-    auto ret = glfwCreateWindowSurface(ctx_.instance(), handle(), nullptr, &surfaceHandle);
-
-    BasicVkObjectWrapper<VkSurfaceKHR> surface{
-        surfaceHandle, [&instance = ctx_.instance()](auto s) {
-            instance->DestroySurfaceKHR(instance, s, nullptr);
-        }};
-
-    CO_CORE_ASSERT(ret == VK_SUCCESS, "Could not create surface!");
-    nameVulkanObject(ctx_.device(), surface, fmt::format("SURF_{}", windowName_));
-
-    return surface;
-}
-
-std::unique_ptr<Swapchain> Window::createSwapchain()
-{
-    SwapchainSupportDetails swapchainSupport =
-        SwapchainSupportDetails::query(ctx_, surface_.handle());
-
-    uint32_t imageCount = swapchainSupport.chooseImageCount();
-
-    VkSwapchainCreateInfoKHR createInfo{.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
-
-    auto surfaceFormat = swapchainSupport.chooseSwapSurfaceFormat();
-
-    createInfo.surface = surface_;
-    createInfo.minImageCount = imageCount;
-    createInfo.imageFormat = surfaceFormat.format;
-    createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    createInfo.imageExtent = swapchainSupport.chooseSwapExtent(toVkExtent2D(dimensions_));
-    createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    if (!ranges::contains(swapchainSupport.presentFamilies, ctx_.graphicsQueueFamily())) {
-        // TODO need to fix this at some point, but currently we don't spend the effort to
-        //      create a separate present queue if necessary - needs fixing in the Context
-        //      constructor!
-        // uint32_t queueFamilyIndices[] = {indices.graphicsFamily, indices.presentFamily};
-        // createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        // createInfo.queueFamilyIndexCount = 2;
-        // createInfo.pQueueFamilyIndices = queueFamilyIndices;
-        throw std::runtime_error(fmt::format("graphics queue does not support presenting"));
-    }
-    else {
-        createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        createInfo.queueFamilyIndexCount = 0;     // Optional
-        createInfo.pQueueFamilyIndices = nullptr; // Optional
-    }
-
-    createInfo.preTransform = swapchainSupport.capabilities.currentTransform;
-    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-    createInfo.presentMode = swapchainSupport.chooseSwapPresentMode();
-    createInfo.clipped = VK_TRUE;
-
-    createInfo.oldSwapchain = VK_NULL_HANDLE;
-
-    return std::make_unique<Swapchain>(ctx_, surface_, createInfo, sampleCount_);
+    return *data_->swapchain;
 }
 
 FrameContext Window::nextSwapchainImage()
 {
-    const Cory::ScopeTimer s{"Window/NextSwapchainImage"};
-    FrameContext frameCtx = swapchain_->nextImage();
+    const ScopeTimer s{"Window/NextSwapchainImage"};
 
-    // if the swapchain needs resizing, we wait for
-    if (frameCtx.shouldRecreateSwapchain) {
+    auto nextImageResult = data_->swapchain->nextImage();
+    auto dims = dimensions();
+    if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
+        auto error = nextImageResult.error();
+        if (error == SwapchainError::Unknown) {
+            throw std::runtime_error(fmt::format(
+                "Failed to acquire next swapchain image for window '{}': {}", title(), error));
+        }
+
         // wait until the surface dimensions are non-zero - this might happen
         // while the app is minimized or the window has been resized to zero height
         // or width, in which case we don't render anything
-        do {
-            glfwPollEvents();
-            VkSurfaceCapabilitiesKHR capabilities{};
-            ctx_.instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
-                ctx_.physicalDevice(), surface_, &capabilities);
-            dimensions_ = {capabilities.currentExtent.width, capabilities.currentExtent.height};
-            std::this_thread::yield();
-        } while (dimensions_.x == 0 || dimensions_.y == 0);
+        // do {
+        //     glfwPollEvents();
+        //     // VkSurfaceCapabilitiesKHR capabilities{};
+        //     // data_->ctx->instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
+        //     //     data_->ctx->physicalDevice(), surface_, &capabilities);
+        //     // size = {capabilities.currentExtent.width, capabilities.currentExtent.height};
+        //     std::this_thread::yield();
+        // } while (dimensions().x == 0 || dimensions().y == 0);
 
-        ctx_.device()->DeviceWaitIdle(ctx_.device());
+        glfwGetWindowSize(data_->window.get(), &dims.x, &dims.y);
+        dimensions = dims;
 
+        // Hard sync to make sure no commands are in flight before recreating the swapchain
+        data_->ctx->device().waitUntilIdle();
         // recreate the necessary resized resources and notify client code via
         // the onSwaphcainResized callback
-        swapchain_.reset();
-        swapchain_ = createSwapchain();
-        createColorAndDepthResources();
-        onSwapchainResized.emit({.size{dimensions_}});
+        data_->swapchain.reset();
+        CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dims);
+        data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
+                                                       data_->surface,
+                                                       SwapchainCreateInfo{
+                                                           .label = title(),
+                                                           .size = dims,
+                                                           .samples = samples(),
+                                                       });
+        onSwapchainResized.emit(SwapchainResizedEvent{.size{dims}});
 
         // retry the whole thing
         return nextSwapchainImage();
     }
 
-    frameCtx.colorImage = &colorImage_;
-    frameCtx.colorImageView = &colorImageView_;
-    frameCtx.depthImage = &depthImages_[frameCtx.index];
-    frameCtx.depthImageView = &depthImageViews_[frameCtx.index];
+    FrameContext frameCtx = std::move(nextImageResult).value();
+    CO_CORE_TRACE("Acquired swapchain image {} for frame {}",
+                  frameCtx.swapchainImageIndex,
+                  frameCtx.frameNumber);
 
     return frameCtx;
 }
 
 void Window::submitAndPresent(FrameContext &frameCtx)
 {
-    {
-        const Cory::ScopeTimer s{"Window/Submit"};
+    CO_CORE_TRACE("Submitting frame {}", frameCtx.frameNumber);
 
-        std::vector<VkSemaphore> waitSemaphores{*frameCtx.acquired};
-        std::vector<VkPipelineStageFlags> waitStages{VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-        std::vector<VkSemaphore> signalSemaphores{*frameCtx.rendered};
+    data_->swapchain->present(frameCtx);
 
-        Magnum::Vk::SubmitInfo submitInfo{};
-        submitInfo.setCommandBuffers({*frameCtx.commandBuffer});
-        submitInfo->pWaitSemaphores = waitSemaphores.data();
-        submitInfo->waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size());
-        submitInfo->pWaitDstStageMask = waitStages.data();
-        submitInfo->pSignalSemaphores = signalSemaphores.data();
-        submitInfo->signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size());
-
-        ctx_.graphicsQueue().submit({submitInfo}, *frameCtx.inFlight);
-    }
-    {
-        const Cory::ScopeTimer s{"Window/Present"};
-        swapchain_->present(frameCtx);
-    }
-
-    if (fpsCounter_.lap()) {
-        auto s = fpsCounter_.stats();
-        auto fps = fmt::format("{} FPS: {:3.2f} ({:3.2f} ms)",
-                               windowName_,
-                               float(1'000'000'000) / float(s.avg),
-                               float(s.avg) / 1'000'000);
-        CO_CORE_INFO(fps);
-        glfwSetWindowTitle(handle(), fps.c_str());
+    if (data_->fpsCounter.lap()) {
+        updateTitle();
     }
 }
-
-void Window::createColorAndDepthResources()
+Gpu::Format Window::colorFormat() const noexcept
 {
-    const auto extent = swapchain_->extent();
-    const Magnum::Vector2i size(extent.x, extent.y);
-    const int levels = 1;
-
-    // COLOR image - only one for now because we don't need more (so far)
-    // ImageUsage::TransferSource is needed to be able to resolve from the image
-    // ImageUsage::Sampled so it can be use it in debug views and so we can use in subsequent frames
-    const auto colorImgUsage =
-        Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::TransferSource | Vk::ImageUsage::Sampled;
-    colorImage_ =
-        Vk::Image{ctx_.device(),
-                  Vk::ImageCreateInfo2D{colorImgUsage, colorFormat_, size, levels, sampleCount_},
-                  Vk::MemoryFlag::DeviceLocal};
-    nameVulkanObject(ctx_.device(), colorImage_, fmt::format("TEX_WndCol {} (IMG)", extent));
-
-    colorImageView_ = Vk::ImageView{ctx_.device(), Vk::ImageViewCreateInfo2D{colorImage_}};
-    nameVulkanObject(ctx_.device(), colorImageView_, fmt::format("TEX_WndCol {} (VIEW)", extent));
-
-    // DEPTH images
-    depthImages_ =
-        ranges::views::indices(swapchain().images().size()) |
-        ranges::views::transform([&](auto idx) {
-            // ImageUsage::Sampled so we can create debug views
-            auto usage = Vk::ImageUsage::DepthStencilAttachment | Vk::ImageUsage::Sampled;
-            Vk::Image img{ctx_.device(),
-                          Vk::ImageCreateInfo2D{usage, depthFormat_, size, levels, sampleCount_},
-                          Vk::MemoryFlag::DeviceLocal};
-
-            nameVulkanObject(
-                ctx_.device(), img, fmt::format("TEX_WndDepth[{}] {} (IMG)", idx, extent));
-            return img;
-        }) |
-        ranges::to<std::vector<Vk::Image>>;
-
-    depthImageViews_ =
-        ranges::views::enumerate(depthImages_) | ranges::views::transform([&](auto it) {
-            auto [idx, depthImage] = it;
-            Vk::ImageView view{ctx_.device(), Vk::ImageViewCreateInfo2D{depthImage}};
-            nameVulkanObject(
-                ctx_.device(), view, fmt::format("TEX_WndDepth[{}] {} (VIEW)", idx, extent));
-            return view;
-        }) |
-        ranges::to<std::vector<Vk::ImageView>>;
-
-    // transition the images to ATTACHMENT_OPTIMAL
-    {
-        SingleShotCommandBuffer setInitialLayoutCmds{ctx_};
-        { // color image
-            const VkImageMemoryBarrier2 imageMemoryBarrier{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
-                .srcAccessMask = VK_ACCESS_2_NONE,
-                .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                .dstAccessMask = VK_ACCESS_2_NONE,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                .srcQueueFamilyIndex = ctx_.graphicsQueueFamily(),
-                .dstQueueFamilyIndex = ctx_.graphicsQueueFamily(),
-                .image = colorImage_,
-                .subresourceRange = {
-                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1,
-                }};
-            const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                                                  .pNext = nullptr,
-                                                  .dependencyFlags = {}, // ?
-                                                  .memoryBarrierCount = 0,
-                                                  .pMemoryBarriers = nullptr,
-                                                  .bufferMemoryBarrierCount = 0,
-                                                  .pBufferMemoryBarriers = nullptr,
-                                                  .imageMemoryBarrierCount = 1,
-                                                  .pImageMemoryBarriers = &imageMemoryBarrier};
-            ctx_.device()->CmdPipelineBarrier2(setInitialLayoutCmds, &dependencyInfo);
-        }
-        { // depth image
-            const VkImageMemoryBarrier2 imageMemoryBarrier{
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
-                .srcAccessMask = VK_ACCESS_2_NONE,
-                .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                .dstAccessMask = VK_ACCESS_2_NONE,
-                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-                .newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-                .srcQueueFamilyIndex = ctx_.graphicsQueueFamily(),
-                .dstQueueFamilyIndex = ctx_.graphicsQueueFamily(),
-                .image = depthImages_[0],
-                .subresourceRange = {
-                    .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1,
-                }};
-            const VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-                                                  .pNext = nullptr,
-                                                  .dependencyFlags = {}, // ?
-                                                  .memoryBarrierCount = 0,
-                                                  .pMemoryBarriers = nullptr,
-                                                  .bufferMemoryBarrierCount = 0,
-                                                  .pBufferMemoryBarriers = nullptr,
-                                                  .imageMemoryBarrierCount = 1,
-                                                  .pImageMemoryBarriers = &imageMemoryBarrier};
-            ctx_.device()->CmdPipelineBarrier2(setInitialLayoutCmds, &dependencyInfo);
-        }
-    }
+    return data_->swapchain->colorFormat();
+}
+Gpu::Format Window::depthFormat() const noexcept
+{
+    return data_->swapchain->depthFormat();
 }
 
-void Window::createGlfwWindow()
+gsl::not_null<GLFWwindow *> Window::getGlfwWindow() const
 {
-    auto windowHandle =
-        glfwCreateWindow(dimensions_.x, dimensions_.y, windowName_.c_str(), nullptr, nullptr);
-    window_ = std::shared_ptr<GLFWwindow>(windowHandle, [=](auto *ptr) {
+    return data_->window.get();
+}
+
+void Window::createWindow()
+{
+
+    auto dims = dimensions();
+    auto windowHandle = glfwCreateWindow(dims.x, dims.y, title().c_str(), nullptr, nullptr);
+
+    std::shared_ptr<GLFWwindow> window(windowHandle, [=](auto *ptr) {
         CO_CORE_TRACE("Destroying GLFW context");
         glfwDestroyWindow(ptr);
         glfwTerminate();
     });
-    glfwSetWindowUserPointer(window_.get(), this);
-
-    glfwSetCursorPosCallback(window_.get(), [](GLFWwindow *window, double mouseX, double mouseY) {
+    glfwSetWindowUserPointer(window.get(), this);
+    glfwSetCursorPosCallback(window.get(), [](GLFWwindow *window, double mouseX, double mouseY) {
         Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
         self.onMouseMoved.emit({.position = {mouseX, mouseY},
-                                .button = detail::getMouseButtonState(window),
-                                .modifiers = detail::getModifierState(window)});
+                                .button = GLFWUtils::getMouseButtonState(window),
+                                .modifiers = GLFWUtils::getModifierState(window)});
     });
-
     glfwSetMouseButtonCallback(
-        window_.get(), [](GLFWwindow *window, int button, int action, int mods) {
+        window.get(), [](GLFWwindow *window, int button, int action, int mods) {
             Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
             double mouseX, mouseY;
             glfwGetCursorPos(window, &mouseX, &mouseY);
             self.onMouseButton.emit(MouseButtonEvent{
                 .position = glm::vec2{mouseX, mouseY},
-                .button = detail::getMouseButtonState(window),
+                .button = GLFWUtils::getMouseButtonState(window),
                 .action = action == GLFW_PRESS ? ButtonAction::Press : ButtonAction::Release,
-                .modifiers = detail::getModifierState(window)});
+                .modifiers = GLFWUtils::getModifierState(window)});
         });
-
-    glfwSetScrollCallback(window_.get(), [](GLFWwindow *window, double xOffset, double yOffset) {
+    glfwSetScrollCallback(window.get(), [](GLFWwindow *window, double xOffset, double yOffset) {
         Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
         self.onMouseScrolled.emit({.position = {mouseX, mouseY},
                                    .scrollDelta = {xOffset, yOffset},
-                                   .modifiers = detail::getModifierState(window)});
+                                   .modifiers = GLFWUtils::getModifierState(window)});
     });
-
     glfwSetKeyCallback(
-        window_.get(), [](GLFWwindow *window, int key, int scancode, int action, int mods) {
+        window.get(), [](GLFWwindow *window, int key, int scancode, int action, int mods) {
             Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
             self.onKeyCallback.emit(
                 KeyEvent{.key = key, .scanCode = scancode, .action = action, .modifiers = mods});
         });
+
+    data_->window = std::move(window);
 }
 
-namespace detail {
-MouseButton getMouseButtonState(GLFWwindow *window)
+void Window::updateTitle()
 {
-    const Cory::MouseButton mouseButton =
-        (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) ? Cory::MouseButton::Left
-        : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS)
-            ? Cory::MouseButton::Middle
-        : (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-            ? Cory::MouseButton::Right
-            : Cory::MouseButton::None;
-    return mouseButton;
-}
+    auto s = data_->fpsCounter.stats();
+    auto fpsTitle = fmt::format("{} {} FPS: {:3.2f} ({:3.2f} ms)",
+                                title(),
+                                dimensions(),
+                                float(1'000'000'000) / float(s.avg),
+                                float(s.avg) / 1'000'000);
+    CO_CORE_INFO(fpsTitle);
 
-ModifierFlags getModifierState(GLFWwindow *window)
-{
-    Cory::ModifierFlags modifiers;
-    if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
-        modifiers.set(Cory::ModifierFlagBits::Alt);
-    }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-        modifiers.set(Cory::ModifierFlagBits::Ctrl);
-    }
-    if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-        modifiers.set(Cory::ModifierFlagBits::Shift);
-    }
-    return modifiers;
+    glfwSetWindowTitle(data_->window.get(), fpsTitle.data());
 }
-} // namespace detail
 
 } // namespace Cory

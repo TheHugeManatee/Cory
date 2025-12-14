@@ -163,12 +163,16 @@ inline glm::vec3 cartesianToSpherical(glm::vec3 cartesian)
     float z = cartesian.z;
 
     float r = sqrt(x * x + y * y + z * z);
-    if (r == 0.0) { return {0.0f, 0.0f, 0.0f}; }
+    if (r == 0.0) {
+        return {0.0f, 0.0f, 0.0f};
+    }
 
     float theta = acos(z / r);                                 // inclination/elevation
     float phi = (x == 0.0f && y == 0.0f) ? 0.0f : atan2(y, x); // azimuth
 
-    if (phi < 0.0f) { phi += 2.0f * glm::pi<float>(); }
+    if (phi < 0.0f) {
+        phi += 2.0f * glm::pi<float>();
+    }
 
     return glm::vec3(r, theta, phi);
 }

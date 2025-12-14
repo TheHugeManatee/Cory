@@ -1,18 +1,13 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
-
-#include <glm/vec3.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
 #include <cppcoro/generator.hpp>
 
-#include <concepts>
-#include <set>
 #include <string_view>
-#include <unordered_map>
 
 namespace Cory {
 
@@ -25,7 +20,7 @@ struct ExecutionInfo {
         Sync::AccessType stateAfter;
     };
     std::vector<RenderTaskHandle> tasks;
-    std::vector<TextureHandle> resources;
+    std::vector<FramegraphTextureHandle> resources;
     std::vector<TransitionInfo> transitions;
 };
 
@@ -47,7 +42,7 @@ class Framegraph : NoCopy {
      *
      * Note that this can be only called once. It will cause all relevant render tasks to execute.
      */
-    ExecutionInfo record(FrameContext& frameCtx);
+    ExecutionInfo record(FrameContext &frameCtx);
 
     /**
      * @brief immediately retire all resources allocated by the framegraph
@@ -60,18 +55,34 @@ class Framegraph : NoCopy {
     /// declare a new render task
     RenderTaskBuilder declareTask(std::string_view name);
 
+    struct FrameContextHandles {
+        TransientTextureHandle colorImage;
+        TransientTextureHandle depthImage;
+        TransientTextureHandle swapchainImage;
+    };
+    /// Import the external frame context (e.g. from a swapchain) as input resources
+    [[nodiscard]] FrameContextHandles importFrameContext(const FrameContext &frameCtx);
+
     /// declare an external texture as an input
     [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
                                                       Sync::AccessType lastWriteAccess,
-                                                      Magnum::Vk::Image &image,
-                                                      Magnum::Vk::ImageView &imageView);
+                                                      const Texture &image,
+                                                      const TextureView &imageView);
 
-    /**
-     * declare that a resource is to be read afterwards. returns general
-     * information and synchronization state of the last write to the
-     * texture so external code can synchronize with it
-     */
-    std::pair<TextureInfo, TextureState> declareOutput(TransientTextureHandle handle);
+    /// @brief declare an external resource dependency for the framegraph
+    /// @param finalAccess The desired final access type for the output resource
+    /// @return Information and synchronization state after the last task using the texture
+    ///
+    /// Declares a texture as the output of the frame graph, intended for further use externally
+    /// (e.g. present to a swap chain).
+    /// The framegraph will only execute tasks that contribute to requested outputs, and skip over
+    /// any tasks that are not required to produce said outputs.
+    ///
+    /// The framegraph will explicitly transition the texture to the requested final access type
+    /// after all tasks have executed.
+    std::pair<TextureInfo, TextureState>
+    declareOutput(TransientTextureHandle handle,
+                  Sync::AccessType finalAccess = Sync::AccessType::Present);
 
     [[nodiscard]] const TextureManager &resources() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
@@ -101,14 +112,17 @@ class Framegraph : NoCopy {
     resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
     [[nodiscard]] ExecutionInfo compile();
-    [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandList &cmd,
+    [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandRecorder &cmd,
                                                                          RenderTaskHandle handle);
 
     [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
     renderTasks() const;
 
+    /// Ensure that all output resources are transitioned to their final access states
+    void finalizeOutputs(ExecutionInfo executionInfo);
+
   private:                             /* members */
-    friend RenderTaskBuilder;                    // convenience so it can call finishTaskDeclaration
+    friend RenderTaskBuilder;          // convenience so it can call finishTaskDeclaration
     friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
     friend FramegraphVisualizer;       // accesses all the internals
 

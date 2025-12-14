@@ -7,9 +7,7 @@ namespace Cory {
 
 template <typename T, typename... Args>
 concept CallableWith = requires(T t, Args... args) {
-    {
-        t(args...)
-    } -> std::same_as<void>;
+    { t(args...) } -> std::same_as<void>;
 };
 
-}
+} // namespace Cory

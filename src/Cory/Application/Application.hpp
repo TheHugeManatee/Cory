@@ -4,11 +4,13 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 
+#include <KDGui/gui_application.h>
+
 #include <memory>
 
 namespace Cory {
 
-class Application : NoCopy, NoMove {
+class Application : NoCopy, NoMove, public KDGui::GuiApplication {
   public:
     Application();
     virtual ~Application();
@@ -17,8 +19,8 @@ class Application : NoCopy, NoMove {
 
     void init(const ContextCreationInfo &info);
 
-    Context& ctx();
-    const Context& ctx() const;
+    Context &ctx();
+    const Context &ctx() const;
 
     LayerStack &layers();
     const LayerStack &layers() const;

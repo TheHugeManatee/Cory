@@ -3,16 +3,11 @@
 #include "TestUtils.hpp"
 
 #include <Cory/Base/FmtUtils.hpp>
-#include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
-
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/CommandPool.h>
-#include <Magnum/Vk/Image.h>
-#include <Magnum/Vk/ImageCreateInfo.h>
-#include <Magnum/Vk/ImageViewCreateInfo.h>
+#include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
+#include <KDGpu/texture_options.h>
 
 #include <cppcoro/fmap.hpp>
 
@@ -20,21 +15,22 @@
 
 using namespace Cory;
 
-namespace Vk = Magnum::Vk;
-
 namespace passes {
 
 struct DepthPassOutputs {
     TransientTextureHandle depthTexture;
 };
+
 RenderTaskDeclaration<DepthPassOutputs>
 depthPass(Context &ctx, RenderTaskBuilder builder, glm::u32vec3 size)
 {
-    auto depth = builder.create(
-        "TEX_depth", size, PixelFormat::Depth32F, Sync::AccessType::DepthStencilAttachmentWrite);
+    auto depth = builder.create("TEX_depth",
+                                size,
+                                TextureFormat::D32_SFLOAT,
+                                Sync::AccessType::DepthStencilAttachmentWrite);
     DepthPassOutputs outputs{depth};
 
-    static ShaderHandle vertexShader = ctx.resources().createShader(
+    static ShaderHandle vertexShader = ctx.shaders().createShader(
         R"glsl(#version 450
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inTexCoord;
@@ -43,31 +39,38 @@ void main() {
     gl_Position = vec4(inPosition, 1.0);
 }
 )glsl",
-        ShaderType::eVertex,
+        Gpu::ShaderStageFlagBits::VertexBit,
         "depth.vert");
 
-    static ShaderHandle fragmentShader = ctx.resources().createShader(
+    static ShaderHandle fragmentShader = ctx.shaders().createShader(
         R"glsl(#version 450
 layout(location = 0) out vec4 outColor;
 void main() {
     outColor = gl_FragCoord;
 }
 )glsl",
-        ShaderType::eFragment,
+        Gpu::ShaderStageFlagBits::FragmentBit,
         "depth.frag");
 
-    auto depthPass =
-        builder.declareRenderPass()
-            .attachDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, 1.0f)
-            .shaders({vertexShader, fragmentShader})
-            .finish();
+    auto depthPass = builder.declareRenderPass(RenderPassDeclaration{
+        .name = "PASS_Depth",
+        .shaders = {vertexShader, fragmentShader},
+        .attachments = {},
+        .depthAttachment =
+            DepthStencilAttachment{
+                depth,
+                KDGpu::AttachmentLoadOperation::Clear,
+                KDGpu::AttachmentStoreOperation::Store,
+                1.0f,
+            },
+    });
 
     co_yield outputs;
     RenderInput render = co_await builder.finishDeclaration();
     CO_CORE_ASSERT(render.cmd != nullptr, "Uh-oh");
-    depthPass.begin(*render.cmd);
+    auto recorder = depthPass.begin(*render.cmd);
     CO_APP_INFO("[DepthPrepass] render commands executing");
-    depthPass.end(*render.cmd);
+    recorder.end();
 }
 
 struct DepthDebugOut {
@@ -83,7 +86,7 @@ RenderTaskDeclaration<DepthDebugOut> depthDebug(Framegraph &graph,
 
     auto depthVis = builder.create("TEX_depthDebugVis",
                                    depthInfo.size,
-                                   PixelFormat::RGBA8Srgb,
+                                   TextureFormat::R8G8B8A8_SRGB,
                                    Sync::AccessType::ColorAttachmentWrite);
 
     co_yield DepthDebugOut{depthVis};
@@ -105,7 +108,7 @@ RenderTaskDeclaration<NormalDebugOut> normalDebug(Framegraph &graph,
 
     auto normalVis = builder.create("TEX_normalDebugVis",
                                     normalInfo.size,
-                                    PixelFormat::RGBA8Srgb,
+                                    TextureFormat::R8G8B8A8_SRGB,
                                     Sync::AccessType::ColorAttachmentWrite);
 
     co_yield NormalDebugOut{normalVis};
@@ -129,7 +132,7 @@ RenderTaskDeclaration<DebugOut> debugGeneral(Framegraph &graph,
 
     auto depthVis = builder.create("TEX_debugVis",
                                    dbgInfo.size,
-                                   PixelFormat::RGBA8Srgb,
+                                   TextureFormat::R8G8B8A8_SRGB,
                                    Sync::AccessType::ColorAttachmentWrite);
 
     co_yield DebugOut{depthVis};
@@ -154,7 +157,7 @@ RenderTaskDeclaration<MainOut> mainPass(RenderTaskBuilder builder,
             ? builder.readWrite(colorInput, Cory::Sync::AccessType::ColorAttachmentReadWrite).first
             : builder.create("TEX_color",
                              depthInfo.size,
-                             PixelFormat::RGBA8Srgb,
+                             TextureFormat::R8G8B8A8_SRGB,
                              Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
     auto normalOut = [&]() {
         if (normalInput) {
@@ -163,7 +166,7 @@ RenderTaskDeclaration<MainOut> mainPass(RenderTaskBuilder builder,
         }
         return builder.create("TEX_normal",
                               depthInfo.size,
-                              PixelFormat::RGBA8Unorm,
+                              TextureFormat::R8G8B8A8_UNORM,
                               Sync::AccessType::ColorAttachmentWrite);
     }();
 
@@ -187,7 +190,7 @@ RenderTaskDeclaration<PostProcessOut> postProcess(RenderTaskBuilder builder,
 
     auto color = builder.create("TEX_postprocess",
                                 curColorInfo.size,
-                                PixelFormat::RGBA8Srgb,
+                                TextureFormat::R8G8B8A8_SRGB,
                                 Sync::AccessType::ColorAttachmentWrite);
 
     co_yield PostProcessOut{color};
@@ -201,25 +204,36 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 {
     testing::VulkanTester t;
 
-    namespace Vk = Magnum::Vk;
-
     Framegraph graph(t.ctx());
-    Vk::Image prevFrame{
-        t.ctx().device(),
-        Vk::ImageCreateInfo2D{Vk::ImageUsage::ColorAttachment | Vk::ImageUsage::Sampled,
-                              Vk::PixelFormat::RGBA8Srgb,
-                              Magnum::Vector2i{1024, 768},
-                              1},
-        Vk::MemoryFlag::DeviceLocal};
-    nameVulkanObject(t.ctx().device(), prevFrame, "TEX_previousFrameColor (IMG)");
-    Vk::ImageView prevFrameView{t.ctx().device(), Vk::ImageViewCreateInfo2D{prevFrame}};
-    nameVulkanObject(t.ctx().device(), prevFrameView, "TEX_previousFrameColor (VIEW)");
+
+    auto &device = t.ctx().device();
+
+    // Create a 2D sRGB color texture to use as a color attachment and for sampling
+    Texture previousFrame = device.createTexture(Gpu::TextureOptions{
+        .label = "TEX_previousFrameColor (IMG)",
+        .type = Gpu::TextureType::TextureType2D,
+        .format = TextureFormat::R8G8B8A8_SRGB,
+        .extent = {1024, 768, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = Gpu::SampleCountFlagBits::Samples1Bit,
+        .usage =
+            Gpu::TextureUsageFlagBits::ColorAttachmentBit | Gpu::TextureUsageFlagBits::SampledBit,
+        .memoryUsage = Gpu::MemoryUsage::GpuOnly,
+    });
+
+    // Create a default 2D view of the texture (keeps same format)
+    TextureView previousFrameView = previousFrame.createView(Gpu::TextureViewOptions{
+        .label = "TEX_previousFrameColor (VIEW)",
+        .viewType = Gpu::ViewType::ViewType2D,
+        .format = TextureFormat::R8G8B8A8_SRGB,
+    });
 
     const TransientTextureHandle prevFrameColor = graph.declareInput(
-        {"TEX_previousFrameColor", glm::u32vec3{1024, 768, 1}, PixelFormat::RGBA8Srgb},
+        {"TEX_previousFrameColor", glm::u32vec3{1024, 768, 1}, TextureFormat::R8G8B8A8_SRGB},
         Sync::AccessType::None,
-        prevFrame,
-        prevFrameView);
+        previousFrame,
+        previousFrameView);
 
     auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("PASS_DepthPre"), {800, 600, 1});
     auto depthTex = depthPass.output().depthTexture;
@@ -251,19 +265,19 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 
     CO_APP_INFO("Final output is a color texture of {}", resultInfo.size);
 
-    Magnum::Vk::CommandBuffer buffer = t.ctx().commandPool().allocate();
-    nameVulkanObject(t.ctx().device(), buffer, "CMD_FramegraphTest");
-
-    buffer.begin();
+    CommandRecorder recorder = device.createCommandRecorder(Gpu::CommandRecorderOptions{
+        .label = "CMD_FramegraphTest",
+        .queue = t.ctx().graphicsQueue().handle(),
+        .level = Gpu::CommandBufferLevel::Primary,
+    });
 
     FrameContext frameCtx{
-        .index = 2,
+        .inFlightIndex = 2,
+        .swapchainImageIndex = 1,
         .frameNumber = 42,
         // rest not needed for the framegraph
-        .commandBuffer = &buffer,
+        .commandBuffer = std::move(recorder),
     };
     auto g = graph.record(frameCtx);
     CO_APP_INFO(graph.dump(g));
-
-    buffer.end();
 }

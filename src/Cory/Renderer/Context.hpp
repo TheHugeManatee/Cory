@@ -1,14 +1,13 @@
 #pragma once
 
-#include <Cory/Base/Callback.hpp>
 #include <Cory/Base/Common.hpp>
+#include <Cory/Base/Function.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/Semaphore.hpp>
-#include <Cory/Renderer/VulkanUtils.hpp>
+#include <Cory/Renderer/Gpu.hpp>
 
-#include <Magnum/Vk/Fence.h>
+#include <KDGpu/instance.h>
+#include <KDGpu/surface.h>
 
-#include <magic_enum.hpp>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -22,11 +21,11 @@ struct DebugMessageInfo {
     std::string message;
 };
 
-
 enum class ValidationLayers { Enabled, Disabled };
+enum class DeviceFeatures { RequiredOnly, All };
 struct ContextCreationInfo {
     ValidationLayers validation{ValidationLayers::Enabled};
-    std::span<const char*> args;
+    std::span<const char *> args;
 };
 
 /**
@@ -38,47 +37,52 @@ class Context : NoCopy {
     ~Context();
 
     // movable
-    Context(Context &&rhs);
-    Context &operator=(Context &&rhs);
+    Context(Context &&rhs) noexcept;
+    Context &operator=(Context &&rhs) noexcept;
 
     std::string name() const;
 
-    [[nodiscard]] Semaphore createSemaphore(std::string_view name = "");
-    [[nodiscard]] Magnum::Vk::Fence createFence(std::string_view name = "",
-                                                FenceCreateMode mode = {});
+    [[nodiscard]] Gpu::GpuSemaphore createSemaphore(std::string_view name = "");
+    [[nodiscard]] Gpu::Fence createFence(std::string_view name = "", FenceCreateMode mode = {});
+
+    /// register a callback that gets called on vulkan validation messages etc.
+    void onVulkanDebugMessageReceived(Function<void(const DebugMessageInfo &)> callback);
 
     bool isHeadless() const;
 
-    Magnum::Vk::Instance &instance();
-    Magnum::Vk::DeviceProperties &physicalDevice();
-    Magnum::Vk::Device &device();
-    DescriptorSets &descriptorSets();
-    Magnum::Vk::CommandPool &commandPool();
+    // Set up the device and queue for a given surface
+    void setupDevice(const Gpu::Surface &surface);
+    // Set up a headless device, i.e. a device not tied to a specific surface
+    void setupHeadlessDevice();
 
-    Magnum::Vk::Queue &graphicsQueue();
-    uint32_t graphicsQueueFamily() const;
-    Magnum::Vk::Queue &computeQueue();
-    uint32_t computeQueueFamily() const;
+    Gpu::Instance &instance();
 
-    ResourceManager &resources();
-    const ResourceManager &resources() const;
+    Gpu::GraphicsApi &graphicsApi();
+    const Gpu::AdapterProperties &physicalDevice();
+    Gpu::Device &device();
 
-    /// register a callback that gets called on vulkan validation messages etc.
-    void onVulkanDebugMessageReceived(std::function<void(const DebugMessageInfo &)> callback);
+    Gpu::Queue &graphicsQueue();
 
-    // get the default mesh layout. if empty is true, will return an empty layout with zero
-    // attachments
-    const Magnum::Vk::MeshLayout &defaultMeshLayout(bool empty = false) const;
-    // non-const only to allow casting to VkPipelineLayout
-    Magnum::Vk::PipelineLayout &defaultPipelineLayout();
-    // non-const only to allow casting to VkDescriptorSetLayotu
-    Magnum::Vk::DescriptorSetLayout &defaultDescriptorSetLayout();
+    Gpu::VulkanResourceManager &resources();
+    const Gpu::VulkanResourceManager &resources() const;
 
-    SamplerHandle defaultSampler() const;
+    PipelineCache &pipelineCache();
+
+    ShaderManager &shaders();
+    const ShaderManager &shaders() const;
+
+    DescriptorSets &descriptors();
+    const DescriptorSets &descriptors() const;
 
   private:
+    Gpu::AdapterAndDevice
+    createDefaultDevice(const Gpu::Surface &surface,
+                        DeviceFeatures features = DeviceFeatures::RequiredOnly,
+                        Gpu::AdapterDeviceType deviceType = Gpu::AdapterDeviceType::Default) const;
+
+    Gpu::AdapterFeatures getRequiredFeatures() const;
+
     std::unique_ptr<struct ContextPrivate> data_;
-    void setupDebugMessenger();
 };
 // static_assert(std::movable<Context>, "Context must be movable");
 

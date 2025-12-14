@@ -63,7 +63,7 @@ template <typename T, typename Friend> class PrivateTypedHandle {
     PrivateTypedHandle() = default;
     /// constructing with a NullHandle type constructs an invalid handle
     /* implicit */ PrivateTypedHandle(NullHandle_t)
-        : PrivateTypedHandle(){};
+        : PrivateTypedHandle() {};
     auto operator<=>(const PrivateTypedHandle &rhs) const = default;
 
     /**
@@ -123,7 +123,9 @@ template <> struct fmt::formatter<Cory::SlotMapHandle> {
     template <typename ParseContext> constexpr auto parse(ParseContext &ctx) { return ctx.end(); }
     auto format(Cory::SlotMapHandle h, format_context &ctx)
     {
-        if (h.valid()) { return fmt::format_to(ctx.out(), "{{{},{}}}", h.index(), h.version()); }
+        if (h.valid()) {
+            return fmt::format_to(ctx.out(), "{{{},{}}}", h.index(), h.version());
+        }
 
         return fmt::format_to(ctx.out(), "{{invalid}}");
     }

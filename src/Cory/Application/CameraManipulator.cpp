@@ -46,28 +46,64 @@ template <typename T> bool isZero(const T &_a)
 {
     return fabs(_a) < std::numeric_limits<T>::epsilon();
 }
-template <typename T> bool isOne(const T &_a) { return areEqual(_a, (T)1); }
-inline float sign(float s) { return (s < 0.f) ? -1.f : 1.f; }
+template <typename T> bool isOne(const T &_a)
+{
+    return areEqual(_a, (T)1);
+}
+inline float sign(float s)
+{
+    return (s < 0.f) ? -1.f : 1.f;
+}
 
-CameraManipulator::CameraManipulator() { update(); }
+CameraManipulator::CameraManipulator()
+{
+    update();
+}
 
-glm::vec3 const &CameraManipulator::getCameraPosition() const { return m_cameraPosition; }
+glm::vec3 const &CameraManipulator::getCameraPosition() const
+{
+    return m_cameraPosition;
+}
 
-glm::vec3 const &CameraManipulator::getCenterPosition() const { return m_centerPosition; }
+glm::vec3 const &CameraManipulator::getCenterPosition() const
+{
+    return m_centerPosition;
+}
 
-glm::mat4 const &CameraManipulator::getViewMatrix() const { return m_matrix; }
+glm::mat4 const &CameraManipulator::getViewMatrix() const
+{
+    return m_matrix;
+}
 
-CameraManipulator::Mode CameraManipulator::getMode() const { return m_mode; }
+CameraManipulator::Mode CameraManipulator::getMode() const
+{
+    return m_mode;
+}
 
-glm::i32vec2 const &CameraManipulator::getMousePosition() const { return m_mousePosition; }
+glm::i32vec2 const &CameraManipulator::getMousePosition() const
+{
+    return m_mousePosition;
+}
 
-float CameraManipulator::getRoll() const { return m_roll; }
+float CameraManipulator::getRoll() const
+{
+    return m_roll;
+}
 
-float CameraManipulator::getSpeed() const { return m_speed; }
+float CameraManipulator::getSpeed() const
+{
+    return m_speed;
+}
 
-glm::vec3 const &CameraManipulator::getUpVector() const { return m_upVector; }
+glm::vec3 const &CameraManipulator::getUpVector() const
+{
+    return m_upVector;
+}
 
-glm::i32vec2 const &CameraManipulator::getWindowSize() const { return m_windowSize; }
+glm::i32vec2 const &CameraManipulator::getWindowSize() const
+{
+    return m_windowSize;
+}
 
 CameraManipulator::Action CameraManipulator::mouseMove(glm::i32vec2 const &position,
                                                        MouseButton mouseButton,
@@ -115,7 +151,10 @@ void CameraManipulator::setLookat(const glm::vec3 &cameraPosition,
     update();
 }
 
-void CameraManipulator::setMode(Mode mode) { m_mode = mode; }
+void CameraManipulator::setMode(Mode mode)
+{
+    m_mode = mode;
+}
 
 void CameraManipulator::setMousePosition(glm::i32vec2 const &position)
 {
@@ -128,9 +167,15 @@ void CameraManipulator::setRoll(float roll)
     update();
 }
 
-void CameraManipulator::setSpeed(float speed) { m_speed = speed; }
+void CameraManipulator::setSpeed(float speed)
+{
+    m_speed = speed;
+}
 
-void CameraManipulator::setWindowSize(glm::i32vec2 const &size) { m_windowSize = size; }
+void CameraManipulator::setWindowSize(glm::i32vec2 const &size)
+{
+    m_windowSize = size;
+}
 
 void CameraManipulator::wheel(int value)
 {
@@ -153,11 +198,15 @@ void CameraManipulator::dolly(glm::vec2 const &delta)
 
     // We are at the point of interest, and don't know any direction, so do
     // nothing!
-    if (isZero(length)) { return; }
+    if (isZero(length)) {
+        return;
+    }
 
     // Use the larger movement.
     float dd;
-    if (m_mode != Mode::Examine) { dd = -delta[1]; }
+    if (m_mode != Mode::Examine) {
+        dd = -delta[1];
+    }
     else {
         dd = fabs(delta[0]) > fabs(delta[1]) ? delta[0] : -delta[1];
     }
@@ -170,13 +219,17 @@ void CameraManipulator::dolly(glm::vec2 const &delta)
     factor *= length;
 
     // Don't move to or through the point of interest.
-    if (1.0f <= factor) { return; }
+    if (1.0f <= factor) {
+        return;
+    }
 
     z *= factor;
 
     // Not going up
     if (m_mode == Mode::Walk) {
-        if (m_upVector.y > m_upVector.z) { z.y = 0; }
+        if (m_upVector.y > m_upVector.z) {
+            z.y = 0;
+        }
         else {
             z.z = 0;
         }
@@ -185,7 +238,9 @@ void CameraManipulator::dolly(glm::vec2 const &delta)
     m_cameraPosition += z;
 
     // In fly mode, the interest moves with us.
-    if (m_mode != Mode::Examine) { m_centerPosition += z; }
+    if (m_mode != Mode::Examine) {
+        m_centerPosition += z;
+    }
 }
 
 void CameraManipulator::motion(glm::i32vec2 const &position, Action action)
@@ -229,7 +284,9 @@ void CameraManipulator::motion(glm::i32vec2 const &position, Action action)
 
 void CameraManipulator::orbit(glm::vec2 const &delta, bool invert)
 {
-    if (isZero(delta[0]) && isZero(delta[1])) { return; }
+    if (isZero(delta[0]) && isZero(delta[1])) {
+        return;
+    }
 
     // Full width will do a full turn
     float dx = delta[0] * float(glm::two_pi<float>());
@@ -260,7 +317,9 @@ void CameraManipulator::orbit(glm::vec2 const &delta, bool invert)
     // Apply the (X) rotation to the eye-center vector
     tmpVector = xRotation * glm::vec4(centerToEye.x, centerToEye.y, centerToEye.z, 0);
     glm::vec3 rotatedVector(tmpVector.x, tmpVector.y, tmpVector.z);
-    if (sign(rotatedVector.x) == sign(centerToEye.x)) { centerToEye = rotatedVector; }
+    if (sign(rotatedVector.x) == sign(centerToEye.x)) {
+        centerToEye = rotatedVector;
+    }
 
     // Make the vector as long as it was originally
     centerToEye *= radius;
@@ -334,7 +393,9 @@ void CameraManipulator::trackball(glm::i32vec2 const &position)
     float t = glm::length(pTB0 - pTB1) / (2.f * trackballSize);
 
     // clamp between -1 and 1
-    if (t > 1.0f) { t = 1.0f; }
+    if (t > 1.0f) {
+        t = 1.0f;
+    }
     else if (t < -1.0f) {
         t = -1.0f;
     }

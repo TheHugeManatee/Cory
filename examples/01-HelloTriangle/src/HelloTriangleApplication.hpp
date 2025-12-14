@@ -1,9 +1,6 @@
 #pragma once
 
 #include <Cory/Application/Application.hpp>
-#include <Cory/Renderer/Swapchain.hpp>
-
-#include <Magnum/Vk/Framebuffer.h>
 
 #include <memory>
 
@@ -14,35 +11,32 @@ class Window;
 class Context;
 } // namespace Cory
 
-namespace Magnum::Vk {
-class Mesh;
-}
+struct Mesh;
 
 class HelloTriangleApplication : public Cory::Application {
   public:
     HelloTriangleApplication(int argc, char **argv);
-    ~HelloTriangleApplication();
+    ~HelloTriangleApplication() override;
 
     void run() override;
 
   private:
-    // create a framebuffer for each of the swap chain images
-    void createFramebuffers();
     // create the mesh to be rendered
     void createGeometry();
+    void renderImGuiOverlay(Cory::FrameContext &frameCtx,
+                            KDGpu::RenderPassCommandRecorder *recorder);
     // record commands for a new command buffer
     void recordCommands(Cory::FrameContext &frameCtx);
+    void createFramebuffers();
 
     double now() const;
     double getElapsedTimeSeconds() const;
 
-  private:
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;
-    std::vector<Magnum::Vk::Framebuffer> framebuffers_;
-    std::unique_ptr<Magnum::Vk::Mesh> mesh_;
-    Cory::ImGuiLayer* imguiLayer_;
+    std::unique_ptr<Mesh> mesh_;
+    Cory::ImGuiLayer *imguiLayer_;
 
     double startupTime_;
     bool disableValidation_{false};

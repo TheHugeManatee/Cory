@@ -28,23 +28,33 @@ template <typename VulkanObjectHandle> VkObjectType getVulkanObjectType()
     if constexpr (std::is_same_v<VulkanObjectHandle, VkDebugUtilsMessengerEXT>) {
         return VK_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT;
     }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkDevice>) { return VK_OBJECT_TYPE_DEVICE; }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkBuffer>) { return VK_OBJECT_TYPE_BUFFER; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkDevice>) {
+        return VK_OBJECT_TYPE_DEVICE;
+    }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkBuffer>) {
+        return VK_OBJECT_TYPE_BUFFER;
+    }
     if constexpr (std::is_same_v<VulkanObjectHandle, VkSurfaceKHR>) {
         return VK_OBJECT_TYPE_SURFACE_KHR;
     }
     if constexpr (std::is_same_v<VulkanObjectHandle, VkSwapchainKHR>) {
         return VK_OBJECT_TYPE_SWAPCHAIN_KHR;
     }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkQueue>) { return VK_OBJECT_TYPE_QUEUE; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkQueue>) {
+        return VK_OBJECT_TYPE_QUEUE;
+    }
     if constexpr (std::is_same_v<VulkanObjectHandle, VkSemaphore>) {
         return VK_OBJECT_TYPE_SEMAPHORE;
     }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkFence>) { return VK_OBJECT_TYPE_FENCE; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkFence>) {
+        return VK_OBJECT_TYPE_FENCE;
+    }
     if constexpr (std::is_same_v<VulkanObjectHandle, VkCommandBuffer>) {
         return VK_OBJECT_TYPE_COMMAND_BUFFER;
     }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkImage>) { return VK_OBJECT_TYPE_IMAGE; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkImage>) {
+        return VK_OBJECT_TYPE_IMAGE;
+    }
     if constexpr (std::is_same_v<VulkanObjectHandle, VkImageView>) {
         return VK_OBJECT_TYPE_IMAGE_VIEW;
     }
@@ -54,7 +64,9 @@ template <typename VulkanObjectHandle> VkObjectType getVulkanObjectType()
     if constexpr (std::is_same_v<VulkanObjectHandle, VkPipeline>) {
         return VK_OBJECT_TYPE_PIPELINE;
     }
-    if constexpr (std::is_same_v<VulkanObjectHandle, VkSampler>) { return VK_OBJECT_TYPE_SAMPLER; }
+    if constexpr (std::is_same_v<VulkanObjectHandle, VkSampler>) {
+        return VK_OBJECT_TYPE_SAMPLER;
+    }
     if constexpr (std::is_same_v<VulkanObjectHandle, VkDescriptorSetLayout>) {
         return VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT;
     }

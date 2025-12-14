@@ -186,6 +186,47 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandRecord
     return transitions;
 }
 
+Framegraph::FrameContextHandles Framegraph::importFrameContext(const FrameContext &frameCtx)
+{
+    auto size = glm::u32vec3{frameCtx.extent, 1};
+    FrameContextHandles handles;
+
+    handles.colorImage = declareInput(
+        {
+            .name = "TEX_SwapCh_Color",
+            .size = size,
+            .format = frameCtx.colorFormat,
+            .sampleCount = frameCtx.sampleCount,
+        },
+        Sync::AccessType::None,
+        *frameCtx.colorImage,
+        *frameCtx.colorImageView);
+
+    handles.depthImage = declareInput(
+        {
+            .name = "TEX_SwapCh_Depth",
+            .size = size,
+            .format = frameCtx.depthFormat,
+            .sampleCount = frameCtx.sampleCount,
+        },
+        Cory::Sync::AccessType::None,
+        *frameCtx.depthImage,
+        *frameCtx.depthImageView);
+
+    handles.swapchainImage = declareInput(
+        {
+            .name = "TEX_SwapCh_Present",
+            .size = size,
+            .format = frameCtx.colorFormat,
+            .sampleCount = frameCtx.sampleCount,
+        },
+        Cory::Sync::AccessType::None,
+        *frameCtx.swapchainImage,
+        *frameCtx.swapchainImageView);
+
+    return handles;
+}
+
 TransientTextureHandle Framegraph::declareInput(TextureInfo info,
                                                 Sync::AccessType lastWriteAccess,
                                                 const Texture &image,

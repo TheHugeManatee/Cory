@@ -125,6 +125,8 @@ set(CORY_SOURCES
         Renderer/PipelineCache.cpp
         Renderer/PipelineCache.hpp
         Base/EnumMap.hpp
+        RenderTasks/StandardRenderTasks.cpp
+        RenderTasks/StandardRenderTasks.hpp
 )
 
 

@@ -17,13 +17,6 @@ add_executable(${TARGET_NAME}
         src/CubeAnimationSystem.cpp
 )
 
-# Replace GLOB_RECURSE for HEADERS with explicit file list
-set(HEADERS
-        include/SceneGraph/SceneGraph.h
-        include/SceneGraph/Node.h
-        include/SceneGraph/Transform.h
-)
-
 target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
 target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

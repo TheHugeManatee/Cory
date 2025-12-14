@@ -2,35 +2,38 @@
 
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
-#include <Cory/Framegraph/CommandList.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
-
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/Mesh.h>
-#include <Magnum/Vk/PipelineLayout.h>
-
-using namespace Magnum;
+#include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
+#include <Cory/Renderer/UniformBufferObject.hpp>
+#include <KDGpu/gpu_core.h>
 
 CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight)
     : Base()
     , ctx_(&ctx)
 {
-    mesh_ = std::make_unique<Vk::Mesh>(Cory::DynamicGeometry::createCube(ctx));
+    // Create mesh using Cory::DynamicGeometry, as in 02-CubeDemo
+    auto cube = Cory::DynamicGeometry::createCube(ctx);
+    mesh_ = std::make_unique<CubeMesh>(CubeMesh{
+        .vertexBuffer = std::move(cube.vertexBuffer),
+        .indexBuffer = std::move(cube.indexBuffer),
+        .indexCount = cube.indexCount,
+    });
 
-    globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(*ctx_, maxFramesInFlight);
+    globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(ctx, maxFramesInFlight);
 
-    vertexShader_ = ctx_->resources().createShader(Cory::ResourceLocator::Locate("cube.vert"));
-    fragmentShader_ = ctx_->resources().createShader(Cory::ResourceLocator::Locate("cube.frag"));
+    vertexShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.vert"));
+    fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag"));
 }
 
 CubeRenderSystem::~CubeRenderSystem()
 {
-    auto &resources = ctx_->resources();
-    resources.release(vertexShader_);
-    resources.release(fragmentShader_);
+    if (ctx_) {
+        auto &shaders = ctx_->shaders();
+        shaders.release(vertexShader_);
+        shaders.release(fragmentShader_);
+    }
 }
 
 void CubeRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
@@ -56,26 +59,38 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
                                  Cory::TransientTextureHandle colorTarget,
                                  Cory::TransientTextureHandle depthTarget)
 {
-
-    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-    float clearDepth = 1.0f;
+    KDGpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    KDGpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
     auto [writtenColorHandle, colorInfo] =
         builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto cubePass = builder.declareRenderPass("PASS_Cubes")
-                        .shaders({vertexShader_, fragmentShader_})
-                        .attach(colorTarget,
-                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                VK_ATTACHMENT_STORE_OP_STORE,
-                                clearColor)
-                        .attachDepth(depthTarget,
-                                     VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_CLEAR,
-                                     VK_ATTACHMENT_STORE_OP_STORE,
-                                     clearDepth)
-                        .finish();
+    auto pushRanges = std::array<KDGpu::PushConstantRange, 1>{{{
+        .offset = 0,
+        .size = sizeof(CubePushConstantState),
+        .shaderStages = KDGpu::ShaderStageFlagBits::AllGraphics,
+    }}};
+    auto cubePass = builder.declareRenderPass(
+        Cory::RenderPassDeclaration{.name = "PASS_Cubes",
+                                    .shaders = {vertexShader_, fragmentShader_},
+                                    .attachments = {{
+                                        {
+                                            .target = colorTarget,
+                                            .load = KDGpu::AttachmentLoadOperation::Clear,
+                                            .store = KDGpu::AttachmentStoreOperation::Store,
+                                            .clearColor = clearColor,
+                                        },
+                                    }},
+                                    .depthAttachment =
+                                        Cory::DepthStencilAttachment{
+                                            .target = depthTarget,
+                                            .load = KDGpu::AttachmentLoadOperation::Clear,
+                                            .store = KDGpu::AttachmentStoreOperation::Store,
+                                            .clearDepthStencil = clearDepthStencil,
+                                        },
+                                    .pushConstantRanges = {pushRanges.begin(), pushRanges.end()}});
 
     co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
 
@@ -83,7 +98,7 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
     /// vvvv  RENDERING COMMANDS  vvvv
 
-    cubePass.begin(*renderApi.cmd);
+    auto passRecorder = cubePass.begin(*renderApi.cmd);
 
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
     glm::mat4 viewMatrix = camera_.viewMatrix;
@@ -94,35 +109,49 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
     // update the uniform buffer
-    CubeUBO &ubo = (*globalUbo_)[frameCtx.index];
+    CubeUBO &ubo = (*globalUbo_)[frameCtx.inFlightIndex];
     ubo.view = viewMatrix;
     ubo.projection = projectionMatrix;
     ubo.viewProjection = viewProjection;
     // need explicit flush otherwise the mapped memory is not synced to the GPU
-    globalUbo_->flush(frameCtx.index);
+    globalUbo_->flush(frameCtx.inFlightIndex);
 
-    ctx_->descriptorSets()
-        .write(Cory::DescriptorSets::SetType::Static, frameCtx.index, *globalUbo_)
+    ctx_->descriptors()
+        .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
         .flushWrites()
-        .bind(renderApi.cmd->handle(), frameCtx.index, ctx_->defaultPipelineLayout());
+        .bind(passRecorder, frameCtx.inFlightIndex);
+
+    // Set dynamic states
+    passRecorder.setCullMode(KDGpu::CullModeFlagBits::BackBit);
+    passRecorder.setDepthTestEnabled(true);
+    passRecorder.setDepthWriteEnabled(true);
+    passRecorder.setDepthCompareOp(KDGpu::CompareOperation::Less);
+
+    // bind the mesh buffers
+    passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
+    passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
     // records commands for each cube
-    recordCommands(*renderApi.cmd);
+    recordCommands(passRecorder);
 
-    cubePass.end(*renderApi.cmd);
+    passRecorder.end();
 }
 
-void CubeRenderSystem::recordCommands(Cory::CommandList &cmd)
+void CubeRenderSystem::recordCommands(KDGpu::RenderPassCommandRecorder &recorder)
 {
+    auto pushRanges = std::array<KDGpu::PushConstantRange, 1>{{{
+        .offset = 0,
+        .size = sizeof(CubePushConstantState),
+        .shaderStages = KDGpu::ShaderStageFlagBits::AllGraphics,
+    }}};
     for (auto &anim : renderState_) {
-        // update push constants
-        ctx_->device()->CmdPushConstants(cmd->handle(),
-                                         ctx_->defaultPipelineLayout(),
-                                         VkShaderStageFlagBits::VK_SHADER_STAGE_ALL,
-                                         0,
-                                         sizeof(anim),
-                                         &anim);
-
-        cmd.handle().draw(*mesh_);
+        recorder.pushConstant(pushRanges[0], &anim);
+        recorder.drawIndexed(KDGpu::DrawIndexedCommand{
+            .indexCount = mesh_->indexCount,
+            .instanceCount = 1,
+            .firstIndex = 0,
+            .vertexOffset = 0,
+            .firstInstance = 0,
+        });
     }
 }

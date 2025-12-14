@@ -56,6 +56,7 @@ struct SwapchainPrivate {
     uint64_t frameNumber{0};
 
     SwapchainSetup swapchainSetup;
+    Gpu::SampleCountFlagBits sampleCount{Gpu::SampleCountFlagBits::Samples1Bit};
     Gpu::Swapchain swapchain;
     std::vector<TextureView> swapchainViews;
 
@@ -182,6 +183,7 @@ SwapchainPrivate::SwapchainPrivate(Context &ctx_,
     auto &device = ctx->device();
     swapchainName = std::move(createInfo.label);
     swapchainSetup = SwapchainSetup::determineSwapchainSetup(device, surface);
+    sampleCount = createInfo.samples;
     // since MAX_FRAMES_IN_FLIGHT does not change, the present and complete semaphores only need
     // to be created once here. Create the present complete and render complete semaphores
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
@@ -240,7 +242,7 @@ SwapchainPrivate::SwapchainPrivate(Context &ctx_,
             {.label = fmt::format("RENDER-COMPLETE-{}-{}", swapchainName, i)}));
     }
 
-    this->createColorAndDepthResources(createInfo.samples);
+    createColorAndDepthResources(sampleCount);
 
     resourceDeleter =
         std::make_unique<KDGpuUtils::ResourceDeleter>(&ctx->device(), MAX_FRAMES_IN_FLIGHT);
@@ -346,6 +348,10 @@ std::expected<FrameContext, SwapchainError> SwapchainPrivate::nextImage()
         .swapchainImageIndex = swapchainImageIndex,
         .frameNumber = frameNumber,
         .extent = glmu::u32vec2::from(swapchainSetup.extent),
+        .colorFormat = swapchainSetup.format,
+        .depthFormat = swapchainSetup.depthFormat,
+        .sampleCount = sampleCount,
+
         .swapchainImage = &swapchain.textures()[swapchainImageIndex],
         .swapchainImageView = &swapchainViews[swapchainImageIndex],
         .colorImage = &colorImages[nextFrameIndex],

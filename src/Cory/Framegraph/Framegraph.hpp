@@ -55,21 +55,34 @@ class Framegraph : NoCopy {
     /// declare a new render task
     RenderTaskBuilder declareTask(std::string_view name);
 
+    struct FrameContextHandles {
+        TransientTextureHandle colorImage;
+        TransientTextureHandle depthImage;
+        TransientTextureHandle swapchainImage;
+    };
+    /// Import the external frame context (e.g. from a swapchain) as input resources
+    [[nodiscard]] FrameContextHandles importFrameContext(const FrameContext &frameCtx);
+
     /// declare an external texture as an input
     [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
                                                       Sync::AccessType lastWriteAccess,
                                                       const Texture &image,
                                                       const TextureView &imageView);
 
-    /**
-     * declare that a resource is to be read afterwards. returns general
-     * information and synchronization state of the last write to the
-     * texture so external code can synchronize with it
-     * @param finalAccess The desired final access type for the output resource
-     */
+    /// @brief declare an external resource dependency for the framegraph
+    /// @param finalAccess The desired final access type for the output resource
+    /// @return Information and synchronization state after the last task using the texture
+    ///
+    /// Declares a texture as the output of the frame graph, intended for further use externally
+    /// (e.g. present to a swap chain).
+    /// The framegraph will only execute tasks that contribute to requested outputs, and skip over
+    /// any tasks that are not required to produce said outputs.
+    ///
+    /// The framegraph will explicitly transition the texture to the requested final access type
+    /// after all tasks have executed.
     std::pair<TextureInfo, TextureState>
     declareOutput(TransientTextureHandle handle,
-                  Sync::AccessType finalAccess = Sync::AccessType::None);
+                  Sync::AccessType finalAccess = Sync::AccessType::Present);
 
     [[nodiscard]] const TextureManager &resources() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;

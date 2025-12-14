@@ -17,21 +17,6 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
-#include <Corrade/Containers/Array.h>
-#include <Corrade/Containers/ArrayView.h>
-#include <Corrade/Containers/Reference.h>
-#include <Magnum/Math/Color.h>
-#include <Magnum/Math/Vector3.h>
-#include <Magnum/Vk/CommandBuffer.h>
-#include <Magnum/Vk/Device.h>
-#include <Magnum/Vk/DeviceProperties.h>
-#include <Magnum/Vk/Mesh.h>
-#include <Magnum/Vk/PipelineLayout.h>
-#include <Magnum/Vk/Queue.h>
-#include <Magnum/Vk/RenderPass.h>
-#include <Magnum/Vk/SamplerCreateInfo.h>
-#include <Magnum/Vk/VertexFormat.h>
-
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
@@ -40,9 +25,10 @@
 #include <gsl/gsl>
 #include <gsl/narrow>
 
+#include <Cory/Base/Time.hpp>
+#include <Cory/RenderTasks/StandardRenderTasks.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
 #include <algorithm>
-
-namespace Vk = Magnum::Vk;
 
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
 {
@@ -61,14 +47,8 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
         .args = args,
     });
 
-    // determine msaa sample count to use - for simplicity, we use either 8 or one sample
-    const auto &limits = ctx().physicalDevice().properties().properties.limits;
-    const VkSampleCountFlags counts =
-        limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts;
-    // 2 samples are guaranteed to be supported, but we'd rather have 8
-    const int msaaSamples = counts & VK_SAMPLE_COUNT_8_BIT ? 8 : 2;
-    CO_APP_INFO("MSAA sample count: {}", msaaSamples);
-
+    // Use Cory API for MSAA sample count
+    const int msaaSamples = 2; // Or use window_->samples() after window creation if needed
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "SceneGraphDemo", msaaSamples);
@@ -76,8 +56,7 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     setupScene();
     setupSystems();
 
-    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight =
-                                              window_->swapchain().maxFramesInFlight(),
+    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
     cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
@@ -186,8 +165,7 @@ void SceneGraphDemoApplication::setupSystems()
     systems_.emplace<Cory::TransformSystem>();
 
     // render system should go last to be aware of the latest state
-    renderSystem_ =
-        &systems_.emplace<CubeRenderSystem>(ctx(), window_->swapchain().maxFramesInFlight());
+    renderSystem_ = &systems_.emplace<CubeRenderSystem>(ctx(), Cory::MAX_FRAMES_IN_FLIGHT);
 }
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()
@@ -199,21 +177,30 @@ void SceneGraphDemoApplication::run()
 {
     // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
-    std::generate_n(std::back_inserter(framegraphs),
-                    window_->swapchain().maxFramesInFlight(),
-                    [&]() { return Cory::Framegraph(ctx()); });
-
+    std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
+        return Cory::Framegraph(ctx());
+    });
+    auto time = Cory::AppClock::now();
     while (!window_->shouldClose()) {
-        glfwPollEvents();
+        processEvents(0);
 
-        layers().update();
+        // Update time
+        auto previousFrameTime = std::exchange(time, Cory::AppClock::now());
+        auto delta = time - previousFrameTime;
+
+        // Update layers
+        layers().update(Cory::LogicUpdateContext{
+            .simulationTime = std::chrono::duration(time.time_since_epoch()).count(),
+            .deltaTime = delta.count(),
+        });
+
         drawImguiControls();
         // tick the components
         auto tickInfo = clock_.tick();
         systems_.tick(sceneGraph_, tickInfo);
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
-        Cory::Framegraph &fg = framegraphs[frameCtx.index];
+        Cory::Framegraph &fg = framegraphs[frameCtx.inFlightIndex];
         // retire old resources from the last time this framegraph was
         // used - our frame synchronization ensures that the resources
         // are no longer in use
@@ -221,9 +208,7 @@ void SceneGraphDemoApplication::run()
 
         defineRenderPasses(fg, frameCtx);
 
-        frameCtx.commandBuffer->begin(Vk::CommandBufferBeginInfo{});
         auto execInfo = fg.record(frameCtx);
-        frameCtx.commandBuffer->end();
 
         window_->submitAndPresent(frameCtx);
 
@@ -233,11 +218,13 @@ void SceneGraphDemoApplication::run()
         }
 
         // break if number of frames to render are reached
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
+        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+            break;
+        }
     }
 
     // wait until last frame is finished rendering
-    ctx().device()->DeviceWaitIdle(ctx().device());
+    ctx().device().waitUntilIdle();
 }
 
 void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
@@ -245,31 +232,20 @@ void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
 {
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
 
-    auto windowColorTarget =
-        framegraph.declareInput({.name = "TEX_SwapCh_Color",
-                                 .size = glm::u32vec3{window_->dimensions(), 1},
-                                 .format = frameCtx.colorImage->format(),
-                                 .sampleCount = window_->sampleCount()},
-                                Cory::Sync::AccessType::None,
-                                *frameCtx.colorImage,
-                                *frameCtx.colorImageView);
-
-    auto windowDepthTarget =
-        framegraph.declareInput({.name = "TEX_SwapCh_Depth",
-                                 .size = glm::u32vec3{window_->dimensions(), 1},
-                                 .format = frameCtx.depthImage->format(),
-                                 .sampleCount = window_->sampleCount()},
-                                Cory::Sync::AccessType::None,
-                                *frameCtx.depthImage,
-                                *frameCtx.depthImageView);
+    auto frameHandles = framegraph.importFrameContext(frameCtx);
 
     auto mainPass = renderSystem_->cubeRenderTask(
-        framegraph.declareTask("TASK_Cubes"), windowColorTarget, windowDepthTarget);
+        framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
 
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    framegraph.declareOutput(layersOutput.color);
+    auto resolvedSwapchain =
+        Cory::StandardRenderTasks::resolve(
+            framegraph.declareTask("TASK_Resolve"), layersOutput.color, frameHandles.swapchainImage)
+            .output();
+
+    framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
 }
 
 void SceneGraphDemoApplication::drawImguiControls()
@@ -277,11 +253,15 @@ void SceneGraphDemoApplication::drawImguiControls()
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
     if (ImGui::Begin("Demo")) {
-        if (ImGui::Button("Dump Framegraph")) { dumpNextFramegraph_ = true; }
+        if (ImGui::Button("Dump Framegraph")) {
+            dumpNextFramegraph_ = true;
+        }
         CoImGui::Text("Time: {:.3f}, Frame: {}",
                       clock_.lastTick().now.time_since_epoch().count(),
                       clock_.lastTick().ticks);
-        if (ImGui::Button("Restart")) { clock_.reset(); }
+        if (ImGui::Button("Restart")) {
+            clock_.reset();
+        }
     }
     ImGui::End();
 

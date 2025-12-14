@@ -10,10 +10,6 @@
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
-namespace Magnum::Vk {
-class Mesh;
-}
-
 struct CubeUBO {
     glm::mat4 projection;
     glm::mat4 view;
@@ -25,6 +21,12 @@ struct CubePushConstantState {
     glm::mat4 modelToWorld{1.0f};
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
     float blend;
+};
+
+struct CubeMesh {
+    KDGpu::Buffer vertexBuffer;
+    KDGpu::Buffer indexBuffer;
+    uint32_t indexCount;
 };
 
 class CubeRenderSystem
@@ -51,14 +53,13 @@ class CubeRenderSystem
                    Cory::TransientTextureHandle depthTarget);
 
   private:
-    void recordCommands(Cory::CommandList &cmd);
+    void recordCommands(KDGpu::RenderPassCommandRecorder &recorder);
 
     std::vector<CubePushConstantState> renderState_;
-    // updated every frame
     Cory::Components::CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};
-    std::unique_ptr<Magnum::Vk::Mesh> mesh_;
+    std::unique_ptr<CubeMesh> mesh_;
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;

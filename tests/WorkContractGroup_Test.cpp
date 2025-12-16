@@ -19,7 +19,10 @@ TEST_CASE("WorkContractGroup", "Cory/Base/WorkContractGroup")
 
         Cory::WorkContract contract = workContractGroup.createContract([&] { ++counter; });
 
-        THEN("The contract is valid") { CHECK(contract.valid()); }
+        THEN("The contract is valid")
+        {
+            CHECK(contract.valid());
+        }
 
         AND_WHEN("Attempting to execute it")
         {
@@ -118,10 +121,15 @@ TEST_CASE("WorkContractGroup", "Cory/Base/WorkContractGroup")
         Cory::WorkContract contract =
             workContractGroup.createContract([&](Cory::ContractToken &token) {
                 ++counter;
-                if (counter < 10) { token.schedule(); }
+                if (counter < 10) {
+                    token.schedule();
+                }
             });
 
-        THEN("The contract is valid") { CHECK(contract.valid()); }
+        THEN("The contract is valid")
+        {
+            CHECK(contract.valid());
+        }
 
         AND_WHEN("Executing until no more contracts are available")
         {

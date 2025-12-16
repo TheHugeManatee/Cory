@@ -3,8 +3,7 @@
 #include <Magnum/Vk/Vulkan.h>
 
 #include <Cory/Base/Log.hpp>
- #include <Cory/Renderer/VulkanUtils.hpp>
-
+#include <Cory/Renderer/VulkanUtils.hpp>
 
 TEST_CASE("VulkanUtils::PNextChain", "[VulkanUtils]")
 {
@@ -71,6 +70,5 @@ TEST_CASE("VulkanUtils::PNextChain", "[VulkanUtils]")
         REQUIRE(thirdEntry->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
         REQUIRE(thirdEntry->pNext == nullptr);
         fmt::print("Third entry = 0x{}\n", fmt::ptr(thirdEntry));
-
     }
 }

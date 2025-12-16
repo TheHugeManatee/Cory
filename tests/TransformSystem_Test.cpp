@@ -44,10 +44,8 @@ TEST_CASE("Transform System works")
     TransformSystem ts;
     ts.tick(sg, {});
 
-    CHECK(sg.getComponent<Transform>(entity)->modelToWorld[3] ==
-          glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-    CHECK(sg.getComponent<Transform>(child)->modelToWorld[3] ==
-          glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
+    CHECK(sg.getComponent<Transform>(entity)->modelToWorld[3] == glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+    CHECK(sg.getComponent<Transform>(child)->modelToWorld[3] == glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
     CHECK(sg.getComponent<Transform>(grandchild)->modelToWorld[3] ==
           glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
 
@@ -55,10 +53,8 @@ TEST_CASE("Transform System works")
     sg.getComponent<Transform>(grandchild)->position = glm::vec3(-1.0f, 0.0f, 0.0f);
     ts.tick(sg, {});
 
-    CHECK(sg.getComponent<Transform>(entity)->modelToWorld[3] ==
-          glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-    CHECK(sg.getComponent<Transform>(child)->modelToWorld[3] ==
-          glm::vec4(2.0f, 1.0f, 0.0f, 1.0f));
+    CHECK(sg.getComponent<Transform>(entity)->modelToWorld[3] == glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+    CHECK(sg.getComponent<Transform>(child)->modelToWorld[3] == glm::vec4(2.0f, 1.0f, 0.0f, 1.0f));
     CHECK(sg.getComponent<Transform>(grandchild)->modelToWorld[3] ==
           glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 

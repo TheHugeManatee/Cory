@@ -66,7 +66,9 @@ TEST_CASE("Regular pingpong between coroutine and scheduler")
 
 Cory::RenderTaskDeclaration<TestOutput> errorCoro(bool throwBeforeYield)
 {
-    if (throwBeforeYield) { throw std::runtime_error{"Ohno :("}; }
+    if (throwBeforeYield) {
+        throw std::runtime_error{"Ohno :("};
+    }
 
     co_yield TestOutput{123};
 

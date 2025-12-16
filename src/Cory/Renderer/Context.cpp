@@ -162,7 +162,7 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
 
     const auto adapterExtensions = selectedAdapter->extensions();
     CO_CORE_TRACE("Supported adapter extensions:");
-    for (const auto &extension : adapterExtensions) {
+    for ([[maybe_unused]] const auto &extension : adapterExtensions) {
         CO_CORE_TRACE("  - {} Version {}", extension.name, extension.version);
     }
 

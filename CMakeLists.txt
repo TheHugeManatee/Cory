@@ -5,6 +5,13 @@ set(PROJECT_TARGETS "coryTargets")
 
 project(${PROJECT_NAME} CXX)
 
+if (MSVC)
+    add_compile_options("$<$<CONFIG:Release>:/Zi>")
+    add_link_options("$<$<CONFIG:Release>:/DEBUG>")
+else ()
+    add_compile_options("$<$<CONFIG:Release>:-g>")
+endif ()
+
 #### Setup Installation directories
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_PDBDIR ${CMAKE_INSTALL_BINDIR}) # typically, we want the PDB files in the same directory

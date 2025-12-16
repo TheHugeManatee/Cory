@@ -218,12 +218,6 @@ Gpu::AdapterFeatures Context::getRequiredFeatures() const
     features.sampleRateShading = true;
     // synchronization2 is automatically enabled by kdgpu
 
-    // TODO dynamic_rendering
-    // VkPhysicalDeviceDynamicRenderingFeatures{
-    //     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-    //     .dynamicRendering = VK_TRUE,
-    // };
-
     features.bindGroupBindingUniformBufferUpdateAfterBind = true;
     features.bindGroupBindingSampledImageUpdateAfterBind = true;
     features.bindGroupBindingStorageBufferUpdateAfterBind = true;
@@ -233,7 +227,7 @@ Gpu::AdapterFeatures Context::getRequiredFeatures() const
     return features;
 }
 
-void Context::setupDevice(const Gpu::Surface &surface)
+void Context::setupDeviceFromSurface(const Gpu::Surface &surface)
 {
     auto &device = data_->device;
 
@@ -252,41 +246,7 @@ void Context::setupDevice(const Gpu::Surface &surface)
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
 
-    Gpu::ResourceBindingFlags bindless_flags;
-    bindless_flags |= Gpu::ResourceBindingFlagBits::PartiallyBoundBit;
-    bindless_flags |= Gpu::ResourceBindingFlagBits::UpdateAfterBindBit;
-
-    using BindPoints = DescriptorSets::BindPoints;
-
-    data_->descriptorSets.init(
-        data_->device,
-        Gpu::BindGroupLayoutOptions{
-            .label = "Default Bind Group Layout",
-            .bindings = {
-                {
-                    {
-                        .binding = std::to_underlying(BindPoints::UniformBufferObject),
-                        .count = 1,
-                        .resourceType = Gpu::ResourceBindingType::UniformBuffer,
-                        .shaderStages = Gpu::ShaderStageFlagBits::All,
-                        .flags = bindless_flags,
-                    },
-                    {
-                        .binding = std::to_underlying(BindPoints::CombinedImageSampler),
-                        .count = 8,
-                        .resourceType = Gpu::ResourceBindingType::CombinedImageSampler,
-                        .shaderStages = Gpu::ShaderStageFlagBits::All,
-                        .flags = bindless_flags,
-                    },
-                    {
-                        .binding = std::to_underlying(BindPoints::StorageBuffer),
-                        .count = 8,
-                        .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                        .shaderStages = Gpu::ShaderStageFlagBits::All,
-                        .flags = bindless_flags,
-                    },
-                },
-            }});
+    setupDescriptors();
 }
 
 void Context::setupHeadlessDevice()
@@ -348,6 +308,47 @@ void Context::setupHeadlessDevice()
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+
+    setupDescriptors();
+}
+
+void Context::setupDescriptors()
+{
+    Gpu::ResourceBindingFlags bindless_flags;
+    bindless_flags |= Gpu::ResourceBindingFlagBits::PartiallyBoundBit;
+    bindless_flags |= Gpu::ResourceBindingFlagBits::UpdateAfterBindBit;
+
+    using BindPoints = DescriptorSets::BindPoints;
+
+    data_->descriptorSets.init(
+        data_->device,
+        Gpu::BindGroupLayoutOptions{
+            .label = "Default Bind Group Layout",
+            .bindings = {
+                {
+                    {
+                        .binding = std::to_underlying(BindPoints::UniformBufferObject),
+                        .count = 1,
+                        .resourceType = Gpu::ResourceBindingType::UniformBuffer,
+                        .shaderStages = Gpu::ShaderStageFlagBits::All,
+                        .flags = bindless_flags,
+                    },
+                    {
+                        .binding = std::to_underlying(BindPoints::CombinedImageSampler),
+                        .count = 8,
+                        .resourceType = Gpu::ResourceBindingType::CombinedImageSampler,
+                        .shaderStages = Gpu::ShaderStageFlagBits::All,
+                        .flags = bindless_flags,
+                    },
+                    {
+                        .binding = std::to_underlying(BindPoints::StorageBuffer),
+                        .count = 8,
+                        .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                        .shaderStages = Gpu::ShaderStageFlagBits::All,
+                        .flags = bindless_flags,
+                    },
+                },
+            }});
 }
 
 Gpu::Instance &Context::instance()

@@ -16,7 +16,7 @@ namespace Cory::testing {
 Context &getTestContext()
 {
     static Context testContext = [] {
-        Context ctx;
+        Context ctx{ContextCreationInfo{.validation = ValidationLayers::Enabled}};
         testContext.setupHeadlessDevice();
         return ctx;
     }();
@@ -34,7 +34,7 @@ VulkanTester::VulkanTester()
     : data_{std::make_unique<VulkanTestContextPrivate>()}
 {
     data_->ctx.onVulkanDebugMessageReceived([data = data_.get()](const DebugMessageInfo &info) {
-        if (info.severity == Cory::DebugMessageSeverity::Error) {
+        if (info.severity == DebugMessageSeverity::Error) {
             std::lock_guard lck{data->debugMessagesMtx};
             data->debugMessages.push_back(info);
         }
@@ -71,9 +71,15 @@ VulkanTester::~VulkanTester()
     }
 }
 
-Context &VulkanTester::ctx() { return data_->ctx; }
+Context &VulkanTester::ctx()
+{
+    return data_->ctx;
+}
 
-const std::vector<DebugMessageInfo> &VulkanTester::errors() { return data_->debugMessages; }
+const std::vector<DebugMessageInfo> &VulkanTester::errors()
+{
+    return data_->debugMessages;
+}
 
 void VulkanTester::expectMessageId(int32_t messageIdNumber)
 {
@@ -104,6 +110,8 @@ TEST_CASE("VulkanTester")
                                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
                                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
                                &messageCallbackData);
+
+    t.ctx().device().waitUntilIdle();
 
     REQUIRE(t.errors().size() == 1);
     CHECK(t.errors()[0].messageType == Cory::DebugMessageType::General);

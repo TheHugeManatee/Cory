@@ -10,6 +10,9 @@
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
+#include <type_traits>
+#include <vector>
+
 struct CubeUBO {
     glm::mat4 projection;
     glm::mat4 view;
@@ -17,16 +20,24 @@ struct CubeUBO {
     glm::vec3 lightPosition;
 };
 
-struct CubePushConstantState {
+struct alignas(16) InstanceData {
     glm::mat4 modelToWorld{1.0f};
-    glm::vec4 color{1.0, 0.0, 0.0, 1.0};
-    float blend;
+    glm::vec4 color{1.0f};
+    glm::vec4 parameters{0.0f};
 };
+
+static_assert(std::is_trivially_copyable_v<InstanceData>);
+static_assert(sizeof(InstanceData) == sizeof(glm::mat4) + 2 * sizeof(glm::vec4));
 
 struct CubeMesh {
     KDGpu::Buffer vertexBuffer;
     KDGpu::Buffer indexBuffer;
     uint32_t indexCount;
+};
+
+struct InstanceBuffer {
+    KDGpu::Buffer buffer;
+    KDGpu::DeviceSize capacity{0};
 };
 
 class CubeRenderSystem
@@ -53,9 +64,10 @@ class CubeRenderSystem
                    Cory::TransientTextureHandle depthTarget);
 
   private:
-    void recordCommands(KDGpu::RenderPassCommandRecorder &recorder);
+    InstanceBuffer &instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount);
 
-    std::vector<CubePushConstantState> renderState_;
+    std::vector<InstanceData> renderState_;
+    std::vector<InstanceBuffer> instanceBuffers_;
     Cory::Components::CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};

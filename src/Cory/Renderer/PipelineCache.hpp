@@ -9,39 +9,6 @@
 #include <KDGpu/pipeline_layout_options.h>
 #include <vector>
 
-namespace std {
-template <> struct hash<Gpu::VertexAttribute> {
-    std::size_t operator()(const Gpu::VertexAttribute &s) const noexcept
-    {
-        return Cory::hashCompose(0, s.location, s.binding, s.format, s.offset);
-    }
-};
-template <> struct hash<Gpu::VertexBufferLayout> {
-    std::size_t operator()(const Gpu::VertexBufferLayout &s) const noexcept
-    {
-        return Cory::hashCompose(0, s.binding, s.stride, s.inputRate);
-    }
-};
-template <> struct hash<Gpu::VertexOptions> {
-    std::size_t operator()(const Gpu::VertexOptions &s) const noexcept
-    {
-        return Cory::hashCompose(0, s.attributes, s.buffers);
-    }
-};
-template <> struct hash<Gpu::PushConstantRange> {
-    std::size_t operator()(const Gpu::PushConstantRange &s) const noexcept
-    {
-        return Cory::hashCompose(0, s.offset, s.size, s.shaderStages);
-    }
-};
-template <> struct hash<Gpu::PipelineLayoutOptions> {
-    std::size_t operator()(const Gpu::PipelineLayoutOptions &s) const noexcept
-    {
-        return Cory::hashCompose(0, s.bindGroupLayouts, s.pushConstantRanges);
-    }
-};
-} // namespace std
-
 namespace Cory {
 
 struct PipelineDescriptor {

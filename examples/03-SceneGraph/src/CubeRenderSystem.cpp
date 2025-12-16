@@ -7,7 +7,11 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
+
+#include <KDGpu/buffer_options.h>
 #include <KDGpu/gpu_core.h>
+
+#include <cstddef>
 
 CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight)
     : Base()
@@ -50,8 +54,9 @@ void CubeRenderSystem::update(Cory::SceneGraph &sg,
                               const AnimationComponent &anim,
                               const Cory::Components::Transform &transform)
 {
-    renderState_.push_back(
-        {.modelToWorld = transform.modelToWorld, .color = anim.color, .blend = anim.blend});
+    renderState_.push_back({.modelToWorld = transform.modelToWorld,
+                            .color = anim.color,
+                            .parameters = glm::vec4{anim.blend, 0.0f, 0.0f, 0.0f}});
 }
 
 Cory::RenderTaskDeclaration<CubeRenderSystem::PassOutputs>
@@ -67,30 +72,25 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto pushRanges = std::array<KDGpu::PushConstantRange, 1>{{{
-        .offset = 0,
-        .size = sizeof(CubePushConstantState),
-        .shaderStages = KDGpu::ShaderStageFlagBits::AllGraphics,
-    }}};
-    auto cubePass = builder.declareRenderPass(
-        Cory::RenderPassDeclaration{.name = "PASS_Cubes",
-                                    .shaders = {vertexShader_, fragmentShader_},
-                                    .attachments = {{
-                                        {
-                                            .target = colorTarget,
-                                            .load = KDGpu::AttachmentLoadOperation::Clear,
-                                            .store = KDGpu::AttachmentStoreOperation::Store,
-                                            .clearColor = clearColor,
-                                        },
-                                    }},
-                                    .depthAttachment =
-                                        Cory::DepthStencilAttachment{
-                                            .target = depthTarget,
-                                            .load = KDGpu::AttachmentLoadOperation::Clear,
-                                            .store = KDGpu::AttachmentStoreOperation::Store,
-                                            .clearDepthStencil = clearDepthStencil,
-                                        },
-                                    .pushConstantRanges = {pushRanges.begin(), pushRanges.end()}});
+    auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
+        .name = "PASS_Cubes",
+        .shaders = {vertexShader_, fragmentShader_},
+        .attachments = {{
+            {
+                .target = colorTarget,
+                .load = KDGpu::AttachmentLoadOperation::Clear,
+                .store = KDGpu::AttachmentStoreOperation::Store,
+                .clearColor = clearColor,
+            },
+        }},
+        .depthAttachment =
+            Cory::DepthStencilAttachment{
+                .target = depthTarget,
+                .load = KDGpu::AttachmentLoadOperation::Clear,
+                .store = KDGpu::AttachmentStoreOperation::Store,
+                .clearDepthStencil = clearDepthStencil,
+            },
+    });
 
     co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
 
@@ -113,13 +113,27 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     ubo.view = viewMatrix;
     ubo.projection = projectionMatrix;
     ubo.viewProjection = viewProjection;
+    ubo.lightPosition = camera_.position;
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.inFlightIndex);
 
-    ctx_->descriptors()
-        .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
-        .flushWrites()
-        .bind(passRecorder, frameCtx.inFlightIndex);
+    auto &descriptorSets = ctx_->descriptors();
+    descriptorSets.write(
+        Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_);
+
+    const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
+    if (instanceCount > 0) {
+        auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
+        auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
+        std::memcpy(
+            mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+        instanceBuffer.buffer.unmap();
+
+        descriptorSets.write(
+            Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, instanceBuffer.buffer);
+    }
+
+    descriptorSets.flushWrites().bind(passRecorder, frameCtx.inFlightIndex);
 
     // Set dynamic states
     passRecorder.setCullMode(KDGpu::CullModeFlagBits::BackBit);
@@ -131,27 +145,38 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
-    // records commands for each cube
-    recordCommands(passRecorder);
-
-    passRecorder.end();
-}
-
-void CubeRenderSystem::recordCommands(KDGpu::RenderPassCommandRecorder &recorder)
-{
-    auto pushRanges = std::array<KDGpu::PushConstantRange, 1>{{{
-        .offset = 0,
-        .size = sizeof(CubePushConstantState),
-        .shaderStages = KDGpu::ShaderStageFlagBits::AllGraphics,
-    }}};
-    for (auto &anim : renderState_) {
-        recorder.pushConstant(pushRanges[0], &anim);
-        recorder.drawIndexed(KDGpu::DrawIndexedCommand{
+    if (instanceCount > 0) {
+        passRecorder.drawIndexed(KDGpu::DrawIndexedCommand{
             .indexCount = mesh_->indexCount,
-            .instanceCount = 1,
+            .instanceCount = instanceCount,
             .firstIndex = 0,
             .vertexOffset = 0,
             .firstInstance = 0,
         });
     }
+
+    passRecorder.end();
+}
+
+InstanceBuffer &CubeRenderSystem::instanceBufferForFrame(uint32_t frameIndex,
+                                                         uint32_t instanceCount)
+{
+    if (instanceBuffers_.size() <= frameIndex) {
+        instanceBuffers_.resize(frameIndex + 1);
+    }
+
+    const KDGpu::DeviceSize requiredSize =
+        static_cast<KDGpu::DeviceSize>(instanceCount) * sizeof(InstanceData);
+    auto &instanceBuffer = instanceBuffers_[frameIndex];
+    if (!instanceBuffer.buffer.isValid() || instanceBuffer.capacity < requiredSize) {
+        instanceBuffer.buffer = ctx_->device().createBuffer(KDGpu::BufferOptions{
+            .label = "SceneGraph Instance Buffer",
+            .size = requiredSize,
+            .usage = KDGpu::BufferUsageFlagBits::StorageBufferBit,
+            .memoryUsage = KDGpu::MemoryUsage::CpuToGpu,
+        });
+        instanceBuffer.capacity = requiredSize;
+    }
+
+    return instanceBuffer;
 }

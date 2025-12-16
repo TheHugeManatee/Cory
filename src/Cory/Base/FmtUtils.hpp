@@ -8,7 +8,9 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
-#include <magic_enum.hpp>
+
+#include <magic_enum/magic_enum.hpp>
+#include <magic_enum/magic_enum_flags.hpp>
 
 #if !defined(MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT)
 #define MAGIC_ENUM_DEFAULT_ENABLE_ENUM_FORMAT true
@@ -33,7 +35,7 @@ struct fmt::formatter<
     auto format(E e, format_context &ctx) const
     {
         using D = std::decay_t<E>;
-        if constexpr (magic_enum::detail::is_flags_v<D>) {
+        if constexpr (magic_enum::detail::subtype_v<D> == magic_enum::detail::enum_subtype::flags) {
             if (auto name = magic_enum::enum_flags_name<D>(e); !name.empty()) {
                 return this->fmt::formatter<std::string_view, char>::format(
                     std::string_view{name.data(), name.size()}, ctx);

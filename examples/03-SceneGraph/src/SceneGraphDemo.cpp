@@ -94,7 +94,7 @@ void SceneGraphDemoApplication::setupScene()
     auto add_subcubes = [this](Cory::Entity parent, float level) -> std::vector<Cory::Entity> {
         std::vector<Cory::Entity> entities;
 
-        float numChildren = Cory::RNG::Uniform(1.0f, 5.0f);
+        float numChildren = Cory::RNG::Uniform(5.0f, 25.0f);
         for (int i = 0; i < numChildren; ++i) {
             const float radius = Cory::RNG::Uniform(3.0f, 7.0f);
 
@@ -181,7 +181,7 @@ void SceneGraphDemoApplication::run()
         return Cory::Framegraph(ctx());
     });
     auto time = Cory::AppClock::now();
- while (!window_->shouldClose()) {
+    while (!window_->shouldClose()) {
         processEvents(0);
 
         // Update time

@@ -23,7 +23,7 @@ struct InstanceData {
     vec4 parameters;
 };
 
-layout(std430, set = 0, binding = 2) buffer InstanceBuffer {
+layout(std430, set = 0, binding = 2) readonly buffer InstanceBuffer {
     InstanceData instances[];
 };
 
@@ -34,7 +34,7 @@ void main() {
     vec4 worldPos = globals.view * model * vec4(inPosition, 1.0);
 
     gl_Position = globals.projection * worldPos;
-    
+
     outWorldPosition = worldPos.xyz;
     // derive normal matrix in the shader from the per-instance transform
     mat4 normalMatrix = transpose(inverse(model));

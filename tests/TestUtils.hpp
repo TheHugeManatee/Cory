@@ -15,7 +15,7 @@ class VulkanTester {
 
     Context &ctx();
 
-    const std::vector<DebugMessageInfo> &errors();
+    const std::vector<DebugMessageInfo> &errors() const;
 
     // indicate that a test expects a specific vulkan message id
     void expectMessageId(int32_t messageIdNumber);

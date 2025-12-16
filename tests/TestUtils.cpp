@@ -76,7 +76,7 @@ Context &VulkanTester::ctx()
     return data_->ctx;
 }
 
-const std::vector<DebugMessageInfo> &VulkanTester::errors()
+const std::vector<DebugMessageInfo> &VulkanTester::errors() const
 {
     return data_->debugMessages;
 }

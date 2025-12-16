@@ -4,11 +4,11 @@
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
-// Todo can live with forward decl only?
+#include <KDGpu/graphics_pipeline_options.h>
+#include <KDGpu/pipeline_layout.h>
 #include <KDGpu/pipeline_layout_options.h>
 
-#include <KDGpu/pipeline_layout.h>
-
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -53,6 +53,7 @@ struct RenderPassDeclaration {
     std::optional<DepthStencilAttachment> depthAttachment;
     std::optional<DepthStencilAttachment> stencilAttachment;
     std::vector<Gpu::PushConstantRange> pushConstantRanges; // Unused if SkipPipelineBind is used
+    std::optional<Gpu::VertexOptions> vertexOptions;
 
     DynamicStates dynamicStates;
 };

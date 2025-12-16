@@ -4,13 +4,6 @@
 layout (location = 0) in vec3 inPosition;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec4 inColor;
-layout (location = 3) in vec4 inInstanceTransform0;
-layout (location = 4) in vec4 inInstanceTransform1;
-layout (location = 5) in vec4 inInstanceTransform2;
-layout (location = 6) in vec4 inInstanceTransform3;
-layout (location = 7) in vec4 inInstanceColor;
-layout (location = 8) in float inInstanceBlend;
-
 layout (location = 0) out vec3 outWorldPosition;
 layout (location = 1) out vec3 outNormal;
 layout (location = 2) out vec4 outColor;
@@ -24,13 +17,19 @@ layout (set = 0, binding = 0) uniform CubeUBO {
     vec3 lightPosition;
 } globals;
 
+struct InstanceData {
+    mat4 modelTransform;
+    vec4 color;
+    vec4 parameters;
+};
+
+layout(std430, set = 0, binding = 2) buffer InstanceBuffer {
+    InstanceData instances[];
+};
+
 void main() {
-    mat4 model = mat4(
-        inInstanceTransform0,
-        inInstanceTransform1,
-        inInstanceTransform2,
-        inInstanceTransform3
-    );
+    InstanceData instance = instances[gl_InstanceIndex];
+    mat4 model = instance.modelTransform;
 
     vec4 worldPos = globals.view * model * vec4(inPosition, 1.0);
 
@@ -42,6 +41,6 @@ void main() {
     vec4 normal = normalMatrix * vec4(inNormal, 0.0);
     outNormal = normal.xyz;
     outColor = inColor;
-    outInstanceColor = inInstanceColor;
-    outBlend = inInstanceBlend;
+    outInstanceColor = instance.color;
+    outBlend = instance.parameters.x;
 }

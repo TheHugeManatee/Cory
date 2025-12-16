@@ -13,6 +13,7 @@
 #include <glm/vec4.hpp>
 
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 struct CubeUBO {
@@ -22,12 +23,14 @@ struct CubeUBO {
     glm::vec3 lightPosition;
 };
 
-struct InstanceData {
+struct alignas(16) InstanceData {
     glm::mat4 modelTransform{1.0f};
     glm::vec4 color{1.0f};
-    float blend{1.0f};
-    float padding[3]{};
+    glm::vec4 parameters{0.0f};
 };
+
+static_assert(std::is_trivially_copyable_v<InstanceData>);
+static_assert(sizeof(InstanceData) == sizeof(glm::mat4) + 2 * sizeof(glm::vec4));
 
 struct InstanceBuffer {
     Gpu::Buffer buffer;

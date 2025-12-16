@@ -79,7 +79,9 @@ class DescriptorSets {
                           gsl::span<Gpu::TextureLayout> layouts,
                           gsl::span<Gpu::TextureViewHandle> images,
                           gsl::span<Gpu::TextureSamplerHandle> samplers);
-    // TODO implement a write for the Buffers
+    DescriptorSets &write(SetType type,
+                          gsl::index frameInFlightIndex,
+                          const Gpu::Buffer &buffer);
 
     /**
      * @brief flush all updates, calling vkUpdateDescriptorSets with the previously recorded

@@ -102,6 +102,23 @@ DescriptorSets &DescriptorSets::write(SetType type,
     return *this;
 }
 
+DescriptorSets &DescriptorSets::write(SetType type,
+                                      gsl::index frameInFlightIndex,
+                                      const Gpu::Buffer &buffer)
+{
+    data_->pendingWrites[type][frameInFlightIndex].emplace_back(KDGpu::BindGroupEntry{
+        .binding = static_cast<uint32_t>(BindPoints::StorageBuffer),
+        .resource =
+            KDGpu::StorageBufferBinding{
+                .buffer = buffer.handle(),
+                .offset = 0,
+                .size = KDGpu::StorageBufferBinding::WholeSize,
+            },
+        .arrayElement = 0,
+    });
+    return *this;
+}
+
 DescriptorSets &DescriptorSets::flushWrites()
 {
     // Note: Delayed writing currently somewhat useless within KDGpu abstraction -

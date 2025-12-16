@@ -113,7 +113,7 @@ void animate(InstanceData &d, float t, float i)
         glm::scale(glm::mat4{1.0f}, glm::vec3{brightness}), r, glm::vec3{1.0f, 1.0f, 1.0f});
 
     d.color = start * cm;
-    d.blend = ad.blend;
+    d.parameters = glm::vec4{ad.blend, 0.0f, 0.0f, 0.0f};
 }
 
 CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
@@ -142,7 +142,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 2);
+    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 8);
 
     createGeometry();
     createShaders();
@@ -159,7 +159,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     // layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 
-    camera_.setMode(Cory::CameraManipulator::Mode::Fly);
+    camera_.setMode(Cory::CameraManipulator::Mode::Trackball);
     camera_.setWindowSize(window_->dimensions());
     camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
     setupCameraCallbacks();
@@ -330,14 +330,12 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.inFlightIndex);
 
-    ctx()
-        .descriptors()
-        .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
-        .flushWrites()
-        .bind(passRecorder, frameCtx.inFlightIndex);
+    auto &descriptorSets = ctx().descriptors();
+    descriptorSets.write(
+        Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_);
 
     // Set dynamic states
-    passRecorder.setCullMode(KDGpu::CullModeFlagBits::BackBit);
+    passRecorder.setCullMode(KDGpu::CullModeFlagBits::None);
     passRecorder.setDepthTestEnabled(true);
     passRecorder.setDepthWriteEnabled(true);
     passRecorder.setDepthCompareOp(KDGpu::CompareOperation::Less);
@@ -355,8 +353,12 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         instanceBuffer.buffer.unmap();
 
-        passRecorder.setVertexBuffer(1, instanceBuffer.buffer);
+        descriptorSets.write(
+            Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, instanceBuffer.buffer);
+    }
+    descriptorSets.flushWrites().bind(passRecorder, frameCtx.inFlightIndex);
 
+    if (instanceCount > 0) {
         // draw all instances in a single call
         passRecorder.drawIndexed(Gpu::DrawIndexedCommand{
             .indexCount = mesh_->indexCount,
@@ -377,46 +379,6 @@ Gpu::VertexOptions CubeDemoApplication::vertexOptions() const
         attribute.binding = 0;
     }
 
-    auto instanceAttributes = std::array{
-        Gpu::VertexAttribute{
-            .location = 3,
-            .binding = 1,
-            .format = Gpu::Format::R32G32B32A32_SFLOAT,
-            .offset = 0,
-        },
-        Gpu::VertexAttribute{
-            .location = 4,
-            .binding = 1,
-            .format = Gpu::Format::R32G32B32A32_SFLOAT,
-            .offset = sizeof(glm::vec4),
-        },
-        Gpu::VertexAttribute{
-            .location = 5,
-            .binding = 1,
-            .format = Gpu::Format::R32G32B32A32_SFLOAT,
-            .offset = 2 * sizeof(glm::vec4),
-        },
-        Gpu::VertexAttribute{
-            .location = 6,
-            .binding = 1,
-            .format = Gpu::Format::R32G32B32A32_SFLOAT,
-            .offset = 3 * sizeof(glm::vec4),
-        },
-        Gpu::VertexAttribute{
-            .location = 7,
-            .binding = 1,
-            .format = Gpu::Format::R32G32B32A32_SFLOAT,
-            .offset = sizeof(glm::mat4),
-        },
-        Gpu::VertexAttribute{
-            .location = 8,
-            .binding = 1,
-            .format = Gpu::Format::R32_SFLOAT,
-            .offset = sizeof(glm::mat4) + sizeof(glm::vec4),
-        },
-    };
-    attributes.insert(attributes.end(), instanceAttributes.begin(), instanceAttributes.end());
-
     return Gpu::VertexOptions{
         .buffers =
             {
@@ -424,11 +386,6 @@ Gpu::VertexOptions CubeDemoApplication::vertexOptions() const
                     .binding = 0,
                     .stride = sizeof(Cory::Mesh::Vertex),
                     .inputRate = Gpu::VertexRate::Vertex,
-                },
-                Gpu::VertexBufferLayout{
-                    .binding = 1,
-                    .stride = sizeof(InstanceData),
-                    .inputRate = Gpu::VertexRate::Instance,
                 },
             },
         .attributes = std::move(attributes),
@@ -449,7 +406,7 @@ InstanceBuffer &CubeDemoApplication::instanceBufferForFrame(uint32_t frameIndex,
         instanceBuffer.buffer = ctx().device().createBuffer(Gpu::BufferOptions{
             .label = "Cube Instance Buffer",
             .size = requiredSize,
-            .usage = Gpu::BufferUsageFlagBits::VertexBufferBit,
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
             .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
         });
         instanceBuffer.capacity = requiredSize;

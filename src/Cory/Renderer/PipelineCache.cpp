@@ -4,8 +4,18 @@
 #include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
+
 #include <KDGpu/graphics_pipeline_options.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
+
+namespace std {
+template <> struct hash<Gpu::PushConstantRange> {
+    std::size_t operator()(const Gpu::PushConstantRange &s) const noexcept
+    {
+        return Cory::hashCompose(0, s.offset, s.size, s.shaderStages);
+    }
+};
+} // namespace std
 
 namespace Cory {
 
@@ -134,9 +144,7 @@ Gpu::PipelineLayoutHandle
 PipelineCachePrivate::createLayout(std::string_view label,
                                    const Gpu::PipelineLayoutOptions &pipelineLayoutOptions)
 {
-    CO_CORE_INFO("Creating new pipeline layout for '{}' ({:X})",
-                 label,
-                 std::hash<Gpu::PipelineLayoutOptions>{}(pipelineLayoutOptions));
+    CO_CORE_INFO("Creating new pipeline layout for '{}'", label);
 
     return resourceManager->createPipelineLayout(device, pipelineLayoutOptions);
 }

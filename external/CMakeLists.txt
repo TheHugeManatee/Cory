@@ -6,8 +6,8 @@ find_package(VulkanHeaders REQUIRED)
 find_package(imgui REQUIRED)
 find_package(glm REQUIRED)
 
-#set(KDGPU_BUILD_KDXR OFF)
-#set(KDGPU_OPENXR_SUPPORT OFF)
+set(KDGPU_BUILD_KDXR OFF)
+set(KDGPU_OPENXR_SUPPORT OFF)
 
 FetchContent_Declare(
         KDGpu

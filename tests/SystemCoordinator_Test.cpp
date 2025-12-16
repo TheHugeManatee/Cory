@@ -36,9 +36,7 @@ TEST_CASE("SystemCoordinator ticks all systems")
     coordinator.emplace<SystemA>();
     coordinator.emplace<SystemB>();
     coordinator.emplace<CallbackSystem<TestComponent>>(
-        [&](SceneGraph &, TickInfo, Entity, TestComponent &cmp) {
-            cmp.callbackSystem = true;
-        });
+        [&](SceneGraph &, TickInfo, Entity, TestComponent &cmp) { cmp.callbackSystem = true; });
 
     TickInfo info{.ticks = 999};
 

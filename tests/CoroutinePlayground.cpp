@@ -76,12 +76,16 @@ class MultiStepProcess {
     }
     ~MultiStepProcess()
     {
-        if (coroHandle_) { coroHandle_.destroy(); }
+        if (coroHandle_) {
+            coroHandle_.destroy();
+        }
     }
 
     int doStep1()
     {
-        if (!coroHandle_.done()) { coroHandle_.resume(); }
+        if (!coroHandle_.done()) {
+            coroHandle_.resume();
+        }
         auto &result = coroHandle_.promise().result;
         if (std::holds_alternative<std::exception_ptr>(result)) {
             std::rethrow_exception(std::get<std::exception_ptr>(result));
@@ -92,7 +96,9 @@ class MultiStepProcess {
     std::string doStep2(std::string stepTwoInput)
     {
         coroHandle_.promise().stepTwoInput = stepTwoInput;
-        if (!coroHandle_.done()) { coroHandle_.resume(); }
+        if (!coroHandle_.done()) {
+            coroHandle_.resume();
+        }
         auto &result = coroHandle_.promise().result;
         if (std::holds_alternative<std::exception_ptr>(result)) {
             std::rethrow_exception(std::get<std::exception_ptr>(result));
@@ -164,7 +170,10 @@ MultiStepProcess asyncJobDelta(cppcoro::task<int> inputTask)
     co_yield "delta " + input;
 }
 
-cppcoro::task<int> nestedJob(int v) { co_return v; }
+cppcoro::task<int> nestedJob(int v)
+{
+    co_return v;
+}
 
 TEST_CASE("Interop with cppcoro tasks", "[Cory/Coroutine/Playground]")
 {

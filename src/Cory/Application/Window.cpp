@@ -86,7 +86,7 @@ Window::Window(Context &context,
 
     data_->surface =
         context.graphicsApi().createSurfaceFromExistingVkSurface(instance_handle, surfaceHandle);
-    context.setupDevice(data_->surface);
+    context.setupDeviceFromSurface(data_->surface);
 
     data_->swapchain = std::make_unique<Swapchain>(context,
                                                    data_->surface,

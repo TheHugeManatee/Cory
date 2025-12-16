@@ -190,9 +190,18 @@ TEST_CASE("Handling hierarchies")
     }
 }
 
-void update_cb(entt::registry &, entt::entity) { fmt::print("Updated!\n"); }
-void construct_cb(entt::registry &, entt::entity) { fmt::print("Constructed!\n"); }
-void destruct_cb(entt::registry &, entt::entity) { fmt::print("Destructed!\n"); }
+void update_cb(entt::registry &, entt::entity)
+{
+    fmt::print("Updated!\n");
+}
+void construct_cb(entt::registry &, entt::entity)
+{
+    fmt::print("Constructed!\n");
+}
+void destruct_cb(entt::registry &, entt::entity)
+{
+    fmt::print("Destructed!\n");
+}
 struct cmp {
     glm::vec3 pos;
 };

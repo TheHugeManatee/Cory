@@ -53,7 +53,9 @@ class Behavior {
     }
     ~Behavior()
     {
-        if (handle_ && !handle_.promise().wasAdopted_) { handle_.destroy(); }
+        if (handle_ && !handle_.promise().wasAdopted_) {
+            handle_.destroy();
+        }
     }
 
     Handle handle_;
@@ -82,7 +84,9 @@ class AnotherCoro {
     }
     ~AnotherCoro()
     {
-        if (handle_) { handle_.destroy(); }
+        if (handle_) {
+            handle_.destroy();
+        }
     }
 
     Handle handle_;
@@ -167,7 +171,9 @@ void World::processTick(SimulationClock::TickInfo tickInfo)
     auto scheduledFromTicks = waitingForFutureTicks_.dequeueUntil(lastTick_.ticks);
     auto scheduledFromTimepoint = waitingForTimePoint_.dequeueUntil(lastTick_.now);
     for (auto h : ranges::view::concat(scheduledFromTicks, scheduledFromTimepoint)) {
-        if (h.done()) { CO_CORE_WARN("Coroutine is already done!"); }
+        if (h.done()) {
+            CO_CORE_WARN("Coroutine is already done!");
+        }
         else {
             h.resume();
         }

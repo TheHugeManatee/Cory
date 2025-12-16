@@ -10,14 +10,31 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 
 #include <memory>
+#include <type_traits>
+#include <vector>
 
 struct CubeUBO {
     glm::mat4 projection;
     glm::mat4 view;
     glm::mat4 viewProjection;
     glm::vec3 lightPosition;
+};
+
+struct alignas(16) InstanceData {
+    glm::mat4 modelTransform{1.0f};
+    glm::vec4 color{1.0f};
+    glm::vec4 parameters{0.0f};
+};
+
+static_assert(std::is_trivially_copyable_v<InstanceData>);
+static_assert(sizeof(InstanceData) == sizeof(glm::mat4) + 2 * sizeof(glm::vec4));
+
+struct InstanceBuffer {
+    Gpu::Buffer buffer;
+    Gpu::DeviceSize capacity{0};
 };
 
 class CubeDemoApplication : public Cory::Application {
@@ -49,6 +66,9 @@ class CubeDemoApplication : public Cory::Application {
     void drawImguiControls();
 
     void setupCameraCallbacks();
+    Gpu::VertexOptions vertexOptions() const;
+    InstanceBuffer &instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount);
+    uint32_t prepareInstanceData(float timeSeconds);
 
   private:
     bool disableValidation_{false};
@@ -65,4 +85,6 @@ class CubeDemoApplication : public Cory::Application {
     bool dumpNextFramegraph_{false};
 
     Cory::CameraManipulator camera_;
+    std::vector<InstanceBuffer> instanceBuffers_;
+    std::vector<InstanceData> instanceData_;
 };

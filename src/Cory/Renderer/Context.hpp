@@ -51,9 +51,11 @@ class Context : NoCopy {
     bool isHeadless() const;
 
     // Set up the device and queue for a given surface
-    void setupDevice(const Gpu::Surface &surface);
+    void setupDeviceFromSurface(const Gpu::Surface &surface);
     // Set up a headless device, i.e. a device not tied to a specific surface
     void setupHeadlessDevice();
+    /// Sets up the descriptor sets
+    void setupDescriptors();
 
     Gpu::Instance &instance();
 

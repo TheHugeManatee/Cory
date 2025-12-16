@@ -121,6 +121,15 @@ KDGpu::GraphicsPipelineHandle TransientRenderPass::pipelineHandle() noexcept
         return textures_->info(attachment.target).format;
     };
 
+    const auto defaultVertexOptions = Gpu::VertexOptions{
+        .buffers = {Gpu::VertexBufferLayout{
+            .binding = 0,
+            .stride = sizeof(Mesh::Vertex),
+            .inputRate = Gpu::VertexRate::Vertex,
+        }},
+        .attributes = Mesh::vertexAttributes(),
+    };
+
     // determine color formats for all attachments
     const PipelineDescriptor pipelineDescriptor{
         .shaders = pass_.shaders,
@@ -133,16 +142,7 @@ KDGpu::GraphicsPipelineHandle TransientRenderPass::pipelineHandle() noexcept
             pass_.stencilAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
         .hasMeshInput = !pass_.options.is_set(PassOptionFlagBits::DisableMeshInput),
         .pipelineLayout = pipelineLayoutHandle(),
-        // TODO provide render pass API to define/customize vertex options
-        .vertexOptions =
-            Gpu::VertexOptions{
-                .buffers = {Gpu::VertexBufferLayout{
-                    .binding = 0,
-                    .stride = sizeof(Mesh::Vertex),
-                    .inputRate = Gpu::VertexRate::Vertex,
-                }},
-                .attributes = Mesh::vertexAttributes(),
-            },
+        .vertexOptions = pass_.vertexOptions.value_or(defaultVertexOptions),
     };
 
     pipeline_ = ctx_->pipelineCache().query(pass_.name, pipelineDescriptor);

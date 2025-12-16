@@ -22,6 +22,7 @@
 #include <Cory/Renderer/Swapchain.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
+#include <KDGpu/buffer_options.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 #include <CLI/App.hpp>
@@ -37,16 +38,13 @@
 
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <algorithm>
+#include <array>
 #include <chrono>
-
-struct PushConstants {
-    glm::mat4 modelTransform{1.0f};
-    glm::vec4 color{1.0, 0.0, 0.0, 1.0};
-    float blend;
-};
+#include <cstddef>
+#include <cstring>
 
 static struct AnimationData {
-    int num_cubes{200};
+    int num_cubes{20000};
     float blend{0.8f};
 
     struct param {
@@ -94,7 +92,7 @@ void randomize()
     randomize(ad.cfi);
 }
 
-void animate(PushConstants &d, float t, float i)
+void animate(InstanceData &d, float t, float i)
 {
 
     const float angle = ad.r0 + ad.rt * t + ad.ri * i + ad.rti * i * t;
@@ -115,7 +113,7 @@ void animate(PushConstants &d, float t, float i)
         glm::scale(glm::mat4{1.0f}, glm::vec3{brightness}), r, glm::vec3{1.0f, 1.0f, 1.0f});
 
     d.color = start * cm;
-    d.blend = ad.blend;
+    d.parameters = glm::vec4{ad.blend, 0.0f, 0.0f, 0.0f};
 }
 
 CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
@@ -144,7 +142,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
 
     CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 2);
+    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 8);
 
     createGeometry();
     createShaders();
@@ -161,7 +159,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     // layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 
-    camera_.setMode(Cory::CameraManipulator::Mode::Fly);
+    camera_.setMode(Cory::CameraManipulator::Mode::Trackball);
     camera_.setWindowSize(window_->dimensions());
     camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
     setupCameraCallbacks();
@@ -284,13 +282,6 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto pushRanges = std::array<Gpu::PushConstantRange, 1>{{
-        Gpu::PushConstantRange{
-            .offset = 0,
-            .size = sizeof(PushConstants),
-            .shaderStages = Gpu::ShaderStageFlagBits::AllGraphics,
-        },
-    }};
     auto cubePass = builder.declareRenderPass(
         Cory::RenderPassDeclaration{.name = "PASS_Cubes",
                                     .shaders = {vertexShader_, fragmentShader_},
@@ -310,10 +301,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                                             .store = Gpu::AttachmentStoreOperation::Store,
                                             .clearDepthStencil = clearDepthStencil,
                                         },
-                                    .pushConstantRanges = {
-                                        pushRanges.begin(),
-                                        pushRanges.end(),
-                                    }});
+                                    .vertexOptions = vertexOptions()});
 
     co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
 
@@ -324,8 +312,6 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
 
     auto passRecorder = cubePass.begin(*renderApi.cmd);
-
-    PushConstants pushData{};
 
     float fovy = glm::radians(70.0f);
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
@@ -340,17 +326,16 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     ubo.view = viewMatrix;
     ubo.projection = projectionMatrix;
     ubo.viewProjection = viewProjection;
+    ubo.lightPosition = camera_.getCameraPosition();
     // need explicit flush otherwise the mapped memory is not synced to the GPU
     globalUbo_->flush(frameCtx.inFlightIndex);
 
-    ctx()
-        .descriptors()
-        .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
-        .flushWrites()
-        .bind(passRecorder, frameCtx.inFlightIndex);
+    auto &descriptorSets = ctx().descriptors();
+    descriptorSets.write(
+        Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_);
 
     // Set dynamic states
-    passRecorder.setCullMode(KDGpu::CullModeFlagBits::BackBit);
+    passRecorder.setCullMode(KDGpu::CullModeFlagBits::None);
     passRecorder.setDepthTestEnabled(true);
     passRecorder.setDepthWriteEnabled(true);
     passRecorder.setDepthCompareOp(KDGpu::CompareOperation::Less);
@@ -359,18 +344,25 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
-    for (int idx = 0; idx < ad.num_cubes; ++idx) {
-        float i = ad.num_cubes == 1
-                      ? 1.0f
-                      : static_cast<float>(idx) / static_cast<float>(ad.num_cubes - 1);
+    const uint32_t instanceCount = prepareInstanceData(t);
+    if (instanceCount > 0) {
+        auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
+        auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
+        std::memcpy(mapped,
+                    instanceData_.data(),
+                    static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+        instanceBuffer.buffer.unmap();
 
-        animate(pushData, t, i);
-        passRecorder.pushConstant(pushRanges[0], &pushData);
+        descriptorSets.write(
+            Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, instanceBuffer.buffer);
+    }
+    descriptorSets.flushWrites().bind(passRecorder, frameCtx.inFlightIndex);
 
-        // draw our triangle mesh
+    if (instanceCount > 0) {
+        // draw all instances in a single call
         passRecorder.drawIndexed(Gpu::DrawIndexedCommand{
             .indexCount = mesh_->indexCount,
-            .instanceCount = 1,
+            .instanceCount = instanceCount,
             .firstIndex = 0,
             .vertexOffset = 0,
             .firstInstance = 0,
@@ -378,6 +370,67 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     }
 
     passRecorder.end();
+}
+
+Gpu::VertexOptions CubeDemoApplication::vertexOptions() const
+{
+    auto attributes = Cory::Mesh::vertexAttributes();
+    for (auto &attribute : attributes) {
+        attribute.binding = 0;
+    }
+
+    return Gpu::VertexOptions{
+        .buffers =
+            {
+                Gpu::VertexBufferLayout{
+                    .binding = 0,
+                    .stride = sizeof(Cory::Mesh::Vertex),
+                    .inputRate = Gpu::VertexRate::Vertex,
+                },
+            },
+        .attributes = std::move(attributes),
+    };
+}
+
+InstanceBuffer &CubeDemoApplication::instanceBufferForFrame(uint32_t frameIndex,
+                                                            uint32_t instanceCount)
+{
+    if (instanceBuffers_.size() <= frameIndex) {
+        instanceBuffers_.resize(frameIndex + 1);
+    }
+
+    const Gpu::DeviceSize requiredSize =
+        gsl::narrow_cast<Gpu::DeviceSize>(instanceCount) * sizeof(InstanceData);
+    auto &instanceBuffer = instanceBuffers_[frameIndex];
+    if (!instanceBuffer.buffer.isValid() || instanceBuffer.capacity < requiredSize) {
+        instanceBuffer.buffer = ctx().device().createBuffer(Gpu::BufferOptions{
+            .label = "Cube Instance Buffer",
+            .size = requiredSize,
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
+            .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
+        });
+        instanceBuffer.capacity = requiredSize;
+    }
+
+    return instanceBuffer;
+}
+
+uint32_t CubeDemoApplication::prepareInstanceData(float timeSeconds)
+{
+    const int requestedInstances = std::max(ad.num_cubes, 0);
+    const uint32_t instanceCount = gsl::narrow_cast<uint32_t>(requestedInstances);
+
+    instanceData_.resize(instanceCount);
+
+    for (uint32_t idx = 0; idx < instanceCount; ++idx) {
+        const float i = instanceCount == 1
+                            ? 1.0f
+                            : static_cast<float>(idx) / static_cast<float>(instanceCount - 1);
+
+        animate(instanceData_[idx], timeSeconds, i);
+    }
+
+    return instanceCount;
 }
 
 void CubeDemoApplication::createGeometry()

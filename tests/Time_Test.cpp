@@ -31,7 +31,8 @@ TEST_CASE("AppClock", "[Time]")
     CHECK(tse(t1 + Cory::Seconds{0.1}) == Catch::Approx(tse(t1 + 100'000'000.0_ns)));
 }
 
-TEST_CASE("AppClock Elapses as expected", "[Time]") {
+TEST_CASE("AppClock Elapses as expected", "[Time]")
+{
     auto t1 = Cory::AppClock::now();
     std::this_thread::sleep_for(30.0_ms);
     auto t2 = Cory::AppClock::now();

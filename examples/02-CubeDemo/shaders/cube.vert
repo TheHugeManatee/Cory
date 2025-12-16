@@ -4,16 +4,11 @@
 layout (location = 0) in vec3 inPosition;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec4 inColor;
-
 layout (location = 0) out vec3 outWorldPosition;
 layout (location = 1) out vec3 outNormal;
 layout (location = 2) out vec4 outColor;
-
-layout (push_constant) uniform PushConstants {
-    mat4 modelTransform;
-    vec4 color;
-    float blend;
-} push;
+layout (location = 3) out vec4 outInstanceColor;
+layout (location = 4) out float outBlend;
 
 layout (set = 0, binding = 0) uniform CubeUBO {
     mat4 projection;
@@ -22,15 +17,30 @@ layout (set = 0, binding = 0) uniform CubeUBO {
     vec3 lightPosition;
 } globals;
 
+struct InstanceData {
+    mat4 modelTransform;
+    vec4 color;
+    vec4 parameters;
+};
+
+layout(std430, set = 0, binding = 2) buffer InstanceBuffer {
+    InstanceData instances[];
+};
+
 void main() {
-    vec4 worldPos = globals.view * push.modelTransform * vec4(inPosition, 1.0);
+    InstanceData instance = instances[gl_InstanceIndex];
+    mat4 model = instance.modelTransform;
+
+    vec4 worldPos = globals.view * model * vec4(inPosition, 1.0);
 
     gl_Position = globals.projection * worldPos;
     
     outWorldPosition = worldPos.xyz;
-    // we currently compute this in the shader because we don't have enough space in the push constants
-    mat4 normalMatrix = transpose(inverse(push.modelTransform));
+    // derive normal matrix in the shader from the per-instance transform
+    mat4 normalMatrix = transpose(inverse(model));
     vec4 normal = normalMatrix * vec4(inNormal, 0.0);
     outNormal = normal.xyz;
     outColor = inColor;
+    outInstanceColor = instance.color;
+    outBlend = instance.parameters.x;
 }

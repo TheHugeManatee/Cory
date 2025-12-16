@@ -12,9 +12,9 @@ namespace Cory {
 void Init()
 {
     // initialize all static objects in the correct order
-    Cory::AppClock::Init();
-    Cory::SimulationClock::Init();
-    Cory::Log::Init();
+    AppClock::Init();
+    SimulationClock::Init();
+    Log::Init();
 }
 
 void Deinit() {}

@@ -72,7 +72,17 @@ PipelineCache::PipelineCache(Gpu::VulkanResourceManager *resourceManager,
     data_->device = device;
     data_->shaderManager = shaderManager;
 }
-PipelineCache::~PipelineCache() {}
+PipelineCache::~PipelineCache()
+{
+    // release all pipelines
+    for (const auto &[_, pipeline] : data_->cache) {
+        data_->resourceManager->deleteGraphicsPipeline(pipeline);
+    }
+    // release all pipeline layouts
+    for (const auto &[_, layout] : data_->layoutCache) {
+        data_->resourceManager->deletePipelineLayout(layout);
+    }
+}
 
 Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
                                                          const PipelineDescriptor &info)

@@ -121,7 +121,7 @@ inline SlotMapHandle SlotMapHandle::setFreeBit(SlotMapHandle handle)
 /// make SlotMapHandle formattable
 template <> struct fmt::formatter<Cory::SlotMapHandle> {
     template <typename ParseContext> constexpr auto parse(ParseContext &ctx) { return ctx.end(); }
-    auto format(Cory::SlotMapHandle h, format_context &ctx)
+    auto format(Cory::SlotMapHandle h, format_context &ctx) const
     {
         if (h.valid()) {
             return fmt::format_to(ctx.out(), "{{{},{}}}", h.index(), h.version());
@@ -142,13 +142,12 @@ template <> struct std::hash<Cory::SlotMapHandle> {
 /// make PrivateTypedHandles formattable
 template <typename T, typename F>
 struct fmt::formatter<Cory::PrivateTypedHandle<T, F>> : public fmt::formatter<Cory::SlotMapHandle> {
-    auto format(Cory::PrivateTypedHandle<T, F> h, format_context &ctx)
+    auto format(Cory::PrivateTypedHandle<T, F> h, format_context &ctx) const
     {
         return fmt::formatter<Cory::SlotMapHandle>::format(h.handle_, ctx);
     }
 };
 
-// partial specialization needs to be in std, not sure if that's a good idea though..
 namespace std {
 template <typename T, typename F> struct hash<Cory::PrivateTypedHandle<T, F>> {
     std::size_t operator()(const Cory::PrivateTypedHandle<T, F> &s) const noexcept

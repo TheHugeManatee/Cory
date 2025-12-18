@@ -12,6 +12,8 @@ else ()
     add_compile_options("$<$<CONFIG:Release>:-g>")
 endif ()
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 #### Setup Installation directories
 include(GNUInstallDirs)
 set(CMAKE_INSTALL_PDBDIR ${CMAKE_INSTALL_BINDIR}) # typically, we want the PDB files in the same directory

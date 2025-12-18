@@ -45,6 +45,7 @@ add_library(Cory_TestLib OBJECT
         WorkContractGroup_Test.cpp
         ValOptional_Test.cpp
         Function_Test.cpp
+        SlangCompiler_Test.cpp
 )
 
 target_link_libraries(Cory_TestLib PUBLIC Catch2::Catch2)

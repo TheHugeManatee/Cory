@@ -3,6 +3,8 @@ set(TARGET_NAME Cory)
 set(TARGET_HEADER_SUBDIR "Cory/")
 
 find_package(Vulkan REQUIRED)
+find_package(Slang REQUIRED)
+message(STATUS "Found Slang version ${Slang_VERSION} at ${Slang_LIBRARY}")
 
 find_package(glfw3 REQUIRED)
 find_package(Microsoft.GSL REQUIRED)
@@ -127,6 +129,8 @@ set(CORY_SOURCES
         Base/EnumMap.hpp
         RenderTasks/StandardRenderTasks.cpp
         RenderTasks/StandardRenderTasks.hpp
+        Renderer/SlangCompiler.cpp
+        Renderer/SlangCompiler.hpp
 )
 
 
@@ -178,6 +182,7 @@ target_link_libraries(${TARGET_NAME}
         glfw
         KDGpu::KDGpuUtils
         KDUtils::KDGui
+        Slang::slang
 
         PRIVATE
 

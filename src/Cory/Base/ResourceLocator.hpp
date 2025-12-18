@@ -13,6 +13,13 @@ struct ResourceNotFound : public std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
+enum class ResourceType {
+    Shader,
+    Texture,
+    Model,
+    Any,
+};
+
 class ResourceLocator {
   public:
     /// add a search path for resources. the path will be appended at the end of all paths
@@ -22,9 +29,11 @@ class ResourceLocator {
      * Locate a path/file by checking all resource search paths and returning the full path that
      * matches the file. most recently added search paths will be checked first
      *
+     * @param type The resource type
      * @throws ResourceNotFound if a resource cannot be located
      */
-    static std::filesystem::path Locate(std::filesystem::path resourcePath);
+    static std::filesystem::path Locate(std::filesystem::path resourcePath,
+                                        ResourceType type = ResourceType::Any);
 
   private:
     static std::vector<std::filesystem::path> searchPaths_;

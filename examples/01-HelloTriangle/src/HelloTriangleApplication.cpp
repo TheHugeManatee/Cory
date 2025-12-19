@@ -118,8 +118,8 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     pipeline_ = std::make_unique<TrianglePipeline>(ctx(),
                                                    *window_,
                                                    *mesh_,
-                                                   std::filesystem::path{"simple_shader.vert"},
-                                                   std::filesystem::path{"simple_shader.frag"});
+                                                   std::filesystem::path{"simple_shader.vert.slang"},
+                                                   std::filesystem::path{"simple_shader.frag.slang"});
 
     auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
         createFramebuffers();

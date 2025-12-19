@@ -112,6 +112,7 @@ void animate(InstanceData &d, float t, float i)
     const glm::mat4 cm = glm::rotate(
         glm::scale(glm::mat4{1.0f}, glm::vec3{brightness}), r, glm::vec3{1.0f, 1.0f, 1.0f});
 
+    d.normalTransform = transpose(inverse(d.modelTransform));
     d.color = start * cm;
     d.parameters = glm::vec4{ad.blend, 0.0f, 0.0f, 0.0f};
 }
@@ -170,8 +171,9 @@ void CubeDemoApplication::createShaders()
 {
     const Cory::ScopeTimer st{"Init/Shaders"};
 
-    vertexShader_ = ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.vert"));
-    fragmentShader_ = ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.frag"));
+    vertexShader_ = ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.vert.slang"));
+    fragmentShader_ =
+        ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
 }
 
 void CubeDemoApplication::createUBO()

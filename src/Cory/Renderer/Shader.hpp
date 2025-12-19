@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Cory {
@@ -16,8 +17,7 @@ class ShaderSource {
   public:
     ShaderSource(std::string source,
                  Gpu::ShaderStageFlagBits type,
-                 std::filesystem::path filePath = "Unknown",
-                 std::string entryPoint = "main");
+                 std::filesystem::path filePath = "Unknown");
 
     /**
      * Loads a shader from a file. If type is not specified, will try to guess the
@@ -28,8 +28,7 @@ class ShaderSource {
      *  - *.comp: Compute Shader
      */
     ShaderSource(std::filesystem::path filePath,
-                 Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN,
-                 std::string entryPoint = "main");
+                 Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN);
 
     // copyable
     ShaderSource(const ShaderSource &rhs) = default;
@@ -48,22 +47,21 @@ class ShaderSource {
     auto type() const { return type_; }
     const auto &defines() const { return macroDefinitions_; }
     const auto &filePath() const { return filename_; }
-    const auto &entryPoint() const { return entryPoint_; }
 
   private:
     std::filesystem::path filename_{"Unknown"};
     std::string source_;
     Gpu::ShaderStageFlagBits type_;
     std::map<std::string, std::string> macroDefinitions_;
-    std::string entryPoint_{"main"};
 };
 
 class Shader {
   public:
-    static std::vector<uint32_t> CompileToSpv(const ShaderSource &source, bool optimize = true);
+    static std::vector<uint32_t>
+    CompileToSpv(const ShaderSource &source, bool optimize = true, std::string_view entryPoint = "main");
 
     Shader();
-    Shader(Context &ctx, ShaderSource source);
+    Shader(Context &ctx, ShaderSource source, std::string entryPoint = "main");
 
     // copyable!
     Shader(const Shader &rhs) = default;
@@ -75,6 +73,7 @@ class Shader {
     Gpu::ShaderModule &module() { return module_; }
     const Gpu::ShaderModule &module() const { return module_; }
     Gpu::ShaderStageFlagBits type() const { return type_; }
+    const std::string &entryPoint() const { return entryPoint_; }
     bool valid() const;
 
     // the size in bytes of the compiled shader module
@@ -88,5 +87,6 @@ class Shader {
     Gpu::ShaderStageFlagBits type_{};
     size_t size_{};
     Gpu::ShaderModule module_;
+    std::string entryPoint_{"main"};
 };
 } // namespace Cory

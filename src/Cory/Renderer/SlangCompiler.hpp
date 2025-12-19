@@ -7,6 +7,7 @@
 
 #include <expected>
 #include <string>
+#include <string_view>
 
 namespace Cory {
 /// This class is a wrapper around the Slang compiler to compile shaders during runtime.
@@ -19,12 +20,13 @@ class SlangCompiler {
     using CompilationError = std::string;
     using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
 
-    [[nodiscard]] CompilationResult compileShader(const ShaderSource &source, bool optimize);
+    [[nodiscard]] CompilationResult compileShader(const ShaderSource &source,
+                                                  std::string_view entryPoint,
+                                                  bool optimize);
 
   private:
     void initSession();
     SlangStage toSlangStage(Gpu::ShaderStageFlagBits stage) const;
-    std::string resolveEntryPoint(const ShaderSource &source) const;
     CompilationResult makeError(std::string message) const;
 
     Slang::ComPtr<slang::ISession> session_;

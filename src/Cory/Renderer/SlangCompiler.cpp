@@ -182,8 +182,8 @@ void SlangCompiler::initSession()
     }
 }
 
-SlangCompiler::CompilationResult SlangCompiler::compileShader(const ShaderSource &source,
-                                                              bool optimize)
+SlangCompiler::CompilationResult
+SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryPoint, bool optimize)
 {
     if (!session_) {
         return makeError("Slang session is not initialized");
@@ -208,8 +208,6 @@ SlangCompiler::CompilationResult SlangCompiler::compileShader(const ShaderSource
     if (!moduleName.empty()) {
         request->setDefaultModuleName(moduleName.c_str());
     }
-
-    const auto entryPointName = resolveEntryPoint(source);
     const auto stage = toSlangStage(source.type());
     if (stage == SlangStage::SLANG_STAGE_NONE) {
         return makeError("Unsupported shader stage for Slang compilation");
@@ -236,6 +234,7 @@ SlangCompiler::CompilationResult SlangCompiler::compileShader(const ShaderSource
                                                              : fullPath.c_str(),
                                             source.source().c_str());
 
+    const std::string entryPointName(entryPoint);
     const int entryPointIndex =
         request->addEntryPoint(translationUnit, entryPointName.c_str(), stage);
 
@@ -279,14 +278,6 @@ SlangStage SlangCompiler::toSlangStage(Gpu::ShaderStageFlagBits stage) const
     default:
         return SLANG_STAGE_NONE;
     }
-}
-
-std::string SlangCompiler::resolveEntryPoint(const ShaderSource &source) const
-{
-    if (!source.entryPoint().empty()) {
-        return source.entryPoint();
-    }
-    return "main";
 }
 
 SlangCompiler::CompilationResult SlangCompiler::makeError(std::string message) const

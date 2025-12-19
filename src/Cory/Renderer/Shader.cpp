@@ -11,21 +11,17 @@ namespace Cory {
 
 ShaderSource::ShaderSource(std::string source,
                            Gpu::ShaderStageFlagBits type,
-                           std::filesystem::path filePath,
-                           std::string entryPoint)
+                           std::filesystem::path filePath)
     : filename_{filePath}
     , source_{std::move(source)}
     , type_{type}
-    , entryPoint_{std::move(entryPoint)}
 {
 }
 
 ShaderSource::ShaderSource(std::filesystem::path filePath,
-                           Gpu::ShaderStageFlagBits type,
-                           std::string entryPoint)
+                           Gpu::ShaderStageFlagBits type)
     : type_{type}
     , filename_{std::move(filePath)}
-    , entryPoint_{std::move(entryPoint)}
 {
     auto fileBytes = readFile(filename_);
     source_ = std::string{fileBytes.begin(), fileBytes.end()};
@@ -35,11 +31,13 @@ ShaderSource::ShaderSource(std::filesystem::path filePath,
     }
 }
 
-std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool optimize)
+std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source,
+                                           bool optimize,
+                                           std::string_view entryPoint)
 {
     static SlangCompiler compiler;
 
-    auto result = compiler.compileShader(source, optimize);
+    auto result = compiler.compileShader(source, entryPoint, optimize);
     if (!result.has_value()) {
         CO_CORE_ERROR("Failed to compile {}: {}", source.filePath().string(), result.error());
         return {};
@@ -50,16 +48,17 @@ std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source, bool opti
 
 // default is an empty (invalid) shader
 Shader::Shader()
-    : source_{"", SHADER_TYPE_UNKNOWN, "", ""}
+    : source_{"", SHADER_TYPE_UNKNOWN, ""}
 {
 }
 
-Shader::Shader(Context &ctx, ShaderSource source)
+Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
     : ctx_{&ctx}
-    , source_{source}
+    , source_{std::move(source)}
     , type_{source_.type()}
+    , entryPoint_{std::move(entryPoint)}
 {
-    std::vector<uint32_t> spirvBinary = CompileToSpv(source, false);
+    std::vector<uint32_t> spirvBinary = CompileToSpv(source_, false, entryPoint_);
     if (spirvBinary.empty()) {
         throw std::runtime_error{"Could not compile shader source to SPIR-V"};
     }

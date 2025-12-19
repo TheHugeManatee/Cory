@@ -17,8 +17,10 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
               result[threadId.x] = threadId.x;
             })",
                                   Gpu::ShaderStageFlagBits::ComputeBit,
-                                  "TestShader.slang"};
-        auto result = compiler.compileShader(source);
+                                  "TestShader.slang",
+                                  "computeMain"};
+
+        auto result = compiler.compileShader(source, false);
 
         if (!result) {
             FAIL(result.error());
@@ -37,8 +39,9 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
               result[threadId x] = threadId.x;
             })",
                                   Gpu::ShaderStageFlagBits::ComputeBit,
-                                  "TestShader.slang"};
-        auto result = compiler.compileShader(source);
+                                  "TestShader.slang",
+                                  "computeMain"};
+        auto result = compiler.compileShader(source, false);
 
         REQUIRE(!result);
         INFO(result.error());
@@ -57,11 +60,12 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
               result[threadId.x] = threadId.x;
             })",
                                   Gpu::ShaderStageFlagBits::ComputeBit,
-                                  "TestShader.slang"};
-        auto result = compiler.compileShader(source);
+                                  "TestShader.slang",
+                                  "computeMain"};
+        auto result = compiler.compileShader(source, false);
 
         REQUIRE(!result);
         INFO(result.error());
-        CHECK(result.error().size() == 0);
+        CHECK(result.error().size() > 0);
     }
 }

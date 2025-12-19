@@ -15,9 +15,9 @@ As such, it uses features that are only supported in rather modern compilers.
 
 - descriptor set/shader uniforms abstraction
     - [x] basics demo done
-    - [ ] manage descriptors and sets via ResourceManager
+    - [x] manage descriptors and sets via ResourceManager
         - [x] Images, Samplers, Buffers, DescriptorSets all managed
-    - [ ] define a global descriptor set 0 that is managed by cory itself
+    - [x] define a global descriptor set 0 that is managed by cory itself
 - Render Graphs/Frame Graphs
     - [x] basic coroutine-based API and render pass resolution via graph search
     - [x] automatically create render passes and layouts
@@ -44,7 +44,7 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] basic entity/component system
 - Shader System
     - [x] push constants
-    - [x] On-the fly shader compilation using [google/shaderc](https://github.com/google/shaderc)
+    - [x] On-the fly shader compilation using [Slang](https://github.com/shader-slang/slang)
     - [ ] shader hot-reloading
     - [ ] shader reflection using [SPIR-V Reflect](https://github.com/KhronosGroup/SPIRV-Reflect)
     - [ ] shader compilation cache
@@ -67,7 +67,7 @@ As such, it uses features that are only supported in rather modern compilers.
 - Multithreading?!
     - Multithreaded framegraph recording?
     - Offload resource creation (shaders/pipelines) to another thread (pool)
-    - explicit sync with queues where necessary
+    - explicit sync with queues where necessary 
     - texture uploads etc.
 - C++ Modules (whenever cmake and compiler support actually catches up)
 

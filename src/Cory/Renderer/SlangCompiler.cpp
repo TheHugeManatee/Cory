@@ -7,9 +7,13 @@
 #include <slang.h>
 
 #include <Cory/Base/ResourceLocator.hpp>
+#include <array>
 #include <atomic>
+#include <cstring>
 #include <fstream>
 #include <mutex>
+#include <string_view>
+#include <utility>
 
 namespace Cory {
 namespace detail {
@@ -138,116 +142,155 @@ class CoryResourceFileSystem final : public ISlangFileSystem, public SlangObject
 
 SlangCompiler::SlangCompiler()
 {
-    auto *globalSession = detail::getGlobalSession();
-
-    // 2. Create Session
-    slang::SessionDesc sessionDesc = {};
-    slang::TargetDesc targetDesc = {};
-    targetDesc.format = SLANG_SPIRV;
-    targetDesc.profile = globalSession->findProfile("spirv_1_5");
-
-    sessionDesc.targets = &targetDesc;
-    sessionDesc.targetCount = 1;
-
-    std::array<slang::CompilerOptionEntry, 1> options = {
-        {slang::CompilerOptionName::EmitSpirvDirectly,
-         {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}}};
-    sessionDesc.compilerOptionEntries = options.data();
-    sessionDesc.compilerOptionEntryCount = gsl::narrow<uint32_t>(options.size());
-    sessionDesc.fileSystem = new detail::CoryResourceFileSystem();
-
-    globalSession->createSession(sessionDesc, session_.writeRef());
+    initSession();
 }
 
 SlangCompiler::~SlangCompiler() {}
 
-SlangCompiler::CompilationResult SlangCompiler::compileShader(const ShaderSource &source)
+void SlangCompiler::initSession()
 {
-    // Load module
-    Slang::ComPtr<slang::IModule> slangModule;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        slangModule = session_->loadModuleFromSourceString(
-            source.filePath().filename().string().c_str(),
-            source.filePath().string().c_str(),
-            source.source().c_str(),
-            diagnosticsBlob.writeRef()); // Optional diagnostic container
-
-        if (!slangModule) {
-            if (diagnosticsBlob != nullptr) {
-                return std::unexpected(
-                    std::string{(const char *)diagnosticsBlob->getBufferPointer()});
-            }
-            return std::unexpected("Could not load Slang module from source");
-        }
+    globalSession_ = detail::getGlobalSession();
+    if (!globalSession_) {
+        CO_CORE_ERROR("Failed to acquire Slang global session");
+        return;
     }
 
-    // Query Entry Points
-    Slang::ComPtr<slang::IEntryPoint> entryPoint;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        slangModule->findEntryPointByName("computeMain", entryPoint.writeRef());
-        if (!entryPoint) {
-            CO_CORE_ERROR("Error getting entry point");
-            return {};
-        }
+    fileSystem_.attach(new detail::CoryResourceFileSystem());
+
+    slang::TargetDesc targetDesc = {};
+    targetDesc.format = SLANG_SPIRV;
+    spirvProfile_ = globalSession_->findProfile("spirv_1_5");
+    targetDesc.profile = spirvProfile_;
+
+    slang::SessionDesc sessionDesc = {};
+    sessionDesc.targets = &targetDesc;
+    sessionDesc.targetCount = 1;
+    sessionDesc.defaultMatrixLayoutMode = SLANG_MATRIX_LAYOUT_COLUMN_MAJOR;
+    sessionDesc.fileSystem = fileSystem_.get();
+
+    std::array options = {
+        slang::CompilerOptionEntry{slang::CompilerOptionName::EmitSpirvDirectly,
+                                   {slang::CompilerOptionValueKind::Int, 1, 0, nullptr, nullptr}},
+    };
+    sessionDesc.compilerOptionEntries = options.data();
+    sessionDesc.compilerOptionEntryCount = static_cast<uint32_t>(options.size());
+
+    SlangResult result = globalSession_->createSession(sessionDesc, session_.writeRef());
+    if (SLANG_FAILED(result)) {
+        CO_CORE_ERROR("Failed to create Slang session (error code {})", result);
+        session_.setNull();
+    }
+}
+
+SlangCompiler::CompilationResult SlangCompiler::compileShader(const ShaderSource &source,
+                                                              bool optimize)
+{
+    if (!session_) {
+        return makeError("Slang session is not initialized");
     }
 
-    // Compose Modules + Entry Points
-    std::array<slang::IComponentType *, 2> componentTypes = {slangModule, entryPoint};
-
-    Slang::ComPtr<slang::IComponentType> composedProgram;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        SlangResult result = session_->createCompositeComponentType(componentTypes.data(),
-                                                                    componentTypes.size(),
-                                                                    composedProgram.writeRef(),
-                                                                    diagnosticsBlob.writeRef());
-        if (SLANG_FAILED(result)) {
-            if (diagnosticsBlob != nullptr) {
-                return std::unexpected(
-                    std::string{(const char *)diagnosticsBlob->getBufferPointer()});
-            }
-            return std::unexpected("Could not compose Slang component type");
-        }
+    Slang::ComPtr<slang::ICompileRequest> request;
+    SlangResult createResult = session_->createCompileRequest(request.writeRef());
+    if (SLANG_FAILED(createResult)) {
+        return makeError("Failed to create Slang compile request");
     }
 
-    // Link
-    Slang::ComPtr<slang::IComponentType> linkedProgram;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        SlangResult result =
-            composedProgram->link(linkedProgram.writeRef(), diagnosticsBlob.writeRef());
-        if (SLANG_FAILED(result)) {
-            if (diagnosticsBlob != nullptr) {
-                return std::unexpected(
-                    std::string{(const char *)diagnosticsBlob->getBufferPointer()});
-            }
-            return std::unexpected("Could not link Slang component type");
-        }
+    request->setCodeGenTarget(SLANG_SPIRV);
+    if (spirvProfile_ != SLANG_PROFILE_UNKNOWN) {
+        request->setTargetProfile(0, spirvProfile_);
+    }
+    request->setMatrixLayoutMode(SLANG_MATRIX_LAYOUT_COLUMN_MAJOR);
+    request->setDebugInfoLevel(SLANG_DEBUG_INFO_LEVEL_NONE);
+    request->setOptimizationLevel(optimize ? SLANG_OPTIMIZATION_LEVEL_HIGH
+                                           : SLANG_OPTIMIZATION_LEVEL_DEFAULT);
+
+    const std::string moduleName = source.filePath().filename().string();
+    if (!moduleName.empty()) {
+        request->setDefaultModuleName(moduleName.c_str());
     }
 
-    // Get Target Kernel Code
+    const auto entryPointName = resolveEntryPoint(source);
+    const auto stage = toSlangStage(source.type());
+    if (stage == SlangStage::SLANG_STAGE_NONE) {
+        return makeError("Unsupported shader stage for Slang compilation");
+    }
+
+    auto detectLanguage = [&source]() {
+        auto ext = source.filePath().extension();
+        if (ext == ".slang" || ext == ".hlsl") {
+            return SLANG_SOURCE_LANGUAGE_SLANG;
+        }
+        return SLANG_SOURCE_LANGUAGE_SLANG;
+    };
+
+    const char *translationUnitName = moduleName.empty() ? nullptr : moduleName.c_str();
+    const int translationUnit = request->addTranslationUnit(detectLanguage(), translationUnitName);
+
+    for (const auto &[name, value] : source.defines()) {
+        request->addTranslationUnitPreprocessorDefine(translationUnit, name.c_str(), value.c_str());
+    }
+
+    const auto fullPath = source.filePath().string();
+    request->addTranslationUnitSourceString(translationUnit,
+                                            fullPath.empty() ? moduleName.c_str()
+                                                             : fullPath.c_str(),
+                                            source.source().c_str());
+
+    const int entryPointIndex =
+        request->addEntryPoint(translationUnit, entryPointName.c_str(), stage);
+
+    SlangResult compileResult = request->compile();
+    if (SLANG_FAILED(compileResult)) {
+        Slang::ComPtr<slang::IBlob> diagnostics;
+        request->getDiagnosticOutputBlob(diagnostics.writeRef());
+        if (diagnostics) {
+            return makeError(
+                std::string(static_cast<const char *>(diagnostics->getBufferPointer())));
+        }
+        return makeError("Slang compilation failed");
+    }
+
     Slang::ComPtr<slang::IBlob> spirvCode;
-    {
-        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-        SlangResult result = linkedProgram->getEntryPointCode(
-            0, 0, spirvCode.writeRef(), diagnosticsBlob.writeRef());
-
-        if (SLANG_FAILED(result)) {
-            if (diagnosticsBlob != nullptr) {
-                return std::unexpected(
-                    std::string{(const char *)diagnosticsBlob->getBufferPointer()});
-            }
-            return std::unexpected("Could not get SPIR-V code from Slang entry point");
-        }
+    SlangResult codeResult =
+        request->getEntryPointCodeBlob(entryPointIndex, 0, spirvCode.writeRef());
+    if (SLANG_FAILED(codeResult) || !spirvCode) {
+        return makeError("Failed to retrieve SPIR-V from Slang compile request");
     }
 
-    // Return result
     SpirvByteCode result;
     result.resize(spirvCode->getBufferSize() / sizeof(uint32_t));
-    memcpy(result.data(), spirvCode->getBufferPointer(), spirvCode->getBufferSize());
+    std::memcpy(result.data(), spirvCode->getBufferPointer(), spirvCode->getBufferSize());
 
     return result;
+}
+
+SlangStage SlangCompiler::toSlangStage(Gpu::ShaderStageFlagBits stage) const
+{
+    using enum Gpu::ShaderStageFlagBits;
+    switch (stage) {
+    case VertexBit:
+        return SLANG_STAGE_VERTEX;
+    case GeometryBit:
+        return SLANG_STAGE_GEOMETRY;
+    case FragmentBit:
+        return SLANG_STAGE_FRAGMENT;
+    case ComputeBit:
+        return SLANG_STAGE_COMPUTE;
+    default:
+        return SLANG_STAGE_NONE;
+    }
+}
+
+std::string SlangCompiler::resolveEntryPoint(const ShaderSource &source) const
+{
+    if (!source.entryPoint().empty()) {
+        return source.entryPoint();
+    }
+    return "main";
+}
+
+SlangCompiler::CompilationResult SlangCompiler::makeError(std::string message) const
+{
+    return std::unexpected(std::move(message));
 }
 } // namespace Cory

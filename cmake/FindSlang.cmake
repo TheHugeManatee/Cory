@@ -117,10 +117,20 @@ if (NOT Slang_INCLUDE_DIR)
 endif ()
 
 # ------------------------------------------------------------
-# Find runtime library
+# Find runtime library (with debug postfix support)
 # ------------------------------------------------------------
+set(_SLANG_DEBUG_POSTFIX "")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(_SLANG_DEBUG_POSTFIX "d")
+elseif (CMAKE_CONFIGURATION_TYPES)
+    list(FIND CMAKE_CONFIGURATION_TYPES "Debug" _debug_index)
+    if (NOT _debug_index EQUAL -1)
+        set(_SLANG_DEBUG_POSTFIX "d")
+    endif ()
+endif ()
+
 find_library(Slang_LIBRARY
-        NAMES slang
+        NAMES slang${_SLANG_DEBUG_POSTFIX} slang
         HINTS ${_SLANG_HINTS}
         PATH_SUFFIXES
         lib
@@ -131,27 +141,22 @@ find_library(Slang_LIBRARY
 )
 
 # ------------------------------------------------------------
-# Runtime deployment libraries
+# Runtime deployment libraries (with debug postfix support)
 # ------------------------------------------------------------
 set(Slang_RUNTIME_LIBRARIES "")
 
 if (Slang_LIBRARY)
-    #list(APPEND Slang_RUNTIME_LIBRARIES "${Slang_LIBRARY}")
-
     # Windows: slang.dll may depend on extra DLLs shipped in Bin/ or bin/
     if (WIN32)
         get_filename_component(_SLANG_BIN_DIR "${Slang_LIBRARY}" DIRECTORY)
-
-        # Check both Bin and bin for runtime DLLs
         set(_SLANG_BIN_DIRS "${_SLANG_BIN_DIR}")
         if (DEFINED ENV{VULKAN_SDK})
             list(APPEND _SLANG_BIN_DIRS "$ENV{VULKAN_SDK}/Bin" "$ENV{VULKAN_SDK}/bin")
         endif ()
-
         foreach (_dir IN LISTS _SLANG_BIN_DIRS)
             foreach (_dll
-                    slang.dll
-                    slang-glslang.dll
+                    slang${_SLANG_DEBUG_POSTFIX}.dll
+                    slang-glslang${_SLANG_DEBUG_POSTFIX}.dll
             )
                 if (EXISTS "${_dir}/${_dll}")
                     list(APPEND Slang_RUNTIME_LIBRARIES "${_dir}/${_dll}")

@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace Cory {
@@ -15,7 +16,8 @@ class ShaderSource {
   public:
     ShaderSource(std::string source,
                  Gpu::ShaderStageFlagBits type,
-                 std::filesystem::path filePath = "Unknown");
+                 std::filesystem::path filePath = "Unknown",
+                 std::string entryPoint = "main");
 
     /**
      * Loads a shader from a file. If type is not specified, will try to guess the
@@ -26,7 +28,8 @@ class ShaderSource {
      *  - *.comp: Compute Shader
      */
     ShaderSource(std::filesystem::path filePath,
-                 Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN);
+                 Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN,
+                 std::string entryPoint = "main");
 
     // copyable
     ShaderSource(const ShaderSource &rhs) = default;
@@ -45,12 +48,14 @@ class ShaderSource {
     auto type() const { return type_; }
     const auto &defines() const { return macroDefinitions_; }
     const auto &filePath() const { return filename_; }
+    const auto &entryPoint() const { return entryPoint_; }
 
   private:
     std::filesystem::path filename_{"Unknown"};
     std::string source_;
     Gpu::ShaderStageFlagBits type_;
     std::map<std::string, std::string> macroDefinitions_;
+    std::string entryPoint_{"main"};
 };
 
 class Shader {
@@ -75,17 +80,13 @@ class Shader {
     // the size in bytes of the compiled shader module
     size_t size() { return size_; }
 
+    static Gpu::ShaderStageFlagBits deduceTypeFromPath(const std::filesystem::path &path);
+
   private:
     Context *ctx_{};
     ShaderSource source_;
     Gpu::ShaderStageFlagBits type_{};
     size_t size_{};
     Gpu::ShaderModule module_;
-
-    std::string preprocessShader();
-
-    // Compiles a shader to SPIR-V assembly. Returns the assembly text
-    // as a string.
-    std::string compileToAssembly(bool optimize = false);
 };
 } // namespace Cory

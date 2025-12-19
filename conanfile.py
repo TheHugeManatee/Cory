@@ -23,7 +23,6 @@ class CoryProjectConan(ConanFile):
         self.requires("magic_enum/0.9.7")
         self.requires("ms-gsl/4.2.0")
         self.requires("range-v3/0.12.0")
-        self.requires("shaderc/2025.3")
         self.requires("spdlog/1.16.0")
         self.requires("vulkan-headers/1.4.313.0")
 

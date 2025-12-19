@@ -15,7 +15,6 @@ find_package(glm REQUIRED)
 find_package(imgui REQUIRED)
 find_package(magic_enum REQUIRED)
 find_package(range-v3 REQUIRED)
-find_package(shaderc)
 find_package(spdlog REQUIRED)
 
 set(CORY_SOURCES
@@ -176,7 +175,6 @@ target_link_libraries(${TARGET_NAME}
         magic_enum::magic_enum
         range-v3::range-v3
         cppcoro::cppcoro
-        shaderc::shaderc
         spdlog::spdlog
         KDGpu::KDGpu
         glfw

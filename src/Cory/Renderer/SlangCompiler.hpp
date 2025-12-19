@@ -20,6 +20,11 @@ class SlangCompiler {
     using CompilationError = std::string;
     using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
 
+    /// @brief Compile a shader source into SPIR-V bytecode.
+    /// @param source The slang shader source to compile.
+    /// @param entryPoint The entry point function name.
+    /// @param optimize Whether to optimize the shader code.
+    /// @return The compiled SPIR-V bytecode or an error message.
     [[nodiscard]] CompilationResult compileShader(const ShaderSource &source,
                                                   std::string_view entryPoint,
                                                   bool optimize);

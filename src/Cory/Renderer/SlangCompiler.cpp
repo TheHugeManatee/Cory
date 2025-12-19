@@ -18,7 +18,15 @@
 namespace Cory {
 namespace detail {
 
-class SlangObject : public ISlangUnknown {
+
+/**
+ * @brief Base class to support the slang COM interfaces.
+ * 
+ * Slang COM interfaces require reference counting and querying for interfaces:
+ *  - addRef and release to add and remove ref counts, deleting itself when the last ref is released.
+ *  - queryInterface to get pointers to supported interfaces (equivalent to dynamic_cast)
+ */
+class SlangObject {
   public:
     virtual ~SlangObject() = default;
 
@@ -51,6 +59,7 @@ class SlangObject : public ISlangUnknown {
     std::atomic<uint32_t> m_refCount{1};
 };
 
+/// @brief Memory blob is just an arbitrary length buffer
 class MemoryBlob final : virtual public ISlangBlob, virtual public SlangObject {
   public:
     MemoryBlob(std::vector<uint8_t> &&data)
@@ -85,14 +94,8 @@ class MemoryBlob final : virtual public ISlangBlob, virtual public SlangObject {
     std::vector<uint8_t> m_data;
 };
 
-static slang::IGlobalSession *getGlobalSession()
-{
-    static Slang::ComPtr<slang::IGlobalSession> globalSession;
-    static std::once_flag once_flag;
-    std::call_once(once_flag, []() { createGlobalSession(globalSession.writeRef()); });
-    return globalSession.get();
-}
-
+/// @brief File system that uses Cory's resource locator to find and load included shader files.
+/// Can later be extended to support virtual file systems like cmrc etc, to package shaders into the binary.
 class CoryResourceFileSystem final : public ISlangFileSystem, public SlangObject {
   public:
     explicit CoryResourceFileSystem() {}
@@ -137,6 +140,15 @@ class CoryResourceFileSystem final : public ISlangFileSystem, public SlangObject
         }
     }
 };
+
+/// Global static Slang session to be shared among all SlangCompiler instances
+static slang::IGlobalSession *getGlobalSession()
+{
+    static Slang::ComPtr<slang::IGlobalSession> globalSession;
+    static std::once_flag once_flag;
+    std::call_once(once_flag, []() { createGlobalSession(globalSession.writeRef()); });
+    return globalSession.get();
+}
 
 } // namespace detail
 

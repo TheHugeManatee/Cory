@@ -27,8 +27,8 @@ CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFligh
 
     globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(ctx, maxFramesInFlight);
 
-    vertexShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.vert"));
-    fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag"));
+    vertexShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.vert.slang"));
+    fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
 }
 
 CubeRenderSystem::~CubeRenderSystem()
@@ -54,9 +54,12 @@ void CubeRenderSystem::update(Cory::SceneGraph &sg,
                               const AnimationComponent &anim,
                               const Cory::Components::Transform &transform)
 {
-    renderState_.push_back({.modelToWorld = transform.modelToWorld,
-                            .color = anim.color,
-                            .parameters = glm::vec4{anim.blend, 0.0f, 0.0f, 0.0f}});
+    renderState_.push_back({
+        .modelToWorld = transform.modelToWorld,
+        .normalToWorld = transpose(inverse(transform.modelToWorld)),
+        .color = anim.color,
+        .parameters = glm::vec4{anim.blend, 0.0f, 0.0f, 0.0f},
+    });
 }
 
 Cory::RenderTaskDeclaration<CubeRenderSystem::PassOutputs>

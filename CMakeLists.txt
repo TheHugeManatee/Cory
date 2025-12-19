@@ -5,12 +5,15 @@ set(PROJECT_TARGETS "coryTargets")
 
 project(${PROJECT_NAME} CXX)
 
+# Make sure release builds still have debug info
 if (MSVC)
     add_compile_options("$<$<CONFIG:Release>:/Zi>")
     add_link_options("$<$<CONFIG:Release>:/DEBUG>")
 else ()
     add_compile_options("$<$<CONFIG:Release>:-g>")
 endif ()
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 #### Setup Installation directories
 include(GNUInstallDirs)

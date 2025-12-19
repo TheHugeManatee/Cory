@@ -97,7 +97,7 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
         shaderStages.push_back(Gpu::ShaderStage{
             .shaderModule = s.module(),
             .stage = s.type(),
-            .entryPoint = "main",
+            .entryPoint = s.entryPoint(),
         });
     }
 

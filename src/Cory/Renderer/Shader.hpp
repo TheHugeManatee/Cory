@@ -7,6 +7,8 @@
 
 #include <filesystem>
 #include <map>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace Cory {
@@ -55,10 +57,11 @@ class ShaderSource {
 
 class Shader {
   public:
-    static std::vector<uint32_t> CompileToSpv(const ShaderSource &source, bool optimize = true);
+    static std::vector<uint32_t>
+    CompileToSpv(const ShaderSource &source, bool optimize = true, std::string_view entryPoint = "main");
 
     Shader();
-    Shader(Context &ctx, ShaderSource source);
+    Shader(Context &ctx, ShaderSource source, std::string entryPoint = "main");
 
     // copyable!
     Shader(const Shader &rhs) = default;
@@ -70,10 +73,13 @@ class Shader {
     Gpu::ShaderModule &module() { return module_; }
     const Gpu::ShaderModule &module() const { return module_; }
     Gpu::ShaderStageFlagBits type() const { return type_; }
+    const std::string &entryPoint() const { return entryPoint_; }
     bool valid() const;
 
     // the size in bytes of the compiled shader module
     size_t size() { return size_; }
+
+    static Gpu::ShaderStageFlagBits deduceTypeFromPath(const std::filesystem::path &path);
 
   private:
     Context *ctx_{};
@@ -81,11 +87,6 @@ class Shader {
     Gpu::ShaderStageFlagBits type_{};
     size_t size_{};
     Gpu::ShaderModule module_;
-
-    std::string preprocessShader();
-
-    // Compiles a shader to SPIR-V assembly. Returns the assembly text
-    // as a string.
-    std::string compileToAssembly(bool optimize = false);
+    std::string entryPoint_{"main"};
 };
 } // namespace Cory

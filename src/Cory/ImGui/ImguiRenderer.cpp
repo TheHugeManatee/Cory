@@ -166,8 +166,8 @@ void ImGuiRenderer::initialize(float scaleFactor,
         const auto vertShaderCode = Shader::CompileToSpv(
             ShaderSource{vertexShaderSource, Gpu::ShaderStageFlagBits::VertexBit, "imgui.vert"});
         m_vertexShader = m_device->createShaderModule(vertShaderCode);
-        const auto fragShaderCode = Shader::CompileToSpv(ShaderSource{
-            fragmentShaderSource, Gpu::ShaderStageFlagBits::FragmentBit, "imgui.frag"});
+        const auto fragShaderCode = Shader::CompileToSpv(
+            ShaderSource{fragmentShaderSource, Gpu::ShaderStageFlagBits::FragmentBit, "imgui.frag"});
         m_fragmentShader = m_device->createShaderModule(fragShaderCode);
     }
 

@@ -16,11 +16,10 @@
 #include <KDGpu/bind_group_layout.h>
 #include <KDGpu/buffer.h>
 #include <KDGpu/gpu_core.h>
-#include <KDGpu/graphics_pipeline.h>
 #include <KDGpu/graphics_pipeline_options.h>
 #include <KDGpu/pipeline_layout.h>
+#include <KDGpu/shader_object.h>
 #include <KDGpu/sampler.h>
-#include <KDGpu/shader_module.h>
 #include <KDGpu/texture.h>
 #include <KDGpu/texture_view.h>
 
@@ -96,11 +95,14 @@ class ImGuiRenderer {
     Gpu::Queue *m_queue{nullptr};
     ImGuiContext *m_imGuiContext{nullptr};
 
-    Gpu::ShaderModule m_vertexShader;
-    Gpu::ShaderModule m_fragmentShader;
-    Gpu::GraphicsPipeline m_pipeline;
-    Gpu::GraphicsPipelineOptions m_pipelineInfo;
+    Gpu::ShaderObject m_vertexShaderObject;
+    Gpu::ShaderObject m_fragmentShaderObject;
     Gpu::PipelineLayout m_pipelineLayout;
+    std::vector<Gpu::ShaderStageFlags> m_shaderStages;
+    std::vector<Gpu::Handle<Gpu::ShaderObject_t>> m_shaderHandles;
+    std::vector<Gpu::VertexBufferLayout> m_vertexLayouts;
+    std::vector<Gpu::VertexAttribute> m_vertexAttributes;
+    Gpu::SampleCountFlagBits m_samples{Gpu::SampleCountFlagBits::Samples1Bit};
 
     float m_oldScaleFactor = 1.0f;
 };

@@ -2,8 +2,10 @@
 include(FetchContent)
 
 find_package(KDBindings REQUIRED)
-find_package(VulkanHeaders REQUIRED)
 find_package(imgui REQUIRED)
+if(NOT TARGET Vulkan::Vulkan)
+    find_package(Vulkan REQUIRED)
+endif()
 find_package(glm REQUIRED)
 
 set(KDGPU_BUILD_KDXR OFF)
@@ -49,6 +51,7 @@ target_include_directories(${TARGET_NAME} PRIVATE "include/optick")
 if (WIN32)
     target_compile_definitions(${TARGET_NAME} PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif ()
+target_link_libraries(${TARGET_NAME} PRIVATE Vulkan::Vulkan)
 
 # Corrected HEADERS file list
 set(HEADERS
@@ -81,8 +84,6 @@ target_link_libraries(${TARGET_NAME}
         PUBLIC
         imgui::imgui
         glm::glm
-        PRIVATE
-        Vulkan::Headers
 )
 
 add_library(Cory::ThirdParty ALIAS ThirdPartyLibs)

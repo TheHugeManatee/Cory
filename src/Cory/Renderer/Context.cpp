@@ -203,7 +203,8 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
         .extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
                        VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
-                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME},
+                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+                       VK_EXT_SHADER_OBJECT_EXTENSION_NAME},
         .queues = {},
         .requestedFeatures =
             features == DeviceFeatures::All ? selectedAdapter->features() : getRequiredFeatures(),
@@ -223,7 +224,11 @@ Gpu::AdapterFeatures Context::getRequiredFeatures() const
     features.bindGroupBindingStorageBufferUpdateAfterBind = true;
     features.bindGroupBindingPartiallyBound = true;
     features.runtimeBindGroupArray = true;
-
+    features.dynamicRendering = true;
+    features.logicOp = true;
+    features.wideLines = true;
+    features.largePoints = true;
+    features.shaderObjectDynamicRendering = true;
     return features;
 }
 
@@ -293,7 +298,8 @@ void Context::setupHeadlessDevice()
         .layers = {},
         .extensions = {VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
                        VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
-                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME},
+                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+                       VK_EXT_SHADER_OBJECT_EXTENSION_NAME},
         .queues = {},
         .requestedFeatures = getRequiredFeatures(),
         .adapterGroup = {},

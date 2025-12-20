@@ -130,8 +130,9 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
-    imguiLayer_ =
-        &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+    // ImGui layer does not currently support non-dynamic rendering anymore..
+    //imguiLayer_ =
+    //    &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 }
 
 HelloTriangleApplication::~HelloTriangleApplication()
@@ -164,8 +165,9 @@ void HelloTriangleApplication::run()
             .deltaTime = delta,
         });
 
-        ImGui::ShowDemoWindow();
-        drawImguiControls();
+        // ImGui layer does not currently support non-dynamic rendering anymore..
+        //ImGui::ShowDemoWindow();
+        //drawImguiControls();
 
         recordCommands(frameCtx);
 
@@ -314,7 +316,9 @@ void HelloTriangleApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx,
 {
     // Updates the geometry buffers used by ImGui and records the commands needed to
     // get the ui into a render target.
-    imguiLayer_->recordFrameCommands(frameCtx, recorder);
+    if (imguiLayer_ != nullptr) {
+        imguiLayer_->recordFrameCommands(frameCtx, recorder);
+    }
 }
 
 double HelloTriangleApplication::now() const

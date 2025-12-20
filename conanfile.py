@@ -24,7 +24,6 @@ class CoryProjectConan(ConanFile):
         self.requires("ms-gsl/4.2.0")
         self.requires("range-v3/0.12.0")
         self.requires("spdlog/1.16.0")
-        self.requires("vulkan-headers/1.4.313.0")
 
     def generate(self):
         tc = CMakeToolchain(self, generator="Ninja")

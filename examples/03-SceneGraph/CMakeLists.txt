@@ -1,7 +1,6 @@
 set(TARGET_NAME "SceneGraphDemo")
 
 find_package(Vulkan REQUIRED)
-find_package(GLEW REQUIRED)
 find_package(range-v3 REQUIRED)
 find_package(CLI11 REQUIRED)
 

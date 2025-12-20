@@ -18,12 +18,12 @@
 namespace Cory {
 namespace detail {
 
-
 /**
  * @brief Base class to support the slang COM interfaces.
- * 
+ *
  * Slang COM interfaces require reference counting and querying for interfaces:
- *  - addRef and release to add and remove ref counts, deleting itself when the last ref is released.
+ *  - addRef and release to add and remove ref counts, deleting itself when the last ref is
+ * released.
  *  - queryInterface to get pointers to supported interfaces (equivalent to dynamic_cast)
  */
 class SlangObject {
@@ -44,7 +44,7 @@ class SlangObject {
     {
         if (void *ptr = castAs(uuid)) {
             *outObject = ptr;
-            addRef();
+            addRefInternal();
             return SLANG_OK;
         }
         *outObject = nullptr;
@@ -95,7 +95,8 @@ class MemoryBlob final : virtual public ISlangBlob, virtual public SlangObject {
 };
 
 /// @brief File system that uses Cory's resource locator to find and load included shader files.
-/// Can later be extended to support virtual file systems like cmrc etc, to package shaders into the binary.
+/// Can later be extended to support virtual file systems like cmrc etc, to package shaders into the
+/// binary.
 class CoryResourceFileSystem final : public ISlangFileSystem, public SlangObject {
   public:
     explicit CoryResourceFileSystem() {}

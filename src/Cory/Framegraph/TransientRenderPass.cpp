@@ -76,7 +76,7 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
     // as we assume it is a depth-only pass
     const uint32_t fbArrayLayers = resolvedAttachments.empty() ? 1 : 0;
 
-    Gpu::RenderPassCommandRecorderOptions renderPassOptions{
+    Gpu::RenderPassCommandRecorderWithDynamicRenderingOptions renderPassOptions{
         .colorAttachments = std::move(resolvedAttachments),
         .depthStencilAttachment = depthStencilAttachment.value_or(Gpu::DepthStencilAttachment{}),
         .samples = determineSampleCount(),

@@ -36,7 +36,7 @@ class HelloTriangleApplication : public Cory::Application {
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<TrianglePipeline> pipeline_;
     std::unique_ptr<Mesh> mesh_;
-    Cory::ImGuiLayer *imguiLayer_;
+    Cory::ImGuiLayer *imguiLayer_{};
 
     double startupTime_;
     bool disableValidation_{false};

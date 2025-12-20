@@ -142,7 +142,8 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
                      Gpu::DynamicState::DepthTestEnable,
                      Gpu::DynamicState::DepthWriteEnable,
                      Gpu::DynamicState::DepthCompareOp},
-            }
+            },
+        .dynamicRendering = {.enabled = true}
         // If you target a predefined RenderPass instead of dynamic rendering:
         // .renderPass = myRenderPass, .subpassIndex = 0
     };

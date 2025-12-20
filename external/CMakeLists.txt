@@ -13,9 +13,11 @@ set(KDGPU_OPENXR_SUPPORT OFF)
 
 FetchContent_Declare(
         KDGpu
-        SOURCE_DIR "C:/dev/KDGpu"
+        #SOURCE_DIR "C:/dev/KDGpu"
         #GIT_REPOSITORY https://github.com/KDAB/KDGpu.git
         #GIT_TAG v0.8.0
+        GIT_REPOSITORY https://github.com/TheHugeManatee/KDGpu.git
+        GIT_COMMIT 57a7a89442c3c4ffa2a86695f0aa505d8484bbf9
 )
 FetchContent_MakeAvailable(KDGpu)
 

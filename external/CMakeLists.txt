@@ -1,4 +1,4 @@
-## KDGPU Does not support conan yet
+## KDGPU Does not support conan, so we consume it via FetchContent here
 include(FetchContent)
 
 find_package(KDBindings REQUIRED)
@@ -8,6 +8,7 @@ if(NOT TARGET Vulkan::Vulkan)
 endif()
 find_package(glm REQUIRED)
 
+# disable KDXR to speed up build times
 set(KDGPU_BUILD_KDXR OFF)
 set(KDGPU_OPENXR_SUPPORT OFF)
 
@@ -22,10 +23,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(KDGpu)
 
 #include(${KDGpu_SOURCE_DIR}/cmake/CMakeRC.cmake)
-
-## This is where you put and configure external dependencies
-## A couple of options are:
-# * Header-only libraries: Just include directly into your repository
 
 set(TARGET_NAME ThirdPartyLibs)
 

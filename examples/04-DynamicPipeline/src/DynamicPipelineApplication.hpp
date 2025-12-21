@@ -3,11 +3,14 @@
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Renderer/Gpu.hpp>
+#include <expected>
 
 #include <KDGpu/shader_object.h>
 
+#include <Cory/Renderer/Shader.hpp>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -56,14 +59,17 @@ class DynamicPipelineApplication : public Cory::Application {
     void loadShaders();
     void createGeometry();
     void recordCommands(Cory::FrameContext &frameCtx);
-    void renderImGuiOverlay(Cory::FrameContext &frameCtx, KDGpu::RenderPassCommandRecorder *recorder);
+    void renderImGuiOverlay(Cory::FrameContext &frameCtx,
+                            KDGpu::RenderPassCommandRecorder *recorder);
     void drawUi();
+    bool compileFragmentShaderSource(std::string_view sourceText);
 
     static uint32_t decodeSampleCount(Gpu::SampleCountFlagBits flag);
-    Gpu::ShaderObject createShaderObject(const std::filesystem::path &sourcePath,
-                                         std::string_view label,
-                                         Gpu::ShaderStageFlagBits stage,
-                                         Gpu::ShaderStageFlags nextStage);
+    std::expected<Gpu::ShaderObject, std::string>
+    createShaderObject(const Cory::ShaderSource &sourcePath,
+                       std::string_view label,
+                       Gpu::ShaderStageFlagBits stage,
+                       Gpu::ShaderStageFlags nextStage);
 
     double now() const;
     double getElapsedTimeSeconds() const;
@@ -78,8 +84,13 @@ class DynamicPipelineApplication : public Cory::Application {
 
     Gpu::ShaderObject vertexShader_;
     Gpu::ShaderObject fragmentShader_;
-    std::vector<Gpu::ShaderStageFlags> shaderStages_;
-    std::vector<Gpu::Handle<Gpu::ShaderObject_t>> shaderObjects_;
+    std::optional<Cory::ShaderSource> fragmentShaderCode_;
+    std::string fragmentShaderEditorSource_;
+    std::string fragmentShaderCompileMessage_;
+    double fragmentShaderLastEditTime_{0.0};
+    bool fragmentShaderDirty_{false};
+    bool fragmentShaderAutoCompile_{false};
+    bool fragmentShaderCompileSuccess_{true};
 
     std::vector<Gpu::VertexBufferLayout> vertexLayouts_;
     std::vector<Gpu::VertexAttribute> vertexAttributes_;

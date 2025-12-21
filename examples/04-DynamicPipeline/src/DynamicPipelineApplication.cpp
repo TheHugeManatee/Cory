@@ -10,6 +10,7 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
+#include <Cory/Renderer/SlangCompiler.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <KDGpu/memory_barrier.h>
@@ -33,12 +34,43 @@
 #include <vector>
 
 namespace {
+constexpr double kShaderAutoCompileDelaySeconds = 0.35;
+
+int ShaderEditorCallback(ImGuiInputTextCallbackData *data)
+{
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+        auto *str = static_cast<std::string *>(data->UserData);
+        str->resize(data->BufTextLen);
+        data->Buf = str->data();
+    }
+    return 0;
+}
+
+bool ShaderEditorInputTextMultiline(const char *label,
+                                    std::string &text,
+                                    const ImVec2 &size,
+                                    ImGuiInputTextFlags flags = 0)
+{
+    flags |= ImGuiInputTextFlags_CallbackResize;
+    if (text.capacity() == text.size()) {
+        text.reserve(text.size() + 1);
+    }
+
+    return ImGui::InputTextMultiline(
+        label, text.data(), text.capacity() + 1, size, flags, ShaderEditorCallback, &text);
+}
 
 int cullModeToIndex(Gpu::CullModeFlags mode)
 {
-    if (mode == Gpu::CullModeFlagBits::FrontBit) { return 1; }
-    if (mode == Gpu::CullModeFlagBits::BackBit) { return 2; }
-    if (mode == Gpu::CullModeFlagBits::FrontAndBack) { return 3; }
+    if (mode == Gpu::CullModeFlagBits::FrontBit) {
+        return 1;
+    }
+    if (mode == Gpu::CullModeFlagBits::BackBit) {
+        return 2;
+    }
+    if (mode == Gpu::CullModeFlagBits::FrontAndBack) {
+        return 3;
+    }
     return 0;
 }
 
@@ -145,8 +177,8 @@ DynamicPipelineApplication::DynamicPipelineApplication(int argc, char **argv)
     Cory::ResourceLocator::addSearchPath(DYNAMIC_PIPELINE_RESOURCE_DIR);
 
     init(Cory::ContextCreationInfo{
-        .validation = disableValidation_ ? Cory::ValidationLayers::Disabled
-                                         : Cory::ValidationLayers::Enabled,
+        .validation =
+            disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
     });
 
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1280, 720};
@@ -194,28 +226,41 @@ void DynamicPipelineApplication::run()
         recordCommands(frameCtx);
         window_->submitAndPresent(frameCtx);
 
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
+        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+            break;
+        }
     }
 }
 
 void DynamicPipelineApplication::loadShaders()
 {
-    auto vertexPath = Cory::ResourceLocator::Locate("dynamic_pipeline.vert.slang",
-                                                    Cory::ResourceType::Shader);
-    auto fragmentPath = Cory::ResourceLocator::Locate("dynamic_pipeline.frag.slang",
-                                                      Cory::ResourceType::Shader);
+    auto vertexPath =
+        Cory::ResourceLocator::Locate("dynamic_pipeline.vert.slang", Cory::ResourceType::Shader);
+    auto fragmentPath =
+        Cory::ResourceLocator::Locate("dynamic_pipeline.frag.slang", Cory::ResourceType::Shader);
 
-    vertexShader_ = createShaderObject(vertexPath,
-                                       "Dynamic Vertex Shader",
-                                       Gpu::ShaderStageFlagBits::VertexBit,
-                                       Gpu::ShaderStageFlagBits::FragmentBit);
-    fragmentShader_ = createShaderObject(fragmentPath,
-                                         "Dynamic Fragment Shader",
-                                         Gpu::ShaderStageFlagBits::FragmentBit,
-                                         {});
+    Cory::ShaderSource vertexShaderSource{vertexPath, Gpu::ShaderStageFlagBits::VertexBit};
+    auto vertexShader = createShaderObject(vertexShaderSource,
+                                           "Dynamic Vertex Shader",
+                                           Gpu::ShaderStageFlagBits::VertexBit,
+                                           Gpu::ShaderStageFlagBits::FragmentBit);
+    if (!vertexShader) {
+        throw std::runtime_error{vertexShader.error()};
+    }
+    vertexShader_ = std::move(vertexShader.value());
 
-    shaderStages_ = {Gpu::ShaderStageFlagBits::VertexBit, Gpu::ShaderStageFlagBits::FragmentBit};
-    shaderObjects_ = {vertexShader_.handle(), fragmentShader_.handle()};
+    fragmentShaderCode_ = Cory::ShaderSource{fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
+    fragmentShaderEditorSource_ = fragmentShaderCode_->source();
+
+    auto fragmentShader = createShaderObject(
+        *fragmentShaderCode_, "Dynamic Fragment Shader", Gpu::ShaderStageFlagBits::FragmentBit, {});
+    if (!fragmentShader) {
+        throw std::runtime_error{fragmentShader.error()};
+    }
+    fragmentShader_ = std::move(fragmentShader.value());
+    fragmentShaderDirty_ = false;
+    fragmentShaderCompileSuccess_ = true;
+    fragmentShaderCompileMessage_ = "Fragment shader loaded";
 }
 
 void DynamicPipelineApplication::createGeometry()
@@ -270,7 +315,8 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     auto pass = frameCtx.commandBuffer.beginRenderPass(passOptions);
 
-    pass.bindShaders(shaderStages_, shaderObjects_);
+    pass.bindShaders({Gpu::ShaderStageFlagBits::VertexBit, Gpu::ShaderStageFlagBits::FragmentBit},
+                     {vertexShader_.handle(), fragmentShader_.handle()});
 
     pass.setPrimitiveTopology(Gpu::PrimitiveTopology::TriangleList);
     pass.setPrimitiveRestartEnabled(settings_.primitiveRestart);
@@ -293,18 +339,17 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
     pass.setDepthClampEnabled(settings_.depthClamp);
     pass.setStencilTestEnabled(false);
     pass.setStencilOp(Gpu::StencilFaceFlagBits::FrontBit,
-                     Gpu::StencilOperation::Keep,
-                     Gpu::StencilOperation::Keep,
-                     Gpu::StencilOperation::Keep,
-                     Gpu::CompareOperation::Always);
+                      Gpu::StencilOperation::Keep,
+                      Gpu::StencilOperation::Keep,
+                      Gpu::StencilOperation::Keep,
+                      Gpu::CompareOperation::Always);
 
     pass.setAlphaToCoverageEnabled(settings_.alphaToCoverage);
     pass.setAlphaToOneEnabled(settings_.alphaToOne);
 
-    const auto viewportScale =
-        settings_.animateViewport
-            ? 0.35f + 0.35f * (std::sin(time) * 0.5f + 0.5f) + 0.3f
-            : settings_.viewportScale;
+    const auto viewportScale = settings_.animateViewport
+                                   ? 0.35f + 0.35f * (std::sin(time) * 0.5f + 0.5f) + 0.3f
+                                   : settings_.viewportScale;
     const float viewportWidth = viewportScale * static_cast<float>(frameCtx.extent.x);
     const float viewportHeight = viewportScale * static_cast<float>(frameCtx.extent.y);
     const float viewportOffsetX = 0.5f * (static_cast<float>(frameCtx.extent.x) - viewportWidth);
@@ -346,10 +391,10 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
     colorMask.setFlag(Gpu::ColorComponentFlagBits::AlphaBit, settings_.writeMask[3]);
 
     const Gpu::ColorBlendEquation blendEquation{
-        .srcColorBlendFactor = settings_.colorBlend ? Gpu::BlendFactor::SrcAlpha
-                                                    : Gpu::BlendFactor::One,
-        .dstColorBlendFactor = settings_.colorBlend ? Gpu::BlendFactor::OneMinusSrcAlpha
-                                                    : Gpu::BlendFactor::Zero,
+        .srcColorBlendFactor =
+            settings_.colorBlend ? Gpu::BlendFactor::SrcAlpha : Gpu::BlendFactor::One,
+        .dstColorBlendFactor =
+            settings_.colorBlend ? Gpu::BlendFactor::OneMinusSrcAlpha : Gpu::BlendFactor::Zero,
         .colorBlendOp = Gpu::BlendOperation::Add,
         .srcAlphaBlendFactor = Gpu::BlendFactor::One,
         .dstAlphaBlendFactor = Gpu::BlendFactor::Zero,
@@ -367,8 +412,7 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     const uint32_t sampleCount = decodeSampleCount(frameCtx.sampleCount);
     const uint32_t maskWordCount = std::max(1u, (sampleCount + 31u) / 32u);
-    const Gpu::SampleMask sampleMask =
-        settings_.sampleMaskAlternating ? 0xAAAAAAAAu : 0xFFFFFFFFu;
+    const Gpu::SampleMask sampleMask = settings_.sampleMaskAlternating ? 0xAAAAAAAAu : 0xFFFFFFFFu;
     const std::vector<Gpu::SampleMask> sampleMasks(maskWordCount, sampleMask);
     pass.setSampleMask(frameCtx.sampleCount, sampleMasks);
 
@@ -458,6 +502,110 @@ void DynamicPipelineApplication::drawUi()
         ImGui::Checkbox("Write Alpha", &settings_.writeMask[3]);
     }
     ImGui::End();
+
+    if (ImGui::Begin("Fragment Shader")) {
+        const std::string shaderPathString = fragmentShaderCode_->filePath().string();
+        ImGui::TextDisabled("%s", shaderPathString.c_str());
+
+        bool requestCompile = false;
+        if (ImGui::Button("Compile shader")) {
+            requestCompile = true;
+        }
+        ImGui::SameLine();
+        ImGui::Checkbox("Auto compile", &fragmentShaderAutoCompile_);
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+            ImGui::SetTooltip("Recompile automatically after edits (%.0f ms delay)",
+                              kShaderAutoCompileDelaySeconds * 1000.0);
+        }
+        ImGui::NewLine();
+        const float editorHeight = 320.0f;
+        const ImVec2 editorSize{ImGui::GetContentRegionAvail().x, editorHeight};
+        const bool editorChanged = ShaderEditorInputTextMultiline(
+            "##FragmentShaderEditor",
+            fragmentShaderEditorSource_,
+            editorSize,
+            ImGuiInputTextFlags_AllowTabInput | ImGuiInputTextFlags_NoHorizontalScroll);
+        const bool editorFocusedThisFrame = ImGui::IsItemFocused();
+        if (editorChanged) {
+            fragmentShaderDirty_ = true;
+            fragmentShaderLastEditTime_ = getElapsedTimeSeconds();
+        }
+
+        const ImGuiIO &io = ImGui::GetIO();
+        if (editorFocusedThisFrame && (io.KeyCtrl || io.KeySuper) &&
+            ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
+            requestCompile = true;
+        }
+
+        if (!requestCompile && fragmentShaderDirty_ && fragmentShaderAutoCompile_) {
+            const double timeSinceEdit = getElapsedTimeSeconds() - fragmentShaderLastEditTime_;
+            if (timeSinceEdit >= kShaderAutoCompileDelaySeconds) {
+                requestCompile = true;
+            }
+        }
+
+        if (requestCompile) {
+            compileFragmentShaderSource(fragmentShaderEditorSource_);
+        }
+
+        std::string statusLine;
+        ImVec4 statusColor{0.8f, 0.8f, 0.8f, 1.0f};
+        if (fragmentShaderDirty_) {
+            statusLine = "Modified - compile to apply";
+            statusColor = ImVec4(0.95f, 0.78f, 0.25f, 1.0f);
+        }
+        else if (fragmentShaderCompileSuccess_) {
+            statusLine = fragmentShaderCompileMessage_.empty() ? "Compilation succeeded"
+                                                               : fragmentShaderCompileMessage_;
+            statusColor = ImVec4(0.45f, 0.85f, 0.45f, 1.0f);
+        }
+        else {
+            statusLine = "Last compile failed";
+            statusColor = ImVec4(0.95f, 0.45f, 0.45f, 1.0f);
+        }
+
+        ImGui::Spacing();
+        ImGui::TextColored(statusColor, "%s", statusLine.c_str());
+
+        if ((!fragmentShaderDirty_ || !fragmentShaderCompileSuccess_) &&
+            !fragmentShaderCompileMessage_.empty()) {
+            ImGui::PushTextWrapPos();
+            if (fragmentShaderCompileSuccess_) {
+                ImGui::TextDisabled("%s", fragmentShaderCompileMessage_.c_str());
+            }
+            else {
+                ImGui::TextUnformatted(fragmentShaderCompileMessage_.c_str());
+            }
+            ImGui::PopTextWrapPos();
+        }
+    }
+    ImGui::End();
+}
+
+bool DynamicPipelineApplication::compileFragmentShaderSource(std::string_view sourceText)
+{
+    const auto shaderPath = fragmentShaderCode_->filePath();
+    Cory::ShaderSource editedSource{
+        std::string{sourceText},
+        Gpu::ShaderStageFlagBits::FragmentBit,
+        shaderPath,
+    };
+
+    auto shader = createShaderObject(
+        editedSource, "Dynamic Fragment Shader", Gpu::ShaderStageFlagBits::FragmentBit, {});
+    if (!shader) {
+        fragmentShaderCompileSuccess_ = false;
+        fragmentShaderCompileMessage_ = shader.error();
+        return false;
+    }
+
+    fragmentShader_ = std::move(shader.value());
+    fragmentShaderCode_ = std::move(editedSource);
+    fragmentShaderDirty_ = false;
+    fragmentShaderCompileSuccess_ = true;
+    fragmentShaderCompileMessage_ = "Compilation succeeded";
+    fragmentShaderLastEditTime_ = getElapsedTimeSeconds();
+    return true;
 }
 
 void DynamicPipelineApplication::resetAttachmentLayouts()
@@ -475,9 +623,13 @@ void DynamicPipelineApplication::resetAttachmentLayouts()
 
 void DynamicPipelineApplication::transitionColorAttachmentForRender(Cory::FrameContext &frameCtx)
 {
-    if (swapchainLayouts_.empty()) { return; }
+    if (swapchainLayouts_.empty()) {
+        return;
+    }
     const uint32_t index = frameCtx.swapchainImageIndex;
-    if (index >= swapchainLayouts_.size()) { return; }
+    if (index >= swapchainLayouts_.size()) {
+        return;
+    }
 
     const auto oldLayout = swapchainLayouts_[index];
     const auto srcStages = oldLayout == Gpu::TextureLayout::ColorAttachmentOptimal
@@ -507,9 +659,13 @@ void DynamicPipelineApplication::transitionColorAttachmentForRender(Cory::FrameC
 
 void DynamicPipelineApplication::transitionColorAttachmentForPresent(Cory::FrameContext &frameCtx)
 {
-    if (swapchainLayouts_.empty()) { return; }
+    if (swapchainLayouts_.empty()) {
+        return;
+    }
     const uint32_t index = frameCtx.swapchainImageIndex;
-    if (index >= swapchainLayouts_.size()) { return; }
+    if (index >= swapchainLayouts_.size()) {
+        return;
+    }
 
     frameCtx.commandBuffer.textureMemoryBarrier(Gpu::TextureMemoryBarrierOptions{
         .srcStages = Gpu::PipelineStageFlagBit::ColorAttachmentOutputBit,
@@ -531,20 +687,22 @@ void DynamicPipelineApplication::transitionColorAttachmentForPresent(Cory::Frame
 
 void DynamicPipelineApplication::transitionDepthAttachmentForRender(Cory::FrameContext &frameCtx)
 {
-    if (depthLayouts_.empty()) { return; }
+    if (depthLayouts_.empty()) {
+        return;
+    }
     const uint32_t index = frameCtx.swapchainImageIndex;
-    if (index >= depthLayouts_.size()) { return; }
+    if (index >= depthLayouts_.size()) {
+        return;
+    }
 
     const auto oldLayout = depthLayouts_[index];
-    const auto srcStages =
-        oldLayout == Gpu::TextureLayout::DepthStencilAttachmentOptimal
-            ? (Gpu::PipelineStageFlagBit::EarlyFragmentTestBit |
-               Gpu::PipelineStageFlagBit::LateFragmentTestBit)
-            : Gpu::PipelineStageFlagBit::TopOfPipeBit;
-    const auto srcMask =
-        oldLayout == Gpu::TextureLayout::DepthStencilAttachmentOptimal
-            ? Gpu::AccessFlagBit::DepthStencilAttachmentWriteBit
-            : Gpu::AccessFlagBit::None;
+    const auto srcStages = oldLayout == Gpu::TextureLayout::DepthStencilAttachmentOptimal
+                               ? (Gpu::PipelineStageFlagBit::EarlyFragmentTestBit |
+                                  Gpu::PipelineStageFlagBit::LateFragmentTestBit)
+                               : Gpu::PipelineStageFlagBit::TopOfPipeBit;
+    const auto srcMask = oldLayout == Gpu::TextureLayout::DepthStencilAttachmentOptimal
+                             ? Gpu::AccessFlagBit::DepthStencilAttachmentWriteBit
+                             : Gpu::AccessFlagBit::None;
 
     frameCtx.commandBuffer.textureMemoryBarrier(Gpu::TextureMemoryBarrierOptions{
         .srcStages = srcStages,
@@ -555,7 +713,8 @@ void DynamicPipelineApplication::transitionDepthAttachmentForRender(Cory::FrameC
         .oldLayout = oldLayout,
         .newLayout = Gpu::TextureLayout::DepthStencilAttachmentOptimal,
         .texture = frameCtx.depthImage->handle(),
-        .range = {.aspectMask = Gpu::TextureAspectFlagBits::DepthBit | Gpu::TextureAspectFlagBits::StencilBit,
+        .range = {.aspectMask =
+                      Gpu::TextureAspectFlagBits::DepthBit | Gpu::TextureAspectFlagBits::StencilBit,
                   .baseMipLevel = 0,
                   .levelCount = 1,
                   .baseArrayLayer = 0,
@@ -565,15 +724,16 @@ void DynamicPipelineApplication::transitionDepthAttachmentForRender(Cory::FrameC
     depthLayouts_[index] = Gpu::TextureLayout::DepthStencilAttachmentOptimal;
 }
 
-Gpu::ShaderObject DynamicPipelineApplication::createShaderObject(const std::filesystem::path &sourcePath,
-                                                                 std::string_view label,
-                                                                 Gpu::ShaderStageFlagBits stage,
-                                                                 Gpu::ShaderStageFlags nextStage)
+std::expected<Gpu::ShaderObject, std::string>
+DynamicPipelineApplication::createShaderObject(const Cory::ShaderSource &source,
+                                               std::string_view label,
+                                               Gpu::ShaderStageFlagBits stage,
+                                               Gpu::ShaderStageFlags nextStage)
 {
-    Cory::ShaderSource source{sourcePath, stage};
-    std::vector<uint32_t> spirv = Cory::Shader::CompileToSpv(source, false);
-    if (spirv.empty()) {
-        throw std::runtime_error{"Failed to compile shader: " + sourcePath.string()};
+    static Cory::SlangCompiler compiler;
+    auto compileResult = compiler.compileShader(source, "main", false);
+    if (!compileResult) {
+        return std::unexpected(compileResult.error());
     }
 
     std::string labelStorage{label};
@@ -581,7 +741,7 @@ Gpu::ShaderObject DynamicPipelineApplication::createShaderObject(const std::file
         .label = labelStorage,
         .stage = stage,
         .nextStage = nextStage,
-        .code = spirv,
+        .code = *compileResult,
         .entryPoint = "main",
         .bindGroupLayouts = {},
         .pushConstantRanges = {},

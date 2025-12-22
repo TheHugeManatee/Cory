@@ -195,17 +195,17 @@ void SlangCompiler::initSession()
     }
 }
 
-SlangCompiler::CompilationResult
+CompilationResult
 SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryPoint, bool optimize)
 {
     if (!session_) {
-        return makeError("Slang session is not initialized");
+        return std::unexpected{"Slang session is not initialized"};
     }
 
     Slang::ComPtr<slang::ICompileRequest> request;
     SlangResult createResult = session_->createCompileRequest(request.writeRef());
     if (SLANG_FAILED(createResult)) {
-        return makeError("Failed to create Slang compile request");
+        return std::unexpected{"Failed to create Slang compile request"};
     }
 
     request->setCodeGenTarget(SLANG_SPIRV);
@@ -223,7 +223,7 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
     }
     const auto stage = toSlangStage(source.type());
     if (stage == SlangStage::SLANG_STAGE_NONE) {
-        return makeError("Unsupported shader stage for Slang compilation");
+        return std::unexpected{"Unsupported shader stage for Slang compilation"};
     }
 
     auto detectLanguage = [&source]() {
@@ -256,17 +256,17 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
         Slang::ComPtr<slang::IBlob> diagnostics;
         request->getDiagnosticOutputBlob(diagnostics.writeRef());
         if (diagnostics) {
-            return makeError(
-                std::string(static_cast<const char *>(diagnostics->getBufferPointer())));
+            return std::unexpected{
+                std::string(static_cast<const char *>(diagnostics->getBufferPointer()))};
         }
-        return makeError("Slang compilation failed");
+        return std::unexpected{"Slang compilation failed"};
     }
 
     Slang::ComPtr<slang::IBlob> spirvCode;
     SlangResult codeResult =
         request->getEntryPointCodeBlob(entryPointIndex, 0, spirvCode.writeRef());
     if (SLANG_FAILED(codeResult) || !spirvCode) {
-        return makeError("Failed to retrieve SPIR-V from Slang compile request");
+        return std::unexpected{"Failed to retrieve SPIR-V from Slang compile request"};
     }
 
     SpirvByteCode result;
@@ -293,8 +293,4 @@ SlangStage SlangCompiler::toSlangStage(Gpu::ShaderStageFlagBits stage) const
     }
 }
 
-SlangCompiler::CompilationResult SlangCompiler::makeError(std::string message) const
-{
-    return std::unexpected(std::move(message));
-}
 } // namespace Cory

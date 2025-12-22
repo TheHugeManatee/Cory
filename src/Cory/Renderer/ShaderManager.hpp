@@ -51,7 +51,7 @@ class ShaderManager : NoCopy {
     void release(ShaderHandle shaderHandle, ValOptional<uint64_t> lastUsedFrame = {});
 
     /// Release any shaders that are no longer in use
-    void clearDeferredReleases(uint64_t currentFrame);
+    void clearDeferredReleases(uint64_t currentFrame = UINT64_MAX);
 
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;

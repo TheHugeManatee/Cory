@@ -53,8 +53,7 @@ ShaderSource::ShaderSource(std::string source,
 {
 }
 
-ShaderSource::ShaderSource(std::filesystem::path filePath,
-                           Gpu::ShaderStageFlagBits type)
+ShaderSource::ShaderSource(std::filesystem::path filePath, Gpu::ShaderStageFlagBits type)
     : type_{type}
     , filename_{std::move(filePath)}
 {
@@ -66,19 +65,12 @@ ShaderSource::ShaderSource(std::filesystem::path filePath,
     }
 }
 
-std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source,
-                                           bool optimize,
-                                           std::string_view entryPoint)
+CompilationResult
+Shader::CompileToSpv(const ShaderSource &source, bool optimize, std::string_view entryPoint)
 {
     static SlangCompiler compiler;
 
-    auto result = compiler.compileShader(source, entryPoint, optimize);
-    if (!result.has_value()) {
-        CO_CORE_ERROR("Failed to compile {}: {}", source.filePath().string(), result.error());
-        return {};
-    }
-
-    return *result;
+    return compiler.compileShader(source, entryPoint, optimize);
 }
 
 // default is an empty (invalid) shader
@@ -93,9 +85,16 @@ Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
     , type_{source_.type()}
     , entryPoint_{std::move(entryPoint)}
 {
-    spirvBinary_ = CompileToSpv(source_, false, entryPoint_);
+    auto result = CompileToSpv(source_, false, entryPoint_);
+    if (result.has_value()) {
+        spirvBinary_ = result.value();
+    }
+    else {
+        error_ = result.error();
+    }
+    // No spirv code means invalid shader, not worth trying to create the object
     if (spirvBinary_.empty()) {
-        throw std::runtime_error{"Could not compile shader source to SPIR-V"};
+        return;
     }
 
     size_ = spirvBinary_.size() * sizeof(uint32_t);
@@ -121,8 +120,9 @@ Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
     };
 
     shaderObject_ = ctx_->device().createShaderObject(options);
+
     if (!shaderObject_.isValid()) {
-        throw std::runtime_error{"Failed to create shader object"};
+        error_ = "Failed to create shader object for shader";
     }
 }
 

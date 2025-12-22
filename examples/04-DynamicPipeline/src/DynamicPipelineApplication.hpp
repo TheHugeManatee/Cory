@@ -3,12 +3,8 @@
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Renderer/Gpu.hpp>
-#include <expected>
-
-#include <KDGpu/shader_object.h>
 
 #include <Cory/Renderer/Shader.hpp>
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -61,15 +57,10 @@ class DynamicPipelineApplication : public Cory::Application {
     void recordCommands(Cory::FrameContext &frameCtx);
     void renderImGuiOverlay(Cory::FrameContext &frameCtx,
                             KDGpu::RenderPassCommandRecorder *recorder);
-    void drawUi();
-    bool compileFragmentShaderSource(std::string_view sourceText);
+    void drawUi(const Cory::FrameContext &frameCtx);
+    bool compileFragmentShaderSource(std::string_view sourceText, uint64_t currentFrameNumber);
 
     static uint32_t decodeSampleCount(Gpu::SampleCountFlagBits flag);
-    std::expected<Gpu::ShaderObject, std::string>
-    createShaderObject(const Cory::ShaderSource &sourcePath,
-                       std::string_view label,
-                       Gpu::ShaderStageFlagBits stage,
-                       Gpu::ShaderStageFlags nextStage);
 
     double now() const;
     double getElapsedTimeSeconds() const;
@@ -82,8 +73,8 @@ class DynamicPipelineApplication : public Cory::Application {
     Cory::ImGuiLayer *imguiLayer_{nullptr};
     Cory::Mesh mesh_;
 
-    Gpu::ShaderObject vertexShader_;
-    Gpu::ShaderObject fragmentShader_;
+    Cory::ShaderHandle vertexShader_;
+    Cory::ShaderHandle fragmentShader_;
     std::optional<Cory::ShaderSource> fragmentShaderCode_;
     std::string fragmentShaderEditorSource_;
     std::string fragmentShaderCompileMessage_;

@@ -10,7 +10,9 @@
 
 #include <vulkan/vulkan.h>
 
-#include <cstdint>
+#include <expected>
+#include <vector>
+#include <string>
 
 namespace Cory {
 
@@ -35,6 +37,11 @@ template <typename BufferStruct>
     requires std::is_trivial_v<BufferStruct>
 class UniformBufferObject;
 class DescriptorSets;
+
+class SlangCompiler;
+using SpirvByteCode = std::vector<uint32_t>;
+using CompilationError = std::string;
+using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
 
 // enums
 static constexpr Gpu::ShaderStageFlagBits SHADER_TYPE_UNKNOWN = Gpu::ShaderStageFlagBits{};

@@ -172,10 +172,14 @@ void ImGuiRenderer::initialize(float scaleFactor,
     (void)depthFormat;
     m_samples = samples;
 
-    const auto vertShaderCode = Shader::CompileToSpv(
-        ShaderSource{vertexShaderSource, Gpu::ShaderStageFlagBits::VertexBit, "imgui.vert"});
-    const auto fragShaderCode = Shader::CompileToSpv(
-        ShaderSource{fragmentShaderSource, Gpu::ShaderStageFlagBits::FragmentBit, "imgui.frag"});
+    const auto vertShaderCode =
+        Shader::CompileToSpv(
+            ShaderSource{vertexShaderSource, ShaderStageFlagBits::VertexBit, "imgui.vert"})
+            .value();
+    const auto fragShaderCode =
+        Shader::CompileToSpv(
+            ShaderSource{fragmentShaderSource, ShaderStageFlagBits::FragmentBit, "imgui.frag"})
+            .value();
 
     m_bindGroupLayout = m_device->createBindGroupLayout(BindGroupLayoutOptions{
         .bindings =
@@ -195,9 +199,8 @@ void ImGuiRenderer::initialize(float scaleFactor,
         },
     };
 
-    m_pipelineLayout = m_device->createPipelineLayout(
-        PipelineLayoutOptions{.bindGroupLayouts = {m_bindGroupLayout},
-                              .pushConstantRanges = pushConstantRanges});
+    m_pipelineLayout = m_device->createPipelineLayout(PipelineLayoutOptions{
+        .bindGroupLayouts = {m_bindGroupLayout}, .pushConstantRanges = pushConstantRanges});
 
     m_vertexShaderObject = m_device->createShaderObject(ShaderObjectOptions{
         .label = "ImGui Vertex Shader",

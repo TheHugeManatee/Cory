@@ -56,18 +56,15 @@ class ShaderSource {
     std::map<std::string, std::string> macroDefinitions_;
 };
 
-class Shader {
+class Shader : NoCopy {
   public:
-    static std::vector<uint32_t> CompileToSpv(const ShaderSource &source,
-                                              bool optimize = true,
-                                              std::string_view entryPoint = "main");
+    static CompilationResult CompileToSpv(const ShaderSource &source,
+                                          bool optimize = true,
+                                          std::string_view entryPoint = "main");
 
     Shader();
     Shader(Context &ctx, ShaderSource source, std::string entryPoint = "main");
 
-    // copyable!
-    Shader(const Shader &rhs) = default;
-    Shader &operator=(const Shader &rhs) = default;
     // movable!
     Shader(Shader &&rhs) = default;
     Shader &operator=(Shader &&rhs) = default;
@@ -80,6 +77,7 @@ class Shader {
     Gpu::ShaderStageFlagBits type() const { return type_; }
     const std::string &entryPoint() const { return entryPoint_; }
     bool valid() const;
+    [[nodiscard]] CompilationError error() const { return error_; }
 
     // the size in bytes of the compiled shader module
     size_t size() const { return size_; }
@@ -95,5 +93,6 @@ class Shader {
     Gpu::ShaderObject shaderObject_;
     Gpu::ShaderStageFlags nextStages_{};
     std::string entryPoint_{"main"};
+    CompilationError error_;
 };
 } // namespace Cory

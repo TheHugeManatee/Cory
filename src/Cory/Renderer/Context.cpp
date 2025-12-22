@@ -229,6 +229,8 @@ Gpu::AdapterFeatures Context::getRequiredFeatures() const
     features.wideLines = true;
     features.largePoints = true;
     features.shaderObjectDynamicRendering = true;
+    features.bindGroupBindingUniformBufferUpdateAfterBind = true;
+    features.bindGroupBindingPartiallyBound = true;
     return features;
 }
 

@@ -4,13 +4,13 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
-#include <Cory/Base/Log.hpp>
+#include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
-#include <Cory/Renderer/SlangCompiler.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <KDGpu/memory_barrier.h>
@@ -202,7 +202,13 @@ DynamicPipelineApplication::DynamicPipelineApplication(int argc, char **argv)
         &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 }
 
-DynamicPipelineApplication::~DynamicPipelineApplication() = default;
+DynamicPipelineApplication::~DynamicPipelineApplication()
+{
+    auto &shaders = ctx().shaders();
+    shaders.release(vertexShader_);
+    shaders.release(fragmentShader_);
+    shaders.clearDeferredReleases();
+}
 
 void DynamicPipelineApplication::run()
 {
@@ -221,7 +227,7 @@ void DynamicPipelineApplication::run()
             .deltaTime = delta,
         });
 
-        drawUi();
+        drawUi(frameCtx);
 
         recordCommands(frameCtx);
         window_->submitAndPresent(frameCtx);
@@ -240,24 +246,26 @@ void DynamicPipelineApplication::loadShaders()
         Cory::ResourceLocator::Locate("dynamic_pipeline.frag.slang", Cory::ResourceType::Shader);
 
     Cory::ShaderSource vertexShaderSource{vertexPath, Gpu::ShaderStageFlagBits::VertexBit};
-    auto vertexShader = createShaderObject(vertexShaderSource,
-                                           "Dynamic Vertex Shader",
-                                           Gpu::ShaderStageFlagBits::VertexBit,
-                                           Gpu::ShaderStageFlagBits::FragmentBit);
-    if (!vertexShader) {
+
+    auto vertexShaderHandle = ctx().shaders().createShader(
+        vertexShaderSource.source(), Gpu::ShaderStageFlagBits::VertexBit, vertexPath);
+
+    const auto &vertexShader = ctx().shaders()[vertexShaderHandle];
+    if (!vertexShader.valid()) {
         throw std::runtime_error{vertexShader.error()};
     }
-    vertexShader_ = std::move(vertexShader.value());
+    vertexShader_ = vertexShaderHandle;
 
     fragmentShaderCode_ = Cory::ShaderSource{fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
     fragmentShaderEditorSource_ = fragmentShaderCode_->source();
 
-    auto fragmentShader = createShaderObject(
-        *fragmentShaderCode_, "Dynamic Fragment Shader", Gpu::ShaderStageFlagBits::FragmentBit, {});
-    if (!fragmentShader) {
+    auto fragmentShaderHandle = ctx().shaders().createShader(
+        fragmentShaderCode_->source(), Gpu::ShaderStageFlagBits::FragmentBit, fragmentPath);
+    const auto &fragmentShader = ctx().shaders()[fragmentShaderHandle];
+    if (!fragmentShader.valid()) {
         throw std::runtime_error{fragmentShader.error()};
     }
-    fragmentShader_ = std::move(fragmentShader.value());
+    fragmentShader_ = fragmentShaderHandle;
     fragmentShaderDirty_ = false;
     fragmentShaderCompileSuccess_ = true;
     fragmentShaderCompileMessage_ = "Fragment shader loaded";
@@ -315,8 +323,10 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
 
     auto pass = frameCtx.commandBuffer.beginRenderPass(passOptions);
 
+    auto vertexShaderObjectHandle = ctx().shaders()[vertexShader_].shaderHandle();
+    auto fragmentShaderObjectHandle = ctx().shaders()[fragmentShader_].shaderHandle();
     pass.bindShaders({Gpu::ShaderStageFlagBits::VertexBit, Gpu::ShaderStageFlagBits::FragmentBit},
-                     {vertexShader_.handle(), fragmentShader_.handle()});
+                     {vertexShaderObjectHandle, fragmentShaderObjectHandle});
 
     pass.setPrimitiveTopology(Gpu::PrimitiveTopology::TriangleList);
     pass.setPrimitiveRestartEnabled(settings_.primitiveRestart);
@@ -400,9 +410,9 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
         .dstAlphaBlendFactor = Gpu::BlendFactor::Zero,
         .alphaBlendOp = Gpu::BlendOperation::Add,
     };
-    const std::vector<bool> blendEnabled{settings_.colorBlend};
-    const std::vector<Gpu::ColorBlendEquation> blendEquations{blendEquation};
-    const std::vector<Gpu::ColorComponentFlags> colorMasks{colorMask};
+    const std::vector blendEnabled{settings_.colorBlend};
+    const std::vector blendEquations{blendEquation};
+    const std::vector colorMasks{colorMask};
     pass.setColorBlendEnabled(0, blendEnabled);
     pass.setColorBlendEquations(0, blendEquations);
     pass.setColorWriteMasks(0, colorMasks);
@@ -413,7 +423,7 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
     const uint32_t sampleCount = decodeSampleCount(frameCtx.sampleCount);
     const uint32_t maskWordCount = std::max(1u, (sampleCount + 31u) / 32u);
     const Gpu::SampleMask sampleMask = settings_.sampleMaskAlternating ? 0xAAAAAAAAu : 0xFFFFFFFFu;
-    const std::vector<Gpu::SampleMask> sampleMasks(maskWordCount, sampleMask);
+    const std::vector sampleMasks(maskWordCount, sampleMask);
     pass.setSampleMask(frameCtx.sampleCount, sampleMasks);
 
     pass.setVertexInput(vertexLayouts_, vertexAttributes_);
@@ -446,7 +456,7 @@ void DynamicPipelineApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx
     imguiLayer_->recordFrameCommands(frameCtx, recorder);
 }
 
-void DynamicPipelineApplication::drawUi()
+void DynamicPipelineApplication::drawUi(const Cory::FrameContext &frameCtx)
 {
     if (ImGui::Begin("Dynamic pipeline controls")) {
         static const char *cullItems[] = {"None", "Front", "Back", "Front & Back"};
@@ -545,7 +555,7 @@ void DynamicPipelineApplication::drawUi()
         }
 
         if (requestCompile) {
-            compileFragmentShaderSource(fragmentShaderEditorSource_);
+            compileFragmentShaderSource(fragmentShaderEditorSource_, frameCtx.frameNumber);
         }
 
         std::string statusLine;
@@ -582,7 +592,8 @@ void DynamicPipelineApplication::drawUi()
     ImGui::End();
 }
 
-bool DynamicPipelineApplication::compileFragmentShaderSource(std::string_view sourceText)
+bool DynamicPipelineApplication::compileFragmentShaderSource(std::string_view sourceText,
+                                                             uint64_t currentFrameNumber)
 {
     const auto shaderPath = fragmentShaderCode_->filePath();
     Cory::ShaderSource editedSource{
@@ -591,19 +602,23 @@ bool DynamicPipelineApplication::compileFragmentShaderSource(std::string_view so
         shaderPath,
     };
 
-    auto shader = createShaderObject(
-        editedSource, "Dynamic Fragment Shader", Gpu::ShaderStageFlagBits::FragmentBit, {});
-    if (!shader) {
+    Cory::ElapsedTimer timer;
+    auto shaderHandle = ctx().shaders().createShader(
+        editedSource.source(), Gpu::ShaderStageFlagBits::FragmentBit, shaderPath);
+    const auto &shader = ctx().shaders()[shaderHandle];
+    if (!shader.valid()) {
         fragmentShaderCompileSuccess_ = false;
         fragmentShaderCompileMessage_ = shader.error();
         return false;
     }
 
-    fragmentShader_ = std::move(shader.value());
+    ctx().shaders().release(fragmentShader_, currentFrameNumber);
+    fragmentShader_ = shaderHandle;
     fragmentShaderCode_ = std::move(editedSource);
     fragmentShaderDirty_ = false;
     fragmentShaderCompileSuccess_ = true;
-    fragmentShaderCompileMessage_ = "Compilation succeeded";
+    fragmentShaderCompileMessage_ =
+        fmt::format("Compilation succeeded ({:.3} ms)", timer.elapsed() * 1000.0);
     fragmentShaderLastEditTime_ = getElapsedTimeSeconds();
     return true;
 }
@@ -722,32 +737,6 @@ void DynamicPipelineApplication::transitionDepthAttachmentForRender(Cory::FrameC
     });
 
     depthLayouts_[index] = Gpu::TextureLayout::DepthStencilAttachmentOptimal;
-}
-
-std::expected<Gpu::ShaderObject, std::string>
-DynamicPipelineApplication::createShaderObject(const Cory::ShaderSource &source,
-                                               std::string_view label,
-                                               Gpu::ShaderStageFlagBits stage,
-                                               Gpu::ShaderStageFlags nextStage)
-{
-    static Cory::SlangCompiler compiler;
-    auto compileResult = compiler.compileShader(source, "main", false);
-    if (!compileResult) {
-        return std::unexpected(compileResult.error());
-    }
-
-    std::string labelStorage{label};
-    Gpu::ShaderObjectOptions options{
-        .label = labelStorage,
-        .stage = stage,
-        .nextStage = nextStage,
-        .code = *compileResult,
-        .entryPoint = "main",
-        .bindGroupLayouts = {},
-        .pushConstantRanges = {},
-    };
-
-    return ctx().device().createShaderObject(options);
 }
 
 uint32_t DynamicPipelineApplication::decodeSampleCount(Gpu::SampleCountFlagBits flag)

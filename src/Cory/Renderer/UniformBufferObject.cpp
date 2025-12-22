@@ -3,10 +3,10 @@
 #include <numeric>
 
 #include <Cory/Base/FmtUtils.hpp>
+#include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
 
 #include <KDGpu/buffer_options.h>
-#include <KDGpu/vulkan/vulkan_graphics_api.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 namespace Cory {

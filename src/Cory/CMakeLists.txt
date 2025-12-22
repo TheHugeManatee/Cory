@@ -90,7 +90,6 @@ set(CORY_SOURCES
         Renderer/DescriptorSets.hpp
         Renderer/ShaderManager.cpp
         Renderer/ShaderManager.hpp
-        #Renderer/Semaphore.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
         Renderer/SingleShotCommandRecorder.cpp
@@ -133,6 +132,7 @@ set(CORY_SOURCES
         Renderer/SlangCompiler.hpp
         Base/FileWatchManager.cpp
         Base/FileWatchManager.hpp
+        Renderer/FrameResourceLifetimeHelper.hpp
 )
 
 

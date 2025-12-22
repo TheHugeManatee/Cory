@@ -3,8 +3,9 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <KDGpu/texture_options.h>
+#include <Cory/Renderer/VulkanUtils.hpp>
 
+#include <KDGpu/texture_options.h>
 #include <KDGpu/utils/formatters.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 

@@ -6,7 +6,6 @@
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
 
 #include <Cory/Renderer/Gpu.hpp>
-#include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
 #include <Cory/Renderer/Synchronization.hpp>
 
 #include <vulkan/vulkan.h>

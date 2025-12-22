@@ -3,7 +3,6 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Gpu.hpp>
-#include <Cory/Renderer/Semaphore.hpp>
 
 #include <KDGpu/gpu_core.h>
 

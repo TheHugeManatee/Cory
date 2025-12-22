@@ -2,6 +2,7 @@
 
 #include <Cory/Base/SlotMap.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Base/ValOptional.hpp>
 
 #include <filesystem>
 #include <memory>
@@ -39,7 +40,18 @@ class ShaderManager : NoCopy {
                  std::source_location loc = std::source_location::current());
     /// dereference a shader handle to access the shader. may throw!
     [[nodiscard]] Shader &operator[](ShaderHandle shaderHandle);
-    void release(ShaderHandle shaderHandle);
+
+    /// @brief Release a shader
+    /// @param shaderHandle   the shader to release
+    /// @param lastUsedFrame optional frame number when the shader was last used
+    ///
+    /// If @a lastUsedFrame is not provided, the shader will be released immediately. Otherwise it
+    /// will be released when clearDeferredReleases has been called with @a lastUsedFrame +
+    /// MAX_FRAMES_IN_FLIGHT
+    void release(ShaderHandle shaderHandle, ValOptional<uint64_t> lastUsedFrame = {});
+
+    /// Release any shaders that are no longer in use
+    void clearDeferredReleases(uint64_t currentFrame);
 
   private:
     std::unique_ptr<struct ResourceManagerPrivate> data_;

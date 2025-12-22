@@ -7,12 +7,20 @@ namespace Cory {
 
 template <typename Signature> class Function;
 
+// Check if a callable is invocable with given arguments
+template <typename F, typename... Args>
+concept ConstCallableWith =
+    requires(const F &f, Args&&... args) {
+    { f(std::forward<Args>(args)...) };
+    };
+
 /**
  * @brief Minimal std::function replacement to avoid #include <functional>
  */
-template <typename R, typename... Args> class Function<R(Args...)> {
+template <typename R, typename... Args> class Function<R(Args...)>
+{
     struct CallableBase {
-        virtual R invoke(Args... args) = 0;
+        virtual R invoke(Args... args) const = 0;
         virtual ~CallableBase() = default;
     };
 
@@ -24,10 +32,17 @@ template <typename R, typename... Args> class Function<R(Args...)> {
         {
         }
 
-        R invoke(Args... args) override { return f(std::forward<Args>(args)...); }
+        R invoke(Args... args) const override
+        {
+            if constexpr (ConstCallableWith<F, Args...>) {
+                return f(std::forward<Args>(args)...);
+            }
+            // f might be a mutable lambda, so we have to const_cast here
+            return const_cast<F &>(f)(std::forward<Args>(args)...);
+        }
     };
 
-    std::unique_ptr<CallableBase> callable;
+    std::shared_ptr<CallableBase> callable;
 
   public:
     template <typename F>
@@ -40,7 +55,7 @@ template <typename R, typename... Args> class Function<R(Args...)> {
 
     explicit operator bool() const { return callable != nullptr; }
 
-    R operator()(Args... args) { return callable->invoke(std::forward<Args>(args)...); }
+    R operator()(Args... args) const { return callable->invoke(std::forward<Args>(args)...); }
 };
 
 } // namespace Cory

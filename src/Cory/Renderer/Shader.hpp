@@ -4,6 +4,7 @@
 #include <Cory/Renderer/Common.hpp>
 
 #include <KDGpu/shader_module.h>
+#include <KDGpu/shader_object.h>
 
 #include <filesystem>
 #include <map>
@@ -57,8 +58,9 @@ class ShaderSource {
 
 class Shader {
   public:
-    static std::vector<uint32_t>
-    CompileToSpv(const ShaderSource &source, bool optimize = true, std::string_view entryPoint = "main");
+    static std::vector<uint32_t> CompileToSpv(const ShaderSource &source,
+                                              bool optimize = true,
+                                              std::string_view entryPoint = "main");
 
     Shader();
     Shader(Context &ctx, ShaderSource source, std::string entryPoint = "main");
@@ -70,14 +72,17 @@ class Shader {
     Shader(Shader &&rhs) = default;
     Shader &operator=(Shader &&rhs) = default;
 
-    Gpu::ShaderModule &module() { return module_; }
-    const Gpu::ShaderModule &module() const { return module_; }
+    Gpu::ShaderObject &shaderObject() { return shaderObject_; }
+    const Gpu::ShaderObject &shaderObject() const { return shaderObject_; }
+    Gpu::Handle<Gpu::ShaderObject_t> shaderHandle() const { return shaderObject_.handle(); }
+    Gpu::ShaderStageFlags nextStages() const { return nextStages_; }
+    Gpu::ShaderModule createShaderModule() const;
     Gpu::ShaderStageFlagBits type() const { return type_; }
     const std::string &entryPoint() const { return entryPoint_; }
     bool valid() const;
 
     // the size in bytes of the compiled shader module
-    size_t size() { return size_; }
+    size_t size() const { return size_; }
 
     static Gpu::ShaderStageFlagBits deduceTypeFromPath(const std::filesystem::path &path);
 
@@ -86,7 +91,9 @@ class Shader {
     ShaderSource source_;
     Gpu::ShaderStageFlagBits type_{};
     size_t size_{};
-    Gpu::ShaderModule module_;
+    std::vector<uint32_t> spirvBinary_;
+    Gpu::ShaderObject shaderObject_;
+    Gpu::ShaderStageFlags nextStages_{};
     std::string entryPoint_{"main"};
 };
 } // namespace Cory

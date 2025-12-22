@@ -51,7 +51,7 @@ ShaderManager::~ShaderManager()
 
 void ShaderManager::setContext(Context &ctx)
 {
-    CO_CORE_ASSERT(data_->ctx == nullptr, "Context already initialized!");
+    CO_CORE_DEBUG_ASSERT(data_->ctx == nullptr, "Context already initialized!");
     data_->ctx = &ctx;
 }
 size_t ShaderManager::shadersInUse() const
@@ -59,12 +59,11 @@ size_t ShaderManager::shadersInUse() const
     return data_->shaders.size();
 }
 
-// SHADERS
 ShaderHandle ShaderManager::createShader(std::filesystem::path filePath,
                                          Gpu::ShaderStageFlagBits type,
                                          std::source_location loc)
 {
-    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    CO_CORE_DEBUG_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     return data_->shaders.emplace(ResourceStorage<Shader>{
         .name = filePath.string(),
         .loc = std::move(loc),
@@ -75,7 +74,7 @@ ShaderHandle ShaderManager::createShader(std::string source,
                                          std::filesystem::path filePath,
                                          std::source_location loc)
 {
-    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    CO_CORE_DEBUG_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     return data_->shaders.emplace(ResourceStorage<Shader>{
         .name = filePath.string(),
         .loc = std::move(loc),
@@ -84,12 +83,12 @@ ShaderHandle ShaderManager::createShader(std::string source,
 }
 Shader &ShaderManager::operator[](ShaderHandle shaderHandle)
 {
-    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    CO_CORE_DEBUG_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     return data_->shaders[shaderHandle].resource;
 }
 void ShaderManager::release(ShaderHandle shaderHandle)
 {
-    CO_CORE_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
+    CO_CORE_DEBUG_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     data_->shaders.release(shaderHandle);
 }
 

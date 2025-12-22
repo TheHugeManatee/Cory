@@ -9,19 +9,23 @@ static_assert(!std::copyable<Cory::ShaderManager>, "ShaderManager is not designe
 static_assert(std::movable<Cory::ShaderManager>, "ShaderManager is designed to be movable");
 
 static constexpr auto testVertexShader = R"(
-#version 450
+struct VSInput  {   [[vk::location(0)]] float3 position : POSITION; };
+struct VSOutput {   float4 position : SV_Position;                  };
 
-layout(location = 0) in vec3 inPosition;
-
-void main() {
-    gl_Position = vec4(inPosition.xy, 0.0, 1.0);
+VSOutput main(VSInput input) {
+    VSOutput output;
+    output.position = float4(input.position.xy, 0.0, 1.0);
+    return output;
 })";
 
 static constexpr auto testInvalidVertexShader = R"(
-#version 450
+struct VSInput  {   [[vk::location(0)]] float3 position : POSITION; };
+struct VSOutput {   float4 position : SV_Position;                  };
 
-void main() {
-    gl_Position = vec4(inPosition.xy, 0.0, 1.0);
+VSOutput main(VSInput input) {
+    VSOutput output;
+    output.position = float4(input.position, 0.0, 1.0);
+    return output;
 })";
 
 using namespace Cory;

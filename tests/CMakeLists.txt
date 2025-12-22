@@ -46,6 +46,7 @@ add_library(Cory_TestLib OBJECT
         ValOptional_Test.cpp
         Function_Test.cpp
         SlangCompiler_Test.cpp
+        FileWatchManager_Test.cpp
 )
 
 target_link_libraries(Cory_TestLib PUBLIC Catch2::Catch2)

@@ -10,6 +10,7 @@
 #include <concepts>
 
 namespace Cory {
+
 template <typename T> using Span = gsl::span<T>;
 
 // forward declarations
@@ -22,6 +23,10 @@ class Profiler;
 class ScopeTimer;
 class LapTimer;
 class ResourceLocator;
+
+struct FileWatch;
+class FileWatchManager;
+using FileWatchHandle = PrivateTypedHandle<FileWatch, FileWatchManager>;
 
 // a base class type to prevent copies
 struct NoCopy {

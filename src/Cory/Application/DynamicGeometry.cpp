@@ -14,32 +14,15 @@ namespace Cory {
 
 Mesh DynamicGeometry::createTriangle(Context &ctx, uint32_t binding)
 {
-
-    // const uint64_t numVertices = 4;
-    // Vk::Buffer vBuffer{
-    //     ctx.device(),
-    //     Vk::BufferCreateInfo{Vk::BufferUsage::VertexBuffer, numVertices * sizeof(Vertex)},
-    //     Magnum::Vk::MemoryFlag::HostCoherent | Magnum::Vk::MemoryFlag::HostVisible};
-    //
-    // Corrade::Containers::Array<char, Vk::MemoryMapDeleter> data =
-    // vBuffer.dedicatedMemory().map();
-    //
-    // auto &view = reinterpret_cast<std::array<Vertex, 3> &>(*data.data());
-    // glm::vec2 p0{0, 0.5f};
-    // glm::vec2 p1{
-    //     p0.x * cos(glm::radians(120.0f)) - p0.y * sin(glm::radians(120.0f)),
-    //     p0.x * sin(glm::radians(120.0f)) + p0.y * cos(glm::radians(120.0f)),
-    // };
-    // glm::vec2 p2{
-    //     p0.x * cos(glm::radians(240.0f)) - p0.y * sin(glm::radians(240.0f)),
-    //     p0.x * sin(glm::radians(240.0f)) + p0.y * cos(glm::radians(240.0f)),
-    // };
-    // view[0] = Vertex{{p0.x, p0.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}};
-    // view[1] = Vertex{{p1.x, p1.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}};
-    // view[2] = Vertex{{p2.x, p2.y, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
-    // mesh.addVertexBuffer(0, std::move(vBuffer), 0).setCount(numVertices);
-
-    return {};
+    std::vector<Mesh::Vertex> vertices{
+        // Equilateral triangle in XY plane
+        {{0.0f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},   // Top (red)
+        {{-0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}}, // Left (green)
+        {{0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},  // Right (blue)
+    };
+    std::vector<uint32_t> indices{0, 1, 2};
+    // No offset for triangle, but could add if needed
+    return createFromCpuBuffers(ctx, vertices, indices);
 }
 
 Mesh DynamicGeometry::createCube(Context &ctx, glm::vec3 offset, uint32_t binding)

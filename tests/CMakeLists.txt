@@ -48,6 +48,7 @@ add_library(Cory_TestLib OBJECT
         SlangCompiler_Test.cpp
         FileWatchManager_Test.cpp
         FrameResourceLifetimeHelper_Test.cpp
+        Locked_Test.cpp
 )
 
 target_link_libraries(Cory_TestLib PUBLIC Catch2::Catch2)

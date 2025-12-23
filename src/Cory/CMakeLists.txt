@@ -133,6 +133,7 @@ set(CORY_SOURCES
         Base/FileWatchManager.cpp
         Base/FileWatchManager.hpp
         Renderer/FrameResourceLifetimeHelper.hpp
+        Base/Locked.hpp
 )
 
 

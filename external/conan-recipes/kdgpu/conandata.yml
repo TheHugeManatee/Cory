@@ -1,5 +1,0 @@
-sources:
-  "0.8.0":
-    url: "https://github.com/KDAB/KDGpu/archive/refs/tags/v0.8.0.tar.gz"
-    sha256: "839C8E85C7EBC222E1BF859C85F1CA2C35F6F97324557FC7CE83FC354D35941D"
-    strip_root: True

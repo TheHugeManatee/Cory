@@ -3,15 +3,14 @@
 #include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/Debugger.hpp>
+#include <Cory/Base/FileWatchManager.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
-#include <KDGpu/graphics_api.h>
 #include <KDGpu/instance.h>
-#include <KDGpu/resource_manager.h>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
 #include <KDGpuKDGui/view.h>
 #include <KDGui/gui_application.h>
@@ -23,6 +22,8 @@ namespace Cory {
 struct ContextPrivate {
     std::string name;
     bool isHeadless{true};
+
+    FileWatchManager fileWatchManager;
 
     Gpu::GraphicsApi api;
     Gpu::Instance instance;
@@ -203,7 +204,8 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
         .extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
                        VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
-                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME},
+                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+                       VK_EXT_SHADER_OBJECT_EXTENSION_NAME},
         .queues = {},
         .requestedFeatures =
             features == DeviceFeatures::All ? selectedAdapter->features() : getRequiredFeatures(),
@@ -223,7 +225,13 @@ Gpu::AdapterFeatures Context::getRequiredFeatures() const
     features.bindGroupBindingStorageBufferUpdateAfterBind = true;
     features.bindGroupBindingPartiallyBound = true;
     features.runtimeBindGroupArray = true;
-
+    features.dynamicRendering = true;
+    features.logicOp = true;
+    features.wideLines = true;
+    features.largePoints = true;
+    features.shaderObjectDynamicRendering = true;
+    features.bindGroupBindingUniformBufferUpdateAfterBind = true;
+    features.bindGroupBindingPartiallyBound = true;
     return features;
 }
 
@@ -293,7 +301,8 @@ void Context::setupHeadlessDevice()
         .layers = {},
         .extensions = {VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
                        VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
-                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME},
+                       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+                       VK_EXT_SHADER_OBJECT_EXTENSION_NAME},
         .queues = {},
         .requestedFeatures = getRequiredFeatures(),
         .adapterGroup = {},
@@ -406,6 +415,14 @@ DescriptorSets &Context::descriptors()
 const DescriptorSets &Context::descriptors() const
 {
     return data_->descriptorSets;
+}
+FileWatchManager &Context::fileWatchManager()
+{
+    return data_->fileWatchManager;
+}
+const FileWatchManager &Context::fileWatchManager() const
+{
+    return data_->fileWatchManager;
 }
 
 void ContextPrivate::receiveDebugUtilsMessage(

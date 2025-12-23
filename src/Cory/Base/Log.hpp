@@ -10,25 +10,19 @@ class Log {
     static void Init();
     static void Shutdown();
 
-    inline static std::shared_ptr<spdlog::logger> &GetCoreLogger() { return s_coreLogger; }
-    inline static std::shared_ptr<spdlog::logger> &GetAppLogger() { return s_appLogger; }
+    static std::shared_ptr<spdlog::logger> &GetCoreLogger() { return s_coreLogger; }
+    static std::shared_ptr<spdlog::logger> &GetAppLogger() { return s_appLogger; }
 
-    inline static void SetCoreLevel(spdlog::level::level_enum level)
-    {
-        s_coreLogger->set_level(level);
-    }
-    inline static void SetAppLevel(spdlog::level::level_enum level)
-    {
-        s_appLogger->set_level(level);
-    }
-    inline static auto GetCoreLevel() { return s_coreLogger->level(); }
-    inline static auto GetAppLevel() { return s_appLogger->level(); }
+    static void SetCoreLevel(spdlog::level::level_enum level) { s_coreLogger->set_level(level); }
+    static void SetAppLevel(spdlog::level::level_enum level) { s_appLogger->set_level(level); }
+    static auto GetCoreLevel() { return s_coreLogger->level(); }
+    static auto GetAppLevel() { return s_appLogger->level(); }
 
-    inline static auto SetCoreLevelScoped(spdlog::level::level_enum level)
+    static auto SetCoreLevelScoped(spdlog::level::level_enum level)
     {
         return ScopedLogLevel{*s_coreLogger, level};
     }
-    inline static auto SetAppLevelScoped(spdlog::level::level_enum level)
+    static auto SetAppLevelScoped(spdlog::level::level_enum level)
     {
         return ScopedLogLevel{*s_appLogger, level};
     }

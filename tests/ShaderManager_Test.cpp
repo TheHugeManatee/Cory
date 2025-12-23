@@ -9,19 +9,23 @@ static_assert(!std::copyable<Cory::ShaderManager>, "ShaderManager is not designe
 static_assert(std::movable<Cory::ShaderManager>, "ShaderManager is designed to be movable");
 
 static constexpr auto testVertexShader = R"(
-#version 450
+struct VSInput  {   [[vk::location(0)]] float3 position : POSITION; };
+struct VSOutput {   float4 position : SV_Position;                  };
 
-layout(location = 0) in vec3 inPosition;
-
-void main() {
-    gl_Position = vec4(inPosition.xy, 0.0, 1.0);
+VSOutput main(VSInput input) {
+    VSOutput output;
+    output.position = float4(input.position.xy, 0.0, 1.0);
+    return output;
 })";
 
 static constexpr auto testInvalidVertexShader = R"(
-#version 450
+struct VSInput  {   [[vk::location(0)]] float3 position : POSITION; };
+struct VSOutput {   float4 position : SV_Position;                  };
 
-void main() {
-    gl_Position = vec4(inPosition.xy, 0.0, 1.0);
+VSOutput main(VSInput input) {
+    VSOutput output;
+    output.position = float4(input.position, 0.0, 1.0);
+    return output;
 })";
 
 using namespace Cory;
@@ -34,7 +38,7 @@ TEST_CASE("ShaderManager", "[Cory/Renderer]")
 
     CHECK(mgr.shadersInUse() == 0);
 
-    SECTION("Shaders")
+    SECTION("Direct shader creation/destruction")
     {
         ShaderHandle shader = mgr.createShader(
             testVertexShader, Gpu::ShaderStageFlagBits::VertexBit, "testVertexShader.vert");
@@ -51,6 +55,27 @@ TEST_CASE("ShaderManager", "[Cory/Renderer]")
         CHECK_THROWS(mgr[invalidHandle]);
 
         mgr.release(shader);
+        CHECK_THROWS(mgr[shader]);
+        CHECK(mgr.shadersInUse() == 0);
+    }
+    SECTION("Per-frame lifetime tracking")
+    {
+        const uint64_t lastFrameInUse = 3;
+        ShaderHandle shader = mgr.createShader(
+            testVertexShader, Gpu::ShaderStageFlagBits::VertexBit, "testVertexShader.vert");
+        CHECK(mgr.shadersInUse() == 1);
+
+        mgr.release(shader, lastFrameInUse);
+        CHECK_NOTHROW(mgr[shader]);
+        CHECK(mgr.shadersInUse() == 1);
+
+        // Has not been released yet at this point
+        mgr.clearDeferredReleases(lastFrameInUse + Cory::MAX_FRAMES_IN_FLIGHT - 1);
+        CHECK_NOTHROW(mgr[shader]);
+        CHECK(mgr.shadersInUse() == 1);
+
+        // Can be and has been released now
+        mgr.clearDeferredReleases(lastFrameInUse + Cory::MAX_FRAMES_IN_FLIGHT);
         CHECK_THROWS(mgr[shader]);
         CHECK(mgr.shadersInUse() == 0);
     }

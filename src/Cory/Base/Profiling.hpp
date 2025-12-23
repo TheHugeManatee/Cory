@@ -107,4 +107,20 @@ class LapTimer {
     std::chrono::milliseconds m_reportInterval;
 };
 
+class ElapsedTimer {
+    std::chrono::high_resolution_clock::time_point m_start;
+
+  public:
+    ElapsedTimer()
+        : m_start{std::chrono::high_resolution_clock::now()}
+    {
+    }
+
+    [[nodiscard]] double elapsed() const noexcept
+    {
+        auto now = std::chrono::high_resolution_clock::now();
+        return std::chrono::duration<double>(now - m_start).count();
+    }
+};
+
 } // namespace Cory

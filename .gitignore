@@ -18,3 +18,5 @@ __pycache__/
 venv/
 cmake-build-*/
 AGENTS.md
+
+KDGpu

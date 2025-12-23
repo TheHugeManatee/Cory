@@ -1,19 +1,16 @@
-set(TARGET_NAME "CubeDemo")
+set(TARGET_NAME "DynamicPipeline")
 
 find_package(Vulkan REQUIRED)
 find_package(range-v3 REQUIRED)
 find_package(CLI11 REQUIRED)
 
-# Always list the files explicitly
 add_executable(${TARGET_NAME}
         src/main.cpp
-        src/CubeDemo.cpp
-        src/CubeDemo.hpp
+        src/DynamicPipelineApplication.cpp
+        src/DynamicPipelineApplication.hpp
 )
 
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-target_compile_definitions(${TARGET_NAME} PRIVATE "CUBEDEMO_RESOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\"")
+target_compile_definitions(${TARGET_NAME} PRIVATE "DYNAMIC_PIPELINE_RESOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\"")
 
 target_link_libraries(${TARGET_NAME}
         PRIVATE
@@ -28,10 +25,9 @@ target_link_libraries(${TARGET_NAME}
 
 if (CORY_BUILD_TESTS)
     enable_testing()
-    add_test(NAME Smoketests.CubeDemo COMMAND ${TARGET_NAME} --frames=100)
+    add_test(NAME Smoketests.DynamicPipeline COMMAND ${TARGET_NAME} --frames=100)
 endif ()
 
-# Install in the desired folder
 install(TARGETS ${TARGET_NAME}
         EXPORT ${PROJECT_TARGETS}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

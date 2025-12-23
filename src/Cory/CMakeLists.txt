@@ -16,6 +16,7 @@ find_package(imgui REQUIRED)
 find_package(magic_enum REQUIRED)
 find_package(range-v3 REQUIRED)
 find_package(spdlog REQUIRED)
+find_package(efsw REQUIRED)
 
 set(CORY_SOURCES
         Application/Application.cpp
@@ -89,7 +90,6 @@ set(CORY_SOURCES
         Renderer/DescriptorSets.hpp
         Renderer/ShaderManager.cpp
         Renderer/ShaderManager.hpp
-        #Renderer/Semaphore.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
         Renderer/SingleShotCommandRecorder.cpp
@@ -130,6 +130,11 @@ set(CORY_SOURCES
         RenderTasks/StandardRenderTasks.hpp
         Renderer/SlangCompiler.cpp
         Renderer/SlangCompiler.hpp
+        Base/FileWatchManager.cpp
+        Base/FileWatchManager.hpp
+        Renderer/FrameResourceLifetimeHelper.hpp
+        Base/Locked.hpp
+        Base/Coro.hpp
 )
 
 
@@ -181,6 +186,7 @@ target_link_libraries(${TARGET_NAME}
         KDGpu::KDGpuUtils
         KDUtils::KDGui
         Slang::slang
+        efsw::efsw
 
         PRIVATE
 

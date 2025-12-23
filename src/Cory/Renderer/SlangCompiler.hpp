@@ -16,10 +16,6 @@ class SlangCompiler {
     SlangCompiler();
     ~SlangCompiler();
 
-    using SpirvByteCode = std::vector<uint32_t>;
-    using CompilationError = std::string;
-    using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
-
     /// @brief Compile a shader source into SPIR-V bytecode.
     /// @param source The slang shader source to compile.
     /// @param entryPoint The entry point function name.
@@ -32,7 +28,6 @@ class SlangCompiler {
   private:
     void initSession();
     SlangStage toSlangStage(Gpu::ShaderStageFlagBits stage) const;
-    CompilationResult makeError(std::string message) const;
 
     Slang::ComPtr<slang::ISession> session_;
     slang::IGlobalSession *globalSession_{nullptr};

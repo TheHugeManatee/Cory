@@ -20,6 +20,7 @@
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/device.h>
 #include <KDGpu/render_pass.h>
+#include <KDGpu/shader_object_options.h>
 #include <KDGpu/texture_options.h>
 #include <KDUtils/color.h>
 
@@ -37,49 +38,54 @@ using namespace KDGpu;
 namespace {
 
 const char *vertexShaderSource = R"(
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
-
-layout(location = 0) in vec2 inPos;
-layout(location = 1) in vec2 inUV;
-layout(location = 2) in vec4 inColor;
-
-layout(push_constant) uniform PushConstants
+struct PushConstants
 {
-    vec2 scale;
-    vec2 translate;
-}
-pushConstants;
-
-layout(location = 0) out vec2 outUV;
-layout(location = 1) out vec4 outColor;
-
-out gl_PerVertex
-{
-    vec4 gl_Position;
+    float2 scale;
+    float2 translate;
 };
 
-void main()
+[[vk::push_constant]]
+ConstantBuffer<PushConstants> pushConstants;
+
+struct VSInput
 {
-    outUV = inUV;
-    outColor = inColor;
-    gl_Position = vec4(inPos * pushConstants.scale + pushConstants.translate, 0.0, 1.0);
+    float2 inPos   : POSITION;   // layout(location = 0)
+    float2 inUV    : TEXCOORD0;  // layout(location = 1)
+    float4 inColor : COLOR0;     // layout(location = 2)
+};
+
+struct VSOutput
+{
+    float4 position : SV_Position;
+    float2 outUV    : TEXCOORD0; // location = 0
+    float4 outColor : COLOR0;    // location = 1
+};
+
+VSOutput main(VSInput input)
+{
+    VSOutput output;
+    output.outUV = input.inUV;
+    output.outColor = input.inColor;
+    output.position =
+        float4(input.inPos * pushConstants.scale + pushConstants.translate,
+               0.0, 1.0);
+    return output;
 })";
 
 const char *fragmentShaderSource = R"(
-#version 450
-#extension GL_ARB_separate_shader_objects : enable
-
-layout (binding = 0) uniform sampler2D fontSampler;
-
-layout (location = 0) in vec2 inUV;
-layout (location = 1) in vec4 inColor;
-
-layout (location = 0) out vec4 outColor;
-
-void main()
+struct FSInput
 {
-outColor = inColor * texture(fontSampler, inUV);
+    float2 inUV    : TEXCOORD0; // location = 0
+    float4 inColor : COLOR0;    // location = 1
+};
+
+[[vk::binding(0, 0)]]
+Sampler2D fontSampler;
+
+float4 main(FSInput input) : SV_Target0
+{
+    float4 tex = fontSampler.Sample(input.inUV);
+    return input.inColor * tex;
 })";
 
 struct VertexImGui {
@@ -162,14 +168,18 @@ void ImGuiRenderer::initialize(float scaleFactor,
                                Gpu::Format colorFormat,
                                Gpu::Format depthFormat)
 {
-    {
-        const auto vertShaderCode = Shader::CompileToSpv(
-            ShaderSource{vertexShaderSource, Gpu::ShaderStageFlagBits::VertexBit, "imgui.vert"});
-        m_vertexShader = m_device->createShaderModule(vertShaderCode);
-        const auto fragShaderCode = Shader::CompileToSpv(
-            ShaderSource{fragmentShaderSource, Gpu::ShaderStageFlagBits::FragmentBit, "imgui.frag"});
-        m_fragmentShader = m_device->createShaderModule(fragShaderCode);
-    }
+    (void)colorFormat;
+    (void)depthFormat;
+    m_samples = samples;
+
+    const auto vertShaderCode =
+        Shader::CompileToSpv(
+            ShaderSource{vertexShaderSource, ShaderStageFlagBits::VertexBit, "imgui.vert"})
+            .value();
+    const auto fragShaderCode =
+        Shader::CompileToSpv(
+            ShaderSource{fragmentShaderSource, ShaderStageFlagBits::FragmentBit, "imgui.frag"})
+            .value();
 
     m_bindGroupLayout = m_device->createBindGroupLayout(BindGroupLayoutOptions{
         .bindings =
@@ -181,69 +191,49 @@ void ImGuiRenderer::initialize(float scaleFactor,
             },
     });
 
+    const std::vector<PushConstantRange> pushConstantRanges{
+        PushConstantRange{
+            .offset = 0,
+            .size = sizeof(PushConstantBlock),
+            .shaderStages = ShaderStageFlagBits::VertexBit,
+        },
+    };
+
     m_pipelineLayout = m_device->createPipelineLayout(PipelineLayoutOptions{
+        .bindGroupLayouts = {m_bindGroupLayout}, .pushConstantRanges = pushConstantRanges});
+
+    m_vertexShaderObject = m_device->createShaderObject(ShaderObjectOptions{
+        .label = "ImGui Vertex Shader",
+        .stage = ShaderStageFlagBits::VertexBit,
+        .nextStage = ShaderStageFlagBits::FragmentBit,
+        .code = vertShaderCode,
+        .entryPoint = "main",
         .bindGroupLayouts = {m_bindGroupLayout},
-        .pushConstantRanges =
-            {
-                PushConstantRange{
-                    .offset = 0,
-                    .size = sizeof(PushConstantBlock),
-                    .shaderStages = ShaderStageFlagBits::VertexBit,
-                },
-            },
+        .pushConstantRanges = pushConstantRanges,
     });
+
+    m_fragmentShaderObject = m_device->createShaderObject(ShaderObjectOptions{
+        .label = "ImGui Fragment Shader",
+        .stage = ShaderStageFlagBits::FragmentBit,
+        .nextStage = {},
+        .code = fragShaderCode,
+        .entryPoint = "main",
+        .bindGroupLayouts = {m_bindGroupLayout},
+        .pushConstantRanges = pushConstantRanges,
+    });
+
+    m_shaderStages = {
+        ShaderStageFlags{ShaderStageFlagBits::VertexBit},
+        ShaderStageFlags{ShaderStageFlagBits::FragmentBit},
+    };
+    m_shaderHandles = {m_vertexShaderObject.handle(), m_fragmentShaderObject.handle()};
+
+    m_vertexLayouts = {VertexImGui::vertexBufferLayout()};
+    m_vertexAttributes = VertexImGui::vertexAttributes();
 
     const auto samplerOptions =
         SamplerOptions{.magFilter = FilterMode::Linear, .minFilter = FilterMode::Linear};
     m_sampler = m_device->createSampler(samplerOptions);
-
-    m_pipelineInfo = GraphicsPipelineOptions{
-        .shaderStages =
-            {
-                {.shaderModule = m_vertexShader, .stage = ShaderStageFlagBits::VertexBit},
-                {.shaderModule = m_fragmentShader, .stage = ShaderStageFlagBits::FragmentBit},
-            },
-        .layout = m_pipelineLayout,
-        .vertex =
-            {
-                .buffers = {VertexImGui::vertexBufferLayout()},
-                .attributes = VertexImGui::vertexAttributes(),
-            },
-        .renderTargets =
-            {
-                {
-                    .format = colorFormat,
-                    .blending =
-                        {
-                            .blendingEnabled = true,
-                            .color =
-                                {
-                                    .srcFactor = BlendFactor::SrcAlpha,
-                                    .dstFactor = BlendFactor::OneMinusSrcAlpha,
-                                },
-                            .alpha =
-                                {
-                                    .srcFactor = BlendFactor::One,
-                                    .dstFactor = BlendFactor::OneMinusSrcAlpha,
-                                },
-                        },
-                },
-            },
-        .depthStencil =
-            {
-                .format = depthFormat,
-                .depthTestEnabled = false,
-                .depthWritesEnabled = false,
-            },
-        .primitive =
-            {
-                .cullMode = CullModeFlagBits::None,
-            },
-        .multisample =
-            {
-                .samples = samples,
-            },
-    };
 
     updateScale(scaleFactor);
 }
@@ -261,15 +251,18 @@ void ImGuiRenderer::updateScale(const float scaleFactor)
 void ImGuiRenderer::cleanup()
 {
     m_meshes.clear();
-    m_pipeline = {};
     m_pipelineLayout = {};
     m_bindGroupLayout = {};
     m_bindGroup = {};
     m_sampler = {};
     m_textureView = {};
     m_texture = {};
-    m_vertexShader = {};
-    m_fragmentShader = {};
+    m_vertexShaderObject = {};
+    m_fragmentShaderObject = {};
+    m_shaderStages.clear();
+    m_shaderHandles.clear();
+    m_vertexLayouts.clear();
+    m_vertexAttributes.clear();
 }
 
 bool ImGuiRenderer::updateGeometryBuffers(FrameContext &frameCtx)
@@ -341,11 +334,50 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx, Gpu::RenderPassComman
     int32_t vertexOffset = 0;
     uint32_t indexOffset = 0;
 
-    if (!m_pipeline.isValid()) m_pipeline = m_device->createGraphicsPipeline(m_pipelineInfo);
-    recorder->setPipeline(m_pipeline);
+    recorder->bindShaders(m_shaderStages, m_shaderHandles);
+    recorder->setPrimitiveTopology(PrimitiveTopology::TriangleList);
+    recorder->setPrimitiveRestartEnabled(false);
+    recorder->setCullMode(CullModeFlagBits::None);
+    recorder->setFrontFace(FrontFace::CounterClockwise);
+    recorder->setPolygonMode(PolygonMode::Fill);
+    recorder->setRasterizerDiscardEnabled(false);
+    recorder->setRasterizationSamples(m_samples);
+    recorder->setDepthTestEnabled(false);
+    recorder->setDepthWriteEnabled(false);
+    recorder->setDepthCompareOp(CompareOperation::Always);
+    recorder->setDepthBiasEnabled(false);
+    recorder->setDepthBoundsTestEnabled(false);
+    recorder->setDepthClampEnabled(false);
+    recorder->setStencilTestEnabled(false);
+    recorder->setAlphaToCoverageEnabled(false);
+    recorder->setAlphaToOneEnabled(false);
+    recorder->setLogicOpEnabled(false);
+    recorder->setVertexInput(m_vertexLayouts, m_vertexAttributes);
+
+    ColorComponentFlags colorMask{};
+    colorMask.setFlag(ColorComponentFlagBits::RedBit, true);
+    colorMask.setFlag(ColorComponentFlagBits::GreenBit, true);
+    colorMask.setFlag(ColorComponentFlagBits::BlueBit, true);
+    colorMask.setFlag(ColorComponentFlagBits::AlphaBit, true);
+    const ColorBlendEquation blendEquation{
+        .srcColorBlendFactor = BlendFactor::SrcAlpha,
+        .dstColorBlendFactor = BlendFactor::OneMinusSrcAlpha,
+        .colorBlendOp = BlendOperation::Add,
+        .srcAlphaBlendFactor = BlendFactor::One,
+        .dstAlphaBlendFactor = BlendFactor::OneMinusSrcAlpha,
+        .alphaBlendOp = BlendOperation::Add,
+    };
+    const std::vector<bool> blendEnables{true};
+    const std::vector<ColorBlendEquation> blendEquations{blendEquation};
+    const std::vector<ColorComponentFlags> colorMasks{colorMask};
+    recorder->setColorBlendEnabled(0, blendEnables);
+    recorder->setColorBlendEquations(0, blendEquations);
+    recorder->setColorWriteMasks(0, colorMasks);
+    const std::vector<SampleMask> sampleMasks(1, 0xffffffffu);
+    recorder->setSampleMask(m_samples, sampleMasks);
 
     // Bind the descriptor set
-    recorder->setBindGroup(0, m_bindGroup);
+    recorder->setBindGroup(0, m_bindGroup, m_pipelineLayout);
 
     // Set the push constants
     const float displaySize[2] = {imDrawData->DisplaySize.x, imDrawData->DisplaySize.y};
@@ -361,22 +393,23 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx, Gpu::RenderPassComman
             .size = sizeof(PushConstantBlock),
             .shaderStages = ShaderStageFlagBits::VertexBit,
         },
-        &m_pushConstantBlock);
+        &m_pushConstantBlock,
+        m_pipelineLayout);
 
     // Set Viewport and scissor rect
-    recorder->setViewport(Gpu::Viewport{
+    recorder->setViewportWithCount({Gpu::Viewport{
         .x = 0.0f,
         .y = 0.0f,
         .width = static_cast<float>(frameCtx.extent.x),
         .height = static_cast<float>(frameCtx.extent.y),
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
-    });
+    }});
 
-    recorder->setScissor(Gpu::Rect2D{
+    recorder->setScissorWithCount({Gpu::Rect2D{
         .offset = {0, 0},
         .extent = {frameCtx.extent.x, frameCtx.extent.y},
-    });
+    }});
 
     // Bind the vertex and index buffers
     recorder->setVertexBuffer(0, m_mesh->vertices);

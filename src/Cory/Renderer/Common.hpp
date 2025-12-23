@@ -6,12 +6,13 @@
 #include <Cory/Base/Common.hpp> // for SlotMapHandle
 
 #include <Cory/Renderer/Gpu.hpp>
-#include <Cory/Renderer/Semaphore.hpp> // Semaphore.hpp is a tiny header so it's ok
 #include <Cory/Renderer/Synchronization.hpp>
 
 #include <vulkan/vulkan.h>
 
-#include <cstdint>
+#include <expected>
+#include <vector>
+#include <string>
 
 namespace Cory {
 
@@ -36,6 +37,11 @@ template <typename BufferStruct>
     requires std::is_trivial_v<BufferStruct>
 class UniformBufferObject;
 class DescriptorSets;
+
+class SlangCompiler;
+using SpirvByteCode = std::vector<uint32_t>;
+using CompilationError = std::string;
+using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
 
 // enums
 static constexpr Gpu::ShaderStageFlagBits SHADER_TYPE_UNKNOWN = Gpu::ShaderStageFlagBits{};

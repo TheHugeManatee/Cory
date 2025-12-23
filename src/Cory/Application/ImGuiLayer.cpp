@@ -9,8 +9,6 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
-#include <KDGpuExample/imgui_renderer.h>
-
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
@@ -22,7 +20,7 @@ namespace Cory {
 struct ImGuiLayer::Private {
     Context *ctx;
     Window *window;
-    std::unique_ptr<KDGpuExample::ImGuiRenderer> imguiRenderer;
+    std::unique_ptr<ImGuiRenderer> imguiRenderer;
     ImGuiContext *context;
     i32vec2 windowSize;
 };
@@ -50,8 +48,8 @@ void ImGuiLayer::onAttach(Context &ctx, LayerAttachInfo attachInfo)
     data_->ctx = &ctx;
     auto &window = *data_->window;
 
-    data_->imguiRenderer = std::make_unique<KDGpuExample::ImGuiRenderer>(
-        &ctx.device(), &ctx.graphicsQueue(), data_->context);
+    data_->imguiRenderer =
+        std::make_unique<ImGuiRenderer>(&ctx.device(), &ctx.graphicsQueue(), data_->context);
     data_->imguiRenderer->initialize(
         1.0f, window.samples(), window.colorFormat(), window.depthFormat());
     data_->windowSize = attachInfo.viewportDimensions;
@@ -147,7 +145,6 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
 
     FrameContext &frameCtx = *renderApi.frameCtx;
 
-    // note - currently, we're letting imgui handle the final resolve
     auto renderPass = imguiPass.begin(frameCtx.commandBuffer);
     recordFrameCommands(frameCtx, &renderPass);
     renderPass.end();
@@ -157,9 +154,8 @@ void ImGuiLayer::recordFrameCommands(FrameContext &frameCtx,
                                      Gpu::RenderPassCommandRecorder *recorder)
 {
     ImGui::Render();
-    if (data_->imguiRenderer->updateGeometryBuffers(frameCtx.inFlightIndex)) {
-        auto extent = glmu::to<Gpu::Extent2D>(frameCtx.extent);
-        data_->imguiRenderer->recordCommands(recorder, extent, frameCtx.inFlightIndex);
+    if (data_->imguiRenderer->updateGeometryBuffers(frameCtx)) {
+        data_->imguiRenderer->recordCommands(frameCtx, recorder);
     }
 }
 

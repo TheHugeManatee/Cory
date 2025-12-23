@@ -133,15 +133,19 @@ with different platforms (compilers and/or drivers) - likely I'm already hitting
 that may make compiling/running the application difficult on other environments.
 I'm always interested in feedback on compatibility issues, but I can of course not promise to be able to fix anything.
 
-That being said, to build the app, after checking out, you should be able to build the app with
+That being said, to build the app, after checking out, you should be set up the dependencies with
 
 ```bash
 conan install . --output-folder=build/debug -s build_type=Debug --build=missing
 conan install . --output-folder=build/release -s build_type=Release --build=missing
+```
+
+and then build with cmake using the presets:
+```bash
 cmake --preset conan-release # or debug
 ```
 
-Then bring your IDE to use the generated CMakeUserPresets.json file
+Then get your IDE to use the generated CMakeUserPresets.json file
 
 ### Cory?
 

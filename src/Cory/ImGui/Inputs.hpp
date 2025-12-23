@@ -1,14 +1,16 @@
 #pragma once
 
+#include <KDGpu/utils/flags.h>
+#include <fmt/format.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <imgui.h>
 #include <kdbindings/property.h>
+#include <magic_enum/magic_enum.hpp>
 
 #include <concepts>
-#include <fmt/format.h>
 #include <string>
 #include <string_view>
 
@@ -156,6 +158,89 @@ auto Input(std::string_view label, Property &property, Arguments... args)
         return true;
     }
     return false;
+}
+
+template <typename E>
+    requires std::is_enum_v<E>
+bool ComboBox(std::string_view label, E &value, ImGuiComboFlags flags = 0)
+{
+    ::ImGui::Text("%s", label.data()); // NOLINT
+    ::ImGui::SameLine(detail::availableWidth() / 3.0f);
+
+    // Pass in the preview value visible before opening the combo (it could technically be different
+    // contents or not pulled from items[])
+    auto valueName = magic_enum::enum_name(value);
+    bool wasChanged = false;
+    if (ImGui::BeginCombo(label.data(), valueName.data(), flags)) {
+        for (auto v : magic_enum::enum_values<E>()) {
+            auto vName = magic_enum::enum_name(v);
+            const bool is_selected = value == v;
+            if (ImGui::Selectable(vName.data(), is_selected)) {
+                value = v;
+                wasChanged = true;
+            }
+
+            // Set the initial focus when opening the combo (scrolling + keyboard navigation focus)
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    return wasChanged;
+}
+
+template <typename E>
+    requires std::is_enum_v<E>
+bool ComboBox(std::string_view label, KDBindings::Property<E> &property)
+{
+    auto v = property.get();
+    if (ComboBox(label, v)) {
+        property.set(v);
+        return true;
+    }
+    return false;
+}
+
+template <typename E>
+    requires std::is_enum_v<E>
+bool ComboBox(std::string_view label, KDGpu::Flags<E> &flags)
+{
+    bool wasChanged = false;
+    E v{flags.toInt()};
+    if (ComboBox(label, v)) {
+        flags = KDGpu::Flags<E>(v);
+        wasChanged = true;
+    }
+    return wasChanged;
+}
+
+template <typename E>
+    requires std::is_enum_v<E>
+bool CheckBoxFlags(std::string_view label, KDGpu::Flags<E> &flags)
+{
+    Text("{}", label);
+    ImGui::BeginGroup();
+    ImGui::Indent();
+
+    bool wasChanged = false;
+    for (auto flag : magic_enum::enum_values<E>()) {
+        bool flagSet = flags.testFlag(flag);
+        if (ImGui::Checkbox(fmt::format("{}##{}", magic_enum::enum_name(flag), label).c_str(),
+                            &flagSet)) {
+            if (flagSet) {
+                flags |= flag;
+            }
+            else {
+                // kdgpu::Flags does not have a clearFlag, and doesn't implement the ~ operator :(
+                flags &= E{~std::to_underlying(flag)};
+            }
+            wasChanged = true;
+        }
+    }
+    ImGui::Unindent();
+    ImGui::EndGroup();
+    return wasChanged;
 }
 
 } // namespace CoImGui

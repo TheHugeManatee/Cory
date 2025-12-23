@@ -4,8 +4,43 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
+
+#include <KDGpu/shader_object_options.h>
 
 #include "SlangCompiler.hpp"
+
+namespace {
+
+Gpu::ShaderStageFlags deduceNextStages(Gpu::ShaderStageFlagBits stage)
+{
+    using StageBit = Gpu::ShaderStageFlagBits;
+    Gpu::ShaderStageFlags next;
+
+    switch (stage) {
+    case StageBit::VertexBit:
+        next |= StageBit::TessellationControlBit;
+        next |= StageBit::GeometryBit;
+        next |= StageBit::FragmentBit;
+        break;
+    case StageBit::TessellationControlBit:
+        next |= StageBit::TessellationEvaluationBit;
+        break;
+    case StageBit::TessellationEvaluationBit:
+        next |= StageBit::GeometryBit;
+        next |= StageBit::FragmentBit;
+        break;
+    case StageBit::GeometryBit:
+        next |= StageBit::FragmentBit;
+        break;
+    default:
+        break;
+    }
+
+    return next;
+}
+
+} // namespace
 
 namespace Cory {
 
@@ -18,8 +53,7 @@ ShaderSource::ShaderSource(std::string source,
 {
 }
 
-ShaderSource::ShaderSource(std::filesystem::path filePath,
-                           Gpu::ShaderStageFlagBits type)
+ShaderSource::ShaderSource(std::filesystem::path filePath, Gpu::ShaderStageFlagBits type)
     : type_{type}
     , filename_{std::move(filePath)}
 {
@@ -31,19 +65,12 @@ ShaderSource::ShaderSource(std::filesystem::path filePath,
     }
 }
 
-std::vector<uint32_t> Shader::CompileToSpv(const ShaderSource &source,
-                                           bool optimize,
-                                           std::string_view entryPoint)
+CompilationResult
+Shader::CompileToSpv(const ShaderSource &source, bool optimize, std::string_view entryPoint)
 {
     static SlangCompiler compiler;
 
-    auto result = compiler.compileShader(source, entryPoint, optimize);
-    if (!result.has_value()) {
-        CO_CORE_ERROR("Failed to compile {}: {}", source.filePath().string(), result.error());
-        return {};
-    }
-
-    return *result;
+    return compiler.compileShader(source, entryPoint, optimize);
 }
 
 // default is an empty (invalid) shader
@@ -58,20 +85,56 @@ Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
     , type_{source_.type()}
     , entryPoint_{std::move(entryPoint)}
 {
-    std::vector<uint32_t> spirvBinary = CompileToSpv(source_, false, entryPoint_);
-    if (spirvBinary.empty()) {
-        throw std::runtime_error{"Could not compile shader source to SPIR-V"};
+    auto result = CompileToSpv(source_, false, entryPoint_);
+    if (result.has_value()) {
+        spirvBinary_ = result.value();
+    }
+    else {
+        error_ = result.error();
+    }
+    // No spirv code means invalid shader, not worth trying to create the object
+    if (spirvBinary_.empty()) {
+        return;
     }
 
-    module_ = ctx_->device().createShaderModule(spirvBinary);
-    size_ = spirvBinary.size() * sizeof(uint32_t);
-    // nameVulkanObject(
-    //     ctx_->device(), *module_, fmt::format("SHDR_{}", source.filePath().filename().string()));
+    size_ = spirvBinary_.size() * sizeof(uint32_t);
+    nextStages_ = deduceNextStages(type_);
+
+    const auto layouts = ctx_->descriptors().layouts();
+    std::string label;
+    if (source_.filePath().empty()) {
+        label = "ShaderObject";
+    }
+    else {
+        label = source_.filePath().filename().string();
+    }
+
+    Gpu::ShaderObjectOptions options{
+        .label = label,
+        .stage = type_,
+        .nextStage = nextStages_,
+        .code = spirvBinary_,
+        .entryPoint = entryPoint_,
+        .bindGroupLayouts = layouts,
+        .pushConstantRanges = {},
+    };
+
+    shaderObject_ = ctx_->device().createShaderObject(options);
+
+    if (!shaderObject_.isValid()) {
+        error_ = "Failed to create shader object for shader";
+    }
 }
 
 bool Shader::valid() const
 {
-    return ctx_ && type_ != SHADER_TYPE_UNKNOWN && module_.isValid();
+    return ctx_ && type_ != SHADER_TYPE_UNKNOWN && shaderObject_.isValid();
+}
+
+Gpu::ShaderModule Shader::createShaderModule() const
+{
+    CO_CORE_DEBUG_ASSERT(ctx_, "Shader has no context to create modules with");
+    return ctx_->device().createShaderModule(spirvBinary_);
 }
 
 Gpu::ShaderStageFlagBits Shader::deduceTypeFromPath(const std::filesystem::path &path)

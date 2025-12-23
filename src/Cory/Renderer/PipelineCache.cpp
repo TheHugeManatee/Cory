@@ -92,10 +92,13 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
     // 1) Shaders -> KDGpu::ShaderStage list
     std::vector<Gpu::ShaderStage> shaderStages;
     shaderStages.reserve(info.shaders.size());
+    std::vector<Gpu::ShaderModule> shaderModules;
+    shaderModules.reserve(info.shaders.size());
     for (auto shaderHandle : info.shaders) {
         const auto &s = (*shaderManager)[shaderHandle];
+        shaderModules.push_back(s.createShaderModule());
         shaderStages.push_back(Gpu::ShaderStage{
-            .shaderModule = s.module(),
+            .shaderModule = shaderModules.back(),
             .stage = s.type(),
             .entryPoint = s.entryPoint(),
         });
@@ -142,7 +145,8 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
                      Gpu::DynamicState::DepthTestEnable,
                      Gpu::DynamicState::DepthWriteEnable,
                      Gpu::DynamicState::DepthCompareOp},
-            }
+            },
+        .dynamicRendering = {.enabled = true}
         // If you target a predefined RenderPass instead of dynamic rendering:
         // .renderPass = myRenderPass, .subpassIndex = 0
     };

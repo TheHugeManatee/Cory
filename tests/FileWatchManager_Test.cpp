@@ -2,13 +2,13 @@
 
 #include <Cory/Base/Log.hpp>
 
-#include <atomic>
 #include <catch2/catch_test_macros.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <future>
 #include <thread>
+#include <vector>
 
 using namespace Cory;
 namespace fs = std::filesystem;
@@ -41,6 +41,106 @@ void deleteTestFile(const fs::path &path)
     std::error_code ec;
     fs::remove(path, ec);
 }
+struct TestCoroutine {
+    struct promise_type {
+        using Handle = cppcoro::coroutine_handle<promise_type>;
+        TestCoroutine get_return_object() { return TestCoroutine{Handle::from_promise(*this)}; }
+        cppcoro::suspend_always initial_suspend() noexcept { return {}; }
+        cppcoro::suspend_always final_suspend() noexcept { return {}; }
+        void return_void() noexcept {}
+        void unhandled_exception() { std::terminate(); }
+    };
+
+    using Handle = cppcoro::coroutine_handle<promise_type>;
+
+    TestCoroutine() = default;
+    explicit TestCoroutine(Handle h)
+        : handle(h)
+    {
+    }
+    TestCoroutine(TestCoroutine &&other) noexcept
+        : handle(std::exchange(other.handle, {}))
+    {
+    }
+    TestCoroutine &operator=(TestCoroutine &&other) noexcept
+    {
+        if (this != &other) {
+            if (handle) handle.destroy();
+            handle = std::exchange(other.handle, {});
+        }
+        return *this;
+    }
+    ~TestCoroutine()
+    {
+        if (handle) handle.destroy();
+    }
+
+    void start()
+    {
+        if (handle) handle.resume();
+    }
+
+    Handle handle{nullptr};
+};
+
+struct AwaitableConsumer {
+    AwaitableConsumer(FileWatchManager &manager, FileWatchHandle watchHandle)
+        : mgr(manager)
+        , handle(watchHandle)
+        , consumerTask{consume()}
+    {
+        consumerTask.start();
+    }
+
+    bool waitForEvents(std::size_t count,
+                       std::chrono::milliseconds timeout = std::chrono::seconds(2))
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (events.size() < count) {
+            mgr.processPendingEvents();
+            if (events.size() >= count) return true;
+            if (std::chrono::steady_clock::now() >= deadline) return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return true;
+    }
+
+    std::vector<FileWatchEventType> takeEvents()
+    {
+        auto copy = events;
+        events.clear();
+        return copy;
+    }
+
+    bool waitUntilFinished(std::chrono::milliseconds timeout = std::chrono::seconds(2))
+    {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        while (!finished) {
+            mgr.processPendingEvents();
+            if (finished) return true;
+            if (std::chrono::steady_clock::now() >= deadline) return false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return true;
+    }
+
+    FileWatchManager &mgr;
+    FileWatchHandle handle;
+    std::vector<FileWatchEventType> events;
+    bool finished{false};
+
+  private:
+    auto consume() -> TestCoroutine
+    {
+        while (true) {
+            auto event = co_await mgr.nextEvent(handle);
+            events.push_back(event);
+            if (event == FileWatchEventType::WatchEnded) break;
+        }
+        finished = true;
+    }
+    TestCoroutine consumerTask;
+};
 } // namespace
 
 TEST_CASE("FileWatchManager: file creation, modification, deletion, and unwatching")
@@ -50,54 +150,82 @@ TEST_CASE("FileWatchManager: file creation, modification, deletion, and unwatchi
     const auto secondFilePath = testDirectory() / "test_filewatch_2.txt";
 
     FileWatchManager mgr;
-    // Clean up before test
     if (fs::exists(testFilePath)) fs::remove(testFilePath);
     if (fs::exists(secondFilePath)) fs::remove(secondFilePath);
 
-    std::vector<FileWatchEventType> receivedEvents;
+    const auto handle = mgr.watch({testFilePath.string()});
+    REQUIRE(handle);
+    AwaitableConsumer consumer{mgr, handle};
 
-    auto handle = mgr.watch({testFilePath.string()},
-                            [&](FileWatchEventType event) { receivedEvents.push_back(event); });
+    createTestFile(testFilePath);
+    REQUIRE(consumer.waitForEvents(2));
+    CHECK(consumer.takeEvents() ==
+          std::vector{FileWatchEventType::Created, FileWatchEventType::Modified});
 
+    modifyTestFile(testFilePath);
+    REQUIRE(consumer.waitForEvents(1));
+    CHECK(consumer.takeEvents() == std::vector{FileWatchEventType::Modified});
+
+    deleteTestFile(testFilePath);
+    REQUIRE(consumer.waitForEvents(1));
+    CHECK(consumer.takeEvents() == std::vector{FileWatchEventType::Deleted});
+
+    CHECK(mgr.unwatch(handle));
+    REQUIRE(consumer.waitForEvents(1));
+    CHECK(consumer.takeEvents() == std::vector{FileWatchEventType::WatchEnded});
+    CHECK(consumer.waitUntilFinished());
+
+    if (fs::exists(testFilePath)) fs::remove(testFilePath);
+    if (fs::exists(secondFilePath)) fs::remove(secondFilePath);
+}
+
+TEST_CASE("FileWatchManager: consumer can exit before sentinel is consumed")
+{
+    using namespace std::chrono_literals;
+    const auto path = testDirectory() / "test_filewatch_early_exit.txt";
+    if (fs::exists(path)) fs::remove(path);
+
+    FileWatchManager mgr;
+    const auto handle = mgr.watch({path.string()});
     REQUIRE(handle);
 
-    // Test file creation
-    createTestFile(testFilePath);
-    REQUIRE(receivedEvents.size() == 0);
-    std::this_thread::sleep_for(20ms);
-    mgr.processPendingEvents();
-    REQUIRE(!receivedEvents.empty());
-    CHECK(receivedEvents == std::vector{FileWatchEventType::Created, FileWatchEventType::Modified});
-    receivedEvents.clear();
+    bool receivedFirstEvent = false;
+    auto consumer = [&]() -> TestCoroutine {
+        auto event = co_await mgr.nextEvent(handle);
+        (void)event;
+        receivedFirstEvent = true;
+        mgr.detach(handle);
+    }();
 
-    // Test file modification
-    modifyTestFile(testFilePath);
-    std::this_thread::sleep_for(20ms);
-    REQUIRE(receivedEvents.size() == 0);
-    mgr.processPendingEvents();
-    REQUIRE(receivedEvents.size() == 1);
-    CHECK(receivedEvents.back() == FileWatchEventType::Modified);
-    receivedEvents.clear();
+    createTestFile(path);
+    std::this_thread::sleep_for(50ms);
 
-    // Test file deletion
-    deleteTestFile(testFilePath);
-    std::this_thread::sleep_for(20ms);
-    REQUIRE(receivedEvents.size() == 0);
-    mgr.processPendingEvents();
-    REQUIRE(receivedEvents.size() == 1);
-    CHECK(receivedEvents.back() == FileWatchEventType::Deleted);
-    receivedEvents.clear();
+    auto deadline = std::chrono::steady_clock::now() + 2s;
+    while (!receivedFirstEvent) {
+        mgr.processPendingEvents();
+        if (receivedFirstEvent) break;
+        REQUIRE(std::chrono::steady_clock::now() < deadline);
+        std::this_thread::sleep_for(1ms);
+    }
 
-    // Test unwatching
-    bool unwatchResult = mgr.unwatch(handle);
-    CHECK(unwatchResult == true);
-    // Modify file again, should not receive callback
-    createTestFile(testFilePath);
-    REQUIRE(receivedEvents.size() == 0);
-    mgr.processPendingEvents();
-    REQUIRE(receivedEvents.size() == 0);
+    CHECK(mgr.unwatch(handle));
+    mgr.processPendingEvents(); // Should safely drain pending events without an active consumer.
 
-    // Clean up
-    if (fs::exists(testFilePath)) fs::remove(testFilePath);
-    if (fs::exists(secondFilePath)) fs::remove(secondFilePath);
+    if (fs::exists(path)) fs::remove(path);
+}
+
+TEST_CASE("FileWatchManager: sentinel is emitted even without file activity")
+{
+    FileWatchManager mgr;
+    const auto path = testDirectory() / "test_filewatch_sentinel.txt";
+    if (fs::exists(path)) fs::remove(path);
+
+    const auto handle = mgr.watch({path.string()});
+    REQUIRE(handle);
+    AwaitableConsumer consumer{mgr, handle};
+
+    CHECK(mgr.unwatch(handle));
+    REQUIRE(consumer.waitForEvents(1));
+    CHECK(consumer.takeEvents() == std::vector{FileWatchEventType::WatchEnded});
+    CHECK(consumer.waitUntilFinished());
 }

@@ -3,15 +3,14 @@
 #include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/Debugger.hpp>
+#include <Cory/Base/FileWatchManager.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
-#include <KDGpu/graphics_api.h>
 #include <KDGpu/instance.h>
-#include <KDGpu/resource_manager.h>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
 #include <KDGpuKDGui/view.h>
 #include <KDGui/gui_application.h>
@@ -23,6 +22,8 @@ namespace Cory {
 struct ContextPrivate {
     std::string name;
     bool isHeadless{true};
+
+    FileWatchManager fileWatchManager;
 
     Gpu::GraphicsApi api;
     Gpu::Instance instance;
@@ -414,6 +415,14 @@ DescriptorSets &Context::descriptors()
 const DescriptorSets &Context::descriptors() const
 {
     return data_->descriptorSets;
+}
+FileWatchManager &Context::fileWatchManager()
+{
+    return data_->fileWatchManager;
+}
+const FileWatchManager &Context::fileWatchManager() const
+{
+    return data_->fileWatchManager;
 }
 
 void ContextPrivate::receiveDebugUtilsMessage(

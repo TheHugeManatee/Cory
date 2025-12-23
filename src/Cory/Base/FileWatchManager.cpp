@@ -1,19 +1,23 @@
 #include "FileWatchManager.hpp"
 
+#include "Locked.hpp"
+
 #include <Cory/Base/SlotMap.hpp>
 
 #include <efsw/efsw.hpp>
 
 #include "Log.hpp"
 
-#include <atomic>
+#include <deque>
 #include <filesystem>
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <system_error>
 #include <unordered_map>
+#include <vector>
 
 namespace Cory {
 namespace {
@@ -49,7 +53,10 @@ struct FileWatchEvent {
 
 struct FileWatchEntry {
     efsw::WatchID watchId{kInvalidWatchId};
-    Function<void(FileWatchEventType)> callback;
+    std::deque<FileWatchEventType> queuedEvents;
+    cppcoro::coroutine_handle<> waitingConsumer{};
+    bool consumerAttached{false};
+    bool pendingRemoval{false};
 };
 
 struct WatchDescriptor {
@@ -59,6 +66,7 @@ struct WatchDescriptor {
 
 } // namespace
 
+/// The FileWatchListener will receive events from efsw on a separate thread. It will use the
 struct FileWatchManager::Private : public efsw::FileWatchListener {
     Private()
         : watcher(std::make_unique<efsw::FileWatcher>())
@@ -77,10 +85,10 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
         // When a potential file action is detected, it might not apply to the
         // actual file associated with the watch. So we check if the path matches
         // the target path of the watch before adding it to the pending events.
-        std::scoped_lock lock(mutex);
+        auto data = fileWatchThreadData.lock();
 
-        auto lookup = watchIdToHandle.find(watchId);
-        if (lookup == watchIdToHandle.end()) return;
+        auto lookup = data->watchIdToHandle.find(watchId);
+        if (lookup == data->watchIdToHandle.end()) return;
 
         const auto eventType = actionToEvent(action);
         if (eventType == FileWatchEventType::Unknown) return;
@@ -95,7 +103,7 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
 
         if (!relevant) return;
 
-        pendingEvents.push_back(FileWatchEvent{
+        data->pendingEvents.push_back(FileWatchEvent{
             .handle = lookup->second.handle,
             .type = eventType,
         });
@@ -103,21 +111,25 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
 
     void stopAll()
     {
-        std::scoped_lock lock(mutex);
-        for (const auto &[watchId, _] : watchIdToHandle) {
+        auto data = fileWatchThreadData.lock();
+        for (const auto &[watchId, _] : data->watchIdToHandle) {
             if (watchId != kInvalidWatchId) {
                 watcher->removeWatch(watchId);
             }
         }
-        watchIdToHandle.clear();
+        data->watchIdToHandle.clear();
+        data->pendingEvents.clear();
         watches.clear();
     }
 
     SlotMap<FileWatchEntry> watches;
     std::unique_ptr<efsw::FileWatcher> watcher;
-    std::unordered_map<efsw::WatchID, WatchDescriptor> watchIdToHandle;
-    std::vector<FileWatchEvent> pendingEvents;
-    std::mutex mutex;
+
+    struct FileWatchThreadData {
+        std::unordered_map<efsw::WatchID, WatchDescriptor> watchIdToHandle;
+        std::vector<FileWatchEvent> pendingEvents;
+    };
+    Locked<FileWatchThreadData> fileWatchThreadData;
 };
 
 std::unique_ptr<FileWatchManager> FileWatchManager::s_instance;
@@ -143,13 +155,31 @@ FileWatchManager::FileWatchManager()
     : data_(std::make_unique<Private>())
 {
 }
-FileWatchManager::~FileWatchManager() = default;
+
+FileWatchManager::~FileWatchManager()
+{
+    // Moved-from?
+    if (!data_) return;
+
+    std::vector<SlotMapHandle> handles;
+    handles.reserve(data_->watches.size());
+    for (auto handle : data_->watches.handles()) {
+        handles.push_back(handle);
+    }
+
+    for (auto handle : handles) {
+        unwatch(handle);
+    }
+    // After unwatching all remaining handles, make sure all pending events are processed
+    processPendingEvents();
+
+    // At this point, all watches should be unwatched and cleaned up.
+}
 
 FileWatchManager::FileWatchManager(FileWatchManager &&rhs) noexcept = default;
 FileWatchManager &FileWatchManager::operator=(FileWatchManager &&rhs) noexcept = default;
 
-FileWatchHandle FileWatchManager::watch(FileWatch watch,
-                                        Function<void(FileWatchEventType)> callback)
+FileWatchHandle FileWatchManager::watch(FileWatch watch)
 {
     auto targetPath = absoluteNormalized(fs::path{watch.path});
     auto directoryPath = targetPath.parent_path();
@@ -174,15 +204,10 @@ FileWatchHandle FileWatchManager::watch(FileWatch watch,
         return {};
     }
 
-    SlotMapHandle handle;
+    SlotMapHandle handle = data_->watches.emplace(watchId);
     {
-        std::scoped_lock lock(data_->mutex);
-        handle = data_->watches.emplace(FileWatchEntry{
-            .watchId = watchId,
-            .callback = std::move(callback),
-        });
-
-        data_->watchIdToHandle[watchId] = WatchDescriptor{
+        auto watchThreadData = data_->fileWatchThreadData.lock();
+        watchThreadData->watchIdToHandle[watchId] = WatchDescriptor{
             .handle = handle,
             .targetPath = targetPath,
         };
@@ -192,41 +217,206 @@ FileWatchHandle FileWatchManager::watch(FileWatch watch,
 
 bool FileWatchManager::unwatch(FileWatchHandle handle)
 {
-    std::scoped_lock lock(data_->mutex);
     if (!handle) return false;
 
     efsw::WatchID watchId = kInvalidWatchId;
+    std::vector<cppcoro::coroutine_handle<>> waiters;
+    {
+        if (!data_->watches.isValid(handle)) return false;
 
-    if (!data_->watches.isValid(handle)) return false;
+        auto &entry = data_->watches[handle];
+        watchId = entry.watchId;
 
-    auto &entry = data_->watches[handle];
-    watchId = entry.watchId;
-    if (watchId != kInvalidWatchId) {
-        data_->watchIdToHandle.erase(watchId);
+        if (watchId != kInvalidWatchId) {
+            auto watchThreadData = data_->fileWatchThreadData.lock();
+            watchThreadData->watchIdToHandle.erase(watchId);
+            entry.watchId = kInvalidWatchId;
+        }
+
+        if (!entry.consumerAttached) {
+            data_->watches.release(handle);
+        }
+        else {
+            entry.pendingRemoval = true;
+            const bool wasEmpty = entry.queuedEvents.empty();
+            entry.queuedEvents.push_back(FileWatchEventType::WatchEnded);
+            if (wasEmpty && entry.waitingConsumer) {
+                waiters.push_back(entry.waitingConsumer);
+                entry.waitingConsumer = nullptr;
+            }
+        }
     }
-    data_->watches.release(handle);
 
     if (watchId != kInvalidWatchId) {
         data_->watcher->removeWatch(watchId);
     }
+
+    for (auto waiter : waiters) {
+        if (waiter) waiter.resume();
+    }
+
     return true;
 }
 
 void FileWatchManager::processPendingEvents()
 {
-    std::scoped_lock lock(data_->mutex);
-    for (const auto &event : data_->pendingEvents) {
-        // Watch has been removed in the meantime
-        if (!data_->watches.isValid(event.handle)) {
-            continue;
+    std::vector<cppcoro::coroutine_handle<>> waiters;
+    {
+        std::vector<FileWatchEvent> events;
+        {
+            auto watchThreadData = data_->fileWatchThreadData.lock();
+            events.swap(watchThreadData->pendingEvents);
         }
 
-        auto &entry = data_->watches[event.handle];
-        if (entry.callback) {
-            entry.callback(event.type);
+        waiters.reserve(events.size());
+
+        for (const auto &event : events) {
+            if (!data_->watches.isValid(event.handle)) continue;
+
+            auto &entry = data_->watches[event.handle];
+            const bool wasEmpty = entry.queuedEvents.empty();
+            entry.queuedEvents.push_back(event.type);
+            // If the entry already had queued events, it's already in our waiters list
+            if (wasEmpty && entry.waitingConsumer) {
+                waiters.push_back(entry.waitingConsumer);
+                entry.waitingConsumer = nullptr;
+            }
         }
     }
-    data_->pendingEvents.clear();
+
+    for (auto waiter : waiters) {
+        if (waiter) waiter.resume();
+    }
+}
+
+FileWatchManager::NextEventAwaitable FileWatchManager::nextEvent(FileWatchHandle handle)
+{
+    CO_CORE_ASSERT(data_->watches.isValid(handle),
+                   "Attempted to await events on an invalid FileWatchHandle.");
+    return NextEventAwaitable{*this, handle};
+}
+
+FileWatchManager::NextEventAwaitable::NextEventAwaitable(FileWatchManager &manager,
+                                                         FileWatchHandle handle)
+    : manager(&manager)
+    , handle(handle)
+{
+    manager.ensureConsumer(handle);
+}
+
+FileWatchManager::NextEventAwaitable::~NextEventAwaitable()
+{
+    if (suspended) {
+        manager->cancelSuspendedConsumer(handle, suspendedHandle);
+    }
+}
+
+bool FileWatchManager::NextEventAwaitable::await_ready()
+{
+    cachedEvent = manager->tryConsumeQueuedEvent(handle);
+    return cachedEvent.has_value();
+}
+
+bool FileWatchManager::NextEventAwaitable::await_suspend(cppcoro::coroutine_handle<> h)
+{
+    cachedEvent = manager->tryConsumeQueuedEvent(handle);
+    if (cachedEvent.has_value()) return false;
+
+    suspendedHandle = h;
+    suspended = manager->suspendConsumer(handle, h);
+    return suspended;
+}
+
+FileWatchEventType FileWatchManager::NextEventAwaitable::await_resume()
+{
+    if (!cachedEvent.has_value()) {
+        cachedEvent = manager->tryConsumeQueuedEvent(handle);
+        CO_CORE_ASSERT(cachedEvent.has_value(),
+                       "Resumed FileWatchManager::nextEvent without a pending event.");
+    }
+    suspended = false;
+    suspendedHandle = {};
+    return *cachedEvent;
+}
+
+void FileWatchManager::detach(FileWatchHandle handle) { detachConsumer(handle); }
+
+void FileWatchManager::detachConsumer(FileWatchHandle handle)
+{
+    if (!handle) return;
+    if (!data_->watches.isValid(handle)) return;
+
+    auto &entry = data_->watches[handle];
+    entry.consumerAttached = false;
+    entry.waitingConsumer = nullptr;
+    if (entry.pendingRemoval) {
+        entry.queuedEvents.clear();
+        data_->watches.release(handle);
+    }
+}
+
+void FileWatchManager::ensureConsumer(FileWatchHandle handle)
+{
+    if (!handle) return;
+    CO_CORE_ASSERT(data_->watches.isValid(handle),
+                   "Attempted to attach consumer for invalid FileWatchHandle.");
+    auto &entry = data_->watches[handle];
+    if (!entry.consumerAttached) {
+        entry.consumerAttached = true;
+    }
+}
+
+std::optional<FileWatchEventType>
+FileWatchManager::tryConsumeQueuedEvent(FileWatchHandle handle)
+{
+    if (!handle) return std::nullopt;
+    if (!data_->watches.isValid(handle)) return std::nullopt;
+
+    auto &entry = data_->watches[handle];
+    if (entry.queuedEvents.empty()) return std::nullopt;
+
+    auto event = entry.queuedEvents.front();
+    entry.queuedEvents.pop_front();
+    finalizeConsumedEvent(handle, event);
+    return event;
+}
+
+void FileWatchManager::finalizeConsumedEvent(FileWatchHandle handle, FileWatchEventType event)
+{
+    if (!data_->watches.isValid(handle)) return;
+
+    if (event == FileWatchEventType::WatchEnded) {
+        detachConsumer(handle);
+    }
+}
+
+bool FileWatchManager::suspendConsumer(FileWatchHandle handle,
+                                       cppcoro::coroutine_handle<> coroutine)
+{
+    if (!handle || !coroutine) return false;
+    if (!data_->watches.isValid(handle)) return false;
+
+    auto &entry = data_->watches[handle];
+    CO_CORE_ASSERT(entry.waitingConsumer == nullptr,
+                   "Multiple coroutines attempted to await the same FileWatchHandle.");
+    entry.waitingConsumer = coroutine;
+    return true;
+}
+
+void FileWatchManager::cancelSuspendedConsumer(FileWatchHandle handle,
+                                               cppcoro::coroutine_handle<> coroutine)
+{
+    if (!handle || !coroutine) return;
+    if (!data_->watches.isValid(handle)) return;
+
+    auto &entry = data_->watches[handle];
+    if (entry.waitingConsumer == coroutine) {
+        entry.waitingConsumer = nullptr;
+        if (entry.pendingRemoval) {
+            entry.queuedEvents.clear();
+            data_->watches.release(handle);
+        }
+    }
 }
 
 } // namespace Cory

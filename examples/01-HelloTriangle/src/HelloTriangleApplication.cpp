@@ -110,7 +110,6 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     int msaaSamples = 1;
     CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
-    CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
@@ -184,8 +183,7 @@ void HelloTriangleApplication::recordCommands(Cory::FrameContext &frameCtx)
 {
     // do some color swirly thingy
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
-    // Magnum::Color4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f};
-    glm::vec4 clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    glm::vec4 clearColor{sin(t) / 2.0f + 0.5f, cos(t) / 2.0f + 0.5f, 0.5f, 1.0f};
 
     auto opaquePassOptions = KDGpu::RenderPassCommandRecorderOptions{
         .colorAttachments = {{

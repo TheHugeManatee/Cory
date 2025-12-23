@@ -11,15 +11,14 @@
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
-#include <Cory/Cory.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
+#include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/Swapchain.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/buffer_options.h>
@@ -34,17 +33,13 @@
 #include <gsl/gsl>
 #include <gsl/narrow>
 #include <imgui.h>
-#include <range/v3/view/transform.hpp>
 
-#include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cstddef>
-#include <cstring>
 
 static struct AnimationData {
-    int num_cubes{20000};
+    int num_cubes{5000};
     float blend{0.8f};
 
     struct param {
@@ -141,7 +136,6 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     // const auto msaaSamples = counts & Gpu::SampleCountFlagBits::Samples8Bit ? 8 : 2;
     // CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
-    CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 8);
 

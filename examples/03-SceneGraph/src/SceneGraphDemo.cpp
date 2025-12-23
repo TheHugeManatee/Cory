@@ -48,8 +48,7 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     });
 
     // Use Cory API for MSAA sample count
-    const int msaaSamples = 2; // Or use window_->samples() after window creation if needed
-    CO_APP_INFO("Vulkan instance version is {}", Cory::queryVulkanInstanceVersion());
+    const int msaaSamples = 4; // Or use window_->samples() after window creation if needed
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "SceneGraphDemo", msaaSamples);
 
@@ -94,7 +93,7 @@ void SceneGraphDemoApplication::setupScene()
     auto add_subcubes = [this](Cory::Entity parent, float level) -> std::vector<Cory::Entity> {
         std::vector<Cory::Entity> entities;
 
-        float numChildren = Cory::RNG::Uniform(5.0f, 25.0f);
+        float numChildren = Cory::RNG::Uniform(4.0f, 15.0f);
         for (int i = 0; i < numChildren; ++i) {
             const float radius = Cory::RNG::Uniform(3.0f, 7.0f);
 

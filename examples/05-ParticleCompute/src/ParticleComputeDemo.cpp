@@ -1,8 +1,8 @@
-#include "SceneGraphDemo.hpp"
+#include "ParticleComputeDemo.hpp"
 
 #include "Common.hpp"
 #include "CubeAnimationSystem.hpp"
-#include "CubeRenderSystem.hpp"
+#include "PointSpriteRenderSystem.hpp"
 
 #include <Cory/Application/CameraLayer.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
@@ -30,16 +30,16 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <algorithm>
 
-SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
+ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const char *> args)
 {
-    CLI::App app{"SceneGraphDemo"};
+    CLI::App app{"ParticleComputeDemoApplication"};
     bool disableValidation{false};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation, "Disable validation layers");
     app.allow_config_extras(true);
     app.parse(gsl::narrow<int>(args.size()), args.data());
 
-    Cory::ResourceLocator::addSearchPath(SCENEGRAPHDEMO_RESOURCE_DIR);
+    Cory::ResourceLocator::addSearchPath(PARTICLECOMPUTEDEMO_RESOURCE_DIR);
 
     init(Cory::ContextCreationInfo{
         .validation =
@@ -48,9 +48,10 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     });
 
     // Use Cory API for MSAA sample count
-    const int msaaSamples = 4; // Or use window_->samples() after window creation if needed
+    const int msaaSamples = 2; // Or use window_->samples() after window creation if needed
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "SceneGraphDemo", msaaSamples);
+    window_ =
+        std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "Particle Compute Demo", msaaSamples);
 
     setupScene();
     setupSystems();
@@ -60,11 +61,9 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
     layers().connectToWindow(*window_);
-
-    clock_.setTimeScale(0.01);
 }
 
-void SceneGraphDemoApplication::setupScene()
+void ParticleComputeDemoApplication::setupScene()
 {
 
     // set up the camera updates
@@ -79,48 +78,22 @@ void SceneGraphDemoApplication::setupScene()
                                           .farPlane = 1000.0f});
 
     Cory::Entity root = sceneGraph_.root();
-    auto center = sceneGraph_.createEntity(root,
-                                           fmt::format("center"),
-                                           AnimationComponent{
-                                               .blend = 0.8f,
-                                               .entityIndex = 0.0f,
-                                           },
-                                           Cory::Components::Transform{
-                                               .position{0.0f, 0.0f, 0.0f},
-                                           });
 
-    // creates 5 cubes within a sphere around the given parent
-    auto add_subcubes = [this](Cory::Entity parent, float level) -> std::vector<Cory::Entity> {
-        std::vector<Cory::Entity> entities;
+    static constexpr size_t numSprites = 3000;
+    static constexpr float sceneRadius = 7.0f;
 
-        float numChildren = Cory::RNG::Uniform(4.0f, 15.0f);
-        for (int i = 0; i < numChildren; ++i) {
-            const float radius = Cory::RNG::Uniform(3.0f, 7.0f);
+    for (size_t i = 0; i < numSprites; ++i) {
+        const float radius = Cory::RNG::Uniform(0.1f, 0.17f);
+        auto pos = Cory::RNG::UniformInSphere() * sceneRadius;
+        auto color = glm::vec4{Cory::RNG::Uniform(0.0f, 1.0f),
+                               Cory::RNG::Uniform(0.0f, 1.0f),
+                               Cory::RNG::Uniform(0.0f, 1.0f),
+                               1.0f};
 
-            auto pos = Cory::RNG::UniformInSphere() * radius;
-            auto scale = glm::vec3{Cory::RNG::Uniform(0.25f, 0.65f)};
-            auto index = level + (level / 2.0f * Cory::RNG::Uniform(-1.0f, 2.0f));
-
-            auto child = sceneGraph_.createEntity(parent,
-                                                  fmt::format("cube{}", i),
-                                                  AnimationComponent{
-                                                      .blend = 0.8f,
-                                                      .entityIndex = index,
-                                                  },
-                                                  Cory::Components::Transform{
-                                                      .position = pos,
-                                                      .rotation = glm::vec3{0.0f, 0.0f, 0.0f},
-                                                      .scale = scale,
-                                                  });
-            entities.push_back(child);
-        }
-        return entities;
-    };
-
-    for (auto &e : add_subcubes(center, 0.25)) {
-        for (auto &sub_e : add_subcubes(e, 0.5)) {
-            add_subcubes(sub_e, 0.75);
-        }
+        sceneGraph_.createEntity(
+            root,
+            fmt::format("Sprite {}", i),
+            PointSpriteComponent{.position = pos, .radius = radius, .color = color});
     }
 
     /// add a coordinate system indicator
@@ -130,14 +103,10 @@ void SceneGraphDemoApplication::setupScene()
             for (uint32_t i = 0; i < steps / 2; ++i) {
                 sceneGraph_.createEntity(root,
                                          fmt::format("{}{}", axis_name, i),
-                                         AnimationComponent{
-                                             .color = glm::vec4{color, 1.0f},
-                                             .blend = 0.5f,
-                                             .entityIndex = -1.0f,
-                                         },
-                                         Cory::Components::Transform{
+                                         PointSpriteComponent{
                                              .position = 0.2f * axis * static_cast<float>(i),
-                                             .scale = glm::vec3{0.1f},
+                                             .radius = 0.1f,
+                                             .color = glm::vec4{color, 1.0f},
                                          });
             }
         };
@@ -147,7 +116,7 @@ void SceneGraphDemoApplication::setupScene()
     make_colored_axis("Z", {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, 100);
 }
 
-void SceneGraphDemoApplication::setupSystems()
+void ParticleComputeDemoApplication::setupSystems()
 {
     animationSystem_ = &systems_.emplace<CubeAnimationSystem>();
 
@@ -164,15 +133,15 @@ void SceneGraphDemoApplication::setupSystems()
     systems_.emplace<Cory::TransformSystem>();
 
     // render system should go last to be aware of the latest state
-    renderSystem_ = &systems_.emplace<CubeRenderSystem>(ctx(), Cory::MAX_FRAMES_IN_FLIGHT);
+    renderSystem_ = &systems_.emplace<PointSpriteRenderSystem>(ctx(), Cory::MAX_FRAMES_IN_FLIGHT);
 }
 
-SceneGraphDemoApplication::~SceneGraphDemoApplication()
+ParticleComputeDemoApplication::~ParticleComputeDemoApplication()
 {
-    CO_APP_TRACE("Destroying SceneGraphDemoApplication");
+    CO_APP_TRACE("Destroying ParticleComputeDemoApplication");
 }
 
-void SceneGraphDemoApplication::run()
+void ParticleComputeDemoApplication::run()
 {
     // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
@@ -226,14 +195,14 @@ void SceneGraphDemoApplication::run()
     ctx().device().waitUntilIdle();
 }
 
-void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
-                                                   const Cory::FrameContext &frameCtx)
+void ParticleComputeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
+                                                        const Cory::FrameContext &frameCtx)
 {
     const Cory::ScopeTimer s{"Frame/DeclarePasses"};
 
     auto frameHandles = framegraph.importFrameContext(frameCtx);
 
-    auto mainPass = renderSystem_->cubeRenderTask(
+    auto mainPass = renderSystem_->spriteRenderTask(
         framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
 
     auto layersOutput = layers().declareRenderTasks(
@@ -247,7 +216,7 @@ void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
 }
 
-void SceneGraphDemoApplication::drawImguiControls()
+void ParticleComputeDemoApplication::drawImguiControls()
 {
     const Cory::ScopeTimer st{"Frame/ImGui"};
 

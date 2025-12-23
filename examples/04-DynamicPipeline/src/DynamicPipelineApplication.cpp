@@ -123,6 +123,8 @@ void DynamicPipelineApplication::run()
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
+        ctx().shaders().clearDeferredReleases(frameCtx.frameNumber);
+
         double previousTime = std::exchange(currentTime, getElapsedTimeSeconds());
         const double delta = currentTime - previousTime;
 

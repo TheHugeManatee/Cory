@@ -45,67 +45,59 @@ void deleteTestFile(const fs::path &path)
 
 TEST_CASE("FileWatchManager: file creation, modification, deletion, and unwatching")
 {
+    using namespace std::chrono_literals;
     const auto testFilePath = testDirectory() / "test_filewatch.txt";
+    const auto secondFilePath = testDirectory() / "test_filewatch_2.txt";
 
     FileWatchManager mgr;
     // Clean up before test
     if (fs::exists(testFilePath)) fs::remove(testFilePath);
+    if (fs::exists(secondFilePath)) fs::remove(secondFilePath);
 
-    std::promise<FileWatchEvent> createdPromise, modifiedPromise, deletedPromise;
-    auto createdFuture = createdPromise.get_future();
-    auto modifiedFuture = modifiedPromise.get_future();
-    auto deletedFuture = deletedPromise.get_future();
-    std::atomic<int> callbackCount{0};
-    std::atomic<bool> createdSet{false}, modifiedSet{false}, deletedSet{false};
-    auto handle = mgr.watch({testFilePath.string()}, [&](FileWatchEvent event) {
-        callbackCount++;
-        switch (event) {
-        case FileWatchEvent::Created:
-            if (!createdSet.exchange(true)) createdPromise.set_value(event);
-            break;
-        case FileWatchEvent::Modified:
-            if (!modifiedSet.exchange(true)) modifiedPromise.set_value(event);
-            break;
-        case FileWatchEvent::Deleted:
-            if (!deletedSet.exchange(true)) deletedPromise.set_value(event);
-            break;
-        default:
-            break;
-        }
-    });
+    std::vector<FileWatchEventType> receivedEvents;
+
+    auto handle = mgr.watch({testFilePath.string()},
+                            [&](FileWatchEventType event) { receivedEvents.push_back(event); });
 
     REQUIRE(handle);
 
     // Test file creation
     createTestFile(testFilePath);
-    auto createdWait = createdFuture.wait_for(std::chrono::seconds(4));
-    if (createdWait != std::future_status::ready) FAIL("File creation event was not received in time");
-    CHECK(createdFuture.get() == FileWatchEvent::Created);
-    callbackCount = 0;
+    REQUIRE(receivedEvents.size() == 0);
+    std::this_thread::sleep_for(20ms);
+    mgr.processPendingEvents();
+    REQUIRE(!receivedEvents.empty());
+    CHECK(receivedEvents == std::vector{FileWatchEventType::Created, FileWatchEventType::Modified});
+    receivedEvents.clear();
 
     // Test file modification
     modifyTestFile(testFilePath);
-    auto modifiedWait = modifiedFuture.wait_for(std::chrono::seconds(4));
-    if (modifiedWait != std::future_status::ready) FAIL("File modification event was not received in time");
-    CHECK(modifiedFuture.get() == FileWatchEvent::Modified);
-    callbackCount = 0;
+    std::this_thread::sleep_for(20ms);
+    REQUIRE(receivedEvents.size() == 0);
+    mgr.processPendingEvents();
+    REQUIRE(receivedEvents.size() == 1);
+    CHECK(receivedEvents.back() == FileWatchEventType::Modified);
+    receivedEvents.clear();
 
     // Test file deletion
     deleteTestFile(testFilePath);
-    auto deletedWait = deletedFuture.wait_for(std::chrono::seconds(4));
-    if (deletedWait != std::future_status::ready) FAIL("File deletion event was not received in time");
-    CHECK(deletedFuture.get() == FileWatchEvent::Deleted);
-    callbackCount = 0;
+    std::this_thread::sleep_for(20ms);
+    REQUIRE(receivedEvents.size() == 0);
+    mgr.processPendingEvents();
+    REQUIRE(receivedEvents.size() == 1);
+    CHECK(receivedEvents.back() == FileWatchEventType::Deleted);
+    receivedEvents.clear();
 
     // Test unwatching
     bool unwatchResult = mgr.unwatch(handle);
     CHECK(unwatchResult == true);
     // Modify file again, should not receive callback
     createTestFile(testFilePath);
-    // Wait a short time to ensure no callback is received
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    CHECK(callbackCount == 0);
+    REQUIRE(receivedEvents.size() == 0);
+    mgr.processPendingEvents();
+    REQUIRE(receivedEvents.size() == 0);
 
     // Clean up
     if (fs::exists(testFilePath)) fs::remove(testFilePath);
+    if (fs::exists(secondFilePath)) fs::remove(secondFilePath);
 }

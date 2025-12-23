@@ -11,8 +11,8 @@
 #include <limits>
 #include <memory>
 #include <mutex>
-#include <system_error>
 #include <string>
+#include <system_error>
 #include <unordered_map>
 
 namespace Cory {
@@ -28,29 +28,33 @@ constexpr efsw::WatchID kInvalidWatchId = std::numeric_limits<efsw::WatchID>::mi
     return absolutePath.lexically_normal();
 }
 
-[[nodiscard]] FileWatchEvent actionToEvent(efsw::Action action)
+[[nodiscard]] FileWatchEventType actionToEvent(efsw::Action action)
 {
     switch (action) {
     case efsw::Actions::Add:
-        return FileWatchEvent::Created;
+        return FileWatchEventType::Created;
     case efsw::Actions::Delete:
-        return FileWatchEvent::Deleted;
+        return FileWatchEventType::Deleted;
     case efsw::Actions::Modified:
-        return FileWatchEvent::Modified;
+        return FileWatchEventType::Modified;
     default:
-        return FileWatchEvent::Unknown;
+        return FileWatchEventType::Unknown;
     }
 }
 
-struct FileWatchCallbackState {
-    fs::path targetPath;
-    Function<void(FileWatchEvent)> callback;
-    std::atomic<bool> active{true};
+struct FileWatchEvent {
+    FileWatchHandle handle;
+    FileWatchEventType type;
 };
 
 struct FileWatchEntry {
     efsw::WatchID watchId{kInvalidWatchId};
-    std::shared_ptr<FileWatchCallbackState> state;
+    Function<void(FileWatchEventType)> callback;
+};
+
+struct WatchDescriptor {
+    FileWatchHandle handle;
+    fs::path targetPath;
 };
 
 } // namespace
@@ -62,10 +66,7 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
         watcher->watch();
     }
 
-    ~Private() override
-    {
-        stopAll();
-    }
+    ~Private() override { stopAll(); }
 
     void handleFileAction(efsw::WatchID watchId,
                           const std::string &dir,
@@ -73,31 +74,31 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
                           efsw::Action action,
                           std::string oldFilename) override
     {
-        std::shared_ptr<FileWatchCallbackState> state;
-        {
-            std::scoped_lock lock(mutex);
-            auto lookup = watchIdToHandle.find(watchId);
-            if (lookup == watchIdToHandle.end()) return;
-            if (!watches.isValid(lookup->second)) return;
-            state = watches[lookup->second].state;
-        }
+        // When a potential file action is detected, it might not apply to the
+        // actual file associated with the watch. So we check if the path matches
+        // the target path of the watch before adding it to the pending events.
+        std::scoped_lock lock(mutex);
 
-        if (!state || !state->active.load(std::memory_order_relaxed)) return;
+        auto lookup = watchIdToHandle.find(watchId);
+        if (lookup == watchIdToHandle.end()) return;
 
         const auto eventType = actionToEvent(action);
-        if (eventType == FileWatchEvent::Unknown) return;
+        if (eventType == FileWatchEventType::Unknown) return;
 
         const auto newPath = absoluteNormalized(fs::path(dir) / filename);
-        bool relevant = newPath == state->targetPath;
+        bool relevant = newPath == lookup->second.targetPath;
 
         if (!relevant && !oldFilename.empty()) {
             const auto oldPath = absoluteNormalized(fs::path(dir) / oldFilename);
-            relevant = oldPath == state->targetPath;
+            relevant = oldPath == lookup->second.targetPath;
         }
 
         if (!relevant) return;
 
-        state->callback(eventType);
+        pendingEvents.push_back(FileWatchEvent{
+            .handle = lookup->second.handle,
+            .type = eventType,
+        });
     }
 
     void stopAll()
@@ -114,7 +115,8 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
 
     SlotMap<FileWatchEntry> watches;
     std::unique_ptr<efsw::FileWatcher> watcher;
-    std::unordered_map<efsw::WatchID, SlotMapHandle> watchIdToHandle;
+    std::unordered_map<efsw::WatchID, WatchDescriptor> watchIdToHandle;
+    std::vector<FileWatchEvent> pendingEvents;
     std::mutex mutex;
 };
 
@@ -132,8 +134,8 @@ void FileWatchManager::Shutdown()
 
 FileWatchManager &FileWatchManager::instance()
 {
-    CO_CORE_ASSERT(s_instance != nullptr,
-                   "Instance has not been initialized, or already shut down.");
+    CO_CORE_DEBUG_ASSERT(s_instance != nullptr,
+                         "Instance has not been initialized, or already shut down.");
     return *s_instance;
 }
 
@@ -147,7 +149,7 @@ FileWatchManager::FileWatchManager(FileWatchManager &&rhs) noexcept = default;
 FileWatchManager &FileWatchManager::operator=(FileWatchManager &&rhs) noexcept = default;
 
 FileWatchHandle FileWatchManager::watch(FileWatch watch,
-                                        Function<void(FileWatchEvent)> callback)
+                                        Function<void(FileWatchEventType)> callback)
 {
     auto targetPath = absoluteNormalized(fs::path{watch.path});
     auto directoryPath = targetPath.parent_path();
@@ -155,7 +157,8 @@ FileWatchHandle FileWatchManager::watch(FileWatch watch,
     directoryPath = absoluteNormalized(directoryPath);
 
     std::error_code ec;
-    const bool directoryExists = fs::exists(directoryPath, ec) && fs::is_directory(directoryPath, ec);
+    const bool directoryExists =
+        fs::exists(directoryPath, ec) && fs::is_directory(directoryPath, ec);
     if (!directoryExists) {
         CO_CORE_ERROR("Unable to watch '{}': directory '{}' does not exist or is not accessible.",
                       targetPath.string(),
@@ -163,58 +166,67 @@ FileWatchHandle FileWatchManager::watch(FileWatch watch,
         return {};
     }
 
-    auto state = std::make_shared<FileWatchCallbackState>();
-    state->targetPath = targetPath;
-    state->callback = std::move(callback);
-
-    efsw::WatchID watchId = kInvalidWatchId;
-    try {
-        watchId = data_->watcher->addWatch(directoryPath.string(), data_.get(), false);
-    }
-    catch (const std::exception &e) {
-        CO_CORE_ERROR("Failed to start file watch for '{}': {}", targetPath.string(), e.what());
-        return {};
-    }
+    efsw::WatchID watchId = data_->watcher->addWatch(directoryPath.string(), data_.get(), false);
 
     if (watchId < 0) {
-        CO_CORE_ERROR("Failed to start file watch for '{}': invalid watch id returned.", targetPath.string());
+        CO_CORE_ERROR("Failed to start file watch for '{}': invalid watch id returned.",
+                      targetPath.string());
         return {};
     }
 
     SlotMapHandle handle;
     {
         std::scoped_lock lock(data_->mutex);
-        handle = data_->watches.emplace(FileWatchEntry{watchId, state});
-        data_->watchIdToHandle[watchId] = handle;
+        handle = data_->watches.emplace(FileWatchEntry{
+            .watchId = watchId,
+            .callback = std::move(callback),
+        });
+
+        data_->watchIdToHandle[watchId] = WatchDescriptor{
+            .handle = handle,
+            .targetPath = targetPath,
+        };
     }
     return handle;
 }
 
 bool FileWatchManager::unwatch(FileWatchHandle handle)
 {
+    std::scoped_lock lock(data_->mutex);
     if (!handle) return false;
 
     efsw::WatchID watchId = kInvalidWatchId;
-    std::shared_ptr<FileWatchCallbackState> state;
 
-    {
-        std::scoped_lock lock(data_->mutex);
-        if (!data_->watches.isValid(handle)) return false;
+    if (!data_->watches.isValid(handle)) return false;
 
-        auto &entry = data_->watches[handle];
-        watchId = entry.watchId;
-        state = entry.state;
-        if (watchId != kInvalidWatchId) {
-            data_->watchIdToHandle.erase(watchId);
-        }
-        data_->watches.release(handle);
+    auto &entry = data_->watches[handle];
+    watchId = entry.watchId;
+    if (watchId != kInvalidWatchId) {
+        data_->watchIdToHandle.erase(watchId);
     }
+    data_->watches.release(handle);
 
-    if (state) state->active.store(false, std::memory_order_relaxed);
     if (watchId != kInvalidWatchId) {
         data_->watcher->removeWatch(watchId);
     }
     return true;
+}
+
+void FileWatchManager::processPendingEvents()
+{
+    std::scoped_lock lock(data_->mutex);
+    for (const auto &event : data_->pendingEvents) {
+        // Watch has been removed in the meantime
+        if (!data_->watches.isValid(event.handle)) {
+            continue;
+        }
+
+        auto &entry = data_->watches[event.handle];
+        if (entry.callback) {
+            entry.callback(event.type);
+        }
+    }
+    data_->pendingEvents.clear();
 }
 
 } // namespace Cory

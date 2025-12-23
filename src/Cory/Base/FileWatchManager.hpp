@@ -13,7 +13,7 @@ struct FileWatch {
 };
 
 /// The different events that we can detect
-enum class FileWatchEvent { Unknown, Created, Deleted, Modified, Renamed };
+enum class FileWatchEventType { Unknown, Created, Deleted, Modified, Renamed };
 
 /// File watch manager that allows starting and stopping file watch events
 class FileWatchManager : NoCopy {
@@ -31,10 +31,14 @@ class FileWatchManager : NoCopy {
 
     /// Start watching a file for changes
     /// The callback will be called on a separate thread.
-    FileWatchHandle watch(FileWatch watch, Function<void(FileWatchEvent event)> callback);
+    FileWatchHandle watch(FileWatch watch, Function<void(FileWatchEventType event)> callback);
 
     /// Stop watching
     bool unwatch(FileWatchHandle handle);
+
+    /// Process all pending events - this will call the registered callbacks
+    /// from the calling thread.
+    void processPendingEvents();
 
   private:
     static std::unique_ptr<FileWatchManager> s_instance;

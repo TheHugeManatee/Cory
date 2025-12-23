@@ -16,7 +16,7 @@ void Init();
  *
  * Mostly takes care of deinitializing all static (global) objects.
  */
-void Deinit();
+void Shutdown();
 
 std::string queryVulkanInstanceVersion();
 

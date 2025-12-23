@@ -4,6 +4,7 @@
 #include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Base/Time.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Base/FileWatchManager.hpp>
 
 #include <fmt/core.h>
 
@@ -15,9 +16,13 @@ void Init()
     AppClock::Init();
     SimulationClock::Init();
     Log::Init();
+    FileWatchManager::Init();
 }
 
-void Deinit() {}
+void Shutdown()
+{
+    FileWatchManager::Shutdown();
+}
 
 std::string queryVulkanInstanceVersion()
 {

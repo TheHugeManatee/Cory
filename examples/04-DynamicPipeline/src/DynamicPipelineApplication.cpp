@@ -7,6 +7,7 @@
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
+#include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
@@ -58,108 +59,6 @@ bool ShaderEditorInputTextMultiline(const char *label,
 
     return ImGui::InputTextMultiline(
         label, text.data(), text.capacity() + 1, size, flags, ShaderEditorCallback, &text);
-}
-
-int cullModeToIndex(Gpu::CullModeFlags mode)
-{
-    if (mode == Gpu::CullModeFlagBits::FrontBit) {
-        return 1;
-    }
-    if (mode == Gpu::CullModeFlagBits::BackBit) {
-        return 2;
-    }
-    if (mode == Gpu::CullModeFlagBits::FrontAndBack) {
-        return 3;
-    }
-    return 0;
-}
-
-Gpu::CullModeFlags cullModeFromIndex(int index)
-{
-    switch (index) {
-    case 1:
-        return Gpu::CullModeFlagBits::FrontBit;
-    case 2:
-        return Gpu::CullModeFlagBits::BackBit;
-    case 3:
-        return Gpu::CullModeFlagBits::FrontAndBack;
-    default:
-        return Gpu::CullModeFlagBits::None;
-    }
-}
-
-int polygonModeToIndex(Gpu::PolygonMode mode)
-{
-    switch (mode) {
-    case Gpu::PolygonMode::Line:
-        return 1;
-    case Gpu::PolygonMode::Point:
-        return 2;
-    default:
-        return 0;
-    }
-}
-
-Gpu::PolygonMode polygonModeFromIndex(int index)
-{
-    switch (index) {
-    case 1:
-        return Gpu::PolygonMode::Line;
-    case 2:
-        return Gpu::PolygonMode::Point;
-    default:
-        return Gpu::PolygonMode::Fill;
-    }
-}
-
-int frontFaceToIndex(Gpu::FrontFace face)
-{
-    return face == Gpu::FrontFace::Clockwise ? 1 : 0;
-}
-
-Gpu::FrontFace frontFaceFromIndex(int index)
-{
-    return index == 1 ? Gpu::FrontFace::Clockwise : Gpu::FrontFace::CounterClockwise;
-}
-
-int logicOpToIndex(Gpu::LogicOperation op)
-{
-    switch (op) {
-    case Gpu::LogicOperation::Clear:
-        return 1;
-    case Gpu::LogicOperation::Set:
-        return 2;
-    case Gpu::LogicOperation::Invert:
-        return 3;
-    case Gpu::LogicOperation::Xor:
-        return 4;
-    case Gpu::LogicOperation::And:
-        return 5;
-    case Gpu::LogicOperation::Or:
-        return 6;
-    default:
-        return 0;
-    }
-}
-
-Gpu::LogicOperation logicOpFromIndex(int index)
-{
-    switch (index) {
-    case 1:
-        return Gpu::LogicOperation::Clear;
-    case 2:
-        return Gpu::LogicOperation::Set;
-    case 3:
-        return Gpu::LogicOperation::Invert;
-    case 4:
-        return Gpu::LogicOperation::Xor;
-    case 5:
-        return Gpu::LogicOperation::And;
-    case 6:
-        return Gpu::LogicOperation::Or;
-    default:
-        return Gpu::LogicOperation::Copy;
-    }
 }
 
 } // namespace
@@ -459,30 +358,11 @@ void DynamicPipelineApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx
 void DynamicPipelineApplication::drawUi(const Cory::FrameContext &frameCtx)
 {
     if (ImGui::Begin("Dynamic pipeline controls")) {
-        static const char *cullItems[] = {"None", "Front", "Back", "Front & Back"};
-        int cullIdx = cullModeToIndex(settings_.cullMode);
-        if (ImGui::Combo("Cull mode", &cullIdx, cullItems, IM_ARRAYSIZE(cullItems))) {
-            settings_.cullMode = cullModeFromIndex(cullIdx);
-        }
-
-        static const char *polygonItems[] = {"Fill", "Wireframe", "Point"};
-        int polyIdx = polygonModeToIndex(settings_.polygonMode);
-        if (ImGui::Combo("Polygon mode", &polyIdx, polygonItems, IM_ARRAYSIZE(polygonItems))) {
-            settings_.polygonMode = polygonModeFromIndex(polyIdx);
-        }
+        CoImGui::ComboBox("Cull Mode", settings_.cullMode);
+        CoImGui::ComboBox("Polygon Mode", settings_.polygonMode);
         ImGui::SliderFloat("Line/Point size", &settings_.lineWidthValue, 1.0f, 15.0f);
-
-        static const char *faceItems[] = {"Counter-Clockwise", "Clockwise"};
-        int faceIdx = frontFaceToIndex(settings_.frontFace);
-        if (ImGui::Combo("Front face", &faceIdx, faceItems, IM_ARRAYSIZE(faceItems))) {
-            settings_.frontFace = frontFaceFromIndex(faceIdx);
-        }
-
-        static const char *logicItems[] = {"Copy", "Clear", "Set", "Invert", "Xor", "And", "Or"};
-        int logicIdx = logicOpToIndex(settings_.logicOperation);
-        if (ImGui::Combo("Logic op", &logicIdx, logicItems, IM_ARRAYSIZE(logicItems))) {
-            settings_.logicOperation = logicOpFromIndex(logicIdx);
-        }
+        CoImGui::ComboBox("Front Face", settings_.frontFace);
+        CoImGui::ComboBox("Logic Operation", settings_.logicOperation);
 
         ImGui::Separator();
 

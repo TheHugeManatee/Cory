@@ -4,6 +4,8 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
+#include <Cory/Base/FileWatchManager.hpp>
+#include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
@@ -85,7 +87,7 @@ DynamicPipelineApplication::DynamicPipelineApplication(int argc, char **argv)
         ctx(), WINDOW_SIZE, "04 - Dynamic Pipeline", /*sample count*/ 1);
 
     resetAttachmentLayouts();
-    loadShaders();
+    shaderAutoReloadTask_ = loadShaders();
     createGeometry();
 
     auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
@@ -116,8 +118,11 @@ void DynamicPipelineApplication::run()
 
     while (!window_->shouldClose()) {
         processEvents();
+        // Process any file changes - triggers e.g. shader reloads
+        ctx().fileWatchManager().processPendingEvents();
 
         Cory::FrameContext frameCtx = window_->nextSwapchainImage();
+
         double previousTime = std::exchange(currentTime, getElapsedTimeSeconds());
         const double delta = currentTime - previousTime;
 
@@ -128,6 +133,11 @@ void DynamicPipelineApplication::run()
 
         drawUi(frameCtx);
 
+        if (requestCompile_) {
+            compileFragmentShaderSource(fragmentShaderEditorSource_, frameCtx.frameNumber);
+            requestCompile_ = false;
+        }
+
         recordCommands(frameCtx);
         window_->submitAndPresent(frameCtx);
 
@@ -137,7 +147,7 @@ void DynamicPipelineApplication::run()
     }
 }
 
-void DynamicPipelineApplication::loadShaders()
+Cory::EagerJob DynamicPipelineApplication::loadShaders()
 {
     auto vertexPath =
         Cory::ResourceLocator::Locate("dynamic_pipeline.vert.slang", Cory::ResourceType::Shader);
@@ -168,6 +178,25 @@ void DynamicPipelineApplication::loadShaders()
     fragmentShaderDirty_ = false;
     fragmentShaderCompileSuccess_ = true;
     fragmentShaderCompileMessage_ = "Fragment shader loaded";
+
+    // Enter the file watch loop coroutine
+    auto &fileWatchManager = ctx().fileWatchManager();
+    auto fsWatchHandle = fileWatchManager.watch(Cory::FileWatch{.path = fragmentPath.string()});
+    for (auto event = Cory::FileWatchEventType::Unknown;
+         event != Cory::FileWatchEventType::WatchEnded;
+         event = co_await fileWatchManager.nextEvent(fsWatchHandle)) {
+        CO_CORE_INFO("Fragment shader file event {}", event);
+
+        if (event == Cory::FileWatchEventType::Modified) {
+            // Reload shader from disk
+            fragmentShaderCode_ =
+                Cory::ShaderSource{fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
+            fragmentShaderEditorSource_ = fragmentShaderCode_->source();
+            fragmentShaderDirty_ = true;
+            requestCompile_ = true;
+            fragmentShaderLastEditTime_ = now();
+        }
+    }
 }
 
 void DynamicPipelineApplication::createGeometry()
@@ -397,9 +426,8 @@ void DynamicPipelineApplication::drawUi(const Cory::FrameContext &frameCtx)
         const std::string shaderPathString = fragmentShaderCode_->filePath().string();
         ImGui::TextDisabled("%s", shaderPathString.c_str());
 
-        bool requestCompile = false;
         if (ImGui::Button("Compile shader")) {
-            requestCompile = true;
+            requestCompile_ = true;
         }
         ImGui::SameLine();
         ImGui::Checkbox("Auto compile", &fragmentShaderAutoCompile_);
@@ -424,18 +452,14 @@ void DynamicPipelineApplication::drawUi(const Cory::FrameContext &frameCtx)
         const ImGuiIO &io = ImGui::GetIO();
         if (editorFocusedThisFrame && (io.KeyCtrl || io.KeySuper) &&
             ImGui::IsKeyPressed(ImGuiKey_Enter, false)) {
-            requestCompile = true;
+            requestCompile_ = true;
         }
 
-        if (!requestCompile && fragmentShaderDirty_ && fragmentShaderAutoCompile_) {
-            const double timeSinceEdit = getElapsedTimeSeconds() - fragmentShaderLastEditTime_;
+        if (!requestCompile_ && fragmentShaderDirty_ && fragmentShaderAutoCompile_) {
+            const double timeSinceEdit = now() - fragmentShaderLastEditTime_;
             if (timeSinceEdit >= kShaderAutoCompileDelaySeconds) {
-                requestCompile = true;
+                requestCompile_ = true;
             }
-        }
-
-        if (requestCompile) {
-            compileFragmentShaderSource(fragmentShaderEditorSource_, frameCtx.frameNumber);
         }
 
         std::string statusLine;

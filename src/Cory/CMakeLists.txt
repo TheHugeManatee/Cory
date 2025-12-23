@@ -134,6 +134,7 @@ set(CORY_SOURCES
         Base/FileWatchManager.hpp
         Renderer/FrameResourceLifetimeHelper.hpp
         Base/Locked.hpp
+        Base/Coro.hpp
 )
 
 

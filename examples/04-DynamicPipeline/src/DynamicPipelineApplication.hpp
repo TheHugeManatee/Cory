@@ -2,9 +2,10 @@
 
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
+#include <Cory/Base/Coro.hpp>
 #include <Cory/Renderer/Gpu.hpp>
-
 #include <Cory/Renderer/Shader.hpp>
+
 #include <memory>
 #include <string>
 #include <string_view>
@@ -52,7 +53,7 @@ class DynamicPipelineApplication : public Cory::Application {
         Gpu::LogicOperation logicOperation{Gpu::LogicOperation::Copy};
     };
 
-    void loadShaders();
+    Cory::EagerJob loadShaders();
     void createGeometry();
     void recordCommands(Cory::FrameContext &frameCtx);
     void renderImGuiOverlay(Cory::FrameContext &frameCtx,
@@ -76,6 +77,8 @@ class DynamicPipelineApplication : public Cory::Application {
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     std::optional<Cory::ShaderSource> fragmentShaderCode_;
+    Cory::EagerJob shaderAutoReloadTask_;
+    bool requestCompile_{false};
     std::string fragmentShaderEditorSource_;
     std::string fragmentShaderCompileMessage_;
     double fragmentShaderLastEditTime_{0.0};

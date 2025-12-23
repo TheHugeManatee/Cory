@@ -15,11 +15,11 @@ set(KDGPU_BUILD_TESTS OFF)
 
 FetchContent_Declare(
         KDGpu
-        SOURCE_DIR "C:/dev/KDGpu"
+        #SOURCE_DIR "C:/dev/KDGpu"
         #GIT_REPOSITORY https://github.com/KDAB/KDGpu.git
         #GIT_TAG v0.8.0
-        #GIT_REPOSITORY https://github.com/TheHugeManatee/KDGpu.git
-        #GIT_COMMIT 57a7a89442c3c4ffa2a86695f0aa505d8484bbf9
+        GIT_REPOSITORY https://github.com/TheHugeManatee/KDGpu.git
+        GIT_COMMIT 50b6512278745cd4bd876d86171d47b315cfacd5
 )
 FetchContent_MakeAvailable(KDGpu)
 

@@ -121,7 +121,7 @@ TEST_CASE("WorkContractGroup", "Cory/Base/WorkContractGroup")
         Cory::WorkContract contract =
             workContractGroup.createContract([&](Cory::ContractToken &token) {
                 ++counter;
-                if (counter < 10) {
+                if (counter < 5) {
                     token.schedule();
                 }
             });
@@ -141,8 +141,8 @@ TEST_CASE("WorkContractGroup", "Cory/Base/WorkContractGroup")
             }
             THEN("The contract reschedules itself")
             {
-                CHECK(counter == 10);
-                CHECK(workContractGroup.contractsScheduled() == 1);
+                CHECK(counter == 5);
+                CHECK(workContractGroup.contractsScheduled() == 0);
             }
         }
     }

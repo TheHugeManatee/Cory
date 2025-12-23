@@ -19,7 +19,6 @@ find_package(Catch2 REQUIRED)
 include(Catch)
 
 add_library(Cory_TestLib OBJECT
-        Cory_Test.cpp
         Utils_Test.cpp
         SlotMap_Test.cpp
         BitField_Test.cpp
@@ -31,8 +30,7 @@ add_library(Cory_TestLib OBJECT
         TestUtils.hpp
         FmtUtils_Test.cpp
         RenderTaskDeclaration_Test.cpp
-        #DescriptorSetManager_Test.cpp
-        #VulkanUtils_Test.cpp
+        DescriptorSetManager_Test.cpp
         SimulationClock_Test.cpp
         FutureFrameQueue_Test.cpp
         LayerStack_Test.cpp

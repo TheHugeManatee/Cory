@@ -96,6 +96,7 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
     shaderModules.reserve(info.shaders.size());
     for (auto shaderHandle : info.shaders) {
         const auto &s = (*shaderManager)[shaderHandle];
+        CO_CORE_ASSERT(s.valid(), "Shader is invalid:\n{}", s.error());
         shaderModules.push_back(s.createShaderModule());
         shaderStages.push_back(Gpu::ShaderStage{
             .shaderModule = shaderModules.back(),

@@ -12,6 +12,7 @@ find_package(glm REQUIRED)
 set(KDGPU_BUILD_KDXR OFF)
 set(KDGPU_OPENXR_SUPPORT OFF)
 set(KDGPU_BUILD_TESTS OFF)
+set(VMA_STATIC_VULKAN_FUNCTIONS ON)
 
 FetchContent_Declare(
         KDGpu

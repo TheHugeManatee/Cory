@@ -4,39 +4,51 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <Magnum/Vk/DescriptorPoolCreateInfo.h>
-#include <Magnum/Vk/DescriptorSetLayoutCreateInfo.h>
-#include <Magnum/Vk/DescriptorType.h>
-
 TEST_CASE("Basic Usage")
 {
-    namespace testing = Cory::testing;
-    namespace Vk = Magnum::Vk;
-
-    testing::VulkanTester t;
+    Cory::testing::VulkanTester t;
 
     Cory::DescriptorSets descriptorSetManager;
 
-    GIVEN("An existing descriptor pool and layout")
+    GIVEN("A set of descriptor set options")
     {
-        Vk::DescriptorPool pool{
-            t.ctx().device(),
-            Vk::DescriptorPoolCreateInfo{8, // max descriptor sets
-                                         {
-                                             {Vk::DescriptorType::UniformBuffer, 3 * 3},
-                                             {Vk::DescriptorType::CombinedImageSampler, 24},
-                                             {Vk::DescriptorType::CombinedImageSampler, 24},
-                                         }}};
-        // default layout currently only has a single uniform buffer and eight images and buffers
-        Vk::DescriptorSetLayoutCreateInfo layout{
-            {{0, Vk::DescriptorType::UniformBuffer}},
-            {{1, Vk::DescriptorType::CombinedImageSampler, 8}},
-            {{2, Vk::DescriptorType::StorageBuffer, 8}},
-        };
+        using BindPoints = Cory::DescriptorSets::BindPoints;
+        Gpu::ResourceBindingFlags bindless_flags;
+        bindless_flags |= Gpu::ResourceBindingFlagBits::PartiallyBoundBit;
+        bindless_flags |= Gpu::ResourceBindingFlagBits::UpdateAfterBindBit;
+        auto createOptions = Gpu::BindGroupLayoutOptions{
+            .label = "Default Bind Group Layout",
+            .bindings =
+                {
+                    {
+                        {
+                            .binding = std::to_underlying(BindPoints::UniformBufferObject),
+                            .count = 1,
+                            .resourceType = Gpu::ResourceBindingType::UniformBuffer,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                        {
+                            .binding = std::to_underlying(BindPoints::CombinedImageSampler),
+                            .count = 8,
+                            .resourceType = Gpu::ResourceBindingType::CombinedImageSampler,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                        {
+                            .binding = std::to_underlying(BindPoints::StorageBuffer),
+                            .count = 8,
+                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                    },
+                },
+            .flags = KDGpu::BindGroupLayoutFlagBits::UpdateAfterBind};
 
         WHEN("Initializing the manager")
         {
-            descriptorSetManager.init(t.ctx().device(), t.ctx().resources(), std::move(layout), 3);
+            descriptorSetManager.init(t.ctx().device(), createOptions);
 
             THEN("It works") {}
         }

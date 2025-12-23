@@ -47,15 +47,23 @@ TEST_CASE("ShaderManager", "[Cory/Renderer]")
         CHECK(mgr[shader].size() > 0);
         CHECK(mgr[shader].type() == Gpu::ShaderStageFlagBits::VertexBit);
 
-        CHECK_THROWS(mgr.createShader(testInvalidVertexShader,
+        ShaderHandle invalidShader = mgr.createShader(testInvalidVertexShader,
                                       Gpu::ShaderStageFlagBits::VertexBit,
-                                      "testInvalidVertexShader.vert"));
+                                      "testInvalidVertexShader.vert");
+        CHECK_FALSE(mgr[invalidShader].valid());
+        CHECK_FALSE(mgr[invalidShader].error().empty());
+        CHECK(mgr[invalidShader].size() == 0);
+        CHECK(mgr.shadersInUse() == 2);
 
         ShaderHandle invalidHandle;
         CHECK_THROWS(mgr[invalidHandle]);
 
         mgr.release(shader);
         CHECK_THROWS(mgr[shader]);
+        CHECK(mgr.shadersInUse() == 1);
+
+        mgr.release(invalidShader);
+        CHECK_THROWS(mgr[invalidShader]);
         CHECK(mgr.shadersInUse() == 0);
     }
     SECTION("Per-frame lifetime tracking")

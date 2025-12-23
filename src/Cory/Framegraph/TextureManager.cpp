@@ -73,32 +73,6 @@ void TextureManager::allocate(FramegraphTextureHandle handle)
     auto &resources = data_->ctx_->resources();
     CO_CORE_DEBUG("Allocating '{}' of {} ({})", res.info.name, res.info.size, res.info.format);
 
-    // {
-    //     const auto size = Magnum::Vector2i{gsl::narrow<int32_t>(res.info.size.x),
-    //                                        gsl::narrow<int32_t>(res.info.size.y)};
-    //     static const int32_t levels = 1;
-    //     static const Magnum::Vk::ImageLayout initialLayout{Magnum::Vk::ImageLayout::Undefined};
-    //
-    //     Vk::ImageUsages usage{};
-    //     usage |= isDepthFormat(res.info.format) ? Vk::ImageUsage::DepthStencilAttachment
-    //                                             : Vk::ImageUsage::ColorAttachment;
-    //     usage |= Vk::ImageUsage::Sampled;
-    //     usage |= Vk::ImageUsage::InputAttachment;
-    //
-    //     const Vk::ImageCreateInfo2D createInfo{
-    //         usage, res.info.format, size, levels, res.info.sampleCount, initialLayout};
-    //
-    //     // todo eventually want to externalize these memory flags
-    //     res.image = resources.createImage(
-    //         fmt::format("{} (IMG)", res.info.name), createInfo, Vk::MemoryFlag::DeviceLocal);
-    // }
-    //
-    // {
-    //     const Vk::ImageViewCreateInfo2D createInfo{resources[res.image]};
-    //     res.view = resources.createImageView(fmt::format("{} (VIEW)", res.info.name),
-    //     createInfo);
-    // }
-
     auto extent = Gpu::Extent3D{
         .width = gsl::narrow<uint32_t>(res.info.size.x),
         .height = gsl::narrow<uint32_t>(res.info.size.y),

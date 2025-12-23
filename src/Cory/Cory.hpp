@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string>
-
 namespace Cory {
 /**
  * Initialize the library.
@@ -18,8 +16,4 @@ void Init();
  */
 void Shutdown();
 
-std::string queryVulkanInstanceVersion();
-
-// dumps a bunch of information onto the console
-void dumpInstanceInformation();
 } // namespace Cory

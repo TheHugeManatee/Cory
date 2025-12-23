@@ -26,29 +26,43 @@ depthPass(Context &ctx, RenderTaskBuilder builder, glm::u32vec3 size)
 {
     auto depth = builder.create("TEX_depth",
                                 size,
-                                TextureFormat::D32_SFLOAT,
+                                TextureFormat::D24_UNORM_S8_UINT,
                                 Sync::AccessType::DepthStencilAttachmentWrite);
     DepthPassOutputs outputs{depth};
 
     static ShaderHandle vertexShader = ctx.shaders().createShader(
-        R"glsl(#version 450
-layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec3 inTexCoord;
-layout(location = 2) in vec4 inColor;
-void main() {
-    gl_Position = vec4(inPosition, 1.0);
-}
-)glsl",
+        R"slang(
+struct VSInput {
+    float3 position;
+    float3 texCoord;
+    float4 color;
+};
+
+struct VSOutput {
+    float4 position : SV_Position;
+};
+
+VSOutput main(VSInput input) {
+    VSOutput output;
+    output.position = float4(input.position, 1.0);
+    return output;
+})slang",
         Gpu::ShaderStageFlagBits::VertexBit,
         "depth.vert");
 
     static ShaderHandle fragmentShader = ctx.shaders().createShader(
-        R"glsl(#version 450
-layout(location = 0) out vec4 outColor;
-void main() {
-    outColor = gl_FragCoord;
-}
-)glsl",
+        R"slang(
+struct VSOutput {
+    float4 position : SV_Position;
+};
+struct PSOutput {
+    float4 outColor : SV_Target0;
+};
+PSOutput main(VSOutput input) {
+    PSOutput output;
+    output.outColor = float4(1.0, 0.0, 0.0, 1.0);
+    return output;
+})slang",
         Gpu::ShaderStageFlagBits::FragmentBit,
         "depth.frag");
 

@@ -1,5 +1,6 @@
 #include <Cory/Base/FileWatchManager.hpp>
 
+#include <Cory/Base/Coro.hpp>
 #include <Cory/Base/Log.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -41,47 +42,6 @@ void deleteTestFile(const fs::path &path)
     std::error_code ec;
     fs::remove(path, ec);
 }
-struct TestCoroutine {
-    struct promise_type {
-        using Handle = cppcoro::coroutine_handle<promise_type>;
-        TestCoroutine get_return_object() { return TestCoroutine{Handle::from_promise(*this)}; }
-        cppcoro::suspend_always initial_suspend() noexcept { return {}; }
-        cppcoro::suspend_always final_suspend() noexcept { return {}; }
-        void return_void() noexcept {}
-        void unhandled_exception() { std::terminate(); }
-    };
-
-    using Handle = cppcoro::coroutine_handle<promise_type>;
-
-    TestCoroutine() = default;
-    explicit TestCoroutine(Handle h)
-        : handle(h)
-    {
-    }
-    TestCoroutine(TestCoroutine &&other) noexcept
-        : handle(std::exchange(other.handle, {}))
-    {
-    }
-    TestCoroutine &operator=(TestCoroutine &&other) noexcept
-    {
-        if (this != &other) {
-            if (handle) handle.destroy();
-            handle = std::exchange(other.handle, {});
-        }
-        return *this;
-    }
-    ~TestCoroutine()
-    {
-        if (handle) handle.destroy();
-    }
-
-    void start()
-    {
-        if (handle) handle.resume();
-    }
-
-    Handle handle{nullptr};
-};
 
 struct AwaitableConsumer {
     AwaitableConsumer(FileWatchManager &manager, FileWatchHandle watchHandle)
@@ -89,7 +49,6 @@ struct AwaitableConsumer {
         , handle(watchHandle)
         , consumerTask{consume()}
     {
-        consumerTask.start();
     }
 
     bool waitForEvents(std::size_t count,
@@ -130,7 +89,7 @@ struct AwaitableConsumer {
     bool finished{false};
 
   private:
-    auto consume() -> TestCoroutine
+    auto consume() -> EagerJob
     {
         while (true) {
             auto event = co_await mgr.nextEvent(handle);
@@ -139,7 +98,7 @@ struct AwaitableConsumer {
         }
         finished = true;
     }
-    TestCoroutine consumerTask;
+    EagerJob consumerTask;
 };
 } // namespace
 
@@ -190,7 +149,7 @@ TEST_CASE("FileWatchManager: consumer can exit before sentinel is consumed")
     REQUIRE(handle);
 
     bool receivedFirstEvent = false;
-    auto consumer = [&]() -> TestCoroutine {
+    auto consumer = [&]() -> EagerJob {
         auto event = co_await mgr.nextEvent(handle);
         (void)event;
         receivedFirstEvent = true;

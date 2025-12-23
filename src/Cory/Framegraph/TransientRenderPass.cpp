@@ -91,9 +91,7 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
     if (!pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
         renderPassRecorder.setPipeline(pipelineHandle());
     }
-    // TODO - figure out whether we want to actually set dynamic states via the render pass
-    // declaration or not
-    // cmd.setupDynamicStates(dynamicStates_);
+
     return renderPassRecorder;
 }
 Gpu::PipelineLayoutHandle TransientRenderPass::pipelineLayoutHandle() noexcept

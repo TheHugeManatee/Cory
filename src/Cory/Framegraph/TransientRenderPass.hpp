@@ -35,6 +35,7 @@ struct ColorAttachment {
     Gpu::AttachmentLoadOperation load;
     Gpu::AttachmentStoreOperation store;
     Gpu::ColorClearValue clearColor;
+    std::optional<Gpu::BlendOptions> blend;
 };
 struct DepthStencilAttachment {
     TransientTextureHandle target;

@@ -15,6 +15,7 @@ struct PipelineDescriptor {
     std::vector<ShaderHandle> shaders;
     Gpu::SampleCountFlagBits sampleCount;
     std::vector<Gpu::Format> colorFormats;
+    std::vector<Gpu::BlendOptions> blendOptions;
     Gpu::Format depthFormat;
     Gpu::Format stencilFormat;
     bool hasMeshInput;
@@ -27,6 +28,7 @@ struct PipelineDescriptor {
                            shaders,
                            sampleCount,
                            colorFormats,
+                           blendOptions,
                            depthFormat,
                            stencilFormat,
                            pipelineLayout,

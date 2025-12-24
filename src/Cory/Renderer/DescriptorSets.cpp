@@ -124,8 +124,16 @@ DescriptorSets &DescriptorSets::write(SetType type,
 DescriptorSets &
 DescriptorSets::write(SetType type, gsl::index frameInFlightIndex, const Gpu::Buffer &buffer)
 {
+    return write(type, frameInFlightIndex, static_cast<uint32_t>(BindPoints::StorageBuffer), buffer);
+}
+
+DescriptorSets &DescriptorSets::write(SetType type,
+                                      gsl::index frameInFlightIndex,
+                                      uint32_t binding,
+                                      const Gpu::Buffer &buffer)
+{
     data_->pendingWrites[type][frameInFlightIndex].emplace_back(KDGpu::BindGroupEntry{
-        .binding = static_cast<uint32_t>(BindPoints::StorageBuffer),
+        .binding = binding,
         .resource =
             KDGpu::StorageBufferBinding{
                 .buffer = buffer.handle(),
@@ -157,6 +165,15 @@ DescriptorSets &DescriptorSets::flushWrites()
 }
 
 DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
+                                     gsl::index frameInFlightIndex)
+{
+    for (SetType type : magic_enum::enum_values<SetType>()) {
+        cmd.setBindGroup(static_cast<uint32_t>(type), data_->bindGroups[type][frameInFlightIndex]);
+    }
+    return *this;
+}
+
+DescriptorSets &DescriptorSets::bind(Gpu::ComputePassCommandRecorder &cmd,
                                      gsl::index frameInFlightIndex)
 {
     for (SetType type : magic_enum::enum_values<SetType>()) {

@@ -14,6 +14,7 @@
 
 #include <range/v3/range/conversion.hpp>
 #include <range/v3/view/transform.hpp>
+#include <range/v3/view/all.hpp>
 
 namespace Cory {
 
@@ -128,12 +129,19 @@ KDGpu::GraphicsPipelineHandle TransientRenderPass::pipelineHandle() noexcept
         .attributes = Mesh::vertexAttributes(),
     };
 
-    // determine color formats for all attachments
+    std::vector<Gpu::Format> colorFormats;
+    std::vector<Gpu::BlendOptions> blendOptions;
+    for (const auto &a : pass_.attachments) {
+        colorFormats.push_back(textures_->info(a.target).format);
+        blendOptions.push_back(a.blend.value_or(Gpu::BlendOptions{}));
+    }
+
+    // determine color formats and blending for all attachments
     const PipelineDescriptor pipelineDescriptor{
         .shaders = pass_.shaders,
         .sampleCount = determineSampleCount(),
-        .colorFormats =
-            pass_.attachments | ranges::views::transform(getColorFormat) | ranges::to<std::vector>,
+        .colorFormats = std::move(colorFormats),
+        .blendOptions = std::move(blendOptions),
         .depthFormat =
             pass_.depthAttachment.transform(getColorFormat).value_or(Gpu::Format::UNDEFINED),
         .stencilFormat =

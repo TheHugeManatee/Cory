@@ -23,7 +23,7 @@ float4 main(FSInput input) : SV_Target0
 {
     const float2 uv = input.localPos;
     const float radial = saturate(1.0f - dot(uv, uv));
-    const float alpha = pow(radial, 2.0f);
+    const float alpha = smoothstep(0.0f, 0.1f, radial);
     const float4 albedo = input.color;
     float4 color = albedo;
     color.rgb *= alpha;

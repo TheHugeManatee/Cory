@@ -132,8 +132,10 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
 
     std::vector<Gpu::RenderTargetOptions> rtos;
     rtos.reserve(info.colorFormats.size());
-    for (auto fmt : info.colorFormats) {
-        rtos.push_back(Gpu::RenderTargetOptions{.format = fmt});
+    for (size_t i = 0; i < info.colorFormats.size(); ++i) {
+        Gpu::BlendOptions blend =
+            i < info.blendOptions.size() ? info.blendOptions[i] : Gpu::BlendOptions{};
+        rtos.push_back(Gpu::RenderTargetOptions{.format = info.colorFormats[i], .blending = blend});
     }
 
     // 8) Build pipeline options

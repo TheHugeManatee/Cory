@@ -72,4 +72,21 @@ class PointSpriteRenderSystem
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     Cory::ShaderHandle computeShader_;
+
+    Cory::ShaderHandle sortPreprocessShader_;
+    Cory::ShaderHandle sortHistogramShader_;
+    Cory::ShaderHandle sortScanShader_;
+    Cory::ShaderHandle sortScatterShader_;
+
+    struct SortBuffers {
+        KDGpu::Buffer keys;
+        KDGpu::Buffer indices;
+        KDGpu::Buffer keysPingPong;
+        KDGpu::Buffer indicesPingPong;
+        KDGpu::Buffer histograms;
+        KDGpu::DeviceSize capacity{0};
+    };
+    std::vector<SortBuffers> sortBuffers_;
+
+    SortBuffers &sortBuffersForFrame(uint32_t frameIndex, uint32_t instanceCount);
 };

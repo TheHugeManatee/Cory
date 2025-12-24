@@ -18,8 +18,9 @@ struct InstanceData
     float4 parameters;
 };
 
-ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
-StructuredBuffer<InstanceData> gInstances : register(t2, space0);
+[[vk::binding(0, 0)]] ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
+[[vk::binding(2, 0)]] StructuredBuffer<InstanceData> gInstances : register(t2, space0);
+[[vk::binding(4, 0)]] StructuredBuffer<uint> gIndices : register(t4, space0);
 
 struct VSInput
 {
@@ -36,7 +37,8 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    const InstanceData instance = gInstances[input.instanceId];
+    const uint sortedIndex = gIndices[input.instanceId];
+    const InstanceData instance = gInstances[sortedIndex];
     static const float2 quadCorners[6] = {
         float2(-1.0, -1.0),
         float2(1.0, -1.0),

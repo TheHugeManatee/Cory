@@ -105,7 +105,7 @@ void ShaderManager::clearDeferredReleases(uint64_t currentFrame)
     for (auto shaderHandle :
          data_->deferredReleaseTracker.collectReleasableResources(currentFrame)) {
         const auto &shader = data_->shaders[shaderHandle];
-        CO_CORE_TRACE("Frame {}: Deferred release of shader {} allocated at {}:{}",
+        CO_CORE_DEBUG("Frame {}: Deferred release of shader {} allocated at {}:{}",
                       currentFrame,
                       shader.name,
                       shader.loc.file_name(),

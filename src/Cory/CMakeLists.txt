@@ -135,6 +135,8 @@ set(CORY_SOURCES
         Renderer/FrameResourceLifetimeHelper.hpp
         Base/Locked.hpp
         Base/Coro.hpp
+        Framegraph/TransientComputePass.cpp
+        Framegraph/TransientComputePass.hpp
 )
 
 

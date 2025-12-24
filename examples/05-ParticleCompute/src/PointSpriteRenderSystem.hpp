@@ -71,4 +71,5 @@ class PointSpriteRenderSystem
     std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
+    Cory::ShaderHandle computeShader_;
 };

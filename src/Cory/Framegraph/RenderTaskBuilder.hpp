@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/TransientComputePass.hpp>
 #include <Cory/Framegraph/TransientRenderPass.hpp>
 
 #include <cppcoro/coroutine.hpp>
@@ -91,6 +92,8 @@ class RenderTaskBuilder : NoCopy {
      * @return a builder class to set up the render pass. call finish() to obtain the pass object
      */
     TransientRenderPass declareRenderPass(RenderPassDeclaration passDeclaration);
+
+    TransientComputePass declareComputePass(ComputePassDeclaration passDeclaration);
 
     /**
      * @brief Finish declaration of the render task.

@@ -101,5 +101,10 @@ TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration p
 {
     return TransientRenderPass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
 }
+
+TransientComputePass RenderTaskBuilder::declareComputePass(ComputePassDeclaration passDeclaration)
+{
+    return TransientComputePass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
+}
 // </editor-fold>
 } // namespace Cory

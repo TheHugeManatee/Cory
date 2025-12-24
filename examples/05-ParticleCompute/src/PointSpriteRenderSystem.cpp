@@ -25,6 +25,8 @@ PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx, uint32_t ma
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.vert.slang"));
     fragmentShader_ =
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.frag.slang"));
+    computeShader_ =
+        ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.comp.slang"));
 }
 
 PointSpriteRenderSystem::~PointSpriteRenderSystem()
@@ -33,6 +35,7 @@ PointSpriteRenderSystem::~PointSpriteRenderSystem()
         auto &shaders = ctx_->shaders();
         shaders.release(vertexShader_);
         shaders.release(fragmentShader_);
+        shaders.release(computeShader_);
     }
 }
 
@@ -72,7 +75,12 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
+    auto sortPass = builder.declareComputePass(Cory::ComputePassDeclaration{
+        .name = "PASS_SortSprites",
+        .shader = computeShader_,
+    });
+
+    auto spritePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
         .name = "PASS_PointSprites",
         .options = Cory::PassOptionFlagBits::DisableMeshInput,
         .shaders = {vertexShader_, fragmentShader_},
@@ -100,7 +108,11 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     Cory::RenderInput renderApi = co_await builder.finishDeclaration();
     /// vvvv  RENDERING COMMANDS  vvvv
 
-    auto passRecorder = cubePass.begin(*renderApi.cmd);
+    auto computeRecorder = sortPass.begin(*renderApi.cmd);
+    // (no compute work for now)
+    computeRecorder.end();
+
+    auto passRecorder = spritePass.begin(*renderApi.cmd);
 
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
     glm::mat4 viewMatrix = camera_.viewMatrix;

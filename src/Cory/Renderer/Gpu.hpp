@@ -43,6 +43,9 @@ struct VertexOptions;
 using GraphicsApi = VulkanGraphicsApi;
 using ResourceManager = VulkanResourceManager;
 
+class ComputePassCommandRecorder;
+class ComputePipeline;
+
 template <typename T> class Handle;
 // typedefs for the various handle types used by the VulkanResourceManager
 using DeviceHandle = Handle<struct Device_t>;
@@ -55,7 +58,7 @@ using CommandRecorderHandle = Handle<struct CommandRecorder_t>;
 using GraphicsPipelineHandle = Handle<struct GraphicsPipeline_t>;
 using PipelineLayoutHandle = Handle<struct PipelineLayout_t>;
 using BindGroupLayoutHandle = Handle<struct BindGroupLayout_t>;
-
+using ComputePipelineHandle = Handle<struct ComputePipeline_t>;
 } // namespace KDGpu
 
 namespace KDGpuUtils {

@@ -5,8 +5,11 @@
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
+#include <KDGpu/compute_pipeline_options.h>
 #include <KDGpu/graphics_pipeline_options.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
+
+#include <unordered_map>
 
 namespace std {
 template <> struct hash<Gpu::PushConstantRange> {
@@ -27,6 +30,10 @@ struct PipelineCachePrivate {
     using DescriptorHasher = decltype([](const PipelineDescriptor &d) { return d.hash(); });
     std::unordered_map<PipelineDescriptor, Gpu::GraphicsPipelineHandle, DescriptorHasher> cache;
 
+    using ComputeHasher = decltype([](const ComputePipelineDescriptor &d) { return d.hash(); });
+    std::unordered_map<ComputePipelineDescriptor, Gpu::ComputePipelineHandle, ComputeHasher>
+        computeCache;
+
     using LayoutOptionsHasher = decltype([](const PipelineLayoutDescriptor &d) {
         return hashCompose(0, d.pushConstantRanges, d.bindGroupLayouts);
     });
@@ -34,6 +41,8 @@ struct PipelineCachePrivate {
         layoutCache;
 
     Gpu::GraphicsPipelineHandle create(std::string_view name, const PipelineDescriptor &info);
+    Gpu::ComputePipelineHandle createCompute(std::string_view name,
+                                             const ComputePipelineDescriptor &info);
 
     Gpu::PipelineLayoutHandle createLayout(std::string_view label,
                                            const Gpu::PipelineLayoutOptions &info);
@@ -47,6 +56,19 @@ Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name,
     }
     auto handle = data_->create(name, info);
     data_->cache.insert({info, handle});
+    return handle;
+}
+
+Gpu::ComputePipelineHandle PipelineCache::queryComputePipeline(
+    std::string_view name,
+    const ComputePipelineDescriptor &info)
+{
+    if (auto it = data_->computeCache.find(info); it != data_->computeCache.end()) {
+        return it->second;
+    }
+
+    auto handle = data_->createCompute(name, info);
+    data_->computeCache.insert({info, handle});
     return handle;
 }
 
@@ -77,6 +99,9 @@ PipelineCache::~PipelineCache()
     // release all pipelines
     for (const auto &[_, pipeline] : data_->cache) {
         data_->resourceManager->deleteGraphicsPipeline(pipeline);
+    }
+    for (const auto &[_, pipeline] : data_->computeCache) {
+        data_->resourceManager->deleteComputePipeline(pipeline);
     }
     // release all pipeline layouts
     for (const auto &[_, layout] : data_->layoutCache) {
@@ -153,6 +178,29 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
     };
 
     return resourceManager->createGraphicsPipeline(device, gpOpts);
+}
+
+Gpu::ComputePipelineHandle PipelineCachePrivate::createCompute(
+    std::string_view name,
+    const ComputePipelineDescriptor &info)
+{
+    CO_CORE_INFO("Creating new compute pipeline for '{}' ({:X})", name, info.hash());
+
+    const auto &shader = (*shaderManager)[info.shader];
+    CO_CORE_ASSERT(shader.valid(), "Shader is invalid:\n{}", shader.error());
+    auto shaderModule = shader.createShaderModule();
+
+    const Gpu::ComputePipelineOptions cpOpts{
+        .label = name,
+        .layout = info.pipelineLayout,
+        .shaderStage =
+            Gpu::ComputeShaderStage{
+                .shaderModule = shaderModule,
+                .entryPoint = shader.entryPoint(),
+            },
+    };
+
+    return resourceManager->createComputePipeline(device, cpOpts);
 }
 
 Gpu::PipelineLayoutHandle

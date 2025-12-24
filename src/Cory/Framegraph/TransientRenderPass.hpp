@@ -5,11 +5,9 @@
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <KDGpu/graphics_pipeline_options.h>
-#include <KDGpu/pipeline_layout.h>
 #include <KDGpu/pipeline_layout_options.h>
 
 #include <optional>
-#include <string_view>
 #include <vector>
 
 namespace Cory {
@@ -75,7 +73,6 @@ class TransientRenderPass : NoCopy {
      *
      *  1. Binds a pipeline with the required layout -
      *  2. Calls begin() on the render pass with the attachments
-     *  3. Set up the dynamic state (Depth test, cull mode, ...) as set up in the builder TODO
      */
     Gpu::RenderPassCommandRecorder begin(CommandRecorder &cmd);
 

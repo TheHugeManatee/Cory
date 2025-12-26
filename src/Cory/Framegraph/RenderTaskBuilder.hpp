@@ -20,7 +20,7 @@ namespace Cory {
 struct RenderInput {
     Context *ctx{};
     FrameContext *frameCtx{};
-    TextureManager *resources{};
+    FramegraphResourceManager *resources{};
     DescriptorSets *descriptors{};
     // eventually, add accessors modify descriptors, push constants etc
     CommandRecorder *cmd{};

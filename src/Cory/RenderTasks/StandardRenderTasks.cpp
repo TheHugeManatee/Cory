@@ -1,7 +1,7 @@
 #include "StandardRenderTasks.hpp"
 
 #include <Cory/Base/GlmUtils.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 
 #include <KDGpu/command_recorder.h>
 

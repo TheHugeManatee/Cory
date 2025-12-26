@@ -11,7 +11,7 @@
 namespace Cory {
 
 TransientComputePass::TransientComputePass(Context &ctx,
-                                           TextureManager &textures,
+                                           FramegraphResourceManager &textures,
                                            ComputePassDeclaration pass)
     : ctx_{&ctx}
     , textures_{&textures}

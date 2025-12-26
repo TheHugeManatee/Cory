@@ -1,10 +1,11 @@
-#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
+#include <KDGpu/buffer_options.h>
 #include <KDGpu/texture_options.h>
 #include <KDGpu/utils/formatters.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
@@ -20,22 +21,31 @@ struct TextureResource {
     Gpu::TextureViewHandle view;
 };
 
-struct TextureManagerPrivate {
-    Context *ctx_{};
-    SlotMap<TextureResource> textureResources_;
+struct BufferResource {
+    BufferInfo info;
+    BufferState state;
+    Gpu::BufferHandle buffer;
 };
 
-TextureManager::TextureManager(Context &ctx)
-    : data_{std::make_unique<TextureManagerPrivate>()}
+struct FramegraphResourceManagerPrivate {
+    Context *ctx_{};
+    SlotMap<TextureResource> textureResources_;
+    SlotMap<BufferResource> bufferResources_;
+};
+
+FramegraphResourceManager::FramegraphResourceManager(Context &ctx)
+    : data_{std::make_unique<FramegraphResourceManagerPrivate>()}
 {
     data_->ctx_ = &ctx;
 }
 
-TextureManager::~TextureManager() = default;
-TextureManager::TextureManager(TextureManager &&) noexcept = default;
-TextureManager &TextureManager::operator=(TextureManager &&) noexcept = default;
+FramegraphResourceManager::~FramegraphResourceManager() = default;
+FramegraphResourceManager::FramegraphResourceManager(FramegraphResourceManager &&) noexcept =
+    default;
+FramegraphResourceManager &
+FramegraphResourceManager::operator=(FramegraphResourceManager &&) noexcept = default;
 
-FramegraphTextureHandle TextureManager::declareTexture(TextureInfo info)
+FramegraphTextureHandle FramegraphResourceManager::declareTexture(TextureInfo info)
 {
     CO_CORE_DEBUG("Declaring '{}' of {} ({}, {} samples)",
                   info.name,
@@ -51,10 +61,11 @@ FramegraphTextureHandle TextureManager::declareTexture(TextureInfo info)
     return handle;
 }
 
-FramegraphTextureHandle TextureManager::registerExternal(TextureInfo info,
-                                                         Sync::AccessType lastWriteAccess,
-                                                         Gpu::TextureHandle resource,
-                                                         Gpu::TextureViewHandle resourceView)
+FramegraphTextureHandle
+FramegraphResourceManager::registerExternal(TextureInfo info,
+                                            Sync::AccessType lastWriteAccess,
+                                            Gpu::TextureHandle resource,
+                                            Gpu::TextureViewHandle resourceView)
 {
     auto handle = data_->textureResources_.emplace(
         TextureResource{.info = info,
@@ -66,7 +77,7 @@ FramegraphTextureHandle TextureManager::registerExternal(TextureInfo info,
     return handle;
 }
 
-void TextureManager::allocate(FramegraphTextureHandle handle)
+void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
 {
     TextureResource &res = data_->textureResources_[handle];
     Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
@@ -119,7 +130,7 @@ void TextureManager::allocate(FramegraphTextureHandle handle)
     res.state.status = TextureMemoryStatus::Allocated;
 }
 
-void TextureManager::allocate(const std::vector<FramegraphTextureHandle> &handles)
+void FramegraphResourceManager::allocate(const std::vector<FramegraphTextureHandle> &handles)
 {
     for (const auto &handle : handles) {
         auto &res = data_->textureResources_[handle];
@@ -132,9 +143,9 @@ void TextureManager::allocate(const std::vector<FramegraphTextureHandle> &handle
     }
 }
 
-Sync::ImageBarrier TextureManager::synchronizeTexture(FramegraphTextureHandle handle,
-                                                      Sync::AccessType access,
-                                                      ImageContents contentsMode)
+Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextureHandle handle,
+                                                                 Sync::AccessType access,
+                                                                 ImageContents contentsMode)
 {
     const auto &info = data_->textureResources_[handle].info;
     auto aspectMask = flagsForFormat(info.format);
@@ -169,27 +180,116 @@ Sync::ImageBarrier TextureManager::synchronizeTexture(FramegraphTextureHandle ha
     return barrier;
 }
 
-const TextureInfo &TextureManager::info(FramegraphTextureHandle handle) const
+const TextureInfo &FramegraphResourceManager::info(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].info;
 }
 
-Gpu::TextureHandle TextureManager::image(FramegraphTextureHandle handle) const
+Gpu::TextureHandle FramegraphResourceManager::image(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].image;
 }
 
-Gpu::TextureViewHandle TextureManager::imageView(FramegraphTextureHandle handle) const
+Gpu::TextureViewHandle FramegraphResourceManager::imageView(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].view;
 }
 
-TextureState TextureManager::state(FramegraphTextureHandle handle) const
+TextureState FramegraphResourceManager::state(FramegraphTextureHandle handle) const
 {
     return data_->textureResources_[handle].state;
 }
 
-void TextureManager::clear()
+FramegraphBufferHandle FramegraphResourceManager::declareBuffer(BufferInfo info)
+{
+    CO_CORE_DEBUG("Declaring buffer '{}' ({} bytes)", info.name, info.size);
+
+    auto handle = data_->bufferResources_.emplace(BufferResource{
+        info,
+        BufferState{.lastAccess = Sync::AccessType::None, .status = BufferMemoryStatus::Virtual},
+        Gpu::Buffer{}});
+    return handle;
+}
+
+FramegraphBufferHandle FramegraphResourceManager::registerExternal(BufferInfo info,
+                                                                   Sync::AccessType lastWriteAccess,
+                                                                   Gpu::BufferHandle resource)
+{
+    auto handle = data_->bufferResources_.emplace(BufferResource{
+        .info = info,
+        .state = BufferState{.lastAccess = lastWriteAccess, .status = BufferMemoryStatus::External},
+        .buffer = resource});
+    return handle;
+}
+
+void FramegraphResourceManager::allocate(FramegraphBufferHandle handle)
+{
+    BufferResource &res = data_->bufferResources_[handle];
+    Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
+    auto &resources = data_->ctx_->resources();
+    CO_CORE_DEBUG("Allocating buffer '{}' ({} bytes)", res.info.name, res.info.size);
+
+    res.buffer =
+        resources.createBuffer(deviceHandle,
+                               Gpu::BufferOptions{.label = fmt::format("{} (BUF)", res.info.name),
+                                                  .size = res.info.size,
+                                                  .usage = res.info.usage,
+                                                  .memoryUsage = res.info.memoryUsage},
+                               nullptr);
+
+    res.state.status = BufferMemoryStatus::Allocated;
+}
+
+void FramegraphResourceManager::allocate(const std::vector<FramegraphBufferHandle> &handles)
+{
+    for (const auto &handle : handles) {
+        auto &res = data_->bufferResources_[handle];
+        if (res.state.status != BufferMemoryStatus::Virtual) {
+            continue;
+        }
+
+        allocate(handle);
+    }
+}
+
+Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBufferHandle handle,
+                                                                 Sync::AccessType access)
+{
+    auto &state = data_->bufferResources_[handle].state;
+    VkBuffer vkBufferHandle = data_->ctx_->resources().getBuffer(buffer(handle))->buffer;
+    Sync::BufferBarrier barrier{.prevAccesses{state.lastAccess},
+                                .nextAccesses{access},
+                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                .buffer = vkBufferHandle,
+                                .offset = 0,
+                                .size = data_->bufferResources_[handle].info.size};
+
+    CO_CORE_TRACE("BARRIER buffer '{}' written as {}, read as {}",
+                  data_->bufferResources_[handle].info.name,
+                  state.lastAccess,
+                  access);
+
+    state.lastAccess = access;
+    return barrier;
+}
+
+const BufferInfo &FramegraphResourceManager::info(FramegraphBufferHandle handle) const
+{
+    return data_->bufferResources_[handle].info;
+}
+
+Gpu::BufferHandle FramegraphResourceManager::buffer(FramegraphBufferHandle handle) const
+{
+    return data_->bufferResources_[handle].buffer;
+}
+
+BufferState FramegraphResourceManager::state(FramegraphBufferHandle handle) const
+{
+    return data_->bufferResources_[handle].state;
+}
+
+void FramegraphResourceManager::clear()
 {
     for (auto &res : data_->textureResources_) {
         if (res.state.status == TextureMemoryStatus::Allocated) {
@@ -198,6 +298,13 @@ void TextureManager::clear()
         }
     }
     data_->textureResources_.clear();
+
+    for (auto &res : data_->bufferResources_) {
+        if (res.state.status == BufferMemoryStatus::Allocated) {
+            data_->ctx_->resources().deleteBuffer(res.buffer);
+        }
+    }
+    data_->bufferResources_.clear();
 }
 
 } // namespace Cory

@@ -3,7 +3,7 @@
 
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
@@ -19,7 +19,7 @@
 namespace Cory {
 
 TransientRenderPass::TransientRenderPass(Context &ctx,
-                                         TextureManager &textures,
+                                         FramegraphResourceManager &textures,
                                          RenderPassDeclaration pass)
     : ctx_{&ctx}
     , textures_{&textures}

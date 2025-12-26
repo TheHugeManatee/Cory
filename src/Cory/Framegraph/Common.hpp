@@ -10,7 +10,7 @@ struct RenderTaskInfo;
 struct RenderTaskExecutionAwaiter;
 class Framegraph;
 class RenderTaskBuilder;
-class TextureManager;
+class FramegraphResourceManager;
 class FramegraphVisualizer;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
@@ -62,8 +62,24 @@ struct TextureState {
     TextureMemoryStatus status{TextureMemoryStatus::Virtual};
 };
 
-using FramegraphTextureHandle = PrivateTypedHandle<TextureInfo, const TextureManager>;
-using MutableFramegraphTextureHandle = PrivateTypedHandle<TextureInfo, TextureManager>;
+enum class BufferMemoryStatus { Virtual, Allocated, External };
+
+struct BufferInfo {
+    std::string name;
+    Gpu::DeviceSize size{};
+    Gpu::BufferUsageFlags usage{};
+    Gpu::MemoryUsage memoryUsage{Gpu::MemoryUsage::GpuOnly};
+};
+
+struct BufferState {
+    Sync::AccessType lastAccess{Sync::AccessType::None};
+    BufferMemoryStatus status{BufferMemoryStatus::Virtual};
+};
+
+using FramegraphTextureHandle = PrivateTypedHandle<TextureInfo, const FramegraphResourceManager>;
+using MutableFramegraphTextureHandle = PrivateTypedHandle<TextureInfo, FramegraphResourceManager>;
+using FramegraphBufferHandle = PrivateTypedHandle<BufferInfo, const FramegraphResourceManager>;
+using MutableFramegraphBufferHandle = PrivateTypedHandle<BufferInfo, FramegraphResourceManager>;
 class TransientTextureHandle {
   public:
     TransientTextureHandle() = default;

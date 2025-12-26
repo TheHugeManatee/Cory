@@ -3,7 +3,7 @@
 #include "FramegraphVisualizer.h"
 
 #include <Cory/Base/Profiling.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 
@@ -32,7 +32,7 @@ struct FramegraphPrivate {
     }
 
     Context *ctx;
-    TextureManager resources;
+    FramegraphResourceManager resources;
     std::vector<TransientTextureHandle> externalInputs;
     std::vector<TransientTextureHandle> outputs;
 
@@ -278,11 +278,11 @@ void Framegraph::enqueueRenderPass(RenderTaskHandle passHandle,
     data_->renderTasks[passHandle].coroHandle = coroHandle;
 }
 
-TextureManager &Framegraph::resources()
+FramegraphResourceManager &Framegraph::resources()
 {
     return data_->resources;
 }
-const TextureManager &Framegraph::resources() const
+const FramegraphResourceManager &Framegraph::resources() const
 {
     return data_->resources;
 }

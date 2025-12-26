@@ -73,8 +73,8 @@ set(CORY_SOURCES
         Framegraph/FramegraphVisualizer.h
         Framegraph/RenderTaskBuilder.hpp
         Framegraph/RenderTaskDeclaration.hpp
-        Framegraph/TextureManager.cpp
-        Framegraph/TextureManager.hpp
+        Framegraph/FramegraphResourceManager.cpp
+        Framegraph/FramegraphResourceManager.hpp
         Framegraph/TransientRenderPass.cpp
         Framegraph/TransientRenderPass.hpp
         ImGui/Inputs.hpp

@@ -61,7 +61,7 @@ struct RenderPassDeclaration {
 class TransientRenderPass : NoCopy {
   public:
     explicit TransientRenderPass(Context &ctx,
-                                 TextureManager &textures,
+                                 FramegraphResourceManager &textures,
                                  RenderPassDeclaration pass);
     ~TransientRenderPass();
 
@@ -89,7 +89,7 @@ class TransientRenderPass : NoCopy {
     Gpu::Rect2D determineRenderArea() const;
 
     Context *ctx_;
-    TextureManager *textures_;
+    FramegraphResourceManager *textures_;
 
     RenderPassDeclaration pass_;
 

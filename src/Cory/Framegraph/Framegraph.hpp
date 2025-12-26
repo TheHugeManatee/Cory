@@ -84,7 +84,7 @@ class Framegraph : NoCopy {
     declareOutput(TransientTextureHandle handle,
                   Sync::AccessType finalAccess = Sync::AccessType::Present);
 
-    [[nodiscard]] const TextureManager &resources() const;
+    [[nodiscard]] const FramegraphResourceManager &resources() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &outputs() const;
 
@@ -96,7 +96,7 @@ class Framegraph : NoCopy {
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
     /// coroHandle
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle);
-    TextureManager &resources();
+    FramegraphResourceManager &resources();
 
     /// to be called from RenderTaskBuilder
     RenderInput renderInput(RenderTaskHandle taskHandle);

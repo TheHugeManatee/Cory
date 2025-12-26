@@ -24,6 +24,7 @@ add_library(Cory_TestLib OBJECT
         BitField_Test.cpp
         Callback_Test.cpp
         FrameGraph_Test.cpp
+        FramegraphResourceManager_Test.cpp
         CoroutinePlayground.cpp
         ShaderManager_Test.cpp
         TestUtils.cpp

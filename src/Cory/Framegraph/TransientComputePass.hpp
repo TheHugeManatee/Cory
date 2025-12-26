@@ -17,7 +17,7 @@ struct ComputePassDeclaration {
 class TransientComputePass {
   public:
     explicit TransientComputePass(Context &ctx,
-                                  TextureManager &textures,
+                                  FramegraphResourceManager &textures,
                                   ComputePassDeclaration pass);
     ~TransientComputePass();
 
@@ -36,7 +36,7 @@ class TransientComputePass {
 
   private:
     Context *ctx_;
-    TextureManager *textures_;
+    FramegraphResourceManager *textures_;
 
     ComputePassDeclaration pass_;
 

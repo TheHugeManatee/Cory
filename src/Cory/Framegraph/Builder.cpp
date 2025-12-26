@@ -2,7 +2,7 @@
 
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 
 namespace Cory {
 

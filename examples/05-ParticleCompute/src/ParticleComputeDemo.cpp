@@ -64,7 +64,6 @@ ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const c
 
 void ParticleComputeDemoApplication::setupScene()
 {
-
     // set up the camera updates
     Cory::Entity camera = sceneGraph_.createEntity(sceneGraph_.root(), "camera");
     sceneGraph_.addComponent<Cory::Components::CameraComponent>(
@@ -199,10 +198,9 @@ void ParticleComputeDemoApplication::defineRenderPasses(Cory::Framegraph &frameg
 
     auto frameHandles = framegraph.importFrameContext(frameCtx);
 
-    auto mainPass = renderSystem_->spriteRenderTask(
-        framegraph.declareTask("TASK_PointSprites"),
-        frameHandles.colorImage,
-        frameHandles.depthImage);
+    auto mainPass = renderSystem_->spriteRenderTask(framegraph.declareTask("TASK_PointSprites"),
+                                                    frameHandles.colorImage,
+                                                    frameHandles.depthImage);
 
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});

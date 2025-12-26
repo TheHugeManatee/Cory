@@ -1,6 +1,6 @@
 #include "CubeDemo.hpp"
 
-// #include <Cory/Application/DepthDebugLayer.hpp>
+#include <Cory/Application/DepthDebugLayer.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
@@ -151,7 +151,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
-    // layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
+    layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 
     camera_.setMode(Cory::CameraManipulator::Mode::Trackball);

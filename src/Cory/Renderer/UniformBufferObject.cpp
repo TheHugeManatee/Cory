@@ -72,7 +72,9 @@ UniformBufferObjectBase &UniformBufferObjectBase::operator=(UniformBufferObjectB
 
 UniformBufferObjectBase::~UniformBufferObjectBase()
 {
-    buffer_.unmap();
+    if (buffer_.isValid()) {
+        buffer_.unmap();
+    }
 }
 
 void UniformBufferObjectBase::flushInternal()

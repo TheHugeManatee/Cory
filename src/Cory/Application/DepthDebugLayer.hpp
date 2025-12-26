@@ -3,9 +3,7 @@
 #include <Cory/Application/ApplicationLayer.hpp>
 #include <Cory/Application/Common.hpp>
 
-#include "kdbindings/property.h"
-
-#include <Cory/Base/SimulationClock.hpp>
+#include <kdbindings/property.h>
 
 namespace Cory {
 

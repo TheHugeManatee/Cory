@@ -4,16 +4,13 @@
 #include <Cory/Base/Callback.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
-#include <Cory/Base/Primitives.hpp>
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
-#include <Cory/Renderer/SingleShotCommandRecorder.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
 #include <KDGpu/instance.h>
 #include <KDGpu/surface.h>
-#include <KDGpu/texture_options.h>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
@@ -22,13 +19,9 @@
 #include <GLFW/glfw3.h>
 // clang-format on
 
-#include <range/v3/algorithm/contains.hpp>
-#include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
 #include <glm/gtc/type_ptr.hpp>
-#include <optional>
-#include <thread>
 
 namespace Cory {
 

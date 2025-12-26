@@ -408,7 +408,7 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
         .ctx = data_->ctx,
         .frameCtx = data_->currentFrameCtx,
         .resources = &data_->resources,
-        .descriptors = nullptr, // TODO???? &data_->ctx->descriptorSets(),
+        .descriptors = &data_->ctx->descriptors(),
         .cmd = data_->commandListInProgress,
     };
 }

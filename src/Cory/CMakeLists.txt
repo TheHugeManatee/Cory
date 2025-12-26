@@ -27,8 +27,8 @@ set(CORY_SOURCES
         Application/CameraManipulator.cpp
         Application/CameraManipulator.hpp
         Application/Common.hpp
-        #Application/DepthDebugLayer.cpp
-        #Application/DepthDebugLayer.hpp
+        Application/DepthDebugLayer.cpp
+        Application/DepthDebugLayer.hpp
         Application/DynamicGeometry.cpp
         Application/DynamicGeometry.hpp
         Application/Event.hpp

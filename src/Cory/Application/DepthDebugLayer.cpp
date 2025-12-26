@@ -3,13 +3,17 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/ResourceManager.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
+
+#include <KDGpu/device.h>
+#include <KDGpu/sampler.h>
 
 namespace Cory {
 
@@ -22,6 +26,7 @@ struct DepthDebugLayer::State {
     Cory::ShaderHandle fullscreenTriShader;
     Cory::ShaderHandle depthDebugShader;
     Cory::UniformBufferObject<Uniforms> ubo;
+    Gpu::Sampler sampler;
 
     glm::vec2 viewportDimensions{1.0f};
 };
@@ -40,12 +45,15 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
 {
     CO_CORE_ASSERT(state_ == nullptr, "Layer was already attached!");
 
-    auto &res = ctx.resources();
+    auto &res = ctx.shaders();
     state_ = std::make_unique<State>(State{
         .fullscreenTriShader{
-            res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert"))},
-        .depthDebugShader{res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag"))},
+            res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
+        .depthDebugShader{res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag.slang"))},
         .ubo{Cory::UniformBufferObject<Uniforms>(ctx, info.maxFramesInFlight)},
+        .sampler = ctx.device().createSampler(
+            Gpu::SamplerOptions{.magFilter = Gpu::FilterMode::Linear,
+                                .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
     });
 }
@@ -55,7 +63,7 @@ void DepthDebugLayer::onDetach(Context &ctx)
     // might have had an exception during attach, or moved-from
     if (!state_) return;
 
-    auto &res = ctx.resources();
+    auto &res = ctx.shaders();
     res.release(state_->fullscreenTriShader);
     res.release(state_->depthDebugShader);
 
@@ -92,7 +100,7 @@ bool DepthDebugLayer::onEvent(Event event)
                       event);
 }
 
-void DepthDebugLayer::onUpdate()
+void DepthDebugLayer::onUpdate(const LogicUpdateContext &updateCtx)
 {
     if (::ImGui::Begin("DepthDebugLayer")) {
         if (bool is_enabled = renderEnabled.get(); ::ImGui::Checkbox("Enabled", &is_enabled)) {
@@ -105,58 +113,63 @@ void DepthDebugLayer::onUpdate()
     ::ImGui::End();
 }
 
-RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(Cory::RenderTaskBuilder builder,
+RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBuilder builder,
                                                                     LayerPassOutputs previousLayer)
 {
-    VkClearColorValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
-
     auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(previousLayer.color, Cory::Sync::AccessType::ColorAttachmentReadWrite);
-    auto depthInfo =
-        builder.read(previousLayer.depth,
-                     Cory::Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+        builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentReadWrite);
+    (void)colorInfo;
+    builder.read(
+        previousLayer.depth, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
-    auto cubePass = builder.declareRenderPass("PASS_DepthDebug")
-                        .shaders({state_->fullscreenTriShader, state_->depthDebugShader})
-                        .disableMeshInput() // fullscreen triangle pass
-                        .attach(previousLayer.color,
-                                VkAttachmentLoadOp::VK_ATTACHMENT_LOAD_OP_LOAD,
-                                VK_ATTACHMENT_STORE_OP_STORE,
-                                clearColor)
-                        .finish();
+    auto cubePass = builder.declareRenderPass(RenderPassDeclaration{
+        .name = "PASS_DepthDebug",
+        .options = PassOptionFlagBits::DisableMeshInput,
+        .shaders = {state_->fullscreenTriShader, state_->depthDebugShader},
+        .attachments = {{
+            .target = writtenColorHandle,
+            .load = Gpu::AttachmentLoadOperation::Load,
+            .store = Gpu::AttachmentStoreOperation::Store,
+            .clearColor = {},
+            .blend = std::nullopt,
+        }},
+    });
 
     /// ^^^^     DECLARATION      ^^^^
     co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+    RenderInput renderApi = co_await builder.finishDeclaration();
     /// vvvv  RENDERING COMMANDS  vvvv
 
-    Context &ctx = *renderApi.ctx;
     FrameContext &frameCtx = *renderApi.frameCtx;
 
     // update the uniform buffer
-    Uniforms &frameUniforms = state_->ubo[frameCtx.index];
+    Uniforms &frameUniforms = state_->ubo[frameCtx.inFlightIndex];
     frameUniforms.size = size.get();
     frameUniforms.center = center.get();
     frameUniforms.window = window.get();
-    state_->ubo.flush(frameCtx.index);
+    state_->ubo.flush(frameCtx.inFlightIndex);
 
-    Cory::TextureManager &resources = *renderApi.resources;
+    FramegraphResourceManager &resources = *renderApi.resources;
 
-    std::array layouts{Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess)};
+    const auto depthLayout = static_cast<Gpu::TextureLayout>(
+        Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess));
+    std::array<Gpu::TextureLayout, 1> layouts{depthLayout};
     std::array textures{resources.imageView(previousLayer.depth)};
-    std::array samplers{ctx.defaultSampler()};
+    std::array samplers{state_->sampler.handle()};
 
     auto &descriptorSets = *renderApi.descriptors;
     descriptorSets
-        .write(Cory::DescriptorSets::SetType::Frame, frameCtx.index, layouts, textures, samplers)
-        .write(Cory::DescriptorSets::SetType::Frame, frameCtx.index, state_->ubo)
-        .flushWrites()
-        .bind(renderApi.cmd->handle(), frameCtx.index, ctx.defaultPipelineLayout());
+        .write(DescriptorSets::SetType::Frame, frameCtx.inFlightIndex, layouts, textures, samplers)
+        .write(DescriptorSets::SetType::Frame, frameCtx.inFlightIndex, state_->ubo)
+        .flushWrites();
 
-    cubePass.begin(*renderApi.cmd);
+    auto recorder = cubePass.begin(*renderApi.cmd);
+    recorder.setDepthTestEnabled(false);
+    recorder.setDepthWriteEnabled(false);
+    descriptorSets.bind(recorder, frameCtx.inFlightIndex);
+    recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
 
-    ctx.device()->CmdDraw(renderApi.cmd->handle(), 3, 1, 0, 0);
-    cubePass.end(*renderApi.cmd);
+    recorder.end();
 }
 
 } // namespace Cory

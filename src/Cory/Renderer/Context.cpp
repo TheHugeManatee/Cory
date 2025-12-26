@@ -232,6 +232,7 @@ Gpu::AdapterFeatures Context::getRequiredFeatures() const
     features.shaderObjectDynamicRendering = true;
     features.bindGroupBindingUniformBufferUpdateAfterBind = true;
     features.bindGroupBindingPartiallyBound = true;
+    features.shaderStorageImageMultisample = true;
     return features;
 }
 

@@ -6,7 +6,7 @@ struct InstanceData
     float4 parameters;
 };
 
-struct CubeUBO
+struct PointSpriteGlobals
 {
     float4x4 projection;
     float4x4 view;
@@ -20,7 +20,7 @@ struct CubeUBO
 };
 
 // Bindings
-[[vk::binding(0, 0)]] ConstantBuffer<CubeUBO> gGlobals;
+[[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals;
 [[vk::binding(2, 0)]] StructuredBuffer<InstanceData> gInstances;
 [[vk::binding(3, 0)]] RWStructuredBuffer<uint> gKeys;
 [[vk::binding(4, 0)]] RWStructuredBuffer<uint> gIndices;

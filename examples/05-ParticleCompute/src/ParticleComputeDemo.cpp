@@ -1,7 +1,6 @@
 #include "ParticleComputeDemo.hpp"
 
 #include "Common.hpp"
-#include "CubeAnimationSystem.hpp"
 #include "PointSpriteRenderSystem.hpp"
 
 #include <Cory/Application/CameraLayer.hpp>
@@ -118,8 +117,6 @@ void ParticleComputeDemoApplication::setupScene()
 
 void ParticleComputeDemoApplication::setupSystems()
 {
-    animationSystem_ = &systems_.emplace<CubeAnimationSystem>();
-
     using Cory::Components::CameraComponent;
     // set up a system to update the camera from the camera manipulator
     systems_.emplace<Cory::CallbackSystem<CameraComponent>>(
@@ -203,7 +200,9 @@ void ParticleComputeDemoApplication::defineRenderPasses(Cory::Framegraph &frameg
     auto frameHandles = framegraph.importFrameContext(frameCtx);
 
     auto mainPass = renderSystem_->spriteRenderTask(
-        framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
+        framegraph.declareTask("TASK_PointSprites"),
+        frameHandles.colorImage,
+        frameHandles.depthImage);
 
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
@@ -233,7 +232,6 @@ void ParticleComputeDemoApplication::drawImguiControls()
     }
     ImGui::End();
 
-    animationSystem_->drawImguiControls();
     if (ImGui::Begin("Camera")) {
         glm::vec3 position = cameraLayer_->position();
         glm::vec3 center = cameraLayer_->focus();

@@ -1,4 +1,4 @@
-struct CubeUBO
+struct PointSpriteGlobals
 {
     float4x4 projection;
     float4x4 view;
@@ -11,7 +11,7 @@ struct CubeUBO
     float padding2;
 };
 
-ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
+ConstantBuffer<PointSpriteGlobals> gGlobals : register(b0, space0);
 
 struct FSInput
 {

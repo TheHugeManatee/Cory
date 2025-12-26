@@ -34,7 +34,6 @@ class ParticleComputeDemoApplication : public Cory::Application {
     Cory::CameraLayer *cameraLayer_;
     Cory::SceneGraph sceneGraph_;
     Cory::SystemCoordinator systems_;
-    class CubeAnimationSystem *animationSystem_{nullptr};
     class PointSpriteRenderSystem *renderSystem_{nullptr};
     void setupSystems();
     void setupScene();

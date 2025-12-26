@@ -10,10 +10,12 @@
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
+#include "RadixSorter.hpp"
+
 #include <type_traits>
 #include <vector>
 
-struct CubeUBO {
+struct PointSpriteGlobals {
     glm::mat4 projection;
     glm::mat4 view;
     glm::mat4 viewProjection;
@@ -68,25 +70,9 @@ class PointSpriteRenderSystem
     Cory::Components::CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};
-    std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
+    std::unique_ptr<Cory::UniformBufferObject<PointSpriteGlobals>> globalUbo_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
-    Cory::ShaderHandle computeShader_;
 
-    Cory::ShaderHandle sortPreprocessShader_;
-    Cory::ShaderHandle sortHistogramShader_;
-    Cory::ShaderHandle sortScanShader_;
-    Cory::ShaderHandle sortScatterShader_;
-
-    struct SortBuffers {
-        KDGpu::Buffer keys;
-        KDGpu::Buffer indices;
-        KDGpu::Buffer keysPingPong;
-        KDGpu::Buffer indicesPingPong;
-        KDGpu::Buffer histograms;
-        KDGpu::DeviceSize capacity{0};
-    };
-    std::vector<SortBuffers> sortBuffers_;
-
-    SortBuffers &sortBuffersForFrame(uint32_t frameIndex, uint32_t instanceCount);
+    Cory::RadixSorter sorter_;
 };

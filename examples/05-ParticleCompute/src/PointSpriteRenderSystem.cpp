@@ -218,6 +218,15 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
             .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, 2, instanceBuffer.buffer)
             .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, 4, sortedIndices)
             .flushWrites();
+
+        renderApi.cmd->bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
+            .srcStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
+            .srcMask = Gpu::AccessFlagBit::ShaderStorageWriteBit,
+            .dstStages = Gpu::PipelineStageFlagBit::VertexShaderBit |
+                         Gpu::PipelineStageFlagBit::FragmentShaderBit,
+            .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
+            .buffer = sortedIndices.handle(),
+        });
     }
 
     auto passRecorder = spritePass.begin(*renderApi.cmd);

@@ -8,12 +8,12 @@ class RNG {
   public:
     static std::random_device &Device()
     {
-        static std::random_device rd;
+        thread_local std::random_device rd;
         return rd;
     }
     static std::mt19937 &Generator()
     {
-        static std::mt19937 gen(Device()());
+        thread_local std::mt19937 gen(Device()());
         return gen;
     }
 
@@ -31,22 +31,23 @@ class RNG {
 
     static glm::vec3 UniformInSphere()
     {
-        std::uniform_real_distribution<float> dis(0.0f, 1.0f);
-        float theta = dis(Generator()) * glm::pi<float>();
+        thread_local std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+        // Uniform volume: sample z uniformly in [-1, 1], phi uniformly in [0, 2pi).
+        float z = dis(Generator()) * 2.0f - 1.0f;
         float phi = dis(Generator()) * glm::two_pi<float>();
         float r = std::cbrt(dis(Generator()));
-        return glm::vec3{r * std::sin(theta) * std::cos(phi),
-                         r * std::sin(theta) * std::sin(phi),
-                         r * std::cos(theta)};
+        float xy = std::sqrt(std::max(0.0f, 1.0f - z * z));
+        return glm::vec3{r * xy * std::cos(phi), r * xy * std::sin(phi), r * z};
     }
 
     static glm::vec3 UniformDirection()
     {
-        std::uniform_real_distribution<float> dis(0.0f, 1.0f);
+        thread_local std::uniform_real_distribution<float> dis(0.0f, 1.0f);
         float theta = dis(Generator()) * glm::two_pi<float>();
         float z = dis(Generator()) * 2.0f - 1.0f;
 
-        return glm::vec3{sqrt(1 - z * z) * cos(theta), sqrt(1 - z * z) * sin(theta), z};
+        const float xy = std::sqrt(std::max(0.0f, 1.0f - z * z));
+        return glm::vec3{xy * std::cos(theta), xy * std::sin(theta), z};
     }
 };
 

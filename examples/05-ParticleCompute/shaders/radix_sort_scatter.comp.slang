@@ -14,7 +14,7 @@ struct PushConstants {
 groupshared uint s_Hist[16];
 
 [numthreads(256, 1, 1)]
-void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
     // Load this workgroup's scanned histogram base offsets
     if (groupThreadId.x < 16) {
@@ -22,20 +22,24 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupThreadId : SV
     }
     GroupMemoryBarrierWithGroupSync();
 
-    uint i = dispatchThreadId.x;
-    if (i < p.numInstances) {
-        uint key = gKeysIn[i];
-        uint index = gIndicesIn[i];
-        uint digit = (key >> p.bitOffset) & 0xF;
-        
-        // We need to know the local offset of this item within this workgroup for this digit.
-        // This is tricky without a local scan.
-        // For simplicity (but lower performance), we can use InterlockedAdd on groupshared memory.
-        
-        uint localOffset;
-        InterlockedAdd(s_Hist[digit], 1, localOffset);
-        
-        gKeysOut[localOffset] = key;
-        gIndicesOut[localOffset] = index;
+    // Stable scatter within each workgroup by processing indices in-order on one thread.
+    if (groupThreadId.x == 0) {
+        uint localCounts[16];
+        [unroll]
+        for (uint d = 0; d < 16; ++d) {
+            localCounts[d] = 0;
+        }
+
+        uint start = groupId.x * 256;
+        uint end = min(start + 256, p.numInstances);
+        for (uint i = start; i < end; ++i) {
+            uint key = gKeysIn[i];
+            uint index = gIndicesIn[i];
+            uint digit = (key >> p.bitOffset) & 0xF;
+            uint localOffset = s_Hist[digit] + localCounts[digit];
+            localCounts[digit] += 1;
+            gKeysOut[localOffset] = key;
+            gIndicesOut[localOffset] = index;
+        }
     }
 }

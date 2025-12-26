@@ -39,31 +39,15 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     float3 pos = gInstances[i].positionAndSize.xyz;
     float4 viewPos = mul(gGlobals.view, float4(pos, 1.0));
     
-    // Use depth for sorting. Smaller depth (closer to camera) should be handled.
-    // Radix sort usually sorts in ascending order. 
-    // For back-to-front transparency, we want larger distance first.
-    // Or we sort ascending and traverse backwards.
-    // Let's sort so that closer objects have larger keys (for back-to-front).
-    // Actually, let's sort by distance and then use the sorted indices.
-    
-    // View space Z is negative in front of camera in many systems, 
-    // but let's just use the distance squared or similar.
+    // View space Z is negative in front of camera in many systems
     float dist = -viewPos.z; // Distance from camera plane
-    
-    // Convert float distance to a sortable uint
-    // For positive floats, we can just flip the bits if we want to reverse or just use as is.
-    // To sort descending (back-to-front):
-    // Higher distance -> smaller key? No, higher distance -> higher key, then render from end to start.
-    // Or higher distance -> smaller key, then render from start to end.
-    // Let's do: higher distance -> smaller key.
-    
-    // Mapping [near, far] to [MAX, 0]
-    // A simple way: use a large value and subtract distance.
-    // Or just bit-cast if distance is always positive and we want ascending.
-    
-    uint key = asuint(max(0.0, dist));
-    // To flip for descending order:
-    key = ~key; 
+
+    // Float to sortable uint conversion - this converts float to uint preserving order
+    uint bits = asuint(dist);
+    uint key =
+               (bits & 0x80000000u)
+               ? ~bits              // negative: flip all bits
+               : (bits ^ 0x80000000u); // positive: flip sign bit
 
     gKeys[i] = key;
 }

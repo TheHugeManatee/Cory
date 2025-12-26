@@ -114,9 +114,9 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
                                                                LayerPassOutputs previousLayer)
 {
     auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentWrite);
+        builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentReadWrite);
     auto [writtenDepthHandle, depthInfo] =
-        builder.write(previousLayer.depth, Sync::AccessType::DepthStencilAttachmentWrite);
+        builder.readWrite(previousLayer.depth, Sync::AccessType::DepthStencilAttachmentReadWrite);
 
     auto imguiPass = builder.declareRenderPass(
         RenderPassDeclaration{.name = "PASS_ImGui",

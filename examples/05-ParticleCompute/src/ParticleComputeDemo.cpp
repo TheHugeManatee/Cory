@@ -78,7 +78,7 @@ void ParticleComputeDemoApplication::setupScene()
 
     Cory::Entity root = sceneGraph_.root();
 
-    static constexpr size_t numSprites = 30000;
+    static constexpr size_t numSprites = 15000;
     static constexpr float sceneRadius = 7.0f;
 
     for (size_t i = 0; i < numSprites; ++i) {

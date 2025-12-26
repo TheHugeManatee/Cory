@@ -269,7 +269,7 @@ constexpr std::array<AccessInfo, static_cast<uint32_t>(AccessType::NUM_ACCESS_TY
      {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL},
 
      // _ACCESS_TRANSFER_READ
-     {VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+     {VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_RESOLVE_BIT,
       VK_ACCESS_2_TRANSFER_READ_BIT,
       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL},
      // _ACCESS_HOST_READ
@@ -357,7 +357,7 @@ constexpr std::array<AccessInfo, static_cast<uint32_t>(AccessType::NUM_ACCESS_TY
      {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_GENERAL},
 
      // _ACCESS_TRANSFER_WRITE
-     {VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+     {VK_PIPELINE_STAGE_2_TRANSFER_BIT | VK_PIPELINE_STAGE_2_RESOLVE_BIT,
       VK_ACCESS_2_TRANSFER_WRITE_BIT,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL},
      // _ACCESS_HOST_PREINITIALIZED
@@ -373,6 +373,11 @@ constexpr std::array<AccessInfo, static_cast<uint32_t>(AccessType::NUM_ACCESS_TY
      {VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL},
+     // _ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_WRITE
+     {VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+          VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL},
      // _ACCESS_GENERAL
      {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
       VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -479,11 +484,9 @@ void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier, VkMemoryBarrier2 *pV
 #endif
         pVkBarrier->dstStageMask |= pNextAccessInfo->stageMask;
 
-        // Add visibility operations as necessary.
-        // If the src access mask is zero, this is a WAR hazard (or for some reason a "RAR"),
-        // so the dst access mask can be safely zeroed as these don't need visibility.
-        if (pVkBarrier->srcAccessMask != 0)
-            pVkBarrier->dstAccessMask |= pNextAccessInfo->accessMask;
+        // Add visibility operations as necessary. Always propagate the dst access mask because
+        // layout transitions (e.g., UNDEFINED -> attachment) are treated as writes by validation.
+        pVkBarrier->dstAccessMask |= pNextAccessInfo->accessMask;
     }
 
     // Ensure that the stage masks are valid if no stages were determined
@@ -549,11 +552,9 @@ void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
 
         pVkBarrier->dstStageMask |= pNextAccessInfo->stageMask;
 
-        // Add visibility operations as necessary.
-        // If the src access mask is zero, this is a WAR hazard (or for some reason a "RAR"),
-        // so the dst access mask can be safely zeroed as these don't need visibility.
-        if (pVkBarrier->srcAccessMask != 0)
-            pVkBarrier->dstAccessMask |= pNextAccessInfo->accessMask;
+        // Add visibility operations as necessary. Always propagate the dst access mask so
+        // layout transitions from an undefined/unused state still synchronize the next use.
+        pVkBarrier->dstAccessMask |= pNextAccessInfo->accessMask;
     }
 
     // Ensure that the stage masks are valid if no stages were determined
@@ -643,11 +644,9 @@ void GetVulkanImageMemoryBarrier(const ImageBarrier &thBarrier, VkImageMemoryBar
 
         pVkBarrier->dstStageMask |= pNextAccessInfo->stageMask;
 
-        // Add visibility operations as necessary.
-        // If the src access mask is zero, this is a WAR hazard (or for some reason a "RAR"),
-        // so the dst access mask can be safely zeroed as these don't need visibility.
-        if (pVkBarrier->srcAccessMask != 0)
-            pVkBarrier->dstAccessMask |= pNextAccessInfo->accessMask;
+        // Add visibility operations as necessary. Always propagate the dst access mask so
+        // transitions from an undefined/unused state still synchronize the next use.
+        pVkBarrier->dstAccessMask |= pNextAccessInfo->accessMask;
 
         VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
         switch (thBarrier.nextLayout) {

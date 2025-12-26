@@ -163,9 +163,7 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
             },
         .dynamicState =
             Gpu::DynamicStateOptions{
-                // TODO: Need to actually extend KDGPU further to provide the necessary
-                // functions on RenderPassCommandRecorder. Note: Viewport and Scissor are
-                // automatically added by KDGpu..
+                // TODO: Need to decide on the specific dynamic states to enable
                 .enabledDynamicStates =
                     {/*Gpu::DynamicState::Viewport,
                      Gpu::DynamicState::Scissor,*/

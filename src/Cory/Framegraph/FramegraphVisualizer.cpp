@@ -1,7 +1,7 @@
 #include "FramegraphVisualizer.h"
 
 #include <Cory/Base/FmtUtils.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/find_if.hpp>

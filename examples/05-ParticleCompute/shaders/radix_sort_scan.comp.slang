@@ -3,6 +3,7 @@
 
 struct PushConstants {
     uint numWorkgroups;
+    uint pad;
 };
 [[vk::push_constant]] PushConstants p;
 

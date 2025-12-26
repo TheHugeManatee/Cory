@@ -73,6 +73,9 @@ class PointSpriteRenderSystem
     std::unique_ptr<Cory::UniformBufferObject<PointSpriteGlobals>> globalUbo_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
+    Cory::ShaderHandle predicateShader_;
+    KDGpu::PipelineLayoutHandle predicateLayout_;
+    KDGpu::ComputePipelineHandle predicatePipeline_;
 
     Cory::RadixSorter sorter_;
 };

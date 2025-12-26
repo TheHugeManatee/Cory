@@ -9,22 +9,17 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <glm/vec3.hpp>
-
 #include <KDGpu/buffer_options.h>
+#include <KDGpu/command_recorder.h>
 
 #include <algorithm>
+#include <bit>
+#include <cstring>
 #include <filesystem>
 #include <numeric>
 #include <vector>
 
 namespace fs = std::filesystem;
-
-namespace {
-
-constexpr uint32_t kWorkgroupSize = 256u;
-
-} // namespace
 
 TEST_CASE("Radix sort compute pipeline matches CPU reference")
 {
@@ -40,79 +35,78 @@ TEST_CASE("Radix sort compute pipeline matches CPU reference")
     // Toy distances (larger = farther)
     std::vector<float> distances{5.0f, 1.0f, 3.5f, 8.0f, 0.5f, 2.5f, 7.0f, 4.0f};
     const uint32_t count = gsl::narrow<uint32_t>(distances.size());
-
-    struct GPUInstanceData {
-        glm::vec4 positionAndSize;
-        glm::vec4 color;
-        glm::vec4 parameters;
-    };
-    std::vector<GPUInstanceData> instances;
-    instances.reserve(distances.size());
+    std::vector<uint32_t> keys;
+    keys.reserve(distances.size());
     for (float d : distances) {
-        instances.push_back({
-            .positionAndSize = glm::vec4{0.0f, 0.0f, -d, 0.5f},
-            .color = glm::vec4{1.0f},
-            .parameters = glm::vec4{0.0f},
-        });
+        const float clamped = std::max(0.0f, d);
+        uint32_t key = std::bit_cast<uint32_t>(clamped);
+        keys.push_back(~key);
     }
 
-    struct GPUUBO {
-        glm::mat4 projection;
-        glm::mat4 view;
-        glm::mat4 viewProjection;
-        glm::vec3 lightPosition;
-        float pad0{};
-        glm::vec3 cameraRight;
-        float pad1{};
-        glm::vec3 cameraUp;
-        float pad2{};
-    } uboData{};
-    uboData.view = glm::mat4{1.0f};
-    uboData.projection = glm::mat4{1.0f};
-    uboData.viewProjection = glm::mat4{1.0f};
-    uboData.cameraRight = {1.0f, 0.0f, 0.0f};
-    uboData.cameraUp = {0.0f, 1.0f, 0.0f};
+    auto makeBuffer =
+        [&](std::string_view label, Gpu::DeviceSize size, Gpu::BufferUsageFlags usage) {
+            return device.createBuffer(Gpu::BufferOptions{
+                .label = label,
+                .size = size,
+                .usage = usage,
+                .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
+            });
+        };
 
-    auto makeBuffer = [&](std::string_view label, Gpu::DeviceSize size) {
-        return device.createBuffer(Gpu::BufferOptions{
-            .label = label,
-            .size = size,
-            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
-            .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
-        });
-    };
+    auto predicateBuffer = makeBuffer("PredicateValues",
+                                      keys.size() * sizeof(uint32_t),
+                                      Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                          Gpu::BufferUsageFlagBits::TransferSrcBit);
+    auto sortedIndicesBuffer = makeBuffer("SortedIndices",
+                                          keys.size() * sizeof(uint32_t),
+                                          Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                              Gpu::BufferUsageFlagBits::TransferSrcBit |
+                                              Gpu::BufferUsageFlagBits::TransferDstBit);
 
-    auto instanceBuffer = makeBuffer("TestInstances", instances.size() * sizeof(GPUInstanceData));
-    auto ubo = makeBuffer("UBO", sizeof(GPUUBO));
-
-    // Upload data
     {
-        auto *mapped = static_cast<std::byte *>(instanceBuffer.map());
-        std::memcpy(mapped, instances.data(), instances.size() * sizeof(GPUInstanceData));
-        instanceBuffer.unmap();
-    }
-    {
-        auto *mapped = static_cast<GPUUBO *>(ubo.map());
-        *mapped = uboData;
-        ubo.unmap();
+        auto *mapped = static_cast<uint32_t *>(predicateBuffer.map());
+        std::memcpy(mapped, keys.data(), keys.size() * sizeof(uint32_t));
+        predicateBuffer.unmap();
     }
 
     auto &scratch = sorter.scratchForFrame(0, count);
 
     auto recorder = device.createCommandRecorder();
-    auto &sorted = sorter.sort(recorder, ctx.descriptors(), scratch, instanceBuffer, ubo, count, 0);
+    auto &sorted = sorter.sort(
+        recorder, ctx.descriptors(), scratch, predicateBuffer, count, sortedIndicesBuffer, 0);
+
+    auto readback = device.createBuffer(Gpu::BufferOptions{
+        .label = "SortedReadback",
+        .size = keys.size() * sizeof(uint32_t),
+        .usage = Gpu::BufferUsageFlagBits::TransferDstBit,
+        .memoryUsage = Gpu::MemoryUsage::GpuToCpu,
+    });
+
+    recorder.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
+        .srcStages = Gpu::PipelineStageFlagBit::TransferBit,
+        .srcMask = Gpu::AccessFlagBit::TransferWriteBit,
+        .dstStages = Gpu::PipelineStageFlagBit::TransferBit,
+        .dstMask = Gpu::AccessFlagBit::TransferReadBit,
+        .buffer = sorted.handle(),
+    });
+    recorder.copyBuffer(Gpu::BufferCopy{
+        .src = sorted.handle(),
+        .dst = readback.handle(),
+        .byteSize = keys.size() * sizeof(uint32_t),
+    });
 
     auto cmdBuf = recorder.finish();
-    auto fence = device.createFence();
+    auto fence = device.createFence(
+        Gpu::FenceOptions{.label = "Fence_ShadersFinished", .createSignalled = false});
     ctx.graphicsQueue().submit(Gpu::SubmitOptions{
         .commandBuffers = {cmdBuf.handle()},
         .signalFence = {fence.handle()},
     });
     fence.wait();
 
-    auto *mappedIndices = static_cast<uint32_t *>(sorted.map());
+    auto *mappedIndices = static_cast<uint32_t *>(readback.map());
     std::vector<uint32_t> gpuSorted(mappedIndices, mappedIndices + count);
-    sorted.unmap();
+    readback.unmap();
 
     // CPU expected far-to-near
     std::vector<uint32_t> expected(count);

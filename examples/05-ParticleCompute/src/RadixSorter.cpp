@@ -1,5 +1,6 @@
 #include "RadixSorter.hpp"
 
+#include <Cory/Base/Log.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
@@ -7,32 +8,41 @@
 #include <Cory/Renderer/ShaderManager.hpp>
 
 #include <KDGpu/buffer_options.h>
+#include <KDGpu/command_recorder.h>
+#include <KDGpu/vulkan/vulkan_compute_pass_command_recorder.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
 
-#include <array>
 #include <numeric>
+#include <utility>
 
 namespace Cory {
 namespace {
 constexpr uint32_t kWorkgroupSize = 256u;
+constexpr Gpu::PushConstantRange kPushRange{
+    .offset = 0,
+    .size = sizeof(uint32_t) * 2,
+    .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit,
+};
+
+ShaderHandle createComputeShader(Context &ctx, std::string_view path)
+{
+    ShaderSource source{ResourceLocator::Locate(path)};
+    return ctx.shaders().createShader(std::move(source), {kPushRange});
+}
 } // namespace
 
 RadixSorter::RadixSorter(Context &ctx)
     : ctx_{&ctx}
 {
-    preprocessShader_ =
-        ctx.shaders().createShader(ResourceLocator::Locate("sort_preprocess.comp.slang"));
-    histogramShader_ =
-        ctx.shaders().createShader(ResourceLocator::Locate("radix_sort_histogram.comp.slang"));
-    scanShader_ = ctx.shaders().createShader(ResourceLocator::Locate("radix_sort_scan.comp.slang"));
-    scatterShader_ =
-        ctx.shaders().createShader(ResourceLocator::Locate("radix_sort_scatter.comp.slang"));
+    histogramShader_ = createComputeShader(ctx, "radix_sort_histogram.comp.slang");
+    scanShader_ = createComputeShader(ctx, "radix_sort_scan.comp.slang");
+    scatterShader_ = createComputeShader(ctx, "radix_sort_scatter.comp.slang");
 }
 
 RadixSorter::~RadixSorter()
 {
     if (!ctx_) return;
     auto &shaders = ctx_->shaders();
-    shaders.release(preprocessShader_);
     shaders.release(histogramShader_);
     shaders.release(scanShader_);
     shaders.release(scatterShader_);
@@ -48,54 +58,29 @@ RadixSorter::ScratchBuffers &RadixSorter::scratchForFrame(uint32_t frameIndex,
     return perFrameScratch_[frameIndex];
 }
 
-void RadixSorter::ensurePipelines()
+void RadixSorter::ensurePipelineLayout()
 {
-    if (preprocessPipeline_.isValid()) return;
+    if (pipelineLayout_.isValid()) return;
 
     auto &cache = ctx_->pipelineCache();
     auto layouts = ctx_->descriptors().layouts();
+    pipelineLayout_ = cache.queryLayout(Gpu::PipelineLayoutOptions{
+        .label = "RadixSortLayout",
+        .bindGroupLayouts = layouts,
+        .pushConstantRanges = {kPushRange},
+    });
+}
 
-    auto makeLayout = [&](std::string_view label,
-                          std::initializer_list<Gpu::PushConstantRange> ranges) {
-        return cache.queryLayout(Gpu::PipelineLayoutOptions{
-            .label = std::string{label},
-            .bindGroupLayouts = layouts,
-            .pushConstantRanges = std::vector<Gpu::PushConstantRange>{ranges},
-        });
-    };
+void RadixSorter::ensurePipeline()
+{
+    if (computePipeline_.isValid()) return;
 
-    preprocessLayout_ =
-        makeLayout("RadixPreprocessLayout",
-                   {Gpu::PushConstantRange{.offset = 0,
-                                           .size = sizeof(uint32_t),
-                                           .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit}});
-    histogramLayout_ = makeLayout(
-        "RadixHistogramLayout",
-        {Gpu::PushConstantRange{
-            .offset = 0, .size = 8, .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit}});
-    scanLayout_ =
-        makeLayout("RadixScanLayout",
-                   {Gpu::PushConstantRange{.offset = 0,
-                                           .size = sizeof(uint32_t),
-                                           .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit}});
-    scatterLayout_ = makeLayout(
-        "RadixScatterLayout",
-        {Gpu::PushConstantRange{
-            .offset = 0, .size = 8, .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit}});
-
-    preprocessPipeline_ =
-        cache.queryComputePipeline("RadixPreprocess",
-                                   ComputePipelineDescriptor{.shader = preprocessShader_,
-                                                             .pipelineLayout = preprocessLayout_});
-    histogramPipeline_ = cache.queryComputePipeline(
-        "RadixHistogram",
-        ComputePipelineDescriptor{.shader = histogramShader_, .pipelineLayout = histogramLayout_});
-    scanPipeline_ = cache.queryComputePipeline(
-        "RadixScan",
-        ComputePipelineDescriptor{.shader = scanShader_, .pipelineLayout = scanLayout_});
-    scatterPipeline_ = cache.queryComputePipeline(
-        "RadixScatter",
-        ComputePipelineDescriptor{.shader = scatterShader_, .pipelineLayout = scatterLayout_});
+    ensurePipelineLayout();
+    auto &cache = ctx_->pipelineCache();
+    computePipeline_ = cache.queryComputePipeline(
+        "RadixSortCompute",
+        ComputePipelineDescriptor{.shader = histogramShader_, .pipelineLayout = pipelineLayout_});
+    CO_CORE_ASSERT(computePipeline_.isValid(), "Failed to create radix sort compute pipeline");
 }
 
 void RadixSorter::ensureScratch(ScratchBuffers &scratch, uint32_t instanceCount)
@@ -114,7 +99,9 @@ void RadixSorter::ensureScratch(ScratchBuffers &scratch, uint32_t instanceCount)
     Gpu::BufferOptions opts{
         .label = "RadixSortBuf",
         .size = required,
-        .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
+        .usage = Gpu::BufferUsageFlagBits::StorageBufferBit |
+                 Gpu::BufferUsageFlagBits::TransferSrcBit |
+                 Gpu::BufferUsageFlagBits::TransferDstBit,
         .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
     };
     scratch.keysA = ctx_->device().createBuffer(opts);
@@ -130,12 +117,12 @@ void RadixSorter::ensureScratch(ScratchBuffers &scratch, uint32_t instanceCount)
 Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
                                DescriptorSets &descriptors,
                                ScratchBuffers &scratch,
-                               const Gpu::Buffer &instanceBuffer,
-                               const Gpu::Buffer &uboBuffer,
+                               const Gpu::Buffer &predicateBuffer,
                                uint32_t instanceCount,
+                               Gpu::Buffer &outputIndices,
                                uint32_t descriptorSetIndex)
 {
-    ensurePipelines();
+    ensurePipeline();
     ensureScratch(scratch, instanceCount);
 
     auto barrier = [&](const Gpu::Buffer &buf, Gpu::AccessFlags srcMask, Gpu::AccessFlags dstMask) {
@@ -150,6 +137,26 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
 
     const uint32_t numWorkgroups = scratch.workgroups;
 
+    if (predicateBuffer.handle() != scratch.keysA.handle()) {
+        cmd.copyBuffer(Gpu::BufferCopy{
+            .src = predicateBuffer.handle(),
+            .dst = scratch.keysA.handle(),
+            .byteSize = static_cast<size_t>(instanceCount) * sizeof(uint32_t),
+        });
+        cmd.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
+            .srcStages = Gpu::PipelineStageFlagBit::TransferBit,
+            .srcMask = Gpu::AccessFlagBit::TransferWriteBit,
+            .dstStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
+            .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
+            .buffer = scratch.keysA.handle(),
+        });
+    }
+    else {
+        barrier(scratch.keysA,
+                Gpu::AccessFlagBit::ShaderStorageWriteBit,
+                Gpu::AccessFlagBit::ShaderStorageReadBit);
+    }
+
     // Initialize indicesA
     {
         auto *mapped = static_cast<uint32_t *>(scratch.indicesA.map());
@@ -157,41 +164,20 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
         scratch.indicesA.unmap();
     }
 
-    // Preprocess
-    {
-        auto pass = cmd.beginComputePass({});
-        pass.setPipeline(preprocessPipeline_);
-        descriptors.write(DescriptorSets::SetType::Static, descriptorSetIndex, uboBuffer)
-            .write(DescriptorSets::SetType::Static, descriptorSetIndex, 2, instanceBuffer)
-            .write(DescriptorSets::SetType::Static, descriptorSetIndex, 3, scratch.keysA)
-            .write(DescriptorSets::SetType::Static, descriptorSetIndex, 4, scratch.indicesA)
-            .flushWrites()
-            .bind(pass, descriptorSetIndex);
-        pass.pushConstant({.offset = 0,
-                           .size = sizeof(uint32_t),
-                           .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
-                          &instanceCount,
-                          preprocessLayout_);
-        pass.dispatchCompute({numWorkgroups, 1, 1});
-        pass.end();
-    }
-    barrier(scratch.keysA,
-            Gpu::AccessFlagBit::ShaderStorageWriteBit,
-            Gpu::AccessFlagBit::ShaderStorageReadBit);
-    barrier(scratch.indicesA,
-            Gpu::AccessFlagBit::ShaderStorageWriteBit,
-            Gpu::AccessFlagBit::ShaderStorageReadBit);
-
     Gpu::Buffer *keysIn = &scratch.keysA;
     Gpu::Buffer *keysOut = &scratch.keysB;
     Gpu::Buffer *indicesIn = &scratch.indicesA;
     Gpu::Buffer *indicesOut = &scratch.indicesB;
 
+    auto &shaders = ctx_->shaders();
+    auto pass = cmd.beginComputePass({});
+    pass.setPipeline(computePipeline_);
+
     for (uint32_t bitOffset = 0; bitOffset < 32; bitOffset += 4) {
         // Histogram
         {
-            auto pass = cmd.beginComputePass({});
-            pass.setPipeline(histogramPipeline_);
+            pass.bindShader(shaders[histogramShader_].shaderHandle());
+
             descriptors.write(DescriptorSets::SetType::Static, descriptorSetIndex, 2, *keysIn)
                 .write(DescriptorSets::SetType::Static, descriptorSetIndex, 3, scratch.histograms)
                 .flushWrites()
@@ -200,11 +186,7 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
                 uint32_t numInstances;
                 uint32_t bitOffset;
             } pc{instanceCount, bitOffset};
-            pass.pushConstant({.offset = 0,
-                               .size = sizeof(pc),
-                               .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
-                              &pc,
-                              histogramLayout_);
+            pass.pushConstant(kPushRange, &pc);
             pass.dispatchCompute({numWorkgroups, 1, 1});
             pass.end();
         }
@@ -215,17 +197,16 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
 
         // Scan
         {
-            auto pass = cmd.beginComputePass({});
-            pass.setPipeline(scanPipeline_);
+            pass.bindShader(shaders[histogramShader_].shaderHandle());
             descriptors
                 .write(DescriptorSets::SetType::Static, descriptorSetIndex, 2, scratch.histograms)
                 .flushWrites()
                 .bind(pass, descriptorSetIndex);
-            pass.pushConstant({.offset = 0,
-                               .size = sizeof(uint32_t),
-                               .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
-                              &numWorkgroups,
-                              scanLayout_);
+            struct {
+                uint32_t numWorkgroups;
+                uint32_t pad;
+            } pc{numWorkgroups, 0u};
+            pass.pushConstant(kPushRange, &pc);
             pass.dispatchCompute({1, 1, 1});
             pass.end();
         }
@@ -235,8 +216,7 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
 
         // Scatter
         {
-            auto pass = cmd.beginComputePass({});
-            pass.setPipeline(scatterPipeline_);
+            pass.bindShader(shaders[histogramShader_].shaderHandle());
             descriptors.write(DescriptorSets::SetType::Static, descriptorSetIndex, 2, *keysIn)
                 .write(DescriptorSets::SetType::Static, descriptorSetIndex, 3, *indicesIn)
                 .write(DescriptorSets::SetType::Static, descriptorSetIndex, 4, *keysOut)
@@ -248,11 +228,7 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
                 uint32_t numInstances;
                 uint32_t bitOffset;
             } pc{instanceCount, bitOffset};
-            pass.pushConstant({.offset = 0,
-                               .size = sizeof(pc),
-                               .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
-                              &pc,
-                              scatterLayout_);
+            pass.pushConstant(kPushRange, &pc);
             pass.dispatchCompute({numWorkgroups, 1, 1});
             pass.end();
         }
@@ -267,6 +243,21 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
         std::swap(indicesIn, indicesOut);
     }
 
-    return *indicesIn;
+    if (indicesIn->handle() != outputIndices.handle()) {
+        cmd.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
+            .srcStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
+            .srcMask = Gpu::AccessFlagBit::ShaderStorageWriteBit,
+            .dstStages = Gpu::PipelineStageFlagBit::TransferBit,
+            .dstMask = Gpu::AccessFlagBit::TransferReadBit,
+            .buffer = indicesIn->handle(),
+        });
+        cmd.copyBuffer(Gpu::BufferCopy{
+            .src = indicesIn->handle(),
+            .dst = outputIndices.handle(),
+            .byteSize = static_cast<size_t>(instanceCount) * sizeof(uint32_t),
+        });
+    }
+
+    return outputIndices;
 }
 } // namespace Cory

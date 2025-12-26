@@ -26,35 +26,28 @@ class RadixSorter {
 
     ScratchBuffers &scratchForFrame(uint32_t frameIndex, uint32_t instanceCount);
 
-    /// Runs the GPU radix sort. Returns the buffer containing the sorted indices.
+    /// Runs the GPU radix sort over the predicate values (uint keys). Returns the sorted indices.
     Gpu::Buffer &sort(Gpu::CommandRecorder &cmd,
                       DescriptorSets &descriptors,
                       ScratchBuffers &scratch,
-                      const Gpu::Buffer &instanceBuffer,
-                      const Gpu::Buffer &uboBuffer,
+                      const Gpu::Buffer &predicateBuffer,
                       uint32_t instanceCount,
+                      Gpu::Buffer &outputIndices,
                       uint32_t descriptorSetIndex);
 
   private:
-    void ensurePipelines();
+    void ensurePipelineLayout();
+    void ensurePipeline();
     void ensureScratch(ScratchBuffers &scratch, uint32_t instanceCount);
 
     Context *ctx_{nullptr};
 
-    ShaderHandle preprocessShader_;
     ShaderHandle histogramShader_;
     ShaderHandle scanShader_;
     ShaderHandle scatterShader_;
 
-    Gpu::PipelineLayoutHandle preprocessLayout_;
-    Gpu::PipelineLayoutHandle histogramLayout_;
-    Gpu::PipelineLayoutHandle scanLayout_;
-    Gpu::PipelineLayoutHandle scatterLayout_;
-
-    Gpu::ComputePipelineHandle preprocessPipeline_;
-    Gpu::ComputePipelineHandle histogramPipeline_;
-    Gpu::ComputePipelineHandle scanPipeline_;
-    Gpu::ComputePipelineHandle scatterPipeline_;
+    Gpu::PipelineLayoutHandle pipelineLayout_;
+    Gpu::ComputePipelineHandle computePipeline_;
 
     std::vector<ScratchBuffers> perFrameScratch_;
 };

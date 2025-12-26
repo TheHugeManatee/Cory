@@ -3,6 +3,7 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
+#include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
@@ -29,6 +30,29 @@ PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx, uint32_t ma
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.vert.slang"));
     fragmentShader_ =
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.frag.slang"));
+    {
+        Cory::ShaderSource predicateSource{
+            Cory::ResourceLocator::Locate("sort_preprocess.comp.slang")};
+        predicateShader_ = ctx.shaders().createShader(
+            std::move(predicateSource),
+            {Gpu::PushConstantRange{.offset = 0,
+                                    .size = sizeof(uint32_t) * 2,
+                                    .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit}});
+    }
+
+    predicateLayout_ = ctx.pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
+        .label = "PointSpritePredicateLayout",
+        .bindGroupLayouts = ctx.descriptors().layouts(),
+        .pushConstantRanges = {Gpu::PushConstantRange{
+            .offset = 0,
+            .size = sizeof(uint32_t) * 2,
+            .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit,
+        }},
+    });
+    predicatePipeline_ = ctx.pipelineCache().queryComputePipeline(
+        "PointSpritePredicate",
+        Cory::ComputePipelineDescriptor{.shader = predicateShader_,
+                                        .pipelineLayout = predicateLayout_});
 }
 
 PointSpriteRenderSystem::~PointSpriteRenderSystem()
@@ -37,6 +61,7 @@ PointSpriteRenderSystem::~PointSpriteRenderSystem()
         auto &shaders = ctx_->shaders();
         shaders.release(vertexShader_);
         shaders.release(fragmentShader_);
+        shaders.release(predicateShader_);
     }
 }
 
@@ -152,12 +177,40 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
             mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         instanceBuffer.buffer.unmap();
 
+        {
+            auto pass = renderApi.cmd->beginComputePass({});
+            pass.setPipeline(predicatePipeline_);
+            ctx_->descriptors()
+                .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
+                .write(Cory::DescriptorSets::SetType::Static,
+                       frameCtx.inFlightIndex,
+                       2,
+                       instanceBuffer.buffer)
+                .write(Cory::DescriptorSets::SetType::Static,
+                       frameCtx.inFlightIndex,
+                       3,
+                       sortBuf.keysA)
+                .flushWrites()
+                .bind(pass, frameCtx.inFlightIndex);
+            struct {
+                uint32_t numInstances;
+                uint32_t pad;
+            } pc{instanceCount, 0u};
+            pass.pushConstant(Gpu::PushConstantRange{.offset = 0,
+                                                     .size = sizeof(pc),
+                                                     .shaderStages =
+                                                         Gpu::ShaderStageFlagBits::ComputeBit},
+                              &pc);
+            pass.dispatchCompute({sortBuf.workgroups, 1, 1});
+            pass.end();
+        }
+
         auto &sortedIndices = sorter_.sort(*renderApi.cmd,
                                            ctx_->descriptors(),
                                            sortBuf,
-                                           instanceBuffer.buffer,
-                                           globalUbo_->buffer(),
+                                           sortBuf.keysA,
                                            instanceCount,
+                                           sortBuf.indicesA,
                                            frameCtx.inFlightIndex);
 
         ctx_->descriptors()

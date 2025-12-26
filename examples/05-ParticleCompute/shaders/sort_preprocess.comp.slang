@@ -23,10 +23,10 @@ struct PointSpriteGlobals
 [[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals;
 [[vk::binding(2, 0)]] StructuredBuffer<InstanceData> gInstances;
 [[vk::binding(3, 0)]] RWStructuredBuffer<uint> gKeys;
-[[vk::binding(4, 0)]] RWStructuredBuffer<uint> gIndices;
 
 struct PushConstants {
     uint numInstances;
+    uint pad;
 };
 [[vk::push_constant]] PushConstants p;
 
@@ -66,5 +66,4 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     key = ~key; 
 
     gKeys[i] = key;
-    gIndices[i] = i;
 }

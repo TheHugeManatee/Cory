@@ -3,6 +3,7 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 
+#include <KDGpu/pipeline_layout_options.h>
 #include <KDGpu/shader_module.h>
 #include <KDGpu/shader_object.h>
 
@@ -43,7 +44,6 @@ class ShaderSource {
         macroDefinitions_[defName] = defValue;
     }
     void removeDefinition(std::string defName) { macroDefinitions_.erase(defName); }
-
     const auto &source() const { return source_; }
     auto type() const { return type_; }
     const auto &defines() const { return macroDefinitions_; }
@@ -63,7 +63,10 @@ class Shader : NoCopy {
                                           std::string_view entryPoint = "main");
 
     Shader();
-    Shader(Context &ctx, ShaderSource source, std::string entryPoint = "main");
+    Shader(Context &ctx,
+           ShaderSource source,
+           std::string entryPoint = "main",
+           std::vector<Gpu::PushConstantRange> pushConstantRanges = {});
 
     // movable!
     Shader(Shader &&rhs) = default;
@@ -93,6 +96,7 @@ class Shader : NoCopy {
     Gpu::ShaderObject shaderObject_;
     Gpu::ShaderStageFlags nextStages_{};
     std::string entryPoint_{"main"};
+    std::vector<Gpu::PushConstantRange> pushConstantRanges_;
     CompilationError error_;
 };
 } // namespace Cory

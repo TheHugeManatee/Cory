@@ -8,8 +8,6 @@
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
-#include <KDGpu/bind_group.h>
-#include <KDGpu/bind_group_options.h>
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/gpu_core.h>
 

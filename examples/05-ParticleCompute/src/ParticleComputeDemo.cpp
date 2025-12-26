@@ -78,11 +78,11 @@ void ParticleComputeDemoApplication::setupScene()
 
     Cory::Entity root = sceneGraph_.root();
 
-    static constexpr size_t numSprites = 15000;
-    static constexpr float sceneRadius = 7.0f;
+    static constexpr size_t numSprites = 50000;
+    static constexpr float sceneRadius = 15.0f;
 
     for (size_t i = 0; i < numSprites; ++i) {
-        const float radius = Cory::RNG::Uniform(0.1f, 0.17f);
+        const float radius = Cory::RNG::Uniform(0.1f, 0.3f);
         auto pos = Cory::RNG::UniformInSphere() * sceneRadius;
         auto color = glm::vec4{Cory::RNG::Uniform(0.0f, 1.0f),
                                Cory::RNG::Uniform(0.0f, 1.0f),

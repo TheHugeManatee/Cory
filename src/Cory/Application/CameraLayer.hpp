@@ -32,7 +32,7 @@ class CameraLayer : public ApplicationLayer {
 
     kdb::Property<float> rotationSpeed{0.002f};
     kdb::Property<float> movementSpeed{0.010f};
-    kdb::Property<float> scrollSpeed{0.05f};
+    kdb::Property<float> scrollSpeed{0.25f};
 
     // external modifications to these will likely be ignored/overwritten
     kdb::Property<glm::vec3> forward{glm::vec3{0.0f, 0.0f, 1.0f}};   ///< =normalize(focus-position)

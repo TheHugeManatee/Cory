@@ -1,5 +1,8 @@
 #pragma once
 
+#include <glm/vec3.hpp>
+#include <glm/gtc/constants.hpp>
+
 #include <random>
 
 namespace Cory {

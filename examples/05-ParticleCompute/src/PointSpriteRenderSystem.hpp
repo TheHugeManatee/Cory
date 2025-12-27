@@ -9,7 +9,7 @@
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
-#include "RadixSorter.hpp"
+#include "../../../src/Cory/Renderer/RadixSorter.hpp"
 
 #include <type_traits>
 #include <vector>

@@ -11,8 +11,6 @@ add_executable(${TARGET_NAME}
         src/ParticleComputeDemo.hpp
         src/PointSpriteRenderSystem.hpp
         src/PointSpriteRenderSystem.cpp
-        src/RadixSorter.hpp
-        src/RadixSorter.cpp
         src/Common.hpp
 )
 

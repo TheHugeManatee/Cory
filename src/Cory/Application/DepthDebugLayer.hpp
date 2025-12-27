@@ -25,7 +25,7 @@ class DepthDebugLayer : public ApplicationLayer {
 
     kdb::Property<bool> renderEnabled{true};
     kdb::Property<glm::vec2> center{glm::vec2(0.5f, 0.5f)};
-    kdb::Property<glm::vec2> size{glm::vec2(0.5f, 0.5f)};
+    kdb::Property<glm::vec2> size{glm::vec2(0.2f, 0.2f)};
     kdb::Property<glm::vec2> window{glm::vec2(0.0f, 1.0f)};
 
   private:

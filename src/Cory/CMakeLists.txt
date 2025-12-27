@@ -88,6 +88,8 @@ set(CORY_SOURCES
         Renderer/Context.hpp
         Renderer/DescriptorSets.cpp
         Renderer/DescriptorSets.hpp
+        Renderer/RadixSorter.cpp
+        Renderer/RadixSorter.hpp
         Renderer/ShaderManager.cpp
         Renderer/ShaderManager.hpp
         Renderer/Shader.cpp

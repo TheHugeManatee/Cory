@@ -147,6 +147,7 @@ void ParticleComputeDemoApplication::run()
     auto time = Cory::AppClock::now();
     while (!window_->shouldClose()) {
         processEvents(0);
+        glfwPollEvents();
 
         // Update time
         auto previousFrameTime = std::exchange(time, Cory::AppClock::now());

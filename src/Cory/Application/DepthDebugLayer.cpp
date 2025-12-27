@@ -1,5 +1,7 @@
 #include <Cory/Application/DepthDebugLayer.hpp>
 
+#include "GLFWUtils.hpp"
+
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Utils.hpp>
@@ -72,32 +74,40 @@ void DepthDebugLayer::onDetach(Context &ctx)
 
 bool DepthDebugLayer::onEvent(Event event)
 {
-    if (!renderEnabled.get()) {
-        return false;
-    }
-    return std::visit(lambda_visitor{
-                          [](auto event) { return false; },
-                          [this](const SwapchainResizedEvent &event) {
-                              state_->viewportDimensions = event.size;
-                              return false;
-                          },
-                          [this](const ScrollEvent &event) {
-                              glm::vec2 size_delta{};
-                              if (event.modifiers.is_set(ModifierFlagBits::Shift)) {
-                                  size_delta.x = event.scrollDelta.y;
-                              }
-                              else {
-                                  size_delta.y = event.scrollDelta.y;
-                              }
-                              size = size.get() + size_delta * 0.03f;
-                              return true;
-                          },
-                          [this](const MouseMovedEvent &event) {
-                              center = event.position / state_->viewportDimensions;
-                              return true;
-                          },
-                      },
-                      event);
+    auto eventHandler = lambda_visitor{
+        [](auto event) { return false; },
+        [this](const SwapchainResizedEvent &event) {
+            if (!renderEnabled()) return false;
+            state_->viewportDimensions = event.size;
+            return false;
+        },
+        [this](const ScrollEvent &event) {
+            if (!renderEnabled()) return false;
+            glm::vec2 size_delta{};
+            if (event.modifiers.is_set(ModifierFlagBits::Shift)) {
+                size_delta.x = event.scrollDelta.y;
+            }
+            else {
+                size_delta.y = event.scrollDelta.y;
+            }
+            size = size.get() + size_delta * 0.03f;
+            return true;
+        },
+        [this](const MouseMovedEvent &event) {
+            if (!renderEnabled()) return false;
+            center = event.position / state_->viewportDimensions;
+            return true;
+        },
+        [this](const KeyEvent &event) {
+            if (event.action == GLFW_PRESS && event.key == GLFW_KEY_D &&
+                event.modifiers == GLFW_MOD_CONTROL) {
+                renderEnabled = !renderEnabled();
+                return true;
+            }
+            return false;
+        },
+    };
+    return std::visit(eventHandler, event);
 }
 
 void DepthDebugLayer::onUpdate(const LogicUpdateContext &updateCtx)

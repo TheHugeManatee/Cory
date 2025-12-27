@@ -35,9 +35,9 @@ ShaderHandle createComputeShader(Context &ctx, std::string_view path)
 RadixSorter::RadixSorter(Context &ctx)
     : ctx_{&ctx}
 {
-    histogramShader_ = createComputeShader(ctx, "radix_sort_histogram.comp.slang");
-    scanShader_ = createComputeShader(ctx, "radix_sort_scan.comp.slang");
-    scatterShader_ = createComputeShader(ctx, "radix_sort_scatter.comp.slang");
+    histogramShader_ = createComputeShader(ctx, "shaders/RadixSortHistogram.comp.slang");
+    scanShader_ = createComputeShader(ctx, "shaders/RadixSortScan.comp.slang");
+    scatterShader_ = createComputeShader(ctx, "shaders/RadixSortScatter.comp.slang");
 }
 
 RadixSorter::~RadixSorter()

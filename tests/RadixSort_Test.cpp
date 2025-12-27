@@ -1,11 +1,11 @@
 #include "TestUtils.hpp"
 
+#include <../src/Cory/Renderer/RadixSorter.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <RadixSorter.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -13,12 +13,12 @@
 #include <KDGpu/command_recorder.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
-#include <span>
 #include <cstring>
 #include <filesystem>
 #include <numeric>
-#include <array>
+#include <span>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -87,9 +87,6 @@ void uploadBuffer(Gpu::Buffer &buffer, std::span<const uint32_t> data)
 TEST_CASE("Radix sort compute pipeline matches CPU reference")
 {
     Cory::testing::VulkanTester t;
-    const auto shaderDir =
-        fs::path{__FILE__}.parent_path().parent_path() / "examples/05-ParticleCompute/shaders";
-    Cory::ResourceLocator::addSearchPath(shaderDir);
 
     auto &ctx = t.ctx();
     auto &device = ctx.device();

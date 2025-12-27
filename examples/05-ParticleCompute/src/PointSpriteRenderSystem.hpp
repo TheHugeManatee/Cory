@@ -3,7 +3,6 @@
 #include "Common.hpp"
 
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>

@@ -1,10 +1,11 @@
 #include "PointSpriteRenderSystem.hpp"
 
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
@@ -184,21 +185,19 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                        frameCtx.inFlightIndex,
                        2,
                        instanceBuffer.buffer)
-                .write(Cory::DescriptorSets::SetType::Static,
-                       frameCtx.inFlightIndex,
-                       3,
-                       sortBuf.keysA)
+                .write(
+                    Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, 3, sortBuf.keysA)
                 .flushWrites()
                 .bind(pass, frameCtx.inFlightIndex);
             struct {
                 uint32_t numInstances;
                 uint32_t pad;
             } pc{instanceCount, 0u};
-            pass.pushConstant(Gpu::PushConstantRange{.offset = 0,
-                                                     .size = sizeof(pc),
-                                                     .shaderStages =
-                                                         Gpu::ShaderStageFlagBits::ComputeBit},
-                              &pc);
+            pass.pushConstant(
+                Gpu::PushConstantRange{.offset = 0,
+                                       .size = sizeof(pc),
+                                       .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
+                &pc);
             pass.dispatchCompute({sortBuf.workgroups, 1, 1});
             pass.end();
         }
@@ -213,7 +212,10 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
 
         ctx_->descriptors()
             .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
-            .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, 2, instanceBuffer.buffer)
+            .write(Cory::DescriptorSets::SetType::Static,
+                   frameCtx.inFlightIndex,
+                   2,
+                   instanceBuffer.buffer)
             .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, 4, sortedIndices)
             .flushWrites();
 
@@ -252,7 +254,8 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     passRecorder.end();
 }
 
-auto PointSpriteRenderSystem::instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount) -> InstanceBuffer &
+auto PointSpriteRenderSystem::instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount)
+    -> InstanceBuffer &
 {
     if (instanceBuffers_.size() <= frameIndex) {
         instanceBuffers_.resize(frameIndex + 1);

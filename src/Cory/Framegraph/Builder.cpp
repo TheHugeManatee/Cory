@@ -6,7 +6,6 @@
 
 namespace Cory {
 
-// <editor-fold desc="RenderTaskExecutionAwaiter">
 RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
 {
     return fg.renderInput(passHandle);
@@ -17,9 +16,7 @@ void RenderTaskExecutionAwaiter::await_suspend(
 {
     fg.enqueueRenderPass(passHandle, coroHandle);
 }
-// </editor-fold>
 
-// <editor-fold desc="RenderTaskBuilder">
 RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
                                      Framegraph &framegraph,
                                      std::string_view taskName)
@@ -167,5 +164,4 @@ TransientComputePass RenderTaskBuilder::declareComputePass(ComputePassDeclaratio
 {
     return TransientComputePass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
 }
-// </editor-fold>
 } // namespace Cory

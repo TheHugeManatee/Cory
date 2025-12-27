@@ -12,7 +12,6 @@
 #include <KDGpu/bind_group_layout_options.h>
 #include <KDGpu/bind_group_options.h>
 #include <KDGpu/command_recorder.h>
-#include <KDGpu/pipeline_layout.h>
 
 #include <KDGpu/bind_group_pool_options.h>
 #include <vector>
@@ -87,13 +86,13 @@ DescriptorSets &DescriptorSets::write(SetType type,
 {
     // Use KDGpu types for buffer binding
 
-    data_->pendingWrites[type][frameInFlightIndex].emplace_back(KDGpu::BindGroupEntry{
+    data_->pendingWrites[type][frameInFlightIndex].emplace_back(Gpu::BindGroupEntry{
         .binding = static_cast<uint32_t>(BindPoints::UniformBufferObject),
         .resource =
-            KDGpu::UniformBufferBinding{
+            Gpu::UniformBufferBinding{
                 .buffer = ubo.handle(),
                 .offset = 0,
-                .size = KDGpu::UniformBufferBinding::WholeSize,
+                .size = Gpu::UniformBufferBinding::WholeSize,
             },
         .arrayElement = 0,
     });
@@ -107,10 +106,10 @@ DescriptorSets &DescriptorSets::write(SetType type,
                                       gsl::span<Gpu::TextureSamplerHandle> samplers)
 {
     for (size_t i = 0; i < images.size(); ++i) {
-        data_->pendingWrites[type][frameInFlightIndex].emplace_back(KDGpu::BindGroupEntry{
+        data_->pendingWrites[type][frameInFlightIndex].emplace_back(Gpu::BindGroupEntry{
             .binding = static_cast<uint32_t>(BindPoints::CombinedImageSampler),
             .resource =
-                KDGpu::TextureViewSamplerBinding{
+                Gpu::TextureViewSamplerBinding{
                     .textureView = images[i],
                     .sampler = samplers[i],
                     .layout = layouts[i],
@@ -124,13 +123,22 @@ DescriptorSets &DescriptorSets::write(SetType type,
 DescriptorSets &
 DescriptorSets::write(SetType type, gsl::index frameInFlightIndex, const Gpu::Buffer &buffer)
 {
-    data_->pendingWrites[type][frameInFlightIndex].emplace_back(KDGpu::BindGroupEntry{
-        .binding = static_cast<uint32_t>(BindPoints::StorageBuffer),
+    return write(
+        type, frameInFlightIndex, static_cast<uint32_t>(BindPoints::StorageBuffer), buffer);
+}
+
+DescriptorSets &DescriptorSets::write(SetType type,
+                                      gsl::index frameInFlightIndex,
+                                      uint32_t binding,
+                                      const Gpu::Buffer &buffer)
+{
+    data_->pendingWrites[type][frameInFlightIndex].emplace_back(Gpu::BindGroupEntry{
+        .binding = binding,
         .resource =
-            KDGpu::StorageBufferBinding{
+            Gpu::StorageBufferBinding{
                 .buffer = buffer.handle(),
                 .offset = 0,
-                .size = KDGpu::StorageBufferBinding::WholeSize,
+                .size = Gpu::StorageBufferBinding::WholeSize,
             },
         .arrayElement = 0,
     });
@@ -140,7 +148,7 @@ DescriptorSets::write(SetType type, gsl::index frameInFlightIndex, const Gpu::Bu
 DescriptorSets &DescriptorSets::flushWrites()
 {
     // Note: Delayed writing currently somewhat useless within KDGpu abstraction -
-    // KDGpu::BindGroup::update always updates directly without an option for submitting batched
+    // Gpu::BindGroup::update always updates directly without an option for submitting batched
     // updates, which makes the whole write/flush approach moot
 
     for (SetType type : magic_enum::enum_values<SetType>()) {
@@ -157,6 +165,15 @@ DescriptorSets &DescriptorSets::flushWrites()
 }
 
 DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
+                                     gsl::index frameInFlightIndex)
+{
+    for (SetType type : magic_enum::enum_values<SetType>()) {
+        cmd.setBindGroup(static_cast<uint32_t>(type), data_->bindGroups[type][frameInFlightIndex]);
+    }
+    return *this;
+}
+
+DescriptorSets &DescriptorSets::bind(Gpu::ComputePassCommandRecorder &cmd,
                                      gsl::index frameInFlightIndex)
 {
     for (SetType type : magic_enum::enum_values<SetType>()) {

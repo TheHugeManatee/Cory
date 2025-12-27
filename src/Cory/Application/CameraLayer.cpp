@@ -83,6 +83,11 @@ void CameraLayer::onUpdate(const LogicUpdateContext &updateContext)
         CoImGui::Slider("fovy", fovy, 10.0f, 140.0f);
         CoImGui::Slider("forward", forward, -1.0f, 1.0f);
         CoImGui::Slider("right", right, -1.0f, 1.0f);
+
+        ImGui::Separator();
+        CoImGui::Slider("movement speed", movementSpeed, 0.01f, 1.0f);
+        CoImGui::Slider("rotation speed", rotationSpeed, 0.001f, 0.1f);
+        CoImGui::Slider("scroll speed", scrollSpeed, 0.1f, 10.0f);
     }
     ::ImGui::End();
 }

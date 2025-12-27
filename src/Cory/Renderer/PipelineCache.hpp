@@ -15,6 +15,7 @@ struct PipelineDescriptor {
     std::vector<ShaderHandle> shaders;
     Gpu::SampleCountFlagBits sampleCount;
     std::vector<Gpu::Format> colorFormats;
+    std::vector<Gpu::BlendOptions> blendOptions;
     Gpu::Format depthFormat;
     Gpu::Format stencilFormat;
     bool hasMeshInput;
@@ -27,12 +28,21 @@ struct PipelineDescriptor {
                            shaders,
                            sampleCount,
                            colorFormats,
+                           blendOptions,
                            depthFormat,
                            stencilFormat,
                            pipelineLayout,
                            vertexOptions);
     }
     bool operator==(const PipelineDescriptor &rhs) const = default;
+};
+
+struct ComputePipelineDescriptor {
+    ShaderHandle shader;
+    Gpu::PipelineLayoutHandle pipelineLayout;
+
+    [[nodiscard]] std::size_t hash() const { return hashCompose(0, shader, pipelineLayout); }
+    bool operator==(const ComputePipelineDescriptor &rhs) const = default;
 };
 
 struct PipelineLayoutDescriptor {
@@ -50,6 +60,8 @@ class PipelineCache {
     ~PipelineCache();
 
     Gpu::GraphicsPipelineHandle query(std::string_view name, const PipelineDescriptor &info);
+    Gpu::ComputePipelineHandle queryComputePipeline(std::string_view name,
+                                                    const ComputePipelineDescriptor &info);
     Gpu::PipelineLayoutHandle queryLayout(const Gpu::PipelineLayoutOptions &pipelineLayoutOptions);
 
   private:

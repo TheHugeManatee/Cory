@@ -82,6 +82,10 @@ class DescriptorSets {
     DescriptorSets &write(SetType type,
                           gsl::index frameInFlightIndex,
                           const Gpu::Buffer &buffer);
+    DescriptorSets &write(SetType type,
+                          gsl::index frameInFlightIndex,
+                          uint32_t binding,
+                          const Gpu::Buffer &buffer);
 
     /**
      * @brief flush all updates, calling vkUpdateDescriptorSets with the previously recorded
@@ -93,6 +97,7 @@ class DescriptorSets {
 
     /// bind the given instance index
     DescriptorSets &bind(Gpu::RenderPassCommandRecorder &cmd, gsl::index instanceIndex);
+    DescriptorSets &bind(Gpu::ComputePassCommandRecorder &cmd, gsl::index instanceIndex);
 
   private:
     std::unique_ptr<struct DescriptorSetManagerPrivate> data_;

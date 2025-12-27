@@ -15,19 +15,18 @@ namespace Cory {
  * fully after the frame has been rendered.
  *
  * Implementation Notes:
- *  - Currently always creates an Image and corresponding ImageView, even
+ *  - For textures, currently always creates an Image and corresponding ImageView, even
  *    though technically creating an ImageView and sampler could be avoided
  *    by having the knowledge from the framegraph how the texture will be used
- *  - Currently, allocates each Image separately - technically, could use an
- *    GPU arena for this
+ *  - Currently, allocates each Image/Buffer separately - technically, could use a GPU arena
  */
-class TextureManager : NoCopy {
+class FramegraphResourceManager : NoCopy {
   public:
-    explicit TextureManager(Context &ctx);
-    ~TextureManager();
+    explicit FramegraphResourceManager(Context &ctx);
+    ~FramegraphResourceManager();
 
-    explicit TextureManager(TextureManager &&) noexcept;
-    TextureManager &operator=(TextureManager &&) noexcept;
+    explicit FramegraphResourceManager(FramegraphResourceManager &&) noexcept;
+    FramegraphResourceManager &operator=(FramegraphResourceManager &&) noexcept;
 
     // Declare a new texture - will only create the metadata, not allocate the actual resource
     FramegraphTextureHandle declareTexture(TextureInfo info);
@@ -59,11 +58,36 @@ class TextureManager : NoCopy {
     [[nodiscard]] Gpu::TextureViewHandle imageView(FramegraphTextureHandle handle) const;
     [[nodiscard]] TextureState state(FramegraphTextureHandle handle) const;
 
+    // Declare a new buffer - will only create the metadata, not allocate the actual resource
+    FramegraphBufferHandle declareBuffer(BufferInfo info);
+
+    // Adopt an external buffer into the framegraph - will participate in synchronization, but
+    // will not be destroyed by the framegraph
+    FramegraphBufferHandle registerExternal(BufferInfo info,
+                                            Sync::AccessType lastWriteAccess,
+                                            Gpu::BufferHandle resource);
+
+    void allocate(const std::vector<FramegraphBufferHandle> &handles);
+
+    /**
+     * @brief create a synchronization barrier object to sync subsequent reads
+     * @param handle the handle to synchronize
+     * @param access the access type
+     *
+     * Will store the given @a access to sync subsequent accesses to the buffer
+     */
+    Sync::BufferBarrier synchronizeBuffer(FramegraphBufferHandle handle, Sync::AccessType access);
+
+    [[nodiscard]] const BufferInfo &info(FramegraphBufferHandle handle) const;
+    [[nodiscard]] Gpu::BufferHandle buffer(FramegraphBufferHandle handle) const;
+    [[nodiscard]] BufferState state(FramegraphBufferHandle handle) const;
+
     void clear();
 
   private:
     void allocate(FramegraphTextureHandle handle);
-    std::unique_ptr<struct TextureManagerPrivate> data_;
+    void allocate(FramegraphBufferHandle handle);
+    std::unique_ptr<struct FramegraphResourceManagerPrivate> data_;
 };
 
 } // namespace Cory

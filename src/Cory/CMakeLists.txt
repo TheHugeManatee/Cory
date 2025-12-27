@@ -27,8 +27,8 @@ set(CORY_SOURCES
         Application/CameraManipulator.cpp
         Application/CameraManipulator.hpp
         Application/Common.hpp
-        #Application/DepthDebugLayer.cpp
-        #Application/DepthDebugLayer.hpp
+        Application/DepthDebugLayer.cpp
+        Application/DepthDebugLayer.hpp
         Application/DynamicGeometry.cpp
         Application/DynamicGeometry.hpp
         Application/Event.hpp
@@ -73,8 +73,8 @@ set(CORY_SOURCES
         Framegraph/FramegraphVisualizer.h
         Framegraph/RenderTaskBuilder.hpp
         Framegraph/RenderTaskDeclaration.hpp
-        Framegraph/TextureManager.cpp
-        Framegraph/TextureManager.hpp
+        Framegraph/FramegraphResourceManager.cpp
+        Framegraph/FramegraphResourceManager.hpp
         Framegraph/TransientRenderPass.cpp
         Framegraph/TransientRenderPass.hpp
         ImGui/Inputs.hpp
@@ -88,6 +88,8 @@ set(CORY_SOURCES
         Renderer/Context.hpp
         Renderer/DescriptorSets.cpp
         Renderer/DescriptorSets.hpp
+        Renderer/RadixSorter.cpp
+        Renderer/RadixSorter.hpp
         Renderer/ShaderManager.cpp
         Renderer/ShaderManager.hpp
         Renderer/Shader.cpp
@@ -135,6 +137,8 @@ set(CORY_SOURCES
         Renderer/FrameResourceLifetimeHelper.hpp
         Base/Locked.hpp
         Base/Coro.hpp
+        Framegraph/TransientComputePass.cpp
+        Framegraph/TransientComputePass.hpp
 )
 
 

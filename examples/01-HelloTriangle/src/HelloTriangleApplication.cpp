@@ -12,7 +12,6 @@
 #include <Cory/Cory.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
-#include <Cory/Renderer/Swapchain.hpp>
 
 #include <KDGpu/buffer_options.h>
 
@@ -24,9 +23,6 @@
 #include <glm/vec4.hpp>
 #include <gsl/gsl>
 #include <imgui.h>
-
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/zip.hpp>
 
 #include <array>
 #include <chrono>

@@ -5,9 +5,8 @@
 #include <Cory/SceneGraph/Common.hpp>
 
 #include <cppcoro/generator.hpp>
-#include <entt/fwd.hpp>
+#include <entt/fwd.hpp> // NOLINT
 
-#include <concepts>
 #include <memory>
 #include <stdexcept>
 

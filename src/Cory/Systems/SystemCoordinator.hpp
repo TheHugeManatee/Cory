@@ -23,7 +23,7 @@ class SystemCoordinator {
 
 /** ====================================== Implementation ====================================== **/
 
-namespace {
+namespace detail {
 template <System Sys> struct SystemImpl : public SystemCoordinator::SystemBase {
     template <typename... Args>
     SystemImpl(Args &&...args)
@@ -33,13 +33,13 @@ template <System Sys> struct SystemImpl : public SystemCoordinator::SystemBase {
     void tick(SceneGraph &graph, TickInfo tickInfo) override { sys_.tick(graph, tickInfo); }
     Sys sys_;
 };
-} // namespace
+} // namespace detail
 
 template <System Sys, typename... Args> Sys &SystemCoordinator::emplace(Args &&...args)
 {
 
     // we have to wrap the system in a proxy class to store it in a vector
-    auto sys = std::make_unique<SystemImpl<Sys>>(std::forward<Args>(args)...);
+    auto sys = std::make_unique<detail::SystemImpl<Sys>>(std::forward<Args>(args)...);
     Sys &sysref = sys->sys_;
     systems_.emplace_back(std::move(sys));
 

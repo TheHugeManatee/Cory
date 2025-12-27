@@ -24,6 +24,7 @@ add_library(Cory_TestLib OBJECT
         BitField_Test.cpp
         Callback_Test.cpp
         FrameGraph_Test.cpp
+        FramegraphResourceManager_Test.cpp
         CoroutinePlayground.cpp
         ShaderManager_Test.cpp
         TestUtils.cpp
@@ -47,7 +48,10 @@ add_library(Cory_TestLib OBJECT
         FileWatchManager_Test.cpp
         FrameResourceLifetimeHelper_Test.cpp
         Locked_Test.cpp
+        RadixSort_Test.cpp
 )
+
+target_include_directories(Cory_TestLib PRIVATE ${CMAKE_SOURCE_DIR}/examples/05-ParticleCompute/src)
 
 target_link_libraries(Cory_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(Cory_TestLib PRIVATE Cory::project_options)

@@ -378,6 +378,8 @@ enum class AccessType : uint32_t {
 
     // Read or written as a color attachment during rendering
     ColorAttachmentReadWrite,
+    // Read or written as a depth/stencil attachment during rendering
+    DepthStencilAttachmentReadWrite,
 
     // General access
     // Covers any access - useful for debug, generally avoid for performance reasons

@@ -1,6 +1,6 @@
 #include "CubeDemo.hpp"
 
-// #include <Cory/Application/DepthDebugLayer.hpp>
+#include <Cory/Application/DepthDebugLayer.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
@@ -137,7 +137,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     // CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 8);
+    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 1);
 
     createGeometry();
     createShaders();
@@ -151,7 +151,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
 
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
-    // layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
+    layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
     layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 
     camera_.setMode(Cory::CameraManipulator::Mode::Trackball);
@@ -197,9 +197,9 @@ void CubeDemoApplication::run()
     auto time = getElapsedTimeSeconds();
 
     while (!window_->shouldClose()) {
-        //        glfwPollEvents();
         // Process KDGui events
         processEvents(0);
+        glfwPollEvents();
 
         // Update time
         auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
@@ -532,10 +532,15 @@ void CubeDemoApplication::setupCameraCallbacks()
         }
         camera_.setMousePosition(event.position);
     });
+
     window_->onMouseScrolled.connect([this](Cory::ScrollEvent event) {
         if (layers().processEvent(event)) {
             return;
         }
         camera_.wheel(static_cast<int32_t>(event.scrollDelta.y));
+    });
+    window_->onKeyCallback.connect([this](Cory::KeyEvent event) {
+        // Camera is not interested in key events currently
+        layers().processEvent(event);
     });
 }

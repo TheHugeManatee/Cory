@@ -19,6 +19,7 @@ namespace passes {
 
 struct DepthPassOutputs {
     TransientTextureHandle depthTexture;
+    TransientBufferHandle depthBuffer;
 };
 
 RenderTaskDeclaration<DepthPassOutputs>
@@ -28,7 +29,11 @@ depthPass(Context &ctx, RenderTaskBuilder builder, glm::u32vec3 size)
                                 size,
                                 TextureFormat::D24_UNORM_S8_UINT,
                                 Sync::AccessType::DepthStencilAttachmentWrite);
-    DepthPassOutputs outputs{depth};
+    auto depthBuffer = builder.create("BUF_depth",
+                                      256u,
+                                      Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                      Sync::AccessType::AnyShaderWrite);
+    DepthPassOutputs outputs{depth, depthBuffer};
 
     static ShaderHandle vertexShader = ctx.shaders().createShader(
         R"slang(
@@ -162,9 +167,11 @@ struct MainOut {
 RenderTaskDeclaration<MainOut> mainPass(RenderTaskBuilder builder,
                                         TransientTextureHandle colorInput,
                                         TransientTextureHandle normalInput,
-                                        TransientTextureHandle depthInput)
+                                        TransientTextureHandle depthInput,
+                                        TransientBufferHandle bufferInput)
 {
     auto depthInfo = builder.read(depthInput, Sync::AccessType::DepthStencilAttachmentRead);
+    builder.readWrite(bufferInput, Sync::AccessType::AnyShaderWrite);
 
     auto colorOut =
         colorInput
@@ -252,12 +259,17 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("PASS_DepthPre"), {800, 600, 1});
     auto depthTex = depthPass.output().depthTexture;
     auto mainPass =
-        passes::mainPass(graph.declareTask("PASS_Main"), NullHandle, NullHandle, depthTex);
+        passes::mainPass(graph.declareTask("PASS_Main"),
+                         NullHandle,
+                         NullHandle,
+                         depthTex,
+                         depthPass.output().depthBuffer);
 
     auto addMainPass = passes::mainPass(graph.declareTask("PASS_Main_Lines"),
                                         mainPass.output().color,
                                         mainPass.output().normal,
-                                        depthTex);
+                                        depthTex,
+                                        depthPass.output().depthBuffer);
 
     auto depthDebugPass = passes::depthDebug(graph, depthPass.output().depthTexture);
     auto normalDebugPass = passes::normalDebug(graph, mainPass.output().normal);
@@ -293,5 +305,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
         .commandBuffer = std::move(recorder),
     };
     auto g = graph.record(frameCtx);
+    CHECK(!g.buffers.empty());
+    CHECK(!g.bufferTransitions.empty());
     CO_APP_INFO(graph.dump(g));
 }

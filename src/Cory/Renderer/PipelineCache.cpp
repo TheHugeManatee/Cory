@@ -5,8 +5,11 @@
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
+#include <KDGpu/compute_pipeline_options.h>
 #include <KDGpu/graphics_pipeline_options.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
+
+#include <unordered_map>
 
 namespace std {
 template <> struct hash<Gpu::PushConstantRange> {
@@ -27,6 +30,10 @@ struct PipelineCachePrivate {
     using DescriptorHasher = decltype([](const PipelineDescriptor &d) { return d.hash(); });
     std::unordered_map<PipelineDescriptor, Gpu::GraphicsPipelineHandle, DescriptorHasher> cache;
 
+    using ComputeHasher = decltype([](const ComputePipelineDescriptor &d) { return d.hash(); });
+    std::unordered_map<ComputePipelineDescriptor, Gpu::ComputePipelineHandle, ComputeHasher>
+        computeCache;
+
     using LayoutOptionsHasher = decltype([](const PipelineLayoutDescriptor &d) {
         return hashCompose(0, d.pushConstantRanges, d.bindGroupLayouts);
     });
@@ -34,6 +41,8 @@ struct PipelineCachePrivate {
         layoutCache;
 
     Gpu::GraphicsPipelineHandle create(std::string_view name, const PipelineDescriptor &info);
+    Gpu::ComputePipelineHandle createCompute(std::string_view name,
+                                             const ComputePipelineDescriptor &info);
 
     Gpu::PipelineLayoutHandle createLayout(std::string_view label,
                                            const Gpu::PipelineLayoutOptions &info);
@@ -47,6 +56,19 @@ Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name,
     }
     auto handle = data_->create(name, info);
     data_->cache.insert({info, handle});
+    return handle;
+}
+
+Gpu::ComputePipelineHandle PipelineCache::queryComputePipeline(
+    std::string_view name,
+    const ComputePipelineDescriptor &info)
+{
+    if (auto it = data_->computeCache.find(info); it != data_->computeCache.end()) {
+        return it->second;
+    }
+
+    auto handle = data_->createCompute(name, info);
+    data_->computeCache.insert({info, handle});
     return handle;
 }
 
@@ -78,6 +100,9 @@ PipelineCache::~PipelineCache()
     for (const auto &[_, pipeline] : data_->cache) {
         data_->resourceManager->deleteGraphicsPipeline(pipeline);
     }
+    for (const auto &[_, pipeline] : data_->computeCache) {
+        data_->resourceManager->deleteComputePipeline(pipeline);
+    }
     // release all pipeline layouts
     for (const auto &[_, layout] : data_->layoutCache) {
         data_->resourceManager->deletePipelineLayout(layout);
@@ -107,8 +132,10 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
 
     std::vector<Gpu::RenderTargetOptions> rtos;
     rtos.reserve(info.colorFormats.size());
-    for (auto fmt : info.colorFormats) {
-        rtos.push_back(Gpu::RenderTargetOptions{.format = fmt});
+    for (size_t i = 0; i < info.colorFormats.size(); ++i) {
+        Gpu::BlendOptions blend =
+            i < info.blendOptions.size() ? info.blendOptions[i] : Gpu::BlendOptions{};
+        rtos.push_back(Gpu::RenderTargetOptions{.format = info.colorFormats[i], .blending = blend});
     }
 
     // 8) Build pipeline options
@@ -136,9 +163,7 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
             },
         .dynamicState =
             Gpu::DynamicStateOptions{
-                // TODO: Need to actually extend KDGPU further to provide the necessary
-                // functions on RenderPassCommandRecorder. Note: Viewport and Scissor are
-                // automatically added by KDGpu..
+                // TODO: Need to decide on the specific dynamic states to enable
                 .enabledDynamicStates =
                     {/*Gpu::DynamicState::Viewport,
                      Gpu::DynamicState::Scissor,*/
@@ -153,6 +178,29 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
     };
 
     return resourceManager->createGraphicsPipeline(device, gpOpts);
+}
+
+Gpu::ComputePipelineHandle PipelineCachePrivate::createCompute(
+    std::string_view name,
+    const ComputePipelineDescriptor &info)
+{
+    CO_CORE_INFO("Creating new compute pipeline for '{}' ({:X})", name, info.hash());
+
+    const auto &shader = (*shaderManager)[info.shader];
+    CO_CORE_ASSERT(shader.valid(), "Shader is invalid:\n{}", shader.error());
+    auto shaderModule = shader.createShaderModule();
+
+    const Gpu::ComputePipelineOptions cpOpts{
+        .label = name,
+        .layout = info.pipelineLayout,
+        .shaderStage =
+            Gpu::ComputeShaderStage{
+                .shaderModule = shaderModule,
+                .entryPoint = shader.entryPoint(),
+            },
+    };
+
+    return resourceManager->createComputePipeline(device, cpOpts);
 }
 
 Gpu::PipelineLayoutHandle

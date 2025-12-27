@@ -28,7 +28,6 @@ struct SwapchainSetup {
     Gpu::TextureUsageFlags usageFlags{Gpu::TextureUsageFlagBits::ColorAttachmentBit |
                                       Gpu::TextureUsageFlagBits::TransferDstBit};
     Gpu::Format depthFormat;
-    Gpu::TextureUsageFlags depthImageUsage_;
     std::vector<Gpu::SampleCountFlagBits> supportedSampleCounts;
 
     Gpu::Extent2D extent;
@@ -294,7 +293,7 @@ void SwapchainPrivate::createColorAndDepthResources(Gpu::SampleCountFlagBits sam
                           .mipLevels = 1,
                           .samples = samples,
                           .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
-                                   swapchainSetup.depthImageUsage_,
+                                   Gpu::TextureUsageFlagBits::SampledBit,
                           .memoryUsage = Gpu::MemoryUsage::GpuOnly,
                       });
                   }) |

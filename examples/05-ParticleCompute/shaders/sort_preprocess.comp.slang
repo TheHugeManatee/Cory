@@ -1,0 +1,53 @@
+
+struct InstanceData
+{
+    float4 positionAndSize;
+    float4 color;
+    float4 parameters;
+};
+
+struct PointSpriteGlobals
+{
+    float4x4 projection;
+    float4x4 view;
+    float4x4 viewProjection;
+    float3 lightPosition;
+    float padding0;
+    float3 cameraRight;
+    float padding1;
+    float3 cameraUp;
+    float padding2;
+};
+
+// Bindings
+[[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals;
+[[vk::binding(2, 0)]] StructuredBuffer<InstanceData> gInstances;
+[[vk::binding(3, 0)]] RWStructuredBuffer<uint> gKeys;
+
+struct PushConstants {
+    uint numInstances;
+    uint pad;
+};
+[[vk::push_constant]] PushConstants p;
+
+[numthreads(256, 1, 1)]
+void main(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint i = dispatchThreadId.x;
+    if (i >= p.numInstances) return;
+
+    float3 pos = gInstances[i].positionAndSize.xyz;
+    float4 viewPos = mul(gGlobals.view, float4(pos, 1.0));
+    
+    // View space Z is negative in front of camera in many systems
+    float dist = -viewPos.z; // Distance from camera plane
+
+    // Float to sortable uint conversion - this converts float to uint preserving order
+    uint bits = asuint(dist);
+    uint key =
+               (bits & 0x80000000u)
+               ? ~bits              // negative: flip all bits
+               : (bits ^ 0x80000000u); // positive: flip sign bit
+
+    gKeys[i] = key;
+}

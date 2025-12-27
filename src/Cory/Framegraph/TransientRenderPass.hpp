@@ -5,11 +5,9 @@
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <KDGpu/graphics_pipeline_options.h>
-#include <KDGpu/pipeline_layout.h>
 #include <KDGpu/pipeline_layout_options.h>
 
 #include <optional>
-#include <string_view>
 #include <vector>
 
 namespace Cory {
@@ -37,6 +35,7 @@ struct ColorAttachment {
     Gpu::AttachmentLoadOperation load;
     Gpu::AttachmentStoreOperation store;
     Gpu::ColorClearValue clearColor;
+    std::optional<Gpu::BlendOptions> blend;
 };
 struct DepthStencilAttachment {
     TransientTextureHandle target;
@@ -62,7 +61,7 @@ struct RenderPassDeclaration {
 class TransientRenderPass : NoCopy {
   public:
     explicit TransientRenderPass(Context &ctx,
-                                 TextureManager &textures,
+                                 FramegraphResourceManager &textures,
                                  RenderPassDeclaration pass);
     ~TransientRenderPass();
 
@@ -75,7 +74,6 @@ class TransientRenderPass : NoCopy {
      *
      *  1. Binds a pipeline with the required layout -
      *  2. Calls begin() on the render pass with the attachments
-     *  3. Set up the dynamic state (Depth test, cull mode, ...) as set up in the builder TODO
      */
     Gpu::RenderPassCommandRecorder begin(CommandRecorder &cmd);
 
@@ -91,7 +89,7 @@ class TransientRenderPass : NoCopy {
     Gpu::Rect2D determineRenderArea() const;
 
     Context *ctx_;
-    TextureManager *textures_;
+    FramegraphResourceManager *textures_;
 
     RenderPassDeclaration pass_;
 

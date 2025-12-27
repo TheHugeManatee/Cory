@@ -232,6 +232,7 @@ Gpu::AdapterFeatures Context::getRequiredFeatures() const
     features.shaderObjectDynamicRendering = true;
     features.bindGroupBindingUniformBufferUpdateAfterBind = true;
     features.bindGroupBindingPartiallyBound = true;
+    features.shaderStorageImageMultisample = true;
     return features;
 }
 
@@ -352,7 +353,42 @@ void Context::setupDescriptors()
                         },
                         {
                             .binding = std::to_underlying(BindPoints::StorageBuffer),
-                            .count = 8,
+                            .count = 1,
+                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                        {
+                            .binding = 3,
+                            .count = 1,
+                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                        {
+                            .binding = 4,
+                            .count = 1,
+                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                        {
+                            .binding = 5,
+                            .count = 1,
+                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                        {
+                            .binding = 6,
+                            .count = 1,
+                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
+                            .shaderStages = Gpu::ShaderStageFlagBits::All,
+                            .flags = bindless_flags,
+                        },
+                        {
+                            .binding = 7,
+                            .count = 1,
                             .resourceType = Gpu::ResourceBindingType::StorageBuffer,
                             .shaderStages = Gpu::ShaderStageFlagBits::All,
                             .flags = bindless_flags,

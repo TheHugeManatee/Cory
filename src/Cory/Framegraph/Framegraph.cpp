@@ -3,7 +3,7 @@
 #include "FramegraphVisualizer.h"
 
 #include <Cory/Base/Profiling.hpp>
-#include <Cory/Framegraph/TextureManager.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 
@@ -32,7 +32,7 @@ struct FramegraphPrivate {
     }
 
     Context *ctx;
-    TextureManager resources;
+    FramegraphResourceManager resources;
     std::vector<TransientTextureHandle> externalInputs;
     std::vector<TransientTextureHandle> outputs;
 
@@ -116,9 +116,13 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
     auto resetCmdList = gsl::finally([this]() { data_->commandListInProgress = nullptr; });
 
     for (const auto &handle : executionInfo.tasks) {
-        auto transitions = executePass(*data_->commandListInProgress, handle);
-        executionInfo.transitions.insert(
-            executionInfo.transitions.end(), transitions.begin(), transitions.end());
+    auto transitions = executePass(*data_->commandListInProgress, handle);
+    executionInfo.transitions.insert(executionInfo.transitions.end(),
+                                     transitions.imageTransitions.begin(),
+                                     transitions.imageTransitions.end());
+    executionInfo.bufferTransitions.insert(executionInfo.bufferTransitions.end(),
+                                           transitions.bufferTransitions.begin(),
+                                           transitions.bufferTransitions.end());
     }
 
     finalizeOutputs(executionInfo);
@@ -137,17 +141,17 @@ void Framegraph::resetForNextFrame()
     data_->renderTasks.clear();
 }
 
-std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandRecorder &cmd,
-                                                                   RenderTaskHandle handle)
+Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd,
+                                                    RenderTaskHandle handle)
 {
-    std::vector<ExecutionInfo::TransitionInfo> transitions;
+    PassTransitions transitions;
     const RenderTaskInfo &rpInfo = data_->renderTasks[handle];
     const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
 
-    auto emitBarrier = [&](const RenderTaskInfo::Dependency &resourceInfo) {
-        transitions.push_back(ExecutionInfo::TransitionInfo{
+    auto emitBarrier = [&](const RenderTaskInfo::TextureDependency &resourceInfo) {
+        transitions.imageTransitions.push_back(ExecutionInfo::TransitionInfo{
             .kind = resourceInfo.kind,
             .task = handle,
             .resource = resourceInfo.handle,
@@ -163,14 +167,30 @@ std::vector<ExecutionInfo::TransitionInfo> Framegraph::executePass(CommandRecord
             resourceInfo.handle, resourceInfo.access, contentsMode);
     };
 
+    auto emitBufferBarrier = [&](const RenderTaskInfo::BufferDependency &resourceInfo) {
+        transitions.bufferTransitions.push_back(ExecutionInfo::BufferTransitionInfo{
+            .kind = resourceInfo.kind,
+            .task = handle,
+            .resource = resourceInfo.handle,
+            .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
+            .stateAfter = resourceInfo.access});
+
+        return data_->resources.synchronizeBuffer(resourceInfo.handle, resourceInfo.access);
+    };
+
     // fill the barriers from the inputs and outputs
     const std::vector<Sync::ImageBarrier> imageBarriers =
-        rpInfo.dependencies | ranges::views::transform(emitBarrier) | ranges::to<std::vector>;
+        rpInfo.textureDependencies | ranges::views::transform(emitBarrier) |
+        ranges::to<std::vector>;
+    const std::vector<Sync::BufferBarrier> bufferBarriers =
+        rpInfo.bufferDependencies | ranges::views::transform(emitBufferBarrier) |
+        ranges::to<std::vector>;
 
     const auto &rsrc = data_->ctx->resources();
     auto device = rsrc.getDevice(data_->ctx->device());
     auto commandBuffer = rsrc.getCommandRecorder(cmd);
-    Sync::CmdPipelineBarrier(*device, commandBuffer->commandBuffer, nullptr, {}, imageBarriers);
+    Sync::CmdPipelineBarrier(
+        *device, commandBuffer->commandBuffer, nullptr, bufferBarriers, imageBarriers);
 
     CO_CORE_TRACE("Recording rendering commands for {}", rpInfo.name);
     const auto &coroHandle = rpInfo.coroHandle;
@@ -255,6 +275,7 @@ ExecutionInfo Framegraph::compile()
 
     auto execInfo = resolve(data_->outputs);
     data_->resources.allocate(execInfo.resources);
+    data_->resources.allocate(execInfo.buffers);
 
     return std::move(execInfo);
 }
@@ -278,11 +299,11 @@ void Framegraph::enqueueRenderPass(RenderTaskHandle passHandle,
     data_->renderTasks[passHandle].coroHandle = coroHandle;
 }
 
-TextureManager &Framegraph::resources()
+FramegraphResourceManager &Framegraph::resources()
 {
     return data_->resources;
 }
-const TextureManager &Framegraph::resources() const
+const FramegraphResourceManager &Framegraph::resources() const
 {
     return data_->resources;
 }
@@ -303,78 +324,151 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
 
     // first, reorder the information into a more convenient graph representation
     // essentially, in- and out-edges
-    std::unordered_map<TransientTextureHandle, RenderTaskHandle> resourceToTask;
-    std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskInputs;
+    std::unordered_map<TransientTextureHandle, RenderTaskHandle> textureToTask;
+    std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskTextureInputs;
     std::unordered_map<TransientTextureHandle, TextureInfo> textures;
+    std::unordered_map<TransientBufferHandle, RenderTaskHandle> bufferToTask;
+    std::unordered_multimap<RenderTaskHandle, TransientBufferHandle> taskBufferInputs;
+    std::unordered_map<TransientBufferHandle, BufferInfo> buffers;
     for (const auto &[taskHandle, taskInfo] : data_->renderTasks.items()) {
-        for (const RenderTaskInfo::Dependency &dependency : taskInfo.dependencies) {
+        for (const RenderTaskInfo::TextureDependency &dependency : taskInfo.textureDependencies) {
             const auto kind = dependency.kind;
             // only counts as input if it is a 'pure' read dependency, not read/write
             if (kind.is_set(TaskDependencyKindBits::Read) &&
                 !kind.is_set(TaskDependencyKindBits::Write)) {
-                taskInputs.insert({taskHandle, dependency.handle});
+                taskTextureInputs.insert({taskHandle, dependency.handle});
             }
             if (kind.is_set(TaskDependencyKindBits::Write)) {
-                resourceToTask[dependency.handle] = taskHandle;
+                textureToTask[dependency.handle] = taskHandle;
             }
             textures[dependency.handle] = data_->resources.info(dependency.handle);
+        }
+        for (const RenderTaskInfo::BufferDependency &dependency : taskInfo.bufferDependencies) {
+            const auto kind = dependency.kind;
+            if (kind.is_set(TaskDependencyKindBits::Read) &&
+                !kind.is_set(TaskDependencyKindBits::Write)) {
+                taskBufferInputs.insert({taskHandle, dependency.handle});
+            }
+            if (kind.is_set(TaskDependencyKindBits::Write)) {
+                bufferToTask[dependency.handle] = taskHandle;
+            }
+            buffers[dependency.handle] = data_->resources.info(dependency.handle);
         }
     }
 
     std::vector<FramegraphTextureHandle>
-        requiredResources; // collects all actually required resources
+        requiredResources; // collects all actually required texture resources
+    std::vector<FramegraphBufferHandle>
+        requiredBuffers; // collects all actually required buffer resources
 
     // flood-fill the graph starting at the resources requested from the outside
-    std::deque<TransientTextureHandle> nextResourcesToResolve{requestedResources.cbegin(),
-                                                              requestedResources.cend()};
-    while (!nextResourcesToResolve.empty()) {
-        auto nextResource = nextResourcesToResolve.front();
-        nextResourcesToResolve.pop_front();
-        requiredResources.push_back(nextResource);
+    std::deque<TransientTextureHandle> nextTexturesToResolve{requestedResources.cbegin(),
+                                                             requestedResources.cend()};
+    std::deque<TransientBufferHandle> nextBuffersToResolve;
+    while (!nextTexturesToResolve.empty() || !nextBuffersToResolve.empty()) {
+        while (!nextTexturesToResolve.empty()) {
+            auto nextResource = nextTexturesToResolve.front();
+            nextTexturesToResolve.pop_front();
+            requiredResources.push_back(nextResource);
 
-        // determine the task that writes/creates the resource
-        auto writingTaskIt = resourceToTask.find(nextResource);
-        if (writingTaskIt == resourceToTask.end()) {
-            // if resource is external, we don't have to resolve it
-            if (ranges::contains(data_->externalInputs, nextResource)) {
-                continue;
+            auto writingTaskIt = textureToTask.find(nextResource);
+            if (writingTaskIt == textureToTask.end()) {
+                if (ranges::contains(data_->externalInputs, nextResource)) {
+                    continue;
+                }
+
+                CO_CORE_ERROR(
+                    "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not "
+                    "created by any render task",
+                    textures[nextResource].name,
+                    nextResource.version(),
+                    nextResource.texture());
+                return {};
             }
 
-            CO_CORE_ERROR(
-                "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not created "
-                "by any render task",
-                textures[nextResource].name,
-                nextResource.version(),
-                nextResource.texture());
-            return {};
+            const RenderTaskHandle writingTask = writingTaskIt->second;
+            CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render task '{}'",
+                          textures[nextResource].name,
+                          nextResource.version(),
+                          data_->renderTasks[writingTask].name);
+            data_->renderTasks[writingTask].executionPriority = ++executionPrio;
+
+            for (const RenderTaskInfo::TextureDependency &created :
+                 data_->renderTasks[writingTask].textureDependencies |
+                     ranges::views::filter([](const auto &outputDesc) {
+                         return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+                     })) {
+                requiredResources.push_back(created.handle);
+            }
+
+            auto texInputs = taskTextureInputs.equal_range(writingTask);
+            ranges::transform(texInputs.first,
+                              texInputs.second,
+                              std::back_inserter(nextTexturesToResolve),
+                              [&](const auto &it) {
+                                  CO_CORE_TRACE("Requesting input texture for {}: '{} v{}'",
+                                                data_->renderTasks[writingTask].name,
+                                                textures[it.second].name,
+                                                it.second.version());
+                                  return it.second;
+                              });
+
+            auto bufInputs = taskBufferInputs.equal_range(writingTask);
+            ranges::transform(bufInputs.first,
+                              bufInputs.second,
+                              std::back_inserter(nextBuffersToResolve),
+                              [&](const auto &it) {
+                                  CO_CORE_TRACE("Requesting input buffer for {}: '{} v{}'",
+                                                data_->renderTasks[writingTask].name,
+                                                buffers[it.second].name,
+                                                it.second.version());
+                                  return it.second;
+                              });
         }
 
-        const RenderTaskHandle writingTask = writingTaskIt->second;
-        CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render task '{}'",
-                      textures[nextResource].name,
-                      nextResource.version(),
-                      data_->renderTasks[writingTask].name);
-        data_->renderTasks[writingTask].executionPriority = ++executionPrio;
+        while (!nextBuffersToResolve.empty()) {
+            auto nextBuffer = nextBuffersToResolve.front();
+            nextBuffersToResolve.pop_front();
+            requiredBuffers.push_back(nextBuffer);
 
-        // mark the resources created by the task as required
-        for (const RenderTaskInfo::Dependency &created :
-             data_->renderTasks[writingTask].dependencies |
-                 ranges::views::filter([](const auto &outputDesc) {
-                     return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-                 })) {
-            requiredResources.push_back(created.handle);
+            auto writingTaskIt = bufferToTask.find(nextBuffer);
+            if (writingTaskIt == bufferToTask.end()) {
+                CO_CORE_ERROR(
+                    "Could not resolve frame dependency graph: buffer '{} v{}' ({}) is not "
+                    "created by any render task",
+                    buffers[nextBuffer].name,
+                    nextBuffer.version(),
+                    nextBuffer.buffer());
+                return {};
+            }
+
+            const RenderTaskHandle writingTask = writingTaskIt->second;
+            CO_CORE_TRACE("Resolving buffer '{} v{}': created/written by render task '{}'",
+                          buffers[nextBuffer].name,
+                          nextBuffer.version(),
+                          data_->renderTasks[writingTask].name);
+            data_->renderTasks[writingTask].executionPriority = ++executionPrio;
+
+            for (const RenderTaskInfo::BufferDependency &created :
+                 data_->renderTasks[writingTask].bufferDependencies |
+                     ranges::views::filter([](const auto &outputDesc) {
+                         return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+                     })) {
+                requiredBuffers.push_back(created.handle);
+            }
+
+            auto bufInputs = taskBufferInputs.equal_range(writingTask);
+            ranges::transform(bufInputs.first,
+                              bufInputs.second,
+                              std::back_inserter(nextBuffersToResolve),
+                              [&](const auto &it) {
+                                  CO_CORE_TRACE("Requesting input buffer for {}: '{} v{}'",
+                                                data_->renderTasks[writingTask].name,
+                                                buffers[it.second].name,
+                                                it.second.version());
+                                  return it.second;
+                              });
         }
-
-        // enqueue the inputs of the task for resolution
-        auto rng = taskInputs.equal_range(writingTask);
-        ranges::transform(
-            rng.first, rng.second, std::back_inserter(nextResourcesToResolve), [&](const auto &it) {
-                CO_CORE_TRACE("Requesting input resource for {}: '{} v{}'",
-                              data_->renderTasks[writingTask].name,
-                              textures[it.second].name,
-                              it.second.version());
-                return it.second;
-            });
     }
 
     auto items = data_->renderTasks.items();
@@ -398,7 +492,11 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                  ranges::to<std::vector<RenderTaskHandle>>;
 
     return {
-        .tasks = std::move(tasks), .resources = std::move(requiredResources), .transitions = {}};
+        .tasks = std::move(tasks),
+        .resources = std::move(requiredResources),
+        .buffers = std::move(requiredBuffers),
+        .transitions = {},
+        .bufferTransitions = {}};
 }
 
 RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
@@ -408,7 +506,7 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
         .ctx = data_->ctx,
         .frameCtx = data_->currentFrameCtx,
         .resources = &data_->resources,
-        .descriptors = nullptr, // TODO???? &data_->ctx->descriptorSets(),
+        .descriptors = &data_->ctx->descriptors(),
         .cmd = data_->commandListInProgress,
     };
 }

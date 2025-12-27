@@ -79,11 +79,15 @@ Shader::Shader()
 {
 }
 
-Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
+Shader::Shader(Context &ctx,
+               ShaderSource source,
+               std::string entryPoint,
+               std::vector<Gpu::PushConstantRange> pushConstantRanges)
     : ctx_{&ctx}
     , source_{std::move(source)}
     , type_{source_.type()}
     , entryPoint_{std::move(entryPoint)}
+    , pushConstantRanges_{std::move(pushConstantRanges)}
 {
     auto result = CompileToSpv(source_, false, entryPoint_);
     if (result.has_value()) {
@@ -116,7 +120,7 @@ Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
         .code = spirvBinary_,
         .entryPoint = entryPoint_,
         .bindGroupLayouts = layouts,
-        .pushConstantRanges = {},
+        .pushConstantRanges = pushConstantRanges_,
     };
 
     shaderObject_ = ctx_->device().createShaderObject(options);

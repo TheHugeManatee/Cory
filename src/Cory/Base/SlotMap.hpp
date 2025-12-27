@@ -7,8 +7,10 @@
 #include <cppcoro/generator.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <new>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -110,7 +112,7 @@ template <typename StoredType_> class SlotMap : NoCopy {
         DereferencedType operator*()
         {
             auto object = sm_->objectAt(index_);
-            return const_cast<DereferencedType>(object.storage);
+            return const_cast<DereferencedType>(*object.storage);
         }
 
       private:
@@ -135,15 +137,15 @@ template <typename StoredType_> class SlotMap : NoCopy {
   private:
     struct Chunk {
         SlotMapHandle id[CHUNK_SIZE];
-        StoredType storage[CHUNK_SIZE];
+        alignas(StoredType) std::byte storage[CHUNK_SIZE][sizeof(StoredType)];
     };
     struct StoredInner {
         SlotMapHandle &id;
-        StoredType &storage;
+        StoredType *storage;
     };
     struct ConstStoredInner {
         const SlotMapHandle &id;
-        const StoredType &storage;
+        const StoredType *storage;
     };
 
     StoredInner objectAt(uint32_t index);
@@ -158,6 +160,15 @@ template <typename StoredType_> class SlotMap : NoCopy {
     uint32_t findNextAliveIndex(uint32_t start = 0) const;
 
   private:
+    static StoredType *storagePtr(Chunk &chunk, uint32_t elementIndex)
+    {
+        return std::launder(reinterpret_cast<StoredType *>(chunk.storage[elementIndex]));
+    }
+    static const StoredType *storagePtr(const Chunk &chunk, uint32_t elementIndex)
+    {
+        return std::launder(reinterpret_cast<const StoredType *>(chunk.storage[elementIndex]));
+    }
+
     std::allocator<Chunk> alloc_;
     std::vector<Chunk *> chunkTable_;
     std::vector<uint32_t> freeList_;
@@ -215,7 +226,7 @@ namespace Cory {
 template <typename StoredType_> StoredType_ &SlotMap<StoredType_>::operator[](SlotMapHandle id)
 {
     auto object = validatedGet(id);
-    return object.storage;
+    return *object.storage;
 }
 
 template <typename StoredType_>
@@ -232,7 +243,9 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
     if (freeList_.empty()) {
         // allocate a new chunk and add the leftovers to the free list
         const auto num_chunks = chunkTable_.size();
-        Chunk &chunk = *chunkTable_.emplace_back(alloc_.allocate(1));
+        Chunk *chunkPtr = alloc_.allocate(1);
+        std::construct_at(chunkPtr);
+        Chunk &chunk = *chunkTable_.emplace_back(chunkPtr);
 
         freeList_.reserve(CHUNK_SIZE);
 
@@ -246,7 +259,7 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
         chunk.id[0] = SlotMapHandle{static_cast<uint32_t>(idx), 0, false};
 
         try {
-            new (&chunk.storage[0]) StoredType{std::forward<InitArgs>(args)...};
+            std::construct_at(storagePtr(chunk, 0), std::forward<InitArgs>(args)...);
         }
         catch (...) {
             // if construction throws, put slot back into free list
@@ -267,7 +280,7 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
 
     try {
         // try to construct the object in the storage
-        new (&object.storage) StoredType{std::forward<InitArgs>(args)...};
+        std::construct_at(object.storage, std::forward<InitArgs>(args)...);
     }
     catch (...) {
         // if construction throws, put slot back into free list
@@ -286,7 +299,7 @@ template <typename StoredType_> void SlotMap<StoredType_>::release(SlotMapHandle
     object.id = SlotMapHandle::setFreeBit(SlotMapHandle::nextVersion(id));
 
     freeList_.push_back(id.index());
-    object.storage.~StoredType(); // destruct the object
+    std::destroy_at(object.storage); // destruct the object
 }
 
 template <typename StoredType_> void SlotMap<StoredType_>::clear()
@@ -299,7 +312,7 @@ template <typename StoredType_> void SlotMap<StoredType_>::clear()
             // if it's alive, destroy it and put into free list
             if (objectId.valid()) {
                 if constexpr (!std::is_trivial_v<StoredType>) {
-                    chunk.storage[i].~StoredType();
+                    std::destroy_at(storagePtr(chunk, static_cast<uint32_t>(i)));
                 }
                 // clear free bit and increase version
                 chunk.id[i] = SlotMapHandle::setFreeBit(SlotMapHandle::nextVersion(objectId));
@@ -314,7 +327,7 @@ template <typename ArgumentType>
 SlotMapHandle SlotMap<StoredType_>::update(SlotMapHandle id, ArgumentType &&value)
 {
     auto object = validatedGet(id);
-    object.storage = value; // update stored value
+    *object.storage = value; // update stored value
     object.id = SlotMapHandle::nextVersion(id);
     return object.id;
 }
@@ -346,6 +359,7 @@ template <typename StoredType_> SlotMap<StoredType_>::~SlotMap()
         clear();
     }
     for (Chunk *chunkPtr : chunkTable_) {
+        std::destroy_at(chunkPtr);
         alloc_.deallocate(chunkPtr, 1);
     }
 }
@@ -357,7 +371,7 @@ typename SlotMap<StoredType_>::StoredInner SlotMap<StoredType_>::objectAt(uint32
     const uint32_t elementIndex = index % CHUNK_SIZE;
 
     auto &chunk = *chunkTable_[chunkIndex];
-    return StoredInner{.id = chunk.id[elementIndex], .storage = chunk.storage[elementIndex]};
+    return StoredInner{.id = chunk.id[elementIndex], .storage = storagePtr(chunk, elementIndex)};
 }
 template <typename StoredType_>
 typename SlotMap<StoredType_>::ConstStoredInner SlotMap<StoredType_>::objectAt(uint32_t index) const
@@ -366,7 +380,8 @@ typename SlotMap<StoredType_>::ConstStoredInner SlotMap<StoredType_>::objectAt(u
     const uint32_t elementIndex = index % CHUNK_SIZE;
 
     auto &chunk = *chunkTable_[chunkIndex];
-    return ConstStoredInner{.id = chunk.id[elementIndex], .storage = chunk.storage[elementIndex]};
+    return ConstStoredInner{.id = chunk.id[elementIndex],
+                            .storage = storagePtr(chunk, elementIndex)};
 }
 
 template <typename StoredType_>
@@ -397,7 +412,7 @@ typename SlotMap<StoredType_>::StoredInner SlotMap<StoredType_>::validatedGet(Sl
                         objectId.version(),
                         handle.version())};
     }
-    return {chunk.id[elementIndex], chunk.storage[elementIndex]};
+    return {chunk.id[elementIndex], storagePtr(chunk, elementIndex)};
 }
 
 template <typename StoredType_>
@@ -434,7 +449,8 @@ cppcoro::generator<std::pair<SlotMapHandle, StoredType_ &>> SlotMap<StoredType_>
         auto &chunk = *chunkPtr;
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
             if (chunk.id[i].valid()) {
-                co_yield std::make_pair(chunk.id[i], std::ref(chunk.storage[i]));
+                co_yield std::make_pair(chunk.id[i],
+                                        std::ref(*storagePtr(chunk, static_cast<uint32_t>(i))));
             }
         }
     }
@@ -447,7 +463,8 @@ SlotMap<StoredType_>::items() const
         auto &chunk = *chunkPtr;
         for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
             if (chunk.id[i].valid()) {
-                co_yield std::make_pair(chunk.id[i], std::ref(chunk.storage[i]));
+                co_yield std::make_pair(chunk.id[i],
+                                        std::ref(*storagePtr(chunk, static_cast<uint32_t>(i))));
             }
         }
     }

@@ -19,9 +19,18 @@ struct ExecutionInfo {
         Sync::AccessType stateBefore;
         Sync::AccessType stateAfter;
     };
+    struct BufferTransitionInfo {
+        TaskDependencyKind kind;
+        RenderTaskHandle task;
+        TransientBufferHandle resource;
+        Sync::AccessType stateBefore;
+        Sync::AccessType stateAfter;
+    };
     std::vector<RenderTaskHandle> tasks;
     std::vector<FramegraphTextureHandle> resources;
+    std::vector<FramegraphBufferHandle> buffers;
     std::vector<TransitionInfo> transitions;
+    std::vector<BufferTransitionInfo> bufferTransitions;
 };
 
 /**
@@ -84,7 +93,7 @@ class Framegraph : NoCopy {
     declareOutput(TransientTextureHandle handle,
                   Sync::AccessType finalAccess = Sync::AccessType::Present);
 
-    [[nodiscard]] const TextureManager &resources() const;
+    [[nodiscard]] const FramegraphResourceManager &resources() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &outputs() const;
 
@@ -96,7 +105,7 @@ class Framegraph : NoCopy {
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
     /// coroHandle
     void enqueueRenderPass(RenderTaskHandle passHandle, cppcoro::coroutine_handle<> coroHandle);
-    TextureManager &resources();
+    FramegraphResourceManager &resources();
 
     /// to be called from RenderTaskBuilder
     RenderInput renderInput(RenderTaskHandle taskHandle);
@@ -112,8 +121,11 @@ class Framegraph : NoCopy {
     resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
     [[nodiscard]] ExecutionInfo compile();
-    [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandRecorder &cmd,
-                                                                         RenderTaskHandle handle);
+    struct PassTransitions {
+        std::vector<ExecutionInfo::TransitionInfo> imageTransitions;
+        std::vector<ExecutionInfo::BufferTransitionInfo> bufferTransitions;
+    };
+    [[nodiscard]] PassTransitions executePass(CommandRecorder &cmd, RenderTaskHandle handle);
 
     [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
     renderTasks() const;

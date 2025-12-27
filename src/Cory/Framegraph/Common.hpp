@@ -10,7 +10,7 @@ struct RenderTaskInfo;
 struct RenderTaskExecutionAwaiter;
 class Framegraph;
 class RenderTaskBuilder;
-class TextureManager;
+class FramegraphResourceManager;
 class FramegraphVisualizer;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
@@ -62,8 +62,24 @@ struct TextureState {
     TextureMemoryStatus status{TextureMemoryStatus::Virtual};
 };
 
-using FramegraphTextureHandle = PrivateTypedHandle<TextureInfo, const TextureManager>;
-using MutableFramegraphTextureHandle = PrivateTypedHandle<TextureInfo, TextureManager>;
+enum class BufferMemoryStatus { Virtual, Allocated, External };
+
+struct BufferInfo {
+    std::string name;
+    Gpu::DeviceSize size{};
+    Gpu::BufferUsageFlags usage{};
+    Gpu::MemoryUsage memoryUsage{Gpu::MemoryUsage::GpuOnly};
+};
+
+struct BufferState {
+    Sync::AccessType lastAccess{Sync::AccessType::None};
+    BufferMemoryStatus status{BufferMemoryStatus::Virtual};
+};
+
+using FramegraphTextureHandle = PrivateTypedHandle<TextureInfo, const FramegraphResourceManager>;
+using MutableFramegraphTextureHandle = PrivateTypedHandle<TextureInfo, FramegraphResourceManager>;
+using FramegraphBufferHandle = PrivateTypedHandle<BufferInfo, const FramegraphResourceManager>;
+using MutableFramegraphBufferHandle = PrivateTypedHandle<BufferInfo, FramegraphResourceManager>;
 class TransientTextureHandle {
   public:
     TransientTextureHandle() = default;
@@ -97,6 +113,39 @@ class TransientTextureHandle {
     uint32_t version_{0xFFFFFFFF};
 };
 
+class TransientBufferHandle {
+  public:
+    TransientBufferHandle() = default;
+    /* implicit */ TransientBufferHandle(NullHandle_t null)
+        : buffer_{null}
+    {
+    }
+    TransientBufferHandle(FramegraphBufferHandle buffer)
+        : buffer_{buffer}
+        , version_{0} {};
+
+    TransientBufferHandle operator+(uint32_t inc)
+    {
+        return TransientBufferHandle{buffer_, version_ + inc};
+    }
+
+    // implicit conversion to the handle it wraps
+    operator FramegraphBufferHandle() const { return buffer_; }
+
+    FramegraphBufferHandle buffer() const { return buffer_; }
+    uint32_t version() const { return version_; }
+
+    auto operator<=>(const TransientBufferHandle &) const = default;
+    explicit operator bool() const { return buffer_.valid() && version_ != 0xFFFFFFFF; }
+
+  private:
+    TransientBufferHandle(FramegraphBufferHandle buffer, uint32_t version)
+        : buffer_{buffer}
+        , version_{version} {};
+    FramegraphBufferHandle buffer_{};
+    uint32_t version_{0xFFFFFFFF};
+};
+
 } // namespace Cory
 
 /// make TransientTextureHandle hashable
@@ -104,5 +153,13 @@ template <> struct std::hash<Cory::TransientTextureHandle> {
     std::size_t operator()(const Cory::TransientTextureHandle &s) const noexcept
     {
         return Cory::hashCompose(s.version(), s.texture());
+    }
+};
+
+/// make TransientBufferHandle hashable
+template <> struct std::hash<Cory::TransientBufferHandle> {
+    std::size_t operator()(const Cory::TransientBufferHandle &s) const noexcept
+    {
+        return Cory::hashCompose(s.version(), s.buffer());
     }
 };

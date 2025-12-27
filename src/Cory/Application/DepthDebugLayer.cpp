@@ -23,9 +23,9 @@ struct Uniforms {
     glm::vec2 window;
 };
 struct DepthDebugLayer::State {
-    Cory::ShaderHandle fullscreenTriShader;
-    Cory::ShaderHandle depthDebugShader;
-    Cory::UniformBufferObject<Uniforms> ubo;
+    ShaderHandle fullscreenTriShader;
+    ShaderHandle depthDebugShader;
+    UniformBufferObject<Uniforms> ubo;
     Gpu::Sampler sampler;
 
     glm::vec2 viewportDimensions{1.0f};
@@ -49,11 +49,11 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
     state_ = std::make_unique<State>(State{
         .fullscreenTriShader{
             res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
-        .depthDebugShader{res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag.slang"))},
+        .depthDebugShader{
+            res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag.slang"))},
         .ubo{Cory::UniformBufferObject<Uniforms>(ctx, info.maxFramesInFlight)},
-        .sampler = ctx.device().createSampler(
-            Gpu::SamplerOptions{.magFilter = Gpu::FilterMode::Linear,
-                                .minFilter = Gpu::FilterMode::Linear}),
+        .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
+            .magFilter = Gpu::FilterMode::Linear, .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
     });
 }
@@ -119,8 +119,8 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     auto [writtenColorHandle, colorInfo] =
         builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentReadWrite);
     (void)colorInfo;
-    builder.read(
-        previousLayer.depth, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    builder.read(previousLayer.depth,
+                 Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     auto cubePass = builder.declareRenderPass(RenderPassDeclaration{
         .name = "PASS_DepthDebug",

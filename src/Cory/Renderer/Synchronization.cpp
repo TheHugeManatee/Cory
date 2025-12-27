@@ -499,7 +499,7 @@ void GetVulkanMemoryBarrier(const GlobalBarrier &thBarrier, VkMemoryBarrier2 *pV
 void GetVulkanBufferMemoryBarrier(const BufferBarrier &thBarrier,
                                   VkBufferMemoryBarrier2 *pVkBarrier)
 {
-    pVkBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    pVkBarrier->sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2;
     pVkBarrier->pNext = nullptr;
     pVkBarrier->srcAccessMask = 0;
     pVkBarrier->dstAccessMask = 0;

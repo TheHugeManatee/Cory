@@ -19,9 +19,18 @@ struct ExecutionInfo {
         Sync::AccessType stateBefore;
         Sync::AccessType stateAfter;
     };
+    struct BufferTransitionInfo {
+        TaskDependencyKind kind;
+        RenderTaskHandle task;
+        TransientBufferHandle resource;
+        Sync::AccessType stateBefore;
+        Sync::AccessType stateAfter;
+    };
     std::vector<RenderTaskHandle> tasks;
     std::vector<FramegraphTextureHandle> resources;
+    std::vector<FramegraphBufferHandle> buffers;
     std::vector<TransitionInfo> transitions;
+    std::vector<BufferTransitionInfo> bufferTransitions;
 };
 
 /**
@@ -112,8 +121,11 @@ class Framegraph : NoCopy {
     resolve(const std::vector<TransientTextureHandle> &requestedResources);
 
     [[nodiscard]] ExecutionInfo compile();
-    [[nodiscard]] std::vector<ExecutionInfo::TransitionInfo> executePass(CommandRecorder &cmd,
-                                                                         RenderTaskHandle handle);
+    struct PassTransitions {
+        std::vector<ExecutionInfo::TransitionInfo> imageTransitions;
+        std::vector<ExecutionInfo::BufferTransitionInfo> bufferTransitions;
+    };
+    [[nodiscard]] PassTransitions executePass(CommandRecorder &cmd, RenderTaskHandle handle);
 
     [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
     renderTasks() const;

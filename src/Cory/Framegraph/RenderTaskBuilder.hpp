@@ -43,13 +43,19 @@ struct RenderTaskExecutionAwaiter {
 
 /// struct summarizing all info collected about a render task
 struct RenderTaskInfo {
-    struct Dependency {
+    struct TextureDependency {
         TaskDependencyKind kind;
         TransientTextureHandle handle;
         Sync::AccessType access;
     };
+    struct BufferDependency {
+        TaskDependencyKind kind;
+        TransientBufferHandle handle;
+        Sync::AccessType access;
+    };
     std::string name;
-    std::vector<Dependency> dependencies;
+    std::vector<TextureDependency> textureDependencies;
+    std::vector<BufferDependency> bufferDependencies;
 
     // framegraph internal stuff
     cppcoro::coroutine_handle<> coroHandle;
@@ -75,16 +81,34 @@ class RenderTaskBuilder : NoCopy {
     TransientTextureHandle
     create(std::string name, glm::u32vec3 size, Gpu::Format format, Sync::AccessType writeAccess);
 
+    /// declare that a render pass creates a certain buffer
+    TransientBufferHandle create(std::string name,
+                                 Gpu::DeviceSize size,
+                                 Gpu::BufferUsageFlags usage,
+                                 Sync::AccessType writeAccess,
+                                 Gpu::MemoryUsage memoryUsage = Gpu::MemoryUsage::GpuOnly);
+
     /// declares a dependency to the named resource
     TextureInfo read(TransientTextureHandle &h, Sync::AccessType readAccess);
+
+    /// declares a dependency to the named buffer resource
+    BufferInfo read(TransientBufferHandle &h, Sync::AccessType readAccess);
 
     /// declare that a render task writes to a certain texture
     std::pair<TransientTextureHandle, TextureInfo> write(TransientTextureHandle handle,
                                                          Sync::AccessType writeAccess);
 
+    /// declare that a render task writes to a certain buffer
+    std::pair<TransientBufferHandle, BufferInfo> write(TransientBufferHandle handle,
+                                                       Sync::AccessType writeAccess);
+
     /// declare that a render task reads from and writes to a certain texture
     std::pair<TransientTextureHandle, TextureInfo> readWrite(TransientTextureHandle handle,
                                                              Sync::AccessType readWriteAccess);
+
+    /// declare that a render task reads from and writes to a certain buffer
+    std::pair<TransientBufferHandle, BufferInfo> readWrite(TransientBufferHandle handle,
+                                                           Sync::AccessType readWriteAccess);
 
     /**
      * Declares a render pass with a default pipeline setup

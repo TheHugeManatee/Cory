@@ -10,6 +10,13 @@ template <typename T = uint8_t> struct GpuAllocation {
     T *cpu;
     BufferDeviceAddress gpu;
     size_t size;
+
+    T& operator[](size_t index) {
+        return cpu[index];
+    }
+    T* operator->() {
+        return cpu;
+    }
 };
 
 /**

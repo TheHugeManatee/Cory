@@ -12,7 +12,7 @@ namespace Cory {
 /**
  * passed to the render task coroutines when they actually execute.
  *
- * A render pass coroutine obtains this object by with a `co_await builder.finishDeclaration()`.
+ * A render pass coroutine obtains this object with a `co_await builder.finishDeclaration()`.
  * It will be (potentially) resumed inside the Framegraph::execute() function,
  * after all resources have been resolved and can be queried through the @a resources
  * member.
@@ -22,6 +22,7 @@ struct RenderInput {
     FrameContext *frameCtx{};
     FramegraphResourceManager *resources{};
     DescriptorSets *descriptors{};
+    ShaderBindingContext *bindingContext{};
     // eventually, add accessors modify descriptors, push constants etc
     CommandRecorder *cmd{};
 };

@@ -34,6 +34,7 @@
 #include <gsl/narrow>
 #include <imgui.h>
 
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
@@ -158,7 +159,6 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     camera_.setWindowSize(window_->dimensions());
     camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
     setupCameraCallbacks();
-    createUBO();
 }
 
 void CubeDemoApplication::createShaders()
@@ -168,14 +168,6 @@ void CubeDemoApplication::createShaders()
     vertexShader_ = ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.vert.slang"));
     fragmentShader_ =
         ctx().shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
-}
-
-void CubeDemoApplication::createUBO()
-{
-    // create and initialize descriptor sets for each frame in flight
-    const Cory::ScopeTimer st{"Init/UBO"};
-    globalUbo_ =
-        std::make_unique<Cory::UniformBufferObject<CubeUBO>>(ctx(), Cory::MAX_FRAMES_IN_FLIGHT);
 }
 
 CubeDemoApplication::~CubeDemoApplication()
@@ -190,8 +182,9 @@ void CubeDemoApplication::run()
 {
     // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
+    uint32_t idx = 0;
     std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
-        return Cory::Framegraph(ctx());
+        return Cory::Framegraph(ctx(), idx++);
     });
 
     auto time = getElapsedTimeSeconds();
@@ -278,26 +271,33 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto cubePass = builder.declareRenderPass(
-        Cory::RenderPassDeclaration{.name = "PASS_Cubes",
-                                    .shaders = {vertexShader_, fragmentShader_},
-                                    .attachments = {{
-                                        {
-                                            // main color target
-                                            .target = colorTarget,
-                                            .load = Gpu::AttachmentLoadOperation::Clear,
-                                            .store = Gpu::AttachmentStoreOperation::Store,
-                                            .clearColor = clearColor,
-                                        },
-                                    }},
-                                    .depthAttachment =
-                                        Cory::DepthStencilAttachment{
-                                            .target = depthTarget,
-                                            .load = Gpu::AttachmentLoadOperation::Clear,
-                                            .store = Gpu::AttachmentStoreOperation::Store,
-                                            .clearDepthStencil = clearDepthStencil,
-                                        },
-                                    .vertexOptions = vertexOptions()});
+    Gpu::PushConstantRange pushRange{
+        .offset = 0,
+        .size = sizeof(Cory::BufferDeviceAddress),
+        .shaderStages = Gpu::ShaderStageFlagBits::VertexBit | Gpu::ShaderStageFlagBits::FragmentBit,
+    };
+    auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
+        .name = "PASS_Cubes",
+        .shaders = {vertexShader_, fragmentShader_},
+        .attachments = {{
+            {
+                // main color target
+                .target = colorTarget,
+                .load = Gpu::AttachmentLoadOperation::Clear,
+                .store = Gpu::AttachmentStoreOperation::Store,
+                .clearColor = clearColor,
+            },
+        }},
+        .depthAttachment =
+            Cory::DepthStencilAttachment{
+                .target = depthTarget,
+                .load = Gpu::AttachmentLoadOperation::Clear,
+                .store = Gpu::AttachmentStoreOperation::Store,
+                .clearDepthStencil = clearDepthStencil,
+            },
+        .pushConstantRanges = {pushRange},
+        .vertexOptions = vertexOptions(),
+    });
 
     co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
 
@@ -317,18 +317,16 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
 
     Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
-    // update the uniform buffer
-    CubeUBO &ubo = (*globalUbo_)[frameCtx.inFlightIndex];
-    ubo.view = viewMatrix;
-    ubo.projection = projectionMatrix;
-    ubo.viewProjection = viewProjection;
-    ubo.lightPosition = camera_.getCameraPosition();
-    // need explicit flush otherwise the mapped memory is not synced to the GPU
-    globalUbo_->flush(frameCtx.inFlightIndex);
+    // update the per-frame data
+    auto data = renderApi.bindingContext->alloc<CubeUBO>();
+    data->view = viewMatrix;
+    data->projection = projectionMatrix;
+    data->viewProjection = viewProjection;
+    data->lightPosition = camera_.getCameraPosition();
+    passRecorder.pushConstant(pushRange, &data.gpu);
 
     auto &descriptorSets = ctx().descriptors();
-    constexpr Cory::DescriptorSets::BufferIndex kInstanceBufferIndex = 0;
-    descriptorSets.write(frameCtx.inFlightIndex, *globalUbo_);
+    constexpr Cory::BufferHeapIndex kInstanceBufferIndex = 0;
 
     // Set dynamic states
     passRecorder.setCullMode(KDGpu::CullModeFlagBits::None);

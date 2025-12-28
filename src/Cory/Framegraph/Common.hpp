@@ -12,6 +12,7 @@ class Framegraph;
 class RenderTaskBuilder;
 class FramegraphResourceManager;
 class FramegraphVisualizer;
+class ShaderBindingContext;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
 enum class DepthTest {

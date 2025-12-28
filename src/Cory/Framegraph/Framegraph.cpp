@@ -4,6 +4,7 @@
 
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 
@@ -25,14 +26,16 @@
 namespace Cory {
 
 struct FramegraphPrivate {
-    FramegraphPrivate(Context &ctx_param)
+    FramegraphPrivate(Context &ctx_param, uint32_t instanceIndex)
         : ctx{&ctx_param}
         , resources{ctx_param}
+        , shaderBindingContext{ctx->device(), ctx->descriptors(), instanceIndex, 2 * 1024 * 1024}
     {
     }
 
     Context *ctx;
     FramegraphResourceManager resources;
+    ShaderBindingContext shaderBindingContext;
     std::vector<TransientTextureHandle> externalInputs;
     std::vector<TransientTextureHandle> outputs;
 
@@ -49,8 +52,8 @@ RenderTaskBuilder Framegraph::declareTask(std::string_view name)
     return RenderTaskBuilder{*data_->ctx, *this, name};
 }
 
-Framegraph::Framegraph(Context &ctx)
-    : data_{std::make_unique<FramegraphPrivate>(ctx)}
+Framegraph::Framegraph(Context &ctx, uint32_t instanceIndex)
+    : data_{std::make_unique<FramegraphPrivate>(ctx, instanceIndex)}
 {
 }
 
@@ -131,6 +134,7 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
 
 void Framegraph::resetForNextFrame()
 {
+    data_->shaderBindingContext.reset();
     data_->resources.clear();
     data_->externalInputs.clear();
     data_->outputs.clear();
@@ -510,6 +514,7 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
         .frameCtx = data_->currentFrameCtx,
         .resources = &data_->resources,
         .descriptors = &data_->ctx->descriptors(),
+        .bindingContext = &data_->shaderBindingContext,
         .cmd = data_->commandListInProgress,
     };
 }

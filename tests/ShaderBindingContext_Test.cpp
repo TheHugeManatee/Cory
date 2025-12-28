@@ -3,7 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/ShaderBindingContext.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <KDGpu/texture_options.h>
 
 TEST_CASE("Shader binding context: Memory bump allocation", "[ShaderBindingContext]")

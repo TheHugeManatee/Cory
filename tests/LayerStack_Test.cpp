@@ -148,7 +148,7 @@ TEST_CASE("LayerStack", "[LayerStack]")
         }
         WHEN("Enqueueing the render tasks")
         {
-            Cory::Framegraph framegraph(tester.ctx());
+            Cory::Framegraph framegraph(tester.ctx(), 0);
 
             SECTION("No layers have a render task")
             {

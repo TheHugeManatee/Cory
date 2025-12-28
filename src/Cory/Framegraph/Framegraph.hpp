@@ -40,7 +40,9 @@ struct ExecutionInfo {
  */
 class Framegraph : NoCopy {
   public:
-    explicit Framegraph(Context &ctx);
+    // Create a new framegraph with the given context, using the given instance index for resource
+    // allocation
+    explicit Framegraph(Context &ctx, uint32_t instanceIndex);
     ~Framegraph();
 
     Framegraph(Framegraph &&) noexcept;

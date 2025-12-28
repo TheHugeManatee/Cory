@@ -159,11 +159,11 @@ void RadixSorter::ensureScratch(ScratchBuffers &scratch,
 
 namespace {
 constexpr uint32_t kBufferSetIndex = static_cast<uint32_t>(DescriptorSetType::BindlessBuffers);
-constexpr DescriptorSets::BufferIndex kKeysIndex = 0;
-constexpr DescriptorSets::BufferIndex kIndicesIndex = 1;
-constexpr DescriptorSets::BufferIndex kHistogramsIndex = 2;
-constexpr DescriptorSets::BufferIndex kWriteBufferIndex = 0;
-constexpr DescriptorSets::BufferIndex kWriteIndicesIndex = 1;
+constexpr BufferHeapIndex kKeysIndex = 0;
+constexpr BufferHeapIndex kIndicesIndex = 1;
+constexpr BufferHeapIndex kHistogramsIndex = 2;
+constexpr BufferHeapIndex kWriteBufferIndex = 0;
+constexpr BufferHeapIndex kWriteIndicesIndex = 1;
 
 Gpu::BindGroup &pushBindGroup(Context &ctx,
                               RadixSorter::ScratchBuffers &scratch,

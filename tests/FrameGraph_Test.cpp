@@ -225,7 +225,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 {
     testing::VulkanTester t;
 
-    Framegraph graph(t.ctx());
+    Framegraph graph(t.ctx(), 0);
 
     auto &device = t.ctx().device();
 

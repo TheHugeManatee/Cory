@@ -7,7 +7,8 @@ struct CubeUBO
     float padding;
 };
 
-[[vk::binding(0, 0)]] ConstantBuffer<CubeUBO> gGlobals;
+struct Push { CubeUBO* globals; };
+[[vk::push_constant]] Push gPush;
 
 struct FSInput
 {
@@ -20,6 +21,7 @@ struct FSInput
 
 float4 main(FSInput input) : SV_Target0
 {
+    CubeUBO gGlobals = *(gPush.globals);
     const float3 posToLight = gGlobals.lightPosition - input.worldPosition;
     const float3 lightVector = normalize(posToLight);
     const float diffuse = max(0.0f, dot(input.normal, lightVector));

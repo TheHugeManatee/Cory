@@ -48,7 +48,6 @@ class CubeDemoApplication : public Cory::Application {
   private:
     // create the mesh to be rendered
     void createGeometry();
-    void createUBO();
     void createShaders();
     void defineRenderPasses(Cory::Framegraph &framegraph, const Cory::FrameContext &frameCtx);
 
@@ -80,7 +79,6 @@ class CubeDemoApplication : public Cory::Application {
     Cory::ShaderHandle fragmentShader_;
     std::unique_ptr<Cory::Mesh> mesh_;
 
-    std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     std::vector<Gpu::BindGroup> bindGroups_;
     double startupTime_;
     bool dumpNextFramegraph_{false};

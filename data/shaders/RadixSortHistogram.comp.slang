@@ -1,6 +1,6 @@
 
-[[vk::binding(2, 0)]] StructuredBuffer<uint> gKeys;
-[[vk::binding(3, 0)]] RWStructuredBuffer<uint> gHistograms; // [numWorkgroups][16]
+[[vk::binding(0, 2)]] StructuredBuffer<uint> gReadOnlyBuffers[];
+[[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[]; // [numWorkgroups][16]
 
 struct PushConstants {
     uint numInstances;
@@ -20,13 +20,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupThreadId : SV
 
     uint i = dispatchThreadId.x;
     if (i < p.numInstances) {
-        uint key = gKeys[i];
+        uint key = gReadOnlyBuffers[0][i];
         uint digit = (key >> p.bitOffset) & 0xF;
         InterlockedAdd(s_Hist[digit], 1);
     }
     GroupMemoryBarrierWithGroupSync();
 
     if (groupThreadId.x < 16) {
-        gHistograms[groupId.x * 16 + groupThreadId.x] = s_Hist[groupThreadId.x];
+        gReadWriteBuffers[0][groupId.x * 16 + groupThreadId.x] = s_Hist[groupThreadId.x];
     }
 }

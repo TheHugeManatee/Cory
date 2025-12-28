@@ -7,7 +7,7 @@ struct CubeUBO
     float padding;
 };
 
-ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
+[[vk::binding(0, 0)]] ConstantBuffer<CubeUBO> gGlobals;
 
 struct FSInput
 {

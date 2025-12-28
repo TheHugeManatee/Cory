@@ -1,9 +1,6 @@
 
-[[vk::binding(2, 0)]] StructuredBuffer<uint> gKeysIn;
-[[vk::binding(3, 0)]] StructuredBuffer<uint> gIndicesIn;
-[[vk::binding(4, 0)]] RWStructuredBuffer<uint> gKeysOut;
-[[vk::binding(5, 0)]] RWStructuredBuffer<uint> gIndicesOut;
-[[vk::binding(6, 0)]] StructuredBuffer<uint> gHistograms; // [numWorkgroups][16] (scanned)
+[[vk::binding(0, 2)]] StructuredBuffer<uint> gReadOnlyBuffers[];
+[[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[];
 
 struct PushConstants {
     uint numInstances;
@@ -18,7 +15,7 @@ void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
 {
     // Load this workgroup's scanned histogram base offsets
     if (groupThreadId.x < 16) {
-        s_Hist[groupThreadId.x] = gHistograms[groupId.x * 16 + groupThreadId.x];
+        s_Hist[groupThreadId.x] = gReadOnlyBuffers[2][groupId.x * 16 + groupThreadId.x];
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -33,13 +30,13 @@ void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
         uint start = groupId.x * 256;
         uint end = min(start + 256, p.numInstances);
         for (uint i = start; i < end; ++i) {
-            uint key = gKeysIn[i];
-            uint index = gIndicesIn[i];
+            uint key = gReadOnlyBuffers[0][i];
+            uint index = gReadOnlyBuffers[1][i];
             uint digit = (key >> p.bitOffset) & 0xF;
             uint localOffset = s_Hist[digit] + localCounts[digit];
             localCounts[digit] += 1;
-            gKeysOut[localOffset] = key;
-            gIndicesOut[localOffset] = index;
+            gReadWriteBuffers[0][localOffset] = key;
+            gReadWriteBuffers[1][localOffset] = index;
         }
     }
 }

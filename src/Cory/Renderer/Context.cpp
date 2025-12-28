@@ -214,25 +214,34 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
 
     return {selectedAdapter, std::move(device)};
 }
-Gpu::AdapterFeatures Context::getRequiredFeatures() const
+Gpu::AdapterFeatures Context::getRequiredFeatures()
 {
     Gpu::AdapterFeatures features{};
-    features.sampleRateShading = true;
+    // Dynamic rendering extensions to avoid pipeline permutations
+    features.dynamicRendering = true;
+    features.shaderObjectDynamicRendering = true;
+    features.logicOp = true;
+
     // synchronization2 is automatically enabled by kdgpu
 
+    // Features for modern bindless resource access
     features.bindGroupBindingUniformBufferUpdateAfterBind = true;
     features.bindGroupBindingSampledImageUpdateAfterBind = true;
     features.bindGroupBindingStorageBufferUpdateAfterBind = true;
+    features.bindGroupBindingStorageImageUpdateAfterBind = true;
     features.bindGroupBindingPartiallyBound = true;
     features.runtimeBindGroupArray = true;
-    features.dynamicRendering = true;
-    features.logicOp = true;
+    features.shaderSampledImageArrayNonUniformIndexing = true;
+    features.shaderStorageBufferArrayNonUniformIndexing = true;
+    features.bufferDeviceAddress = true;
+
+    // Enable shader storage image multisampling
+    features.shaderStorageImageMultisample = true;
+    // Sample rate shading to enable MSAA on e.g. raymarched volumes
+    features.sampleRateShading = true;
+    // Other features
     features.wideLines = true;
     features.largePoints = true;
-    features.shaderObjectDynamicRendering = true;
-    features.bindGroupBindingUniformBufferUpdateAfterBind = true;
-    features.bindGroupBindingPartiallyBound = true;
-    features.shaderStorageImageMultisample = true;
     return features;
 }
 
@@ -328,74 +337,8 @@ void Context::setupDescriptors()
     bindless_flags |= Gpu::ResourceBindingFlagBits::PartiallyBoundBit;
     bindless_flags |= Gpu::ResourceBindingFlagBits::UpdateAfterBindBit;
 
-    using BindPoints = DescriptorSets::BindPoints;
-
-    data_->descriptorSets.init(
-        data_->device,
-        Gpu::BindGroupLayoutOptions{
-            .label = "Default Bind Group Layout",
-            .bindings =
-                {
-                    {
-                        {
-                            .binding = std::to_underlying(BindPoints::UniformBufferObject),
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::UniformBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = std::to_underlying(BindPoints::CombinedImageSampler),
-                            .count = 8,
-                            .resourceType = Gpu::ResourceBindingType::CombinedImageSampler,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = std::to_underlying(BindPoints::StorageBuffer),
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 3,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 4,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 5,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 6,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 7,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                    },
-                },
-            .flags = KDGpu::BindGroupLayoutFlagBits::UpdateAfterBind});
+    data_->descriptorSets.init(data_->device,
+                               DescriptorSetOptions{.label = "Default Bind Group Layout"});
 }
 
 Gpu::Instance &Context::instance()

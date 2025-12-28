@@ -1,5 +1,5 @@
 
-[[vk::binding(2, 0)]] RWStructuredBuffer<uint> gHistograms; // [numWorkgroups][16]
+[[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[]; // [numWorkgroups][16]
 
 struct PushConstants {
     uint numWorkgroups;
@@ -23,8 +23,8 @@ void main(uint3 groupThreadId : SV_GroupThreadID)
         for (uint digit = 0; digit < 16; ++digit) {
             for (uint wg = 0; wg < p.numWorkgroups; ++wg) {
                 uint idx = wg * 16 + digit;
-                uint val = gHistograms[idx];
-                gHistograms[idx] = sum;
+                uint val = gReadWriteBuffers[0][idx];
+                gReadWriteBuffers[0][idx] = sum;
                 sum += val;
             }
         }

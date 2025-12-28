@@ -153,30 +153,31 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     FrameContext &frameCtx = *renderApi.frameCtx;
 
     // update the uniform buffer
-    Uniforms &frameUniforms = state_->ubo[frameCtx.inFlightIndex];
-    frameUniforms.size = size.get();
-    frameUniforms.center = center.get();
-    frameUniforms.window = window.get();
-    state_->ubo.flush(frameCtx.inFlightIndex);
+    state_->ubo.writeAndFlush(frameCtx.inFlightIndex,
+                              Uniforms{
+                                  .center = center.get(),
+                                  .size = size.get(),
+                                  .window = window.get(),
+                              });
 
     FramegraphResourceManager &resources = *renderApi.resources;
 
     const auto depthLayout = static_cast<Gpu::TextureLayout>(
         Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess));
-    std::array<Gpu::TextureLayout, 1> layouts{depthLayout};
-    std::array textures{resources.imageView(previousLayer.depth)};
-    std::array samplers{state_->sampler.handle()};
-
-    auto &descriptorSets = *renderApi.descriptors;
-    descriptorSets
-        .write(DescriptorSets::SetType::Frame, frameCtx.inFlightIndex, layouts, textures, samplers)
-        .write(DescriptorSets::SetType::Frame, frameCtx.inFlightIndex, state_->ubo)
-        .flushWrites();
 
     auto recorder = cubePass.begin(*renderApi.cmd);
+    renderApi.descriptors
+        ->write(ImageBindPoint::Texture2D,
+                frameCtx.inFlightIndex,
+                0,
+                depthLayout,
+                resources.imageView(previousLayer.depth),
+                state_->sampler.handle())
+        .write(frameCtx.inFlightIndex, state_->ubo)
+        .bind(recorder, frameCtx.inFlightIndex);
+
     recorder.setDepthTestEnabled(false);
     recorder.setDepthWriteEnabled(false);
-    descriptorSets.bind(recorder, frameCtx.inFlightIndex);
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
 
     recorder.end();

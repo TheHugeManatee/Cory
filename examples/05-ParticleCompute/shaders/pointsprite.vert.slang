@@ -18,9 +18,9 @@ struct InstanceData
     float4 parameters;
 };
 
-[[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals : register(b0, space0);
-[[vk::binding(2, 0)]] StructuredBuffer<InstanceData> gInstances : register(t2, space0);
-[[vk::binding(4, 0)]] StructuredBuffer<uint> gIndices : register(t4, space0);
+[[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals;
+[[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
+[[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[];
 
 struct VSInput
 {
@@ -37,8 +37,8 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    const uint sortedIndex = gIndices[input.instanceId];
-    const InstanceData instance = gInstances[sortedIndex];
+    const uint sortedIndex = gReadWriteBuffers[1][input.instanceId];
+    const InstanceData instance = gReadOnlyBuffers[0][sortedIndex];
     static const float2 quadCorners[6] = {
         float2(-1.0, -1.0),
         float2(1.0, -1.0),

@@ -5,11 +5,8 @@ struct Globals
     float2 window;
 };
 
-[[vk::binding(0, 1)]]
-ConstantBuffer<Globals> globals;
-
-[[vk::binding(1, 1)]]
-Texture2DMS<float4> textures[8];
+[[vk::binding(0, 0)]] ConstantBuffer<Globals> globals;
+[[vk::binding(1, 1)]] Sampler2DMS<float4> textures[];
 
 struct PSIn
 {
@@ -34,8 +31,7 @@ float4 main(PSIn input) : SV_Target
         discard;
     }
 
-    float4 texColor =
-        textures[0].Load(int2(input.pos.xy), input.sampleID);
+    float4 texColor = textures[0].Load(int2(input.pos.xy), input.sampleID);
 
     float depthNorm =
         (texColor.r - globals.window.x) /

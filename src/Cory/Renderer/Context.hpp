@@ -85,7 +85,7 @@ class Context : NoCopy {
                         DeviceFeatures features = DeviceFeatures::RequiredOnly,
                         Gpu::AdapterDeviceType deviceType = Gpu::AdapterDeviceType::Default) const;
 
-    Gpu::AdapterFeatures getRequiredFeatures() const;
+    static Gpu::AdapterFeatures getRequiredFeatures();
 
     std::unique_ptr<struct ContextPrivate> data_;
 };

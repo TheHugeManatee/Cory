@@ -137,7 +137,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     // CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 1);
+    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 8);
 
     createGeometry();
     createShaders();
@@ -327,8 +327,8 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     globalUbo_->flush(frameCtx.inFlightIndex);
 
     auto &descriptorSets = ctx().descriptors();
-    descriptorSets.write(
-        Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_);
+    constexpr Cory::DescriptorSets::BufferIndex kInstanceBufferIndex = 0;
+    descriptorSets.write(frameCtx.inFlightIndex, *globalUbo_);
 
     // Set dynamic states
     passRecorder.setCullMode(KDGpu::CullModeFlagBits::None);
@@ -349,10 +349,12 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         instanceBuffer.buffer.unmap();
 
-        descriptorSets.write(
-            Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, instanceBuffer.buffer);
+        descriptorSets.write(Cory::BufferBindPoint::StorageBufferReadOnly,
+                             frameCtx.inFlightIndex,
+                             kInstanceBufferIndex,
+                             instanceBuffer.buffer);
     }
-    descriptorSets.flushWrites().bind(passRecorder, frameCtx.inFlightIndex);
+    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
 
     if (instanceCount > 0) {
         // draw all instances in a single call

@@ -15,8 +15,8 @@ struct InstanceData
     float4 parameters;
 };
 
-ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
-StructuredBuffer<InstanceData> gInstances : register(t2, space0);
+[[vk::binding(0, 0)]] ConstantBuffer<CubeUBO> gGlobals;
+[[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
 
 struct VSInput
 {
@@ -38,7 +38,7 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    const InstanceData instance = gInstances[input.instanceId];
+    const InstanceData instance = gReadOnlyBuffers[0][input.instanceId];
     const float4 localPosition = float4(input.position, 1.0f);
     const float4x4 normalMatrix = instance.normalTransform;
 

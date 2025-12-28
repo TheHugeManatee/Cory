@@ -21,8 +21,8 @@ struct PointSpriteGlobals
 
 // Bindings
 [[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals;
-[[vk::binding(2, 0)]] StructuredBuffer<InstanceData> gInstances;
-[[vk::binding(3, 0)]] RWStructuredBuffer<uint> gKeys;
+[[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
+[[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[];
 
 struct PushConstants {
     uint numInstances;
@@ -36,7 +36,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     uint i = dispatchThreadId.x;
     if (i >= p.numInstances) return;
 
-    float3 pos = gInstances[i].positionAndSize.xyz;
+    float3 pos = gReadOnlyBuffers[0][i].positionAndSize.xyz;
     float4 viewPos = mul(gGlobals.view, float4(pos, 1.0));
     
     // View space Z is negative in front of camera in many systems
@@ -49,5 +49,5 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
                ? ~bits              // negative: flip all bits
                : (bits ^ 0x80000000u); // positive: flip sign bit
 
-    gKeys[i] = key;
+    gReadWriteBuffers[0][i] = key;
 }

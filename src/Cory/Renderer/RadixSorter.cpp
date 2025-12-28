@@ -158,6 +158,13 @@ void RadixSorter::ensureScratch(ScratchBuffers &scratch,
 }
 
 namespace {
+constexpr uint32_t kBufferSetIndex = static_cast<uint32_t>(DescriptorSetType::BindlessBuffers);
+constexpr DescriptorSets::BufferIndex kKeysIndex = 0;
+constexpr DescriptorSets::BufferIndex kIndicesIndex = 1;
+constexpr DescriptorSets::BufferIndex kHistogramsIndex = 2;
+constexpr DescriptorSets::BufferIndex kWriteBufferIndex = 0;
+constexpr DescriptorSets::BufferIndex kWriteIndicesIndex = 1;
+
 Gpu::BindGroup &pushBindGroup(Context &ctx,
                               RadixSorter::ScratchBuffers &scratch,
                               std::string_view label,
@@ -165,7 +172,7 @@ Gpu::BindGroup &pushBindGroup(Context &ctx,
 {
     auto bindGroup = ctx.device().createBindGroup(Gpu::BindGroupOptions{
         .label = std::string(label),
-        .layout = ctx.descriptors().layouts()[0],
+        .layout = ctx.descriptors().layouts()[kBufferSetIndex],
         .resources = std::move(entries),
         .bindGroupPool = scratch.bindGroupPool,
     });
@@ -327,25 +334,27 @@ void RadixSorter::dispatchHistogram(Gpu::CommandRecorder &cmd,
                                     "RadixHistogram",
                                     {
                                         Gpu::BindGroupEntry{
-                                            .binding = 2,
-                                            .resource = Gpu::StorageBufferBinding{
-                                                .buffer = keys.handle(),
-                                                .offset = 0,
-                                                .size = Gpu::StorageBufferBinding::WholeSize,
-                                            },
-                                            .arrayElement = 0,
+                                            .binding = BufferBindPoint::StorageBufferReadOnly,
+                                            .resource =
+                                                Gpu::StorageBufferBinding{
+                                                    .buffer = keys.handle(),
+                                                    .offset = 0,
+                                                    .size = Gpu::StorageBufferBinding::WholeSize,
+                                                },
+                                            .arrayElement = kKeysIndex,
                                         },
                                         Gpu::BindGroupEntry{
-                                            .binding = 3,
-                                            .resource = Gpu::StorageBufferBinding{
-                                                .buffer = scratch.histograms.handle(),
-                                                .offset = 0,
-                                                .size = Gpu::StorageBufferBinding::WholeSize,
-                                            },
-                                            .arrayElement = 0,
+                                            .binding = BufferBindPoint::StorageBufferReadWrite,
+                                            .resource =
+                                                Gpu::StorageBufferBinding{
+                                                    .buffer = scratch.histograms.handle(),
+                                                    .offset = 0,
+                                                    .size = Gpu::StorageBufferBinding::WholeSize,
+                                                },
+                                            .arrayElement = kWriteBufferIndex,
                                         },
                                     });
-    pass.setBindGroup(0, bindGroup);
+    pass.setBindGroup(kBufferSetIndex, bindGroup);
     struct {
         uint32_t numInstances;
         uint32_t bitOffset;
@@ -366,21 +375,23 @@ void RadixSorter::dispatchScan(Gpu::CommandRecorder &cmd,
     auto pass = cmd.beginComputePass({});
     pass.setPipeline(computePipeline_);
     pass.bindShader(shaders[scanShader_].shaderHandle());
-    auto &bindGroup = pushBindGroup(*ctx_,
-                                    scratch,
-                                    "RadixScan",
-                                    {
-                                        Gpu::BindGroupEntry{
-                                            .binding = 2,
-                                            .resource = Gpu::StorageBufferBinding{
-                                                .buffer = scratch.histograms.handle(),
-                                                .offset = 0,
-                                                .size = Gpu::StorageBufferBinding::WholeSize,
-                                            },
-                                            .arrayElement = 0,
-                                        },
-                                    });
-    pass.setBindGroup(0, bindGroup);
+    auto &bindGroup = pushBindGroup(
+        *ctx_,
+        scratch,
+        "RadixScan",
+        {
+            Gpu::BindGroupEntry{
+                .binding = static_cast<uint32_t>(BufferBindPoint::StorageBufferReadWrite),
+                .resource =
+                    Gpu::StorageBufferBinding{
+                        .buffer = scratch.histograms.handle(),
+                        .offset = 0,
+                        .size = Gpu::StorageBufferBinding::WholeSize,
+                    },
+                .arrayElement = kWriteBufferIndex,
+            },
+        });
+    pass.setBindGroup(kBufferSetIndex, bindGroup);
     struct {
         uint32_t numWorkgroups;
         uint32_t pad;
@@ -409,58 +420,62 @@ void RadixSorter::dispatchScatter(Gpu::CommandRecorder &cmd,
     auto pass = cmd.beginComputePass({});
     pass.setPipeline(computePipeline_);
     pass.bindShader(shaders[scatterShader_].shaderHandle());
-    auto &bindGroup =
-        pushBindGroup(*ctx_,
-                      scratch,
-                      "RadixScatter",
-                      {
-                          Gpu::BindGroupEntry{
-                              .binding = 2,
-                              .resource = Gpu::StorageBufferBinding{
-                                  .buffer = keysIn.handle(),
-                                  .offset = 0,
-                                  .size = Gpu::StorageBufferBinding::WholeSize,
-                              },
-                              .arrayElement = 0,
-                          },
-                          Gpu::BindGroupEntry{
-                              .binding = 3,
-                              .resource = Gpu::StorageBufferBinding{
-                                  .buffer = indicesIn.handle(),
-                                  .offset = 0,
-                                  .size = Gpu::StorageBufferBinding::WholeSize,
-                              },
-                              .arrayElement = 0,
-                          },
-                          Gpu::BindGroupEntry{
-                              .binding = 4,
-                              .resource = Gpu::StorageBufferBinding{
-                                  .buffer = keysOut.handle(),
-                                  .offset = 0,
-                                  .size = Gpu::StorageBufferBinding::WholeSize,
-                              },
-                              .arrayElement = 0,
-                          },
-                          Gpu::BindGroupEntry{
-                              .binding = 5,
-                              .resource = Gpu::StorageBufferBinding{
-                                  .buffer = indicesOut.handle(),
-                                  .offset = 0,
-                                  .size = Gpu::StorageBufferBinding::WholeSize,
-                              },
-                              .arrayElement = 0,
-                          },
-                          Gpu::BindGroupEntry{
-                              .binding = 6,
-                              .resource = Gpu::StorageBufferBinding{
-                                  .buffer = scratch.histograms.handle(),
-                                  .offset = 0,
-                                  .size = Gpu::StorageBufferBinding::WholeSize,
-                              },
-                              .arrayElement = 0,
-                          },
-                      });
-    pass.setBindGroup(0, bindGroup);
+    auto &bindGroup = pushBindGroup(*ctx_,
+                                    scratch,
+                                    "RadixScatter",
+                                    {
+                                        Gpu::BindGroupEntry{
+                                            .binding = BufferBindPoint::StorageBufferReadOnly,
+                                            .resource =
+                                                Gpu::StorageBufferBinding{
+                                                    .buffer = keysIn.handle(),
+                                                    .offset = 0,
+                                                    .size = Gpu::StorageBufferBinding::WholeSize,
+                                                },
+                                            .arrayElement = kKeysIndex,
+                                        },
+                                        Gpu::BindGroupEntry{
+                                            .binding = BufferBindPoint::StorageBufferReadOnly,
+                                            .resource =
+                                                Gpu::StorageBufferBinding{
+                                                    .buffer = indicesIn.handle(),
+                                                    .offset = 0,
+                                                    .size = Gpu::StorageBufferBinding::WholeSize,
+                                                },
+                                            .arrayElement = kIndicesIndex,
+                                        },
+                                        Gpu::BindGroupEntry{
+                                            .binding = BufferBindPoint::StorageBufferReadWrite,
+                                            .resource =
+                                                Gpu::StorageBufferBinding{
+                                                    .buffer = keysOut.handle(),
+                                                    .offset = 0,
+                                                    .size = Gpu::StorageBufferBinding::WholeSize,
+                                                },
+                                            .arrayElement = kWriteBufferIndex,
+                                        },
+                                        Gpu::BindGroupEntry{
+                                            .binding = BufferBindPoint::StorageBufferReadWrite,
+                                            .resource =
+                                                Gpu::StorageBufferBinding{
+                                                    .buffer = indicesOut.handle(),
+                                                    .offset = 0,
+                                                    .size = Gpu::StorageBufferBinding::WholeSize,
+                                                },
+                                            .arrayElement = kWriteIndicesIndex,
+                                        },
+                                        Gpu::BindGroupEntry{
+                                            .binding = BufferBindPoint::StorageBufferReadOnly,
+                                            .resource =
+                                                Gpu::StorageBufferBinding{
+                                                    .buffer = scratch.histograms.handle(),
+                                                    .offset = 0,
+                                                    .size = Gpu::StorageBufferBinding::WholeSize,
+                                                },
+                                            .arrayElement = kHistogramsIndex,
+                                        },
+                                    });
+    pass.setBindGroup(kBufferSetIndex, bindGroup);
     struct {
         uint32_t numInstances;
         uint32_t bitOffset;

@@ -170,6 +170,9 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     if (instanceCount > 0) {
         auto &sortBuf = sorter_.scratchForFrame(frameCtx.inFlightIndex, instanceCount);
         auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
+        constexpr Cory::DescriptorSets::BufferIndex kInstanceBufferIndex = 0;
+        constexpr Cory::DescriptorSets::BufferIndex kSortedIndicesBufferIndex = 1;
+        constexpr Cory::DescriptorSets::BufferIndex kSortKeysBufferIndex = 0;
 
         auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
         std::memcpy(
@@ -180,14 +183,15 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
             auto pass = renderApi.cmd->beginComputePass({});
             pass.setPipeline(predicatePipeline_);
             ctx_->descriptors()
-                .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
-                .write(Cory::DescriptorSets::SetType::Static,
+                .write(frameCtx.inFlightIndex, *globalUbo_)
+                .write(Cory::BufferBindPoint::StorageBufferReadOnly,
                        frameCtx.inFlightIndex,
-                       2,
+                       kInstanceBufferIndex,
                        instanceBuffer.buffer)
-                .write(
-                    Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, 3, sortBuf.keysA)
-                .flushWrites()
+                .write(Cory::BufferBindPoint::StorageBufferReadWrite,
+                       frameCtx.inFlightIndex,
+                       kSortKeysBufferIndex,
+                       sortBuf.keysA)
                 .bind(pass, frameCtx.inFlightIndex);
             struct {
                 uint32_t numInstances;
@@ -211,13 +215,15 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                                            frameCtx.inFlightIndex);
 
         ctx_->descriptors()
-            .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_)
-            .write(Cory::DescriptorSets::SetType::Static,
+            .write(frameCtx.inFlightIndex, *globalUbo_)
+            .write(Cory::BufferBindPoint::StorageBufferReadOnly,
                    frameCtx.inFlightIndex,
-                   2,
+                   kInstanceBufferIndex,
                    instanceBuffer.buffer)
-            .write(Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, 4, sortedIndices)
-            .flushWrites();
+            .write(Cory::BufferBindPoint::StorageBufferReadWrite,
+                   frameCtx.inFlightIndex,
+                   kSortedIndicesBufferIndex,
+                   sortedIndices);
 
         renderApi.cmd->bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
             .srcStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,

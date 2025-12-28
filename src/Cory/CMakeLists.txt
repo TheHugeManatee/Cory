@@ -139,6 +139,8 @@ set(CORY_SOURCES
         Base/Coro.hpp
         Framegraph/TransientComputePass.cpp
         Framegraph/TransientComputePass.hpp
+        Renderer/ShaderBindingContext.cpp
+        Renderer/ShaderBindingContext.hpp
 )
 
 

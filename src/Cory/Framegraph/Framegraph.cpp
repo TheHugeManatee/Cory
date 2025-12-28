@@ -116,13 +116,13 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
     auto resetCmdList = gsl::finally([this]() { data_->commandListInProgress = nullptr; });
 
     for (const auto &handle : executionInfo.tasks) {
-    auto transitions = executePass(*data_->commandListInProgress, handle);
-    executionInfo.transitions.insert(executionInfo.transitions.end(),
-                                     transitions.imageTransitions.begin(),
-                                     transitions.imageTransitions.end());
-    executionInfo.bufferTransitions.insert(executionInfo.bufferTransitions.end(),
-                                           transitions.bufferTransitions.begin(),
-                                           transitions.bufferTransitions.end());
+        auto transitions = executePass(*data_->commandListInProgress, handle);
+        executionInfo.transitions.insert(executionInfo.transitions.end(),
+                                         transitions.imageTransitions.begin(),
+                                         transitions.imageTransitions.end());
+        executionInfo.bufferTransitions.insert(executionInfo.bufferTransitions.end(),
+                                               transitions.bufferTransitions.begin(),
+                                               transitions.bufferTransitions.end());
     }
 
     finalizeOutputs(executionInfo);
@@ -141,8 +141,7 @@ void Framegraph::resetForNextFrame()
     data_->renderTasks.clear();
 }
 
-Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd,
-                                                    RenderTaskHandle handle)
+Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, RenderTaskHandle handle)
 {
     PassTransitions transitions;
     const RenderTaskInfo &rpInfo = data_->renderTasks[handle];
@@ -179,9 +178,9 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd,
     };
 
     // fill the barriers from the inputs and outputs
-    const std::vector<Sync::ImageBarrier> imageBarriers =
-        rpInfo.textureDependencies | ranges::views::transform(emitBarrier) |
-        ranges::to<std::vector>;
+    const std::vector<Sync::ImageBarrier> imageBarriers = rpInfo.textureDependencies |
+                                                          ranges::views::transform(emitBarrier) |
+                                                          ranges::to<std::vector>;
     const std::vector<Sync::BufferBarrier> bufferBarriers =
         rpInfo.bufferDependencies | ranges::views::transform(emitBufferBarrier) |
         ranges::to<std::vector>;
@@ -195,7 +194,12 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd,
     CO_CORE_TRACE("Recording rendering commands for {}", rpInfo.name);
     const auto &coroHandle = rpInfo.coroHandle;
     if (!coroHandle.done()) {
+        cmd.beginDebugLabel(Gpu::DebugLabelOptions{
+            .label = "Render Task " + rpInfo.name,
+            .color = {0.0f, 0.5f, 1.0f, 1.0f},
+        });
         coroHandle.resume();
+        cmd.endDebugLabel();
     }
 
     CO_CORE_ASSERT(coroHandle.done(),
@@ -491,12 +495,11 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                  ranges::views::transform([](const auto &it) { return it.first; }) |
                  ranges::to<std::vector<RenderTaskHandle>>;
 
-    return {
-        .tasks = std::move(tasks),
-        .resources = std::move(requiredResources),
-        .buffers = std::move(requiredBuffers),
-        .transitions = {},
-        .bufferTransitions = {}};
+    return {.tasks = std::move(tasks),
+            .resources = std::move(requiredResources),
+            .buffers = std::move(requiredBuffers),
+            .transitions = {},
+            .bufferTransitions = {}};
 }
 
 RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)

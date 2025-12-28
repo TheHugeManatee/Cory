@@ -121,8 +121,8 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     globalUbo_->flush(frameCtx.inFlightIndex);
 
     auto &descriptorSets = ctx_->descriptors();
-    descriptorSets.write(
-        Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_);
+    constexpr Cory::DescriptorSets::BufferIndex kInstanceBufferIndex = 0;
+    descriptorSets.write(frameCtx.inFlightIndex, *globalUbo_);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     if (instanceCount > 0) {
@@ -132,11 +132,13 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
             mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         instanceBuffer.buffer.unmap();
 
-        descriptorSets.write(
-            Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, instanceBuffer.buffer);
+        descriptorSets.write(Cory::BufferBindPoint::StorageBufferReadOnly,
+                             frameCtx.inFlightIndex,
+                             kInstanceBufferIndex,
+                             instanceBuffer.buffer);
     }
 
-    descriptorSets.flushWrites().bind(passRecorder, frameCtx.inFlightIndex);
+    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
 
     // Set dynamic states
     passRecorder.setCullMode(KDGpu::CullModeFlagBits::BackBit);

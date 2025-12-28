@@ -5,13 +5,7 @@ struct Globals
     float2 window;
 };
 
-struct PushConstants
-{
-    Globals* globals;
-};
-
-[[vk::push_constant]] PushConstants pushConstants;
-[[vk::binding(0, 0)]] ConstantBuffer<Globals> globals;
+[[vk::push_constant]] Globals* globals;
 
 [[vk::binding(1, 1)]] Sampler2DMS<float4> textures[];
 
@@ -29,10 +23,8 @@ float4 colorMap(float t)
 
 float4 main(PSIn input) : SV_Target
 {
-    //Globals globals = *pushConstants.globals;
-
-    float2 start = globals.center - globals.size * 0.5;
-    float2 end   = globals.center + globals.size * 0.5;
+    float2 start = globals->center - globals->size * 0.5;
+    float2 end   = globals->center + globals->size * 0.5;
 
     if (input.inTex.x < start.x || input.inTex.x > end.x ||
         input.inTex.y < start.y || input.inTex.y > end.y)

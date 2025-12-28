@@ -41,7 +41,7 @@ struct InstanceBuffer {
 class CubeDemoApplication : public Cory::Application {
   public:
     CubeDemoApplication(int argc, const char **argv);
-    ~CubeDemoApplication();
+    ~CubeDemoApplication() override;
 
     void run() override;
 

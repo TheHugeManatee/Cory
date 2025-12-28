@@ -414,6 +414,12 @@ void ContextPrivate::receiveDebugUtilsMessage(
                           .messageIdNumber = pCallbackData->messageIdNumber,
                           .message = pCallbackData->pMessage ? pCallbackData->pMessage : ""};
 
+    if (pCallbackData->messageIdNumber == 0 && info.severity != DebugMessageSeverity::Error) {
+        // ignore message ID 0 - this is the loader itself, usually complaining about some system
+        // layers
+        return;
+    }
+
     if (validationMessageCallback) {
         validationMessageCallback(info);
         return;

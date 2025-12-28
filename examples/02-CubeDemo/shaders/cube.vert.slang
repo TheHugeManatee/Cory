@@ -1,4 +1,4 @@
-struct CubeUBO
+struct ViewData
 {
     float4x4 projection;
     float4x4 view;
@@ -6,6 +6,7 @@ struct CubeUBO
     float3 lightPosition;
     float padding;
 };
+[[vk::push_constant]] ViewData *globals;
 
 struct InstanceData
 {
@@ -14,10 +15,6 @@ struct InstanceData
     float4 color;
     float4 parameters;
 };
-
-struct Push { CubeUBO* globals; };
-[[vk::push_constant]] Push gPush;
-
 [[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
 
 struct VSInput
@@ -40,15 +37,14 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    CubeUBO gGlobals = *(gPush.globals);
     const InstanceData instance = gReadOnlyBuffers[0][input.instanceId];
     const float4 localPosition = float4(input.position, 1.0f);
     const float4x4 normalMatrix = instance.normalTransform;
 
-    float4 viewPosition = mul(gGlobals.view, mul(instance.modelTransform, localPosition));
+    float4 viewPosition = mul(globals->view, mul(instance.modelTransform, localPosition));
 
     VSOutput output;
-    output.position = mul(gGlobals.projection, viewPosition);
+    output.position = mul(globals->projection, viewPosition);
     output.worldPosition = viewPosition.xyz;
     output.normal = mul(normalMatrix, float4(input.normal, 0.0f)).xyz;
     output.color = input.color;

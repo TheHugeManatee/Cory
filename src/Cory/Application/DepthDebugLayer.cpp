@@ -7,6 +7,7 @@
 #include <Cory/Base/Utils.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
@@ -19,7 +20,7 @@
 
 namespace Cory {
 
-struct Uniforms {
+struct DrawData {
     glm::vec2 center;
     glm::vec2 size;
     glm::vec2 window;
@@ -27,7 +28,6 @@ struct Uniforms {
 struct DepthDebugLayer::State {
     ShaderHandle fullscreenTriShader;
     ShaderHandle depthDebugShader;
-    UniformBufferObject<Uniforms> ubo;
     Gpu::Sampler sampler;
 
     glm::vec2 viewportDimensions{1.0f};
@@ -53,7 +53,6 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
             res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
         .depthDebugShader{
             res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag.slang"))},
-        .ubo{Cory::UniformBufferObject<Uniforms>(ctx, info.maxFramesInFlight)},
         .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
             .magFilter = Gpu::FilterMode::Linear, .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
@@ -143,6 +142,8 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
             .clearColor = {},
             .blend = std::nullopt,
         }},
+        .pushConstantRanges = {KDGpu::PushConstantRange{
+            .offset = 0, .size = 8, .shaderStages = Gpu::ShaderStageFlagBits::AllGraphics}},
     });
 
     /// ^^^^     DECLARATION      ^^^^
@@ -151,15 +152,6 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     /// vvvv  RENDERING COMMANDS  vvvv
 
     FrameContext &frameCtx = *renderApi.frameCtx;
-
-    // update the uniform buffer
-    state_->ubo.writeAndFlush(frameCtx.inFlightIndex,
-                              Uniforms{
-                                  .center = center.get(),
-                                  .size = size.get(),
-                                  .window = window.get(),
-                              });
-
     FramegraphResourceManager &resources = *renderApi.resources;
 
     const auto depthLayout = static_cast<Gpu::TextureLayout>(
@@ -173,8 +165,17 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                 depthLayout,
                 resources.imageView(previousLayer.depth),
                 state_->sampler.handle())
-        .write(frameCtx.inFlightIndex, state_->ubo)
         .bind(recorder, frameCtx.inFlightIndex);
+
+    auto d = renderApi.bindingContext->alloc<DrawData>();
+    d->center = center.get();
+    d->size = size.get();
+    d->window = window.get();
+    recorder.pushConstant(
+        KDGpu::PushConstantRange{.offset = 0,
+                                 .size = sizeof(DrawData),
+                                 .shaderStages = Gpu::ShaderStageFlagBits::FragmentBit},
+        &d.gpu);
 
     recorder.setDepthTestEnabled(false);
     recorder.setDepthWriteEnabled(false);

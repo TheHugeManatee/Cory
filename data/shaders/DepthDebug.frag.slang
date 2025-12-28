@@ -5,7 +5,14 @@ struct Globals
     float2 window;
 };
 
+struct PushConstants
+{
+    Globals* globals;
+};
+
+[[vk::push_constant]] PushConstants pushConstants;
 [[vk::binding(0, 0)]] ConstantBuffer<Globals> globals;
+
 [[vk::binding(1, 1)]] Sampler2DMS<float4> textures[];
 
 struct PSIn
@@ -22,6 +29,8 @@ float4 colorMap(float t)
 
 float4 main(PSIn input) : SV_Target
 {
+    //Globals globals = *pushConstants.globals;
+
     float2 start = globals.center - globals.size * 0.5;
     float2 end   = globals.center + globals.size * 0.5;
 

@@ -163,7 +163,7 @@ DescriptorSets &DescriptorSets::write(gsl::index frameInFlightIndex,
 
 DescriptorSets &DescriptorSets::write(ImageBindPoint bindPoint,
                                       gsl::index instanceIndex,
-                                      TextureIndex textureIndex,
+                                      TextureHeapIndex textureIndex,
                                       Gpu::TextureLayout layout,
                                       Gpu::TextureViewHandle image,
                                       Gpu::TextureSamplerHandle sampler)
@@ -202,7 +202,7 @@ DescriptorSets &DescriptorSets::write(ImageBindPoint bindPoint,
     return *this;
 }
 DescriptorSets &DescriptorSets::write(gsl::index instanceIndex,
-                                      SamplerIndex samplerIndex,
+                                      SamplerHeapIndex samplerIndex,
                                       Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
@@ -219,7 +219,7 @@ DescriptorSets &DescriptorSets::write(gsl::index instanceIndex,
 
 DescriptorSets &DescriptorSets::write(BufferBindPoint type,
                                       gsl::index instanceIndex,
-                                      BufferIndex bufferIndex,
+                                      BufferHeapIndex bufferIndex,
                                       const Gpu::Buffer &buffer)
 {
     CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
@@ -255,16 +255,15 @@ DescriptorSets &DescriptorSets::flush(gsl::index instanceIndex)
             resources.getBindGroup(data_->bindGroups[set][instanceIndex].handle());
 
         for (const auto &write : writes) {
-            data_->bindGroups[set][instanceIndex].update(write);
-            // vulkanBindGroup->fillWriteBindGroupData(writeStorage[writeCount], write);
-            // ++writeCount;
-            //
-            // // Avoid overflowing the fixed-size array, worst case we still have a couple of extra
-            // // calls to updateDescriptorSets()
-            // if (writeCount == maxWrites) {
-            //     vulkanDevice->updateDescriptorSets(gsl::span(writeStorage.data(), writeCount));
-            //     writeCount = 0;
-            // }
+            vulkanBindGroup->fillWriteBindGroupData(writeStorage[writeCount], write);
+            ++writeCount;
+
+            // Avoid overflowing the fixed-size array, worst case we still have a couple of extra
+            // calls to updateDescriptorSets()
+            if (writeCount == maxWrites) {
+                vulkanDevice->updateDescriptorSets(gsl::span(writeStorage.data(), writeCount));
+                writeCount = 0;
+            }
         }
         writes.clear();
     }

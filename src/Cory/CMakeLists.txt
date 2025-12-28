@@ -141,6 +141,8 @@ set(CORY_SOURCES
         Framegraph/TransientComputePass.hpp
         Renderer/ShaderBindingContext.cpp
         Renderer/ShaderBindingContext.hpp
+        Renderer/GpuBumpAllocator.cpp
+        Renderer/GpuBumpAllocator.hpp
 )
 
 

@@ -77,9 +77,6 @@ struct DescriptorSetOptions {
  */
 class DescriptorSets : NoCopy {
   public:
-    using TextureIndex = uint16_t;
-    using BufferIndex = uint16_t;
-    using SamplerIndex = uint16_t;
     static constexpr size_t MAX_IMAGES = 1024;
     static constexpr size_t MAX_BUFFERS = 1024;
     static constexpr size_t MAX_SAMPLERS = 1024;
@@ -114,19 +111,19 @@ class DescriptorSets : NoCopy {
      */
     DescriptorSets &write(ImageBindPoint bindPoint,
                           gsl::index instanceIndex,
-                          TextureIndex textureIndex,
+                          TextureHeapIndex textureIndex,
                           Gpu::TextureLayout layout,
                           Gpu::TextureViewHandle image = {},
                           Gpu::TextureSamplerHandle sampler = {});
 
     /// Write just an image sampler to the specified sampler index
     DescriptorSets &
-    write(gsl::index instanceIndex, SamplerIndex samplerIndex, Gpu::TextureSamplerHandle sampler);
+    write(gsl::index instanceIndex, SamplerHeapIndex samplerIndex, Gpu::TextureSamplerHandle sampler);
 
     /// Write a buffer pointer to the given bind point & index
     DescriptorSets &write(BufferBindPoint type,
                           gsl::index instanceIndex,
-                          BufferIndex bufferIndex,
+                          BufferHeapIndex bufferIndex,
                           const Gpu::Buffer &buffer);
 
     /// Access the bind group for the given set type and instance index

@@ -43,6 +43,12 @@ using SpirvByteCode = std::vector<uint32_t>;
 using CompilationError = std::string;
 using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
 
+using BufferDeviceAddress = uint64_t;
+
+using TextureHeapIndex = uint16_t;
+using BufferHeapIndex = uint16_t;
+using SamplerHeapIndex = uint16_t;
+
 // enums
 static constexpr Gpu::ShaderStageFlagBits SHADER_TYPE_UNKNOWN = Gpu::ShaderStageFlagBits{};
 

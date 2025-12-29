@@ -1,5 +1,4 @@
-struct PointSpriteGlobals
-{
+struct PointSpriteGlobals {
     float4x4 projection;
     float4x4 view;
     float4x4 viewProjection;
@@ -11,8 +10,7 @@ struct PointSpriteGlobals
     float padding2;
 };
 
-struct InstanceData
-{
+struct InstanceData {
     float4 positionAndSize;
     float4 color;
     float4 parameters;
@@ -22,14 +20,12 @@ struct InstanceData
 [[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
 [[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[];
 
-struct VSInput
-{
+struct VSInput {
     uint vertexId : SV_VertexID;
     uint instanceId : SV_InstanceID;
 };
 
-struct VSOutput
-{
+struct VSOutput {
     float4 position : SV_Position;
     float4 color : COLOR0;
     float2 localPos : TEXCOORD0;

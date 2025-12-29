@@ -11,7 +11,7 @@ struct PushConstants {
 groupshared uint s_Hist[16];
 
 [numthreads(256, 1, 1)]
-void main(uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+void main(uint3 groupThreadId: SV_GroupThreadID, uint3 groupId: SV_GroupID)
 {
     // Load this workgroup's scanned histogram base offsets
     if (groupThreadId.x < 16) {

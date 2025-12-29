@@ -1,5 +1,4 @@
-struct PointSpriteGlobals
-{
+struct PointSpriteGlobals {
     float4x4 projection;
     float4x4 view;
     float4x4 viewProjection;
@@ -13,13 +12,13 @@ struct PointSpriteGlobals
 
 ConstantBuffer<PointSpriteGlobals> gGlobals : register(b0, space0);
 
-struct FSInput
-{
+struct FSInput {
     float4 color : COLOR0;
     float2 localPos : TEXCOORD0;
 };
 
-float4 main(FSInput input) : SV_Target0
+float4 main(FSInput input)
+    : SV_Target0
 {
     const float2 uv = input.localPos;
     const float radial = saturate(1.0f - dot(uv, uv));

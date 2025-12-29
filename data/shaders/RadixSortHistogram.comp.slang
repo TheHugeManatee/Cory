@@ -6,12 +6,15 @@ struct PushConstants {
     uint numInstances;
     uint bitOffset;
 };
-[[vk::push_constant]] PushConstants p;
+[[vk::push_constant]]
+PushConstants p;
 
 groupshared uint s_Hist[16];
 
 [numthreads(256, 1, 1)]
-void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupThreadId : SV_GroupThreadID, uint3 groupId : SV_GroupID)
+void main(uint3 dispatchThreadId: SV_DispatchThreadID,
+          uint3 groupThreadId: SV_GroupThreadID,
+          uint3 groupId: SV_GroupID)
 {
     if (groupThreadId.x < 16) {
         s_Hist[groupThreadId.x] = 0;

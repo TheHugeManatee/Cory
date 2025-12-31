@@ -46,21 +46,6 @@ Gpu::ShaderStageFlags deduceNextStages(Gpu::ShaderStageFlagBits stage)
 } // namespace
 
 namespace Cory {
-namespace {
-bool rangesEqual(std::span<const Gpu::PushConstantRange> lhs,
-                 std::span<const Gpu::PushConstantRange> rhs)
-{
-    if (lhs.size() != rhs.size()) {
-        return false;
-    }
-    for (size_t i = 0; i < lhs.size(); ++i) {
-        if (lhs[i].offset != rhs[i].offset) return false;
-        if (lhs[i].size != rhs[i].size) return false;
-        if (lhs[i].shaderStages != rhs[i].shaderStages) return false;
-    }
-    return true;
-}
-} // namespace
 
 ShaderSource::ShaderSource(std::string source,
                            Gpu::ShaderStageFlagBits type,
@@ -97,9 +82,7 @@ Shader::Shader()
 {
 }
 
-Shader::Shader(Context &ctx,
-               ShaderSource source,
-               std::string entryPoint)
+Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
     : ctx_{&ctx}
     , source_{std::move(source)}
     , type_{source_.type()}
@@ -132,13 +115,15 @@ Shader::Shader(Context &ctx,
     }
 
     if (pushConstantReflection_ && pushConstantReflection_->size > 0) {
-        pushConstantRanges_.push_back(Gpu::PushConstantRange{
-            .offset = 0,
-            .size = static_cast<uint32_t>(pushConstantReflection_->size),
-            .shaderStages = type_,
-        });
+        CO_CORE_ASSERT(pushConstantReflection_->size <= MAX_PUSH_CONSTANT_SIZE,
+                       "{}: Push constant size exceeds maximum allowed size (uses {} bytes, "
+                       "MAX_PUSH_CONSTANT_SIZE = {} bytes",
+                       source_.filePath().string(),
+                       pushConstantReflection_->size,
+                       MAX_PUSH_CONSTANT_SIZE);
     }
 
+    auto pushConstantRanges = std::vector{globalPushConstantRange};
     Gpu::ShaderObjectOptions options{
         .label = label,
         .stage = type_,
@@ -146,7 +131,7 @@ Shader::Shader(Context &ctx,
         .code = spirvBinary_,
         .entryPoint = entryPoint_,
         .bindGroupLayouts = layouts,
-        .pushConstantRanges = pushConstantRanges_,
+        .pushConstantRanges = pushConstantRanges,
     };
 
     shaderObject_ = ctx_->device().createShaderObject(options);
@@ -159,46 +144,6 @@ Shader::Shader(Context &ctx,
 bool Shader::valid() const
 {
     return ctx_ && type_ != SHADER_TYPE_UNKNOWN && shaderObject_.isValid();
-}
-
-Gpu::ShaderObject &Shader::shaderObject(std::span<const Gpu::PushConstantRange> ranges)
-{
-    CO_CORE_DEBUG_ASSERT(ctx_, "Shader has no context");
-    if (ranges.empty()) {
-        return shaderObject_;
-    }
-
-    auto it = std::find_if(shaderObjectVariants_.begin(),
-                           shaderObjectVariants_.end(),
-                           [&](const ShaderObjectVariant &variant) {
-                               return rangesEqual(variant.ranges, ranges);
-                           });
-    if (it != shaderObjectVariants_.end()) {
-        return it->object;
-    }
-
-    const auto layouts = ctx_->descriptors().layouts();
-    std::vector<Gpu::PushConstantRange> rangesCopy{ranges.begin(), ranges.end()};
-    Gpu::ShaderObjectOptions options{
-        .label = source_.filePath().empty() ? "ShaderObject" : source_.filePath().filename().string(),
-        .stage = type_,
-        .nextStage = nextStages_,
-        .code = spirvBinary_,
-        .entryPoint = entryPoint_,
-        .bindGroupLayouts = layouts,
-        .pushConstantRanges = rangesCopy,
-    };
-
-    ShaderObjectVariant variant{.ranges = std::move(rangesCopy),
-                                .object = ctx_->device().createShaderObject(options)};
-    shaderObjectVariants_.push_back(std::move(variant));
-    return shaderObjectVariants_.back().object;
-}
-
-Gpu::Handle<Gpu::ShaderObject_t>
-Shader::shaderHandle(std::span<const Gpu::PushConstantRange> ranges)
-{
-    return shaderObject(ranges).handle();
 }
 
 Gpu::ShaderModule Shader::createShaderModule() const
@@ -230,49 +175,6 @@ Gpu::ShaderStageFlagBits Shader::deduceTypeFromPath(const std::filesystem::path 
         return Gpu::ShaderStageFlagBits::ComputeBit;
     }
     return SHADER_TYPE_UNKNOWN;
-}
-
-std::vector<Gpu::PushConstantRange>
-mergePushConstantRanges(std::span<const Gpu::PushConstantRange> ranges)
-{
-    std::vector<Gpu::PushConstantRange> merged;
-    merged.reserve(ranges.size());
-
-    for (const auto &range : ranges) {
-        auto it = std::find_if(merged.begin(), merged.end(), [&](const auto &existing) {
-            return existing.offset == range.offset && existing.size == range.size;
-        });
-        if (it != merged.end()) {
-            it->shaderStages |= range.shaderStages;
-        }
-        else {
-            merged.push_back(range);
-        }
-    }
-
-    std::sort(merged.begin(), merged.end(), [](const auto &lhs, const auto &rhs) {
-        if (lhs.offset != rhs.offset) return lhs.offset < rhs.offset;
-        return lhs.size < rhs.size;
-    });
-
-    return merged;
-}
-
-std::vector<Gpu::PushConstantRange>
-collectPushConstantRanges(ShaderManager &shaderManager, std::span<const ShaderHandle> shaders)
-{
-    if (shaders.empty()) {
-        return {};
-    }
-
-    std::vector<Gpu::PushConstantRange> ranges;
-    for (auto shaderHandle : shaders) {
-        const auto &shader = shaderManager[shaderHandle];
-        const auto shaderRanges = shader.pushConstantRanges();
-        ranges.insert(ranges.end(), shaderRanges.begin(), shaderRanges.end());
-    }
-
-    return mergePushConstantRanges(ranges);
 }
 
 } // namespace Cory

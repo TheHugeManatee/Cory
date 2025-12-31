@@ -23,7 +23,7 @@ constexpr uint32_t kWorkgroupSize = 256u;
 constexpr Gpu::PushConstantRange kPushRange{
     .offset = 0,
     .size = sizeof(uint32_t) * 2,
-    .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit,
+    .shaderStages = Gpu::ShaderStageFlagBits::All,
 };
 
 ShaderHandle createComputeShader(Context &ctx, std::string_view path)
@@ -66,11 +66,11 @@ void RadixSorter::ensurePipelineLayout()
 
     auto &cache = ctx_->pipelineCache();
     auto layouts = ctx_->descriptors().layouts();
-    const std::array<ShaderHandle, 3> shaders{histogramShader_, scanShader_, scatterShader_};
+
     pipelineLayout_ = cache.queryLayout(Gpu::PipelineLayoutOptions{
         .label = "RadixSortLayout",
         .bindGroupLayouts = layouts,
-        .pushConstantRanges = collectPushConstantRanges(ctx_->shaders(), shaders),
+        .pushConstantRanges = {kPushRange},
     });
 }
 

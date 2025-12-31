@@ -39,11 +39,10 @@ Gpu::PipelineLayoutHandle TransientComputePass::pipelineLayoutHandle() noexcept
         return pipelineLayout_;
     }
 
-    const std::array<ShaderHandle, 1> shaders{pass_.shader};
     pipelineLayout_ = ctx_->pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
         .label = fmt::format("Pipeline Layout {}", pass_.name),
         .bindGroupLayouts = ctx_->descriptors().layouts(),
-        .pushConstantRanges = collectPushConstantRanges(ctx_->shaders(), shaders),
+        .pushConstantRanges = {Shader::globalPushConstantRange},
     });
 
     return pipelineLayout_;
@@ -54,11 +53,11 @@ Gpu::ComputePipelineHandle TransientComputePass::pipelineHandle() noexcept
     if (pipeline_.isValid()) {
         return pipeline_;
     }
-    pipeline_ = ctx_->pipelineCache().queryComputePipeline(
-        fmt::format("Compute Pipeline {}", pass_.name),
-        ComputePipelineDescriptor{
-            .pipelineLayout = pipelineLayoutHandle(),
-        });
+    pipeline_ =
+        ctx_->pipelineCache().queryComputePipeline(fmt::format("Compute Pipeline {}", pass_.name),
+                                                   ComputePipelineDescriptor{
+                                                       .pipelineLayout = pipelineLayoutHandle(),
+                                                   });
     return pipeline_;
 }
 

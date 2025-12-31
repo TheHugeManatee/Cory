@@ -7,9 +7,9 @@
 #include <KDGpu/shader_module.h>
 #include <KDGpu/shader_object.h>
 
+#include <array>
 #include <filesystem>
 #include <map>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -62,14 +62,20 @@ class ShaderSource {
 
 class Shader : NoCopy {
   public:
+    // Every shader in the engine is declared with a push range of MAX_PUSH_CONSTANT_SIZE for
+    // consistency. Whether the shader actually uses it or not does not matter much for performance.
+    static constexpr auto globalPushConstantRange = Gpu::PushConstantRange{
+        .offset = 0,
+        .size = MAX_PUSH_CONSTANT_SIZE,
+        .shaderStages = Gpu::ShaderStageFlagBits::All,
+    };
+
     static CompilationResult CompileToSpv(const ShaderSource &source,
                                           bool optimize = true,
                                           std::string_view entryPoint = "main");
 
     Shader();
-    Shader(Context &ctx,
-           ShaderSource source,
-           std::string entryPoint = "main");
+    Shader(Context &ctx, ShaderSource source, std::string entryPoint = "main");
 
     // movable!
     Shader(Shader &&rhs) = default;
@@ -77,18 +83,12 @@ class Shader : NoCopy {
 
     Gpu::ShaderObject &shaderObject() { return shaderObject_; }
     const Gpu::ShaderObject &shaderObject() const { return shaderObject_; }
-    Gpu::ShaderObject &shaderObject(std::span<const Gpu::PushConstantRange> ranges);
     Gpu::Handle<Gpu::ShaderObject_t> shaderHandle() const { return shaderObject_.handle(); }
-    Gpu::Handle<Gpu::ShaderObject_t> shaderHandle(std::span<const Gpu::PushConstantRange> ranges);
     Gpu::ShaderStageFlags nextStages() const { return nextStages_; }
     Gpu::ShaderStageFlagBits type() const { return type_; }
     const std::string &entryPoint() const { return entryPoint_; }
     bool valid() const;
     [[nodiscard]] CompilationError error() const { return error_; }
-    std::span<const Gpu::PushConstantRange> pushConstantRanges() const
-    {
-        return pushConstantRanges_;
-    }
     const std::optional<PushConstantReflection> &pushConstantReflection() const
     {
         return pushConstantReflection_;
@@ -119,18 +119,7 @@ class Shader : NoCopy {
     Gpu::ShaderObject shaderObject_;
     Gpu::ShaderStageFlags nextStages_{};
     std::string entryPoint_{"main"};
-    std::vector<Gpu::PushConstantRange> pushConstantRanges_;
     std::optional<PushConstantReflection> pushConstantReflection_;
     CompilationError error_;
-    struct ShaderObjectVariant {
-        std::vector<Gpu::PushConstantRange> ranges;
-        Gpu::ShaderObject object;
-    };
-    std::vector<ShaderObjectVariant> shaderObjectVariants_;
 };
-
-std::vector<Gpu::PushConstantRange>
-mergePushConstantRanges(std::span<const Gpu::PushConstantRange> ranges);
-std::vector<Gpu::PushConstantRange>
-collectPushConstantRanges(ShaderManager &shaderManager, std::span<const ShaderHandle> shaders);
 } // namespace Cory

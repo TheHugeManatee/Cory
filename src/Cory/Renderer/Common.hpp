@@ -12,13 +12,15 @@
 
 #include <expected>
 #include <optional>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace Cory {
 
 // maximum number of frames in flight at a time
 static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+/// Hard limit for maximum size of push constants. 128 bytes is guaranteed by Vulkan spec.
+static constexpr uint32_t MAX_PUSH_CONSTANT_SIZE = 128;
 
 // forward declared classes/structs
 class Context;

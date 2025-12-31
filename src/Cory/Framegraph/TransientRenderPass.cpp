@@ -136,14 +136,14 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
             !pass_.shaders.empty(), "Render pass '{}' has no shaders to bind", pass_.name);
         std::vector<Gpu::ShaderStageFlags> stages;
         std::vector<Gpu::Handle<Gpu::ShaderObject_t>> handles;
-        const auto pushRanges = collectPushConstantRanges(ctx_->shaders(), pass_.shaders);
         stages.reserve(pass_.shaders.size());
         handles.reserve(pass_.shaders.size());
+
         auto &shaders = ctx_->shaders();
         for (auto shaderHandle : pass_.shaders) {
             auto &shader = shaders[shaderHandle];
             stages.emplace_back(shader.type());
-            handles.emplace_back(shader.shaderHandle(pushRanges));
+            handles.emplace_back(shader.shaderHandle());
         }
         renderPassRecorder.bindShaders(stages, handles);
 
@@ -184,7 +184,6 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
             renderPassRecorder.setVertexInput(vertexOptions.buffers, vertexOptions.attributes);
         }
 
-        const auto renderArea = determineRenderArea();
         Gpu::Rect2D scissorRect = dynamicStates_.renderArea;
         if (scissorRect.extent.width == 0 && scissorRect.extent.height == 0) {
             scissorRect = renderArea;
@@ -237,7 +236,7 @@ Gpu::PipelineLayoutHandle TransientRenderPass::pipelineLayoutHandle() noexcept
     pipelineLayout_ = ctx_->pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
         .label = fmt::format("Pipeline Layout {}", pass_.name),
         .bindGroupLayouts = ctx_->descriptors().layouts(),
-        .pushConstantRanges = collectPushConstantRanges(ctx_->shaders(), pass_.shaders),
+        .pushConstantRanges = {Shader::globalPushConstantRange},
     });
 
     return pipelineLayout_;

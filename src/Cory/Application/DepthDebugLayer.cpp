@@ -177,7 +177,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     recorder.pushConstant(
         Gpu::PushConstantRange{.offset = 0,
                                .size = sizeof(BufferDeviceAddress),
-                               .shaderStages = Gpu::ShaderStageFlagBits::FragmentBit},
+                               .shaderStages = Gpu::ShaderStageFlagBits::All},
         &d.gpu,
         cubePass.pipelineLayoutHandle());
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});

@@ -322,8 +322,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         Gpu::PushConstantRange{
             .offset = 0,
             .size = sizeof(Cory::BufferDeviceAddress),
-            .shaderStages = Gpu::ShaderStageFlagBits::VertexBit |
-                            Gpu::ShaderStageFlagBits::FragmentBit,
+            .shaderStages = Gpu::ShaderStageFlagBits::All,
         },
         &data.gpu,
         cubePass.pipelineLayoutHandle());

@@ -147,8 +147,8 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     });
 
     /// ^^^^     DECLARATION      ^^^^
-    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    RenderInput renderApi = co_await builder.finishDeclaration(
+        LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     FrameContext &frameCtx = *renderApi.frameCtx;

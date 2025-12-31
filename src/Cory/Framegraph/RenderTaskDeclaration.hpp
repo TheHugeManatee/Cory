@@ -6,6 +6,7 @@
 #include <cppcoro/is_awaitable.hpp>
 
 #include <type_traits>
+#include <utility>
 
 namespace Cory {
 
@@ -34,13 +35,18 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
 
         cppcoro::suspend_never yield_value(RenderTaskOutput output)
         {
+            set_output(std::move(output));
+            return {};
+        }
+        void return_void() {}
+
+        void set_output(RenderTaskOutput output)
+        {
             CO_CORE_ASSERT(!outputsProvided_,
                            "Coroutine cannot yield multiple RenderTaskOutput structs!");
             output_ = std::move(output);
             outputsProvided_ = true;
-            return {};
         }
-        void return_void() {}
 
         // todo: this could easily be a std::variant
         RenderTaskOutput output_;

@@ -2,7 +2,6 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <cppcoro/generator.hpp>
@@ -135,10 +134,11 @@ class Framegraph : NoCopy {
     /// Ensure that all output resources are transitioned to their final access states
     void finalizeOutputs(ExecutionInfo executionInfo);
 
-  private:                             /* members */
-    friend RenderTaskBuilder;          // convenience so it can call finishTaskDeclaration
-    friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
-    friend FramegraphVisualizer;       // accesses all the internals
+  private:                    /* members */
+    friend RenderTaskBuilder; // convenience so it can call finishTaskDeclaration
+    template <typename>
+    friend struct RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
+    friend FramegraphVisualizer;              // accesses all the internals
 
     std::unique_ptr<struct FramegraphPrivate> data_;
 };

@@ -141,9 +141,11 @@ void ParticleComputeDemoApplication::run()
 {
     // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
+    uint32_t idx = 0;
     std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
-        return Cory::Framegraph(ctx());
+        return Cory::Framegraph(ctx(), idx++);
     });
+
     auto time = Cory::AppClock::now();
     while (!window_->shouldClose()) {
         processEvents(0);

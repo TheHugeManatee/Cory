@@ -7,7 +7,8 @@
 namespace Cory {
 
 struct RenderTaskInfo;
-struct RenderTaskExecutionAwaiter;
+template <typename> struct RenderTaskExecutionAwaiter;
+struct RenderInput;
 class Framegraph;
 class RenderTaskBuilder;
 class FramegraphResourceManager;

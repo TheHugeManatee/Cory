@@ -4,11 +4,12 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <KDGpu/texture_options.h>
 
+#include <KDGpu/texture_options.h>
 #include <cppcoro/fmap.hpp>
 
 #include <gsl/gsl>
@@ -84,8 +85,7 @@ PSOutput main(VSOutput input) {
             },
     });
 
-    co_yield outputs;
-    RenderInput render = co_await builder.finishDeclaration();
+    RenderInput render = co_await builder.finishDeclaration(outputs);
     CO_CORE_ASSERT(render.cmd != nullptr, "Uh-oh");
     auto recorder = depthPass.begin(*render.cmd);
     CO_APP_INFO("[DepthPrepass] render commands executing");
@@ -108,8 +108,8 @@ RenderTaskDeclaration<DepthDebugOut> depthDebug(Framegraph &graph,
                                    TextureFormat::R8G8B8A8_SRGB,
                                    Sync::AccessType::ColorAttachmentWrite);
 
-    co_yield DepthDebugOut{depthVis};
-    RenderInput render = co_await builder.finishDeclaration();
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(DepthDebugOut{depthVis});
 
     CO_APP_INFO("[DepthDebug] Pass render commands are executed");
 }
@@ -130,8 +130,8 @@ RenderTaskDeclaration<NormalDebugOut> normalDebug(Framegraph &graph,
                                     TextureFormat::R8G8B8A8_SRGB,
                                     Sync::AccessType::ColorAttachmentWrite);
 
-    co_yield NormalDebugOut{normalVis};
-    RenderInput render = co_await builder.finishDeclaration();
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(NormalDebugOut{normalVis});
 
     CO_APP_INFO("[NormalDebug] Pass render commands are executed");
 }
@@ -154,8 +154,7 @@ RenderTaskDeclaration<DebugOut> debugGeneral(Framegraph &graph,
                                    TextureFormat::R8G8B8A8_SRGB,
                                    Sync::AccessType::ColorAttachmentWrite);
 
-    co_yield DebugOut{depthVis};
-    RenderInput render = co_await builder.finishDeclaration();
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(DebugOut{depthVis});
 
     CO_APP_INFO("[Debug] Pass render commands are executed");
 }
@@ -191,8 +190,8 @@ RenderTaskDeclaration<MainOut> mainPass(RenderTaskBuilder builder,
                               Sync::AccessType::ColorAttachmentWrite);
     }();
 
-    co_yield MainOut{colorOut, normalOut};
-    RenderInput render = co_await builder.finishDeclaration();
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(MainOut{colorOut, normalOut});
 
     CO_APP_INFO("{} Pass render commands are executed", builder.name());
 }
@@ -214,8 +213,7 @@ RenderTaskDeclaration<PostProcessOut> postProcess(RenderTaskBuilder builder,
                                 TextureFormat::R8G8B8A8_SRGB,
                                 Sync::AccessType::ColorAttachmentWrite);
 
-    co_yield PostProcessOut{color};
-    RenderInput render = co_await builder.finishDeclaration();
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(PostProcessOut{color});
 
     CO_APP_INFO("[Postprocess] Pass render commands are executed");
 }
@@ -258,12 +256,11 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
 
     auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("PASS_DepthPre"), {800, 600, 1});
     auto depthTex = depthPass.output().depthTexture;
-    auto mainPass =
-        passes::mainPass(graph.declareTask("PASS_Main"),
-                         NullHandle,
-                         NullHandle,
-                         depthTex,
-                         depthPass.output().depthBuffer);
+    auto mainPass = passes::mainPass(graph.declareTask("PASS_Main"),
+                                     NullHandle,
+                                     NullHandle,
+                                     depthTex,
+                                     depthPass.output().depthBuffer);
 
     auto addMainPass = passes::mainPass(graph.declareTask("PASS_Main_Lines"),
                                         mainPass.output().color,

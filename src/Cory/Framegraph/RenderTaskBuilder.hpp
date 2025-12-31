@@ -1,18 +1,22 @@
 #pragma once
 
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Framegraph/TransientComputePass.hpp>
 #include <Cory/Framegraph/TransientRenderPass.hpp>
 
 #include <cppcoro/coroutine.hpp>
+
 #include <string_view>
+#include <utility>
 
 namespace Cory {
-
 /**
  * passed to the render task coroutines when they actually execute.
  *
- * A render pass coroutine obtains this object with a `co_await builder.finishDeclaration()`.
+ * A render pass coroutine obtains this object with a
+ * `co_await builder.finishDeclaration(outputs)`.
  * It will be (potentially) resumed inside the Framegraph::execute() function,
  * after all resources have been resolved and can be queried through the @a resources
  * member.
@@ -34,12 +38,15 @@ struct RenderInput {
  * Note that the coroutine may never be resumed if the render pass identified by the @a passHandle
  * does not get scheduled.
  */
-struct RenderTaskExecutionAwaiter {
+template <typename RenderTaskOutput> struct RenderTaskExecutionAwaiter {
     RenderTaskHandle passHandle;
     Framegraph &fg;
+    RenderTaskOutput output;
     [[nodiscard]] constexpr bool await_ready() const noexcept { return false; }
     [[nodiscard]] RenderInput await_resume() const noexcept;
-    void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept;
+    void await_suspend(
+        cppcoro::coroutine_handle<typename RenderTaskDeclaration<RenderTaskOutput>::promise_type>
+            coroHandle) noexcept;
 };
 
 /// struct summarizing all info collected about a render task
@@ -121,7 +128,7 @@ class RenderTaskBuilder : NoCopy {
     TransientComputePass declareComputePass(ComputePassDeclaration passDeclaration);
 
     /**
-     * @brief Finish declaration of the render task.
+     * @brief Finish declaration of the render task and provide outputs.
      *
      * co_await'ing on the returned awaiter will suspend execution of the current coroutine
      * and enqueue it to the frame graph. Execution will resume on the framegraph's execution
@@ -129,7 +136,8 @@ class RenderTaskBuilder : NoCopy {
      * at all (the render pass provides resources that another pass consumes). If the resources
      * of the render pass are not needed, the coroutine will never be resumed.
      */
-    RenderTaskExecutionAwaiter finishDeclaration();
+    template <typename RenderTaskOutput>
+    RenderTaskExecutionAwaiter<RenderTaskOutput> finishDeclaration(RenderTaskOutput output);
 
     /// the name of the render task that is being created
     const std::string &name() const { return info_.name; }
@@ -139,5 +147,36 @@ class RenderTaskBuilder : NoCopy {
     RenderTaskInfo info_;
     Framegraph &framegraph_;
 };
+} // namespace Cory
+
+#include <Cory/Framegraph/Framegraph.hpp>
+
+namespace Cory {
+template <typename RenderTaskOutput>
+RenderInput RenderTaskExecutionAwaiter<RenderTaskOutput>::await_resume() const noexcept
+{
+    return fg.renderInput(passHandle);
+}
+
+template <typename RenderTaskOutput>
+void RenderTaskExecutionAwaiter<RenderTaskOutput>::await_suspend(
+    cppcoro::coroutine_handle<typename RenderTaskDeclaration<RenderTaskOutput>::promise_type>
+        coroHandle) noexcept
+{
+    coroHandle.promise().set_output(std::move(output));
+    fg.enqueueRenderPass(passHandle, coroHandle);
+}
+
+template <typename RenderTaskOutput>
+RenderTaskExecutionAwaiter<RenderTaskOutput>
+RenderTaskBuilder::finishDeclaration(RenderTaskOutput output)
+{
+    const RenderTaskHandle passHandle = framegraph_.finishTaskDeclaration(std::move(info_));
+    return RenderTaskExecutionAwaiter<RenderTaskOutput>{
+        passHandle,
+        framegraph_,
+        std::move(output),
+    };
+}
 
 } // namespace Cory

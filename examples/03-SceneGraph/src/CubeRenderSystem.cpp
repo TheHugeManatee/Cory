@@ -95,10 +95,11 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
             },
     });
 
-    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
-
     /// ^^^^     DECLARATION      ^^^^
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
+        .colorOut = writtenColorHandle,
+        .depthOut = writtenDepthHandle,
+    });
     /// vvvv  RENDERING COMMANDS  vvvv
 
     auto passRecorder = cubePass.begin(*renderApi.cmd);

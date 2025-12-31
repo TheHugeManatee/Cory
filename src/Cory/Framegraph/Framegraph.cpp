@@ -4,6 +4,7 @@
 
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
@@ -208,8 +209,8 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, Render
 
     CO_CORE_ASSERT(coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
-                   "points! A render task should only have a single co_yield and should wait on "
-                   "the builder's finishTaskDeclaration() exactly once!");
+                   "points! A render task should only wait on the builder's finishDeclaration() "
+                   "exactly once!");
 
     return transitions;
 }

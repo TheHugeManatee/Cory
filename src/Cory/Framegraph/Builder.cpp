@@ -6,17 +6,6 @@
 
 namespace Cory {
 
-RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
-{
-    return fg.renderInput(passHandle);
-}
-
-void RenderTaskExecutionAwaiter::await_suspend(
-    cppcoro::coroutine_handle<> coroHandle) const noexcept
-{
-    fg.enqueueRenderPass(passHandle, coroHandle);
-}
-
 RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
                                      Framegraph &framegraph,
                                      std::string_view taskName)
@@ -28,12 +17,6 @@ RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
     CO_CORE_TRACE("Pass {}: declaration started", info_.name);
 }
 RenderTaskBuilder::~RenderTaskBuilder() {}
-
-RenderTaskExecutionAwaiter RenderTaskBuilder::finishDeclaration()
-{
-    const RenderTaskHandle passHandle = framegraph_.finishTaskDeclaration(std::move(info_));
-    return RenderTaskExecutionAwaiter{passHandle, framegraph_};
-}
 
 TransientTextureHandle RenderTaskBuilder::create(std::string name,
                                                  glm::u32vec3 size,

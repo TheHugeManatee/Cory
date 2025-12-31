@@ -43,7 +43,8 @@ class MockLayer : public Cory::ApplicationLayer {
     renderTask(Cory::RenderTaskBuilder builder, Cory::LayerPassOutputs previousLayer) override
     {
         updatedIndex_ = counter++;
-        co_yield Cory::LayerPassOutputs{};
+        Cory::RenderInput render = co_await builder.finishDeclaration(previousLayer);
+        (void)render;
     }
 };
 

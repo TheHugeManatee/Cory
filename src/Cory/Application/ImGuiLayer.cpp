@@ -140,8 +140,8 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
                                   },
                               .pushConstantRanges = {}});
 
-    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    RenderInput renderApi = co_await builder.finishDeclaration(
+        LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle});
 
     FrameContext &frameCtx = *renderApi.frameCtx;
 

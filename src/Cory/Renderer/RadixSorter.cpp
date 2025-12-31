@@ -203,8 +203,6 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
         });
     };
 
-    const uint32_t numWorkgroups = scratch.workgroups;
-
     if (predicateBuffer.handle() != scratch.keysA.handle()) {
         cmd.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
             .srcStages = Gpu::PipelineStageFlagBit::HostBit,

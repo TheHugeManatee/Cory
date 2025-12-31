@@ -136,13 +136,14 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
             !pass_.shaders.empty(), "Render pass '{}' has no shaders to bind", pass_.name);
         std::vector<Gpu::ShaderStageFlags> stages;
         std::vector<Gpu::Handle<Gpu::ShaderObject_t>> handles;
+        const auto pushRanges = collectPushConstantRanges(ctx_->shaders(), pass_.shaders);
         stages.reserve(pass_.shaders.size());
         handles.reserve(pass_.shaders.size());
         auto &shaders = ctx_->shaders();
         for (auto shaderHandle : pass_.shaders) {
-            const auto &shader = shaders[shaderHandle];
+            auto &shader = shaders[shaderHandle];
             stages.emplace_back(shader.type());
-            handles.emplace_back(shader.shaderHandle());
+            handles.emplace_back(shader.shaderHandle(pushRanges));
         }
         renderPassRecorder.bindShaders(stages, handles);
 
@@ -151,12 +152,24 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
         renderPassRecorder.setPolygonMode(Gpu::PolygonMode::Fill);
         renderPassRecorder.setRasterizationSamples(determineSampleCount());
         renderPassRecorder.setCullMode(toCullMode(pass_.dynamicStates.cullMode));
+        renderPassRecorder.setRasterizerDiscardEnabled(false);
 
         const bool depthTestEnabled = pass_.dynamicStates.depthTest != DepthTest::Disabled;
         renderPassRecorder.setDepthTestEnabled(depthTestEnabled);
         renderPassRecorder.setDepthWriteEnabled(pass_.dynamicStates.depthWrite ==
                                                 DepthWrite::Enabled);
         renderPassRecorder.setDepthCompareOp(toCompareOp(pass_.dynamicStates.depthTest));
+        renderPassRecorder.setDepthBiasEnabled(false);
+        renderPassRecorder.setDepthBoundsTestEnabled(false);
+        renderPassRecorder.setDepthClampEnabled(false);
+        renderPassRecorder.setStencilTestEnabled(false);
+        renderPassRecorder.setAlphaToCoverageEnabled(false);
+        renderPassRecorder.setAlphaToOneEnabled(false);
+        renderPassRecorder.setLogicOpEnabled(false);
+        renderPassRecorder.setPrimitiveRestartEnabled(false);
+
+        const std::vector<Gpu::SampleMask> sampleMasks(1, 0xffffffffu);
+        renderPassRecorder.setSampleMask(determineSampleCount(), sampleMasks);
 
         if (!pass_.options.is_set(PassOptionFlagBits::DisableMeshInput)) {
             const auto defaultVertexOptions = Gpu::VertexOptions{

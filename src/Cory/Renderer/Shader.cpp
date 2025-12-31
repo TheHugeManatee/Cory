@@ -46,6 +46,21 @@ Gpu::ShaderStageFlags deduceNextStages(Gpu::ShaderStageFlagBits stage)
 } // namespace
 
 namespace Cory {
+namespace {
+bool rangesEqual(std::span<const Gpu::PushConstantRange> lhs,
+                 std::span<const Gpu::PushConstantRange> rhs)
+{
+    if (lhs.size() != rhs.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if (lhs[i].offset != rhs[i].offset) return false;
+        if (lhs[i].size != rhs[i].size) return false;
+        if (lhs[i].shaderStages != rhs[i].shaderStages) return false;
+    }
+    return true;
+}
+} // namespace
 
 ShaderSource::ShaderSource(std::string source,
                            Gpu::ShaderStageFlagBits type,
@@ -144,6 +159,46 @@ Shader::Shader(Context &ctx,
 bool Shader::valid() const
 {
     return ctx_ && type_ != SHADER_TYPE_UNKNOWN && shaderObject_.isValid();
+}
+
+Gpu::ShaderObject &Shader::shaderObject(std::span<const Gpu::PushConstantRange> ranges)
+{
+    CO_CORE_DEBUG_ASSERT(ctx_, "Shader has no context");
+    if (ranges.empty()) {
+        return shaderObject_;
+    }
+
+    auto it = std::find_if(shaderObjectVariants_.begin(),
+                           shaderObjectVariants_.end(),
+                           [&](const ShaderObjectVariant &variant) {
+                               return rangesEqual(variant.ranges, ranges);
+                           });
+    if (it != shaderObjectVariants_.end()) {
+        return it->object;
+    }
+
+    const auto layouts = ctx_->descriptors().layouts();
+    std::vector<Gpu::PushConstantRange> rangesCopy{ranges.begin(), ranges.end()};
+    Gpu::ShaderObjectOptions options{
+        .label = source_.filePath().empty() ? "ShaderObject" : source_.filePath().filename().string(),
+        .stage = type_,
+        .nextStage = nextStages_,
+        .code = spirvBinary_,
+        .entryPoint = entryPoint_,
+        .bindGroupLayouts = layouts,
+        .pushConstantRanges = rangesCopy,
+    };
+
+    ShaderObjectVariant variant{.ranges = std::move(rangesCopy),
+                                .object = ctx_->device().createShaderObject(options)};
+    shaderObjectVariants_.push_back(std::move(variant));
+    return shaderObjectVariants_.back().object;
+}
+
+Gpu::Handle<Gpu::ShaderObject_t>
+Shader::shaderHandle(std::span<const Gpu::PushConstantRange> ranges)
+{
+    return shaderObject(ranges).handle();
 }
 
 Gpu::ShaderModule Shader::createShaderModule() const

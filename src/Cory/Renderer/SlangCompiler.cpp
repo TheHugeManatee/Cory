@@ -1,12 +1,13 @@
 #include "SlangCompiler.hpp"
 
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Renderer/SlangCompilerTools.hpp>
 
 #include <slang-com-helper.h>
 #include <slang-com-ptr.h>
 #include <slang.h>
 
-#include <Cory/Base/ResourceLocator.hpp>
 #include <array>
 #include <atomic>
 #include <cstring>
@@ -278,6 +279,8 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
     Slang::ComPtr<slang::IComponentType> program;
     SlangResult programResult = request->getProgram(program.writeRef());
     if (!SLANG_FAILED(programResult) && program) {
+        const std::string dump = SlangCompilerTools::dumpProgramLayout(program);
+        CO_CORE_DEBUG("=== {} ===\n{}", source.filePath().string(), dump);
         if (auto layout = program->getLayout()) {
             if (auto globals = layout->getGlobalParamsTypeLayout()) {
                 const uint32_t fieldCount = globals->getFieldCount();
@@ -290,11 +293,20 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
 
                     auto typeLayout = field->getTypeLayout();
                     auto type = typeLayout ? typeLayout->getType() : nullptr;
-                    const bool isPointer =
-                        type && typeLayout &&
-                        type->getKind() == slang::TypeReflection::Kind::Pointer &&
-                        typeLayout->getFieldCount() == 0;
-                    const size_t size = typeLayout ? typeLayout->getSize() : 0u;
+                    bool isPointer = false;
+                    if (type) {
+                        if (type->getKind() == slang::TypeReflection::Kind::Pointer) {
+                            isPointer = true;
+                        }
+                        else if (auto *elementType = type->getElementType()) {
+                            isPointer =
+                                elementType->getKind() == slang::TypeReflection::Kind::Pointer;
+                        }
+                    }
+                    size_t size = typeLayout ? typeLayout->getSize() : 0u;
+                    if (isPointer && size == 0u) {
+                        size = sizeof(BufferDeviceAddress);
+                    }
 
                     pushConstants = PushConstantReflection{.size = size, .isPointer = isPointer};
                     break;

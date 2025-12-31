@@ -77,7 +77,9 @@ class Shader : NoCopy {
 
     Gpu::ShaderObject &shaderObject() { return shaderObject_; }
     const Gpu::ShaderObject &shaderObject() const { return shaderObject_; }
+    Gpu::ShaderObject &shaderObject(std::span<const Gpu::PushConstantRange> ranges);
     Gpu::Handle<Gpu::ShaderObject_t> shaderHandle() const { return shaderObject_.handle(); }
+    Gpu::Handle<Gpu::ShaderObject_t> shaderHandle(std::span<const Gpu::PushConstantRange> ranges);
     Gpu::ShaderStageFlags nextStages() const { return nextStages_; }
     Gpu::ShaderStageFlagBits type() const { return type_; }
     const std::string &entryPoint() const { return entryPoint_; }
@@ -120,6 +122,11 @@ class Shader : NoCopy {
     std::vector<Gpu::PushConstantRange> pushConstantRanges_;
     std::optional<PushConstantReflection> pushConstantReflection_;
     CompilationError error_;
+    struct ShaderObjectVariant {
+        std::vector<Gpu::PushConstantRange> ranges;
+        Gpu::ShaderObject object;
+    };
+    std::vector<ShaderObjectVariant> shaderObjectVariants_;
 };
 
 std::vector<Gpu::PushConstantRange>

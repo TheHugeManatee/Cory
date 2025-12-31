@@ -143,6 +143,8 @@ set(CORY_SOURCES
         Systems/SystemCoordinator.hpp
         Systems/TransformSystem.cpp
         Systems/TransformSystem.hpp
+        Renderer/SlangCompilerTools.cpp
+        Renderer/SlangCompilerTools.hpp
 )
 
 

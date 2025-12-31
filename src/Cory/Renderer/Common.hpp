@@ -11,6 +11,7 @@
 #include <vulkan/vulkan.h>
 
 #include <expected>
+#include <optional>
 #include <vector>
 #include <string>
 
@@ -41,7 +42,18 @@ class DescriptorSets;
 class SlangCompiler;
 using SpirvByteCode = std::vector<uint32_t>;
 using CompilationError = std::string;
-using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
+
+struct PushConstantReflection {
+    size_t size{};
+    bool isPointer{};
+};
+
+struct ShaderCompilationOutput {
+    SpirvByteCode spirv;
+    std::optional<PushConstantReflection> pushConstants;
+};
+
+using CompilationResult = std::expected<ShaderCompilationOutput, CompilationError>;
 
 using BufferDeviceAddress = uint64_t;
 

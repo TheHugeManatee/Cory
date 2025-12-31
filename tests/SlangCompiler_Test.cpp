@@ -25,7 +25,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
             FAIL(result.error());
         }
         REQUIRE(result.has_value());
-        CHECK(result.value().size() > 0);
+        CHECK(result.value().spirv.size() > 0);
     }
     SECTION("Compiling an invalid compute shader")
     {

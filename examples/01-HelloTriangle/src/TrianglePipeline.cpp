@@ -44,13 +44,15 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
     const auto vertexShaderSource =
         Cory::ShaderSource{vertexFile, Gpu::ShaderStageFlagBits::VertexBit};
     auto vertexShader =
-        device.createShaderModule(Cory::Shader::CompileToSpv(vertexShaderSource, false).value());
+        device.createShaderModule(
+            Cory::Shader::CompileToSpv(vertexShaderSource, false).value().spirv);
 
     const auto fragmentFile = Cory::ResourceLocator::Locate(fragFile);
     const auto fragmentShaderSource =
         Cory::ShaderSource{fragmentFile, Gpu::ShaderStageFlagBits::FragmentBit};
     auto fragmentShader =
-        device.createShaderModule(Cory::Shader::CompileToSpv(fragmentShaderSource, false).value());
+        device.createShaderModule(
+            Cory::Shader::CompileToSpv(fragmentShaderSource, false).value().spirv);
 
     // Create a pipeline layout (array of bind group layouts)
     const KDGpu::PipelineLayoutOptions pipelineLayoutOptions = {

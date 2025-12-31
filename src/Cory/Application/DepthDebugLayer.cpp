@@ -12,6 +12,7 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
@@ -52,7 +53,7 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
         .fullscreenTriShader{
             res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
         .depthDebugShader{
-            res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag.slang"))},
+            res.createShader(ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
         .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
             .magFilter = Gpu::FilterMode::Linear, .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
@@ -142,8 +143,9 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
             .clearColor = {},
             .blend = std::nullopt,
         }},
-        .pushConstantRanges = {KDGpu::PushConstantRange{
-            .offset = 0, .size = 8, .shaderStages = Gpu::ShaderStageFlagBits::AllGraphics}},
+        .dynamicStates = {.cullMode = CullMode::None,
+                          .depthTest = DepthTest::Disabled,
+                          .depthWrite = DepthWrite::Disabled},
     });
 
     /// ^^^^     DECLARATION      ^^^^
@@ -158,6 +160,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
         Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess));
 
     auto recorder = cubePass.begin(*renderApi.cmd);
+
     renderApi.descriptors
         ->write(ImageBindPoint::Texture2D,
                 frameCtx.inFlightIndex,
@@ -165,20 +168,18 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                 depthLayout,
                 resources.imageView(previousLayer.depth),
                 state_->sampler.handle())
-        .bind(recorder, frameCtx.inFlightIndex);
+        .bind(recorder, frameCtx.inFlightIndex, cubePass.pipelineLayoutHandle());
 
     auto d = renderApi.bindingContext->alloc<DrawData>();
     d->center = center.get();
     d->size = size.get();
     d->window = window.get();
     recorder.pushConstant(
-        KDGpu::PushConstantRange{.offset = 0,
-                                 .size = sizeof(DrawData),
-                                 .shaderStages = Gpu::ShaderStageFlagBits::FragmentBit},
-        &d.gpu);
-
-    recorder.setDepthTestEnabled(false);
-    recorder.setDepthWriteEnabled(false);
+        Gpu::PushConstantRange{.offset = 0,
+                               .size = sizeof(BufferDeviceAddress),
+                               .shaderStages = Gpu::ShaderStageFlagBits::FragmentBit},
+        &d.gpu,
+        cubePass.pipelineLayoutHandle());
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
 
     recorder.end();

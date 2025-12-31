@@ -6,6 +6,7 @@
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
+#include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/UniformBufferObject.hpp>
 
@@ -15,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
+#include <array>
 #include <cstddef>
 
 PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight)
@@ -32,26 +34,16 @@ PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx, uint32_t ma
     {
         Cory::ShaderSource predicateSource{
             Cory::ResourceLocator::Locate("sort_preprocess.comp.slang")};
-        predicateShader_ = ctx.shaders().createShader(
-            std::move(predicateSource),
-            {Gpu::PushConstantRange{.offset = 0,
-                                    .size = sizeof(uint32_t) * 2,
-                                    .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit}});
+        predicateShader_ = ctx.shaders().createShader(std::move(predicateSource));
     }
 
     predicateLayout_ = ctx.pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
         .label = "PointSpritePredicateLayout",
         .bindGroupLayouts = ctx.descriptors().layouts(),
-        .pushConstantRanges = {Gpu::PushConstantRange{
-            .offset = 0,
-            .size = sizeof(uint32_t) * 2,
-            .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit,
-        }},
     });
     predicatePipeline_ = ctx.pipelineCache().queryComputePipeline(
         "PointSpritePredicate",
-        Cory::ComputePipelineDescriptor{.shader = predicateShader_,
-                                        .pipelineLayout = predicateLayout_});
+        Cory::ComputePipelineDescriptor{.pipelineLayout = predicateLayout_});
 }
 
 PointSpriteRenderSystem::~PointSpriteRenderSystem()
@@ -139,7 +131,9 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                 .store = Gpu::AttachmentStoreOperation::Store,
                 .clearDepthStencil = clearDepthStencil,
             },
-        .vertexOptions = Gpu::VertexOptions{},
+        .dynamicStates = {.cullMode = Cory::CullMode::None,
+                          .depthTest = Cory::DepthTest::Less,
+                          .depthWrite = Cory::DepthWrite::Disabled},
     });
 
     /// ^^^^     DECLARATION      ^^^^
@@ -171,9 +165,9 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     if (instanceCount > 0) {
         auto &sortBuf = sorter_.scratchForFrame(frameCtx.inFlightIndex, instanceCount);
         auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
-        constexpr Cory::DescriptorSets::BufferIndex kInstanceBufferIndex = 0;
-        constexpr Cory::DescriptorSets::BufferIndex kSortedIndicesBufferIndex = 1;
-        constexpr Cory::DescriptorSets::BufferIndex kSortKeysBufferIndex = 0;
+        constexpr Cory::BufferHeapIndex kInstanceBufferIndex = 0;
+        constexpr Cory::BufferHeapIndex kSortedIndicesBufferIndex = 1;
+        constexpr Cory::BufferHeapIndex kSortKeysBufferIndex = 0;
 
         auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
         std::memcpy(
@@ -241,13 +235,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     // instance data already uploaded before sorting
 
     auto &descriptorSets = ctx_->descriptors();
-    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
-
-    // Set dynamic states
-    passRecorder.setCullMode(Gpu::CullModeFlagBits::None);
-    passRecorder.setDepthTestEnabled(true);
-    passRecorder.setDepthWriteEnabled(false);
-    passRecorder.setDepthCompareOp(Gpu::CompareOperation::Less);
+    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex, spritePass.pipelineLayoutHandle());
 
     if (instanceCount > 0) {
         passRecorder.draw(Gpu::DrawCommand{

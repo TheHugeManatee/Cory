@@ -15,23 +15,12 @@ namespace Cory {
  *  - Temp allocations for coherently mapped buffers (replaces UBOs)
  *  - Push constants
  *
- * TODOs:
- * For per-frame/draw/pass data:
- *  - Allocate big(ish) HOST_COHERENT buffer (todo: find out about kdgpu specific here to set the
- *    correct flags)
- *  - Split this buffer into one region for each frame in flight
- *  - For each frame, provide a bump allocator to allocate regions for the current frame
- *  - passes can then allocate individual regions for their data, write to them directly on the CPU
- * via the mapped pointer, and pass the device memory to the shaders via push constant
- *
  * For textures:
  *  - For simplicity, we scrap the descriptor buffer contents every frame:
  *  - Whenever a pass requires a texture, it must already be uploaded.
  *  - The SBC then assigns it a binding index, and writes the descriptor set entry for it
  *  - texture assignment is also done via a simple bump allocator, hence each descriptor index
  *    will be used exactly once per frame
- *  - Later, this can be further optimized by using VK_EXT_descriptor_buffer to directly write
- *    descriptors into the GPU instead of going through vkUpdateDescriptorSets
  *
  */
 class ShaderBindingContext : NoCopy, NoMove {

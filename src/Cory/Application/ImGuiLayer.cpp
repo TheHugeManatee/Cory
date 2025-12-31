@@ -121,7 +121,6 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
     auto imguiPass = builder.declareRenderPass(
         RenderPassDeclaration{.name = "PASS_ImGui",
                               .options = PassOptionFlagBits::SkipPipelineBind,
-                              .shaders = {},
                               .attachments = {{
                                   {
                                       // main color target
@@ -137,8 +136,7 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
                                       .load = Gpu::AttachmentLoadOperation::Load,
                                       .store = Gpu::AttachmentStoreOperation::Store,
                                       .clearDepthStencil = {},
-                                  },
-                              .pushConstantRanges = {}});
+                                  }});
 
     RenderInput renderApi = co_await builder.finishDeclaration(
         LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle});

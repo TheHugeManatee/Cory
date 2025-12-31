@@ -12,6 +12,7 @@
 #include <cstring>
 #include <fstream>
 #include <mutex>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -273,7 +274,39 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
     result.resize(spirvCode->getBufferSize() / sizeof(uint32_t));
     std::memcpy(result.data(), spirvCode->getBufferPointer(), spirvCode->getBufferSize());
 
-    return result;
+    std::optional<PushConstantReflection> pushConstants;
+    Slang::ComPtr<slang::IComponentType> program;
+    SlangResult programResult = request->getProgram(program.writeRef());
+    if (!SLANG_FAILED(programResult) && program) {
+        if (auto layout = program->getLayout()) {
+            if (auto globals = layout->getGlobalParamsTypeLayout()) {
+                const uint32_t fieldCount = globals->getFieldCount();
+                for (uint32_t i = 0; i < fieldCount; ++i) {
+                    auto field = globals->getFieldByIndex(i);
+                    if (!field) continue;
+                    if (field->getCategory() != slang::ParameterCategory::PushConstantBuffer) {
+                        continue;
+                    }
+
+                    auto typeLayout = field->getTypeLayout();
+                    auto type = typeLayout ? typeLayout->getType() : nullptr;
+                    const bool isPointer =
+                        type && typeLayout &&
+                        type->getKind() == slang::TypeReflection::Kind::Pointer &&
+                        typeLayout->getFieldCount() == 0;
+                    const size_t size = typeLayout ? typeLayout->getSize() : 0u;
+
+                    pushConstants = PushConstantReflection{.size = size, .isPointer = isPointer};
+                    break;
+                }
+            }
+        }
+    }
+
+    return ShaderCompilationOutput{
+        .spirv = std::move(result),
+        .pushConstants = std::move(pushConstants),
+    };
 }
 
 SlangStage SlangCompiler::toSlangStage(Gpu::ShaderStageFlagBits stage) const

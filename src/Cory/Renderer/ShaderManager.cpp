@@ -66,18 +66,17 @@ ShaderHandle ShaderManager::createShader(std::filesystem::path filePath,
     return data_->shaders.emplace(ResourceStorage<Shader>{
         .name = filePath.string(),
         .loc = std::move(loc),
-        .resource = {std::ref(*data_->ctx), ShaderSource{std::move(filePath), type}, "main", {}}});
+        .resource = {std::ref(*data_->ctx), ShaderSource{std::move(filePath), type}, "main"}});
 }
 
 ShaderHandle ShaderManager::createShader(ShaderSource source,
-                                         std::vector<Gpu::PushConstantRange> pushConstantRanges,
                                          std::source_location loc)
 {
     CO_CORE_DEBUG_ASSERT(data_->ctx != nullptr, "Context was not initialized!");
     return data_->shaders.emplace(ResourceStorage<Shader>{
         .name = source.filePath().string(),
         .loc = std::move(loc),
-        .resource = {std::ref(*data_->ctx), std::move(source), "main", std::move(pushConstantRanges)}});
+        .resource = {std::ref(*data_->ctx), std::move(source), "main"}});
 }
 
 ShaderHandle ShaderManager::createShader(std::string source,
@@ -91,8 +90,7 @@ ShaderHandle ShaderManager::createShader(std::string source,
         .loc = std::move(loc),
         .resource = {std::ref(*data_->ctx),
                      ShaderSource{std::move(source), type, std::move(filePath)},
-                     "main",
-                     {}}});
+                     "main"}});
 }
 
 Shader &ShaderManager::operator[](ShaderHandle shaderHandle)

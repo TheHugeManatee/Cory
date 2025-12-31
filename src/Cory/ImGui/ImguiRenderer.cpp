@@ -175,11 +175,13 @@ void ImGuiRenderer::initialize(float scaleFactor,
     const auto vertShaderCode =
         Shader::CompileToSpv(
             ShaderSource{vertexShaderSource, ShaderStageFlagBits::VertexBit, "imgui.vert"})
-            .value();
+            .value()
+            .spirv;
     const auto fragShaderCode =
         Shader::CompileToSpv(
             ShaderSource{fragmentShaderSource, ShaderStageFlagBits::FragmentBit, "imgui.frag"})
-            .value();
+            .value()
+            .spirv;
 
     m_bindGroupLayout = m_device->createBindGroupLayout(BindGroupLayoutOptions{
         .bindings =

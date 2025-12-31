@@ -12,7 +12,6 @@
 namespace Cory {
 
 struct PipelineDescriptor {
-    std::vector<ShaderHandle> shaders;
     Gpu::SampleCountFlagBits sampleCount;
     std::vector<Gpu::Format> colorFormats;
     std::vector<Gpu::BlendOptions> blendOptions;
@@ -25,7 +24,6 @@ struct PipelineDescriptor {
     [[nodiscard]] std::size_t hash() const
     {
         return hashCompose(0,
-                           shaders,
                            sampleCount,
                            colorFormats,
                            blendOptions,
@@ -38,10 +36,9 @@ struct PipelineDescriptor {
 };
 
 struct ComputePipelineDescriptor {
-    ShaderHandle shader;
     Gpu::PipelineLayoutHandle pipelineLayout;
 
-    [[nodiscard]] std::size_t hash() const { return hashCompose(0, shader, pipelineLayout); }
+    [[nodiscard]] std::size_t hash() const { return hashCompose(0, pipelineLayout); }
     bool operator==(const ComputePipelineDescriptor &rhs) const = default;
 };
 

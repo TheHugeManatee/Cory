@@ -3,10 +3,13 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
+#include <Cory/Renderer/Shader.hpp>
 
 #include <KDGpu/command_recorder.h>
 #include <KDGpu/compute_pass_command_recorder.h>
 #include <KDGpu/compute_pipeline_options.h>
+
+#include <array>
 
 namespace Cory {
 
@@ -36,10 +39,11 @@ Gpu::PipelineLayoutHandle TransientComputePass::pipelineLayoutHandle() noexcept
         return pipelineLayout_;
     }
 
+    const std::array<ShaderHandle, 1> shaders{pass_.shader};
     pipelineLayout_ = ctx_->pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
         .label = fmt::format("Pipeline Layout {}", pass_.name),
         .bindGroupLayouts = ctx_->descriptors().layouts(),
-        .pushConstantRanges = pass_.pushConstantRanges,
+        .pushConstantRanges = collectPushConstantRanges(ctx_->shaders(), shaders),
     });
 
     return pipelineLayout_;
@@ -53,7 +57,6 @@ Gpu::ComputePipelineHandle TransientComputePass::pipelineHandle() noexcept
     pipeline_ = ctx_->pipelineCache().queryComputePipeline(
         fmt::format("Compute Pipeline {}", pass_.name),
         ComputePipelineDescriptor{
-            .shader = pass_.shader,
             .pipelineLayout = pipelineLayoutHandle(),
         });
     return pipeline_;

@@ -119,7 +119,7 @@ class RenderTaskBuilder : NoCopy {
                                                            Sync::AccessType readWriteAccess);
 
     /**
-     * Declares a render pass with a default pipeline setup
+     * Declares a render pass and its attachments.
      * @param passDeclaration   the declaration of the pass
      * @return a builder class to set up the render pass. call finish() to obtain the pass object
      */

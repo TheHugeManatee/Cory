@@ -290,6 +290,22 @@ DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
     return *this;
 }
 
+DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
+                                     gsl::index frameInFlightIndex,
+                                     Gpu::PipelineLayoutHandle pipelineLayout)
+{
+    CO_CORE_ASSERT(data_ != nullptr, "DescriptorSets not initialized");
+
+    flush(frameInFlightIndex);
+
+    for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
+        cmd.setBindGroup(static_cast<uint32_t>(type),
+                         data_->bindGroups[type][frameInFlightIndex],
+                         pipelineLayout);
+    }
+    return *this;
+}
+
 DescriptorSets &DescriptorSets::bind(Gpu::ComputePassCommandRecorder &cmd,
                                      gsl::index frameInFlightIndex)
 {

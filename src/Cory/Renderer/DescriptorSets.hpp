@@ -131,6 +131,9 @@ class DescriptorSets : NoCopy {
 
     /// bind the given instance index
     DescriptorSets &bind(Gpu::RenderPassCommandRecorder &cmd, gsl::index instanceIndex);
+    DescriptorSets &bind(Gpu::RenderPassCommandRecorder &cmd,
+                         gsl::index instanceIndex,
+                         Gpu::PipelineLayoutHandle pipelineLayout);
     DescriptorSets &bind(Gpu::ComputePassCommandRecorder &cmd, gsl::index instanceIndex);
 
     /// Apply all queued descriptor writes

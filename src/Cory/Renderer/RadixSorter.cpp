@@ -12,6 +12,7 @@
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/command_recorder.h>
 
+#include <array>
 #include <cstring>
 #include <numeric>
 #include <utility>
@@ -28,7 +29,7 @@ constexpr Gpu::PushConstantRange kPushRange{
 ShaderHandle createComputeShader(Context &ctx, std::string_view path)
 {
     ShaderSource source{ResourceLocator::Locate(path)};
-    return ctx.shaders().createShader(std::move(source), {kPushRange});
+    return ctx.shaders().createShader(std::move(source));
 }
 } // namespace
 
@@ -65,10 +66,11 @@ void RadixSorter::ensurePipelineLayout()
 
     auto &cache = ctx_->pipelineCache();
     auto layouts = ctx_->descriptors().layouts();
+    const std::array<ShaderHandle, 3> shaders{histogramShader_, scanShader_, scatterShader_};
     pipelineLayout_ = cache.queryLayout(Gpu::PipelineLayoutOptions{
         .label = "RadixSortLayout",
         .bindGroupLayouts = layouts,
-        .pushConstantRanges = {kPushRange},
+        .pushConstantRanges = collectPushConstantRanges(ctx_->shaders(), shaders),
     });
 }
 
@@ -79,8 +81,7 @@ void RadixSorter::ensurePipeline()
     ensurePipelineLayout();
     auto &cache = ctx_->pipelineCache();
     computePipeline_ = cache.queryComputePipeline(
-        "RadixSortCompute",
-        ComputePipelineDescriptor{.shader = histogramShader_, .pipelineLayout = pipelineLayout_});
+        "RadixSortCompute", ComputePipelineDescriptor{.pipelineLayout = pipelineLayout_});
     CO_CORE_ASSERT(computePipeline_.isValid(), "Failed to create radix sort compute pipeline");
 }
 

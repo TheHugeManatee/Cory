@@ -59,9 +59,8 @@ Gpu::GraphicsPipelineHandle PipelineCache::query(std::string_view name,
     return handle;
 }
 
-Gpu::ComputePipelineHandle PipelineCache::queryComputePipeline(
-    std::string_view name,
-    const ComputePipelineDescriptor &info)
+Gpu::ComputePipelineHandle
+PipelineCache::queryComputePipeline(std::string_view name, const ComputePipelineDescriptor &info)
 {
     if (auto it = data_->computeCache.find(info); it != data_->computeCache.end()) {
         return it->second;
@@ -114,22 +113,6 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
 {
     CO_CORE_INFO("Creating new pipeline for '{}' ({:X})", name, info.hash());
 
-    // 1) Shaders -> KDGpu::ShaderStage list
-    std::vector<Gpu::ShaderStage> shaderStages;
-    shaderStages.reserve(info.shaders.size());
-    std::vector<Gpu::ShaderModule> shaderModules;
-    shaderModules.reserve(info.shaders.size());
-    for (auto shaderHandle : info.shaders) {
-        const auto &s = (*shaderManager)[shaderHandle];
-        CO_CORE_ASSERT(s.valid(), "Shader is invalid:\n{}", s.error());
-        shaderModules.push_back(s.createShaderModule());
-        shaderStages.push_back(Gpu::ShaderStage{
-            .shaderModule = shaderModules.back(),
-            .stage = s.type(),
-            .entryPoint = s.entryPoint(),
-        });
-    }
-
     std::vector<Gpu::RenderTargetOptions> rtos;
     rtos.reserve(info.colorFormats.size());
     for (size_t i = 0; i < info.colorFormats.size(); ++i) {
@@ -141,7 +124,7 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
     // 8) Build pipeline options
     const Gpu::GraphicsPipelineOptions gpOpts = {
         .label = name,
-        .shaderStages = std::move(shaderStages),
+        .shaderStages = {},
         .layout = info.pipelineLayout,
         .vertex = info.vertexOptions,
         .renderTargets = std::move(rtos),
@@ -180,24 +163,15 @@ Gpu::GraphicsPipelineHandle PipelineCachePrivate::create(std::string_view name,
     return resourceManager->createGraphicsPipeline(device, gpOpts);
 }
 
-Gpu::ComputePipelineHandle PipelineCachePrivate::createCompute(
-    std::string_view name,
-    const ComputePipelineDescriptor &info)
+Gpu::ComputePipelineHandle
+PipelineCachePrivate::createCompute(std::string_view name, const ComputePipelineDescriptor &info)
 {
     CO_CORE_INFO("Creating new compute pipeline for '{}' ({:X})", name, info.hash());
-
-    const auto &shader = (*shaderManager)[info.shader];
-    CO_CORE_ASSERT(shader.valid(), "Shader is invalid:\n{}", shader.error());
-    auto shaderModule = shader.createShaderModule();
 
     const Gpu::ComputePipelineOptions cpOpts{
         .label = name,
         .layout = info.pipelineLayout,
-        .shaderStage =
-            Gpu::ComputeShaderStage{
-                .shaderModule = shaderModule,
-                .entryPoint = shader.entryPoint(),
-            },
+        .shaderStage = {},
     };
 
     return resourceManager->createComputePipeline(device, cpOpts);

@@ -11,7 +11,6 @@ namespace Cory {
 struct ComputePassDeclaration {
     std::string name;
     ShaderHandle shader;
-    std::vector<Gpu::PushConstantRange> pushConstantRanges;
 };
 
 class TransientComputePass {

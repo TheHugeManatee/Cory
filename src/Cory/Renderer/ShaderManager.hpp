@@ -33,10 +33,9 @@ class ShaderManager : NoCopy {
     createShader(std::filesystem::path filePath,
                  Gpu::ShaderStageFlagBits type = SHADER_TYPE_UNKNOWN,
                  std::source_location loc = std::source_location::current());
-    /// Create a shader from a fully configured ShaderSource (e.g. with push constants).
+    /// Create a shader from a fully configured ShaderSource.
     [[nodiscard]] ShaderHandle
     createShader(ShaderSource source,
-                 std::vector<Gpu::PushConstantRange> pushConstantRanges = {},
                  std::source_location loc = std::source_location::current());
     /// @see ShaderSource::ShaderSource(std::string, ShaderType, std::filesystem::path)
     [[nodiscard]] ShaderHandle

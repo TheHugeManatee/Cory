@@ -10,7 +10,7 @@ struct PointSpriteGlobals {
     float padding2;
 };
 
-ConstantBuffer<PointSpriteGlobals> gGlobals : register(b0, space0);
+[[vk::push_constant]] PointSpriteGlobals *globals;
 
 struct FSInput {
     float4 color : COLOR0;

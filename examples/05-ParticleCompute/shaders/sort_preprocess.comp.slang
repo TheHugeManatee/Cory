@@ -18,13 +18,13 @@ struct PointSpriteGlobals {
 };
 
 // Bindings
-[[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals;
 [[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
 [[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[];
 
 struct PushConstants {
     uint numInstances;
     uint pad;
+    PointSpriteGlobals *globals;
 };
 [[vk::push_constant]] PushConstants p;
 
@@ -35,7 +35,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     if (i >= p.numInstances) return;
 
     float3 pos = gReadOnlyBuffers[0][i].positionAndSize.xyz;
-    float4 viewPos = mul(gGlobals.view, float4(pos, 1.0));
+    float4 viewPos = mul(p.globals->view, float4(pos, 1.0));
 
     // View space Z is negative in front of camera in many systems
     float dist = -viewPos.z; // Distance from camera plane

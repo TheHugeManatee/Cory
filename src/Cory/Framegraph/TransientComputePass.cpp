@@ -29,7 +29,8 @@ Gpu::ComputePassCommandRecorder TransientComputePass::begin(CommandRecorder &cmd
     auto options = Gpu::ComputePassCommandRecorderOptions{};
     auto recorder = cmd.beginComputePass(std::move(options));
 
-    recorder.setPipeline(pipelineHandle());
+    // Set the pipeline layout so it is known for things like bind groups etc.
+    recorder.setPipelineLayout(pipelineLayoutHandle());
     return recorder;
 }
 
@@ -46,19 +47,6 @@ Gpu::PipelineLayoutHandle TransientComputePass::pipelineLayoutHandle() noexcept
     });
 
     return pipelineLayout_;
-}
-
-Gpu::ComputePipelineHandle TransientComputePass::pipelineHandle() noexcept
-{
-    if (pipeline_.isValid()) {
-        return pipeline_;
-    }
-    pipeline_ =
-        ctx_->pipelineCache().queryComputePipeline(fmt::format("Compute Pipeline {}", pass_.name),
-                                                   ComputePipelineDescriptor{
-                                                       .pipelineLayout = pipelineLayoutHandle(),
-                                                   });
-    return pipeline_;
 }
 
 } // namespace Cory

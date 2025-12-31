@@ -16,9 +16,9 @@ struct InstanceData {
     float4 parameters;
 };
 
-[[vk::binding(0, 0)]] ConstantBuffer<PointSpriteGlobals> gGlobals;
 [[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
 [[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[];
+[[vk::push_constant]] PointSpriteGlobals *globals;
 
 struct VSInput {
     uint vertexId : SV_VertexID;
@@ -49,14 +49,14 @@ VSOutput main(VSInput input)
     const float halfSize = instance.positionAndSize.w;
 
     const float3 center = instance.positionAndSize.xyz;
-    const float3 right = gGlobals.cameraRight;
-    const float3 up = gGlobals.cameraUp;
+    const float3 right = globals->cameraRight;
+    const float3 up = globals->cameraUp;
 
     const float3 worldOffset = corner.x * right * halfSize + corner.y * up * halfSize;
     const float3 worldPosition = center + worldOffset;
 
     VSOutput output;
-    output.position = mul(gGlobals.viewProjection, float4(worldPosition, 1.0));
+    output.position = mul(globals->viewProjection, float4(worldPosition, 1.0));
     output.color = instance.color;
     output.localPos = corner;
     return output;

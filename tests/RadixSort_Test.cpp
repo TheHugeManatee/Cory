@@ -2,9 +2,9 @@
 
 #include <../src/Cory/Renderer/RadixSorter.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -91,6 +91,8 @@ TEST_CASE("Radix sort compute pipeline matches CPU reference")
     auto &ctx = t.ctx();
     auto &device = ctx.device();
     Cory::RadixSorter sorter{ctx};
+    Cory::FramegraphResourceManager resources{ctx};
+    auto passes = sorter.declarePasses(resources);
 
     // Toy distances (larger = farther)
     std::vector<float> distances{5.0f, 1.0f, 3.5f, 8.0f, 0.5f, 2.5f, 7.0f, 4.0f};
@@ -133,8 +135,14 @@ TEST_CASE("Radix sort compute pipeline matches CPU reference")
     auto &scratch = sorter.scratchForFrame(0, count);
 
     auto recorder = device.createCommandRecorder();
-    auto &sorted = sorter.sort(
-        recorder, ctx.descriptors(), scratch, predicateBuffer, count, sortedIndicesBuffer, 0);
+    auto &sorted = sorter.sort(recorder,
+                               ctx.descriptors(),
+                               scratch,
+                               passes,
+                               predicateBuffer,
+                               count,
+                               sortedIndicesBuffer,
+                               0);
 
     auto readback = device.createBuffer(Gpu::BufferOptions{
         .label = "SortedReadback",
@@ -196,6 +204,8 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
     auto &ctx = t.ctx();
     auto &device = ctx.device();
     Cory::RadixSorter sorter{ctx};
+    Cory::FramegraphResourceManager resources{ctx};
+    auto passes = sorter.declarePasses(resources);
 
     const std::array<uint32_t, 8> keys = {0x1u, 0xFu, 0x2u, 0x1u, 0x0u, 0xAu, 0xFu, 0x2u};
     const uint32_t count = static_cast<uint32_t>(keys.size());
@@ -221,7 +231,14 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .buffer = scratch.keysA.handle(),
         });
         sorter.dispatchHistogram(
-            recorder, ctx.descriptors(), scratch, scratch.keysA, count, bitOffset, 0);
+            recorder,
+            ctx.descriptors(),
+            scratch,
+            passes.histogram,
+            scratch.keysA,
+            count,
+            bitOffset,
+            0);
 
         auto histo = readbackBuffer(device,
                                     ctx.graphicsQueue(),
@@ -254,7 +271,7 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
             .buffer = scratch.histograms.handle(),
         });
-        sorter.dispatchScan(recorder, ctx.descriptors(), scratch, 0);
+        sorter.dispatchScan(recorder, ctx.descriptors(), scratch, passes.scan, 0);
 
         auto scanned = readbackBuffer(device,
                                       ctx.graphicsQueue(),
@@ -312,6 +329,7 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
         sorter.dispatchScatter(recorder,
                                ctx.descriptors(),
                                scratch,
+                               passes.scatter,
                                scratch.keysA,
                                scratch.indicesA,
                                scratch.keysB,

@@ -5,11 +5,9 @@
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
+#include <Cory/Renderer/RadixSorter.hpp>
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
-
-#include "../../../src/Cory/Renderer/RadixSorter.hpp"
 
 #include <type_traits>
 #include <vector>
@@ -42,7 +40,7 @@ struct InstanceBuffer {
 class PointSpriteRenderSystem
     : public Cory::BasicSystem<PointSpriteRenderSystem, PointSpriteComponent> {
   public:
-    explicit PointSpriteRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight);
+    explicit PointSpriteRenderSystem(Cory::Context &ctx);
     ~PointSpriteRenderSystem();
 
     void beforeUpdate(Cory::SceneGraph &sg);
@@ -58,8 +56,8 @@ class PointSpriteRenderSystem
     };
     Cory::RenderTaskDeclaration<PassOutputs>
     spriteRenderTask(Cory::RenderTaskBuilder builder,
-                   Cory::TransientTextureHandle colorTarget,
-                   Cory::TransientTextureHandle depthTarget);
+                     Cory::TransientTextureHandle colorTarget,
+                     Cory::TransientTextureHandle depthTarget);
 
   private:
     InstanceBuffer &instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount);
@@ -69,12 +67,10 @@ class PointSpriteRenderSystem
     Cory::Components::CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};
-    std::unique_ptr<Cory::UniformBufferObject<PointSpriteGlobals>> globalUbo_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     Cory::ShaderHandle predicateShader_;
     KDGpu::PipelineLayoutHandle predicateLayout_;
-    KDGpu::ComputePipelineHandle predicatePipeline_;
 
     Cory::RadixSorter sorter_;
 };

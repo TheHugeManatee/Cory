@@ -2,9 +2,10 @@
 
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
-#include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
 #include <KDGpu/bind_group_options.h>
@@ -50,6 +51,48 @@ RadixSorter::~RadixSorter()
     shaders.release(scatterShader_);
 }
 
+RadixSorter::Passes RadixSorter::declarePasses(RenderTaskBuilder &builder)
+{
+    return Passes{
+        .histogram = builder.declareComputePass(ComputePassDeclaration{
+            .name = "PASS_RadixHistogram",
+            .shader = histogramShader_,
+        }),
+        .scan = builder.declareComputePass(ComputePassDeclaration{
+            .name = "PASS_RadixScan",
+            .shader = scanShader_,
+        }),
+        .scatter = builder.declareComputePass(ComputePassDeclaration{
+            .name = "PASS_RadixScatter",
+            .shader = scatterShader_,
+        }),
+    };
+}
+
+RadixSorter::Passes RadixSorter::declarePasses(FramegraphResourceManager &resources)
+{
+    return Passes{
+        .histogram = TransientComputePass{*ctx_,
+                                          resources,
+                                          ComputePassDeclaration{
+                                              .name = "PASS_RadixHistogram",
+                                              .shader = histogramShader_,
+                                          }},
+        .scan = TransientComputePass{*ctx_,
+                                     resources,
+                                     ComputePassDeclaration{
+                                         .name = "PASS_RadixScan",
+                                         .shader = scanShader_,
+                                     }},
+        .scatter = TransientComputePass{*ctx_,
+                                        resources,
+                                        ComputePassDeclaration{
+                                            .name = "PASS_RadixScatter",
+                                            .shader = scatterShader_,
+                                        }},
+    };
+}
+
 RadixSorter::ScratchBuffers &RadixSorter::scratchForFrame(uint32_t frameIndex,
                                                           uint32_t instanceCount)
 {
@@ -58,31 +101,6 @@ RadixSorter::ScratchBuffers &RadixSorter::scratchForFrame(uint32_t frameIndex,
     }
     ensureScratch(perFrameScratch_[frameIndex], instanceCount, frameIndex);
     return perFrameScratch_[frameIndex];
-}
-
-void RadixSorter::ensurePipelineLayout()
-{
-    if (pipelineLayout_.isValid()) return;
-
-    auto &cache = ctx_->pipelineCache();
-    auto layouts = ctx_->descriptors().layouts();
-
-    pipelineLayout_ = cache.queryLayout(Gpu::PipelineLayoutOptions{
-        .label = "RadixSortLayout",
-        .bindGroupLayouts = layouts,
-        .pushConstantRanges = {kPushRange},
-    });
-}
-
-void RadixSorter::ensurePipeline()
-{
-    if (computePipeline_.isValid()) return;
-
-    ensurePipelineLayout();
-    auto &cache = ctx_->pipelineCache();
-    computePipeline_ = cache.queryComputePipeline(
-        "RadixSortCompute", ComputePipelineDescriptor{.pipelineLayout = pipelineLayout_});
-    CO_CORE_ASSERT(computePipeline_.isValid(), "Failed to create radix sort compute pipeline");
 }
 
 void RadixSorter::ensureScratch(ScratchBuffers &scratch,
@@ -185,12 +203,12 @@ Gpu::BindGroup &pushBindGroup(Context &ctx,
 Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
                                DescriptorSets &descriptors,
                                ScratchBuffers &scratch,
+                               Passes &passes,
                                const Gpu::Buffer &predicateBuffer,
                                uint32_t instanceCount,
                                Gpu::Buffer &outputIndices,
                                uint32_t frameInFlightIndex)
 {
-    ensurePipeline();
     ensureScratch(scratch, instanceCount, frameInFlightIndex);
     scratch.bindGroups.clear();
 
@@ -255,15 +273,21 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
 
     for (uint32_t bitOffset = 0; bitOffset < 32; bitOffset += 4) {
         // Histogram
-        dispatchHistogram(
-            cmd, descriptors, scratch, *keysIn, instanceCount, bitOffset, frameInFlightIndex);
+        dispatchHistogram(cmd,
+                          descriptors,
+                          scratch,
+                          passes.histogram,
+                          *keysIn,
+                          instanceCount,
+                          bitOffset,
+                          frameInFlightIndex);
         barrier(scratch.histograms,
                 Gpu::AccessFlagBit::ShaderStorageWriteBit,
                 Gpu::AccessFlags(Gpu::AccessFlagBit::ShaderStorageReadBit |
                                  Gpu::AccessFlagBit::ShaderStorageWriteBit));
 
         // Scan
-        dispatchScan(cmd, descriptors, scratch, frameInFlightIndex);
+        dispatchScan(cmd, descriptors, scratch, passes.scan, frameInFlightIndex);
         barrier(scratch.histograms,
                 Gpu::AccessFlagBit::ShaderStorageWriteBit,
                 Gpu::AccessFlagBit::ShaderStorageReadBit);
@@ -272,6 +296,7 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
         dispatchScatter(cmd,
                         descriptors,
                         scratch,
+                        passes.scatter,
                         *keysIn,
                         *indicesIn,
                         *keysOut,
@@ -314,18 +339,17 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
 void RadixSorter::dispatchHistogram(Gpu::CommandRecorder &cmd,
                                     DescriptorSets &descriptors,
                                     ScratchBuffers &scratch,
+                                    TransientComputePass &computePass,
                                     const Gpu::Buffer &keys,
                                     uint32_t instanceCount,
                                     uint32_t bitOffset,
                                     uint32_t frameInFlightIndex)
 {
-    ensurePipeline();
     ensureScratch(scratch, instanceCount, frameInFlightIndex);
     (void)descriptors;
 
     auto &shaders = ctx_->shaders();
-    auto pass = cmd.beginComputePass({});
-    pass.setPipeline(computePipeline_);
+    auto pass = computePass.begin(cmd);
     pass.bindShader(shaders[histogramShader_].shaderHandle());
 
     auto &bindGroup = pushBindGroup(*ctx_,
@@ -366,13 +390,12 @@ void RadixSorter::dispatchHistogram(Gpu::CommandRecorder &cmd,
 void RadixSorter::dispatchScan(Gpu::CommandRecorder &cmd,
                                DescriptorSets &descriptors,
                                ScratchBuffers &scratch,
+                               TransientComputePass &computePass,
                                uint32_t frameInFlightIndex)
 {
-    ensurePipeline();
     (void)descriptors;
     auto &shaders = ctx_->shaders();
-    auto pass = cmd.beginComputePass({});
-    pass.setPipeline(computePipeline_);
+    auto pass = computePass.begin(cmd);
     pass.bindShader(shaders[scanShader_].shaderHandle());
     auto &bindGroup = pushBindGroup(
         *ctx_,
@@ -403,6 +426,7 @@ void RadixSorter::dispatchScan(Gpu::CommandRecorder &cmd,
 void RadixSorter::dispatchScatter(Gpu::CommandRecorder &cmd,
                                   DescriptorSets &descriptors,
                                   ScratchBuffers &scratch,
+                                  TransientComputePass &computePass,
                                   const Gpu::Buffer &keysIn,
                                   const Gpu::Buffer &indicesIn,
                                   Gpu::Buffer &keysOut,
@@ -411,13 +435,11 @@ void RadixSorter::dispatchScatter(Gpu::CommandRecorder &cmd,
                                   uint32_t bitOffset,
                                   uint32_t frameInFlightIndex)
 {
-    ensurePipeline();
     ensureScratch(scratch, instanceCount, frameInFlightIndex);
     (void)descriptors;
 
     auto &shaders = ctx_->shaders();
-    auto pass = cmd.beginComputePass({});
-    pass.setPipeline(computePipeline_);
+    auto pass = computePass.begin(cmd);
     pass.bindShader(shaders[scatterShader_].shaderHandle());
     auto &bindGroup = pushBindGroup(*ctx_,
                                     scratch,

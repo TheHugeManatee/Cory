@@ -29,10 +29,6 @@ class TransientComputePass {
     /// Obtain the pipeline layout handle. Creates the layout if necessary.
     [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;
 
-    /// Obtain the pipeline handle for the graphics pipeline associated with this pass. Creates the
-    /// pipeline if necessary.
-    [[nodiscard]] Gpu::ComputePipelineHandle pipelineHandle() noexcept;
-
   private:
     Context *ctx_;
     FramegraphResourceManager *textures_;

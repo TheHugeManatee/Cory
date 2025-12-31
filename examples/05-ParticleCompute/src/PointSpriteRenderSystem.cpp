@@ -2,13 +2,12 @@
 
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
-#include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/gpu_core.h>
@@ -16,17 +15,13 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
-#include <array>
 #include <cstddef>
 
-PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight)
+PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx)
     : Base()
     , ctx_(&ctx)
     , sorter_{ctx}
 {
-    globalUbo_ =
-        std::make_unique<Cory::UniformBufferObject<PointSpriteGlobals>>(ctx, maxFramesInFlight);
-
     vertexShader_ =
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.vert.slang"));
     fragmentShader_ =
@@ -36,14 +31,6 @@ PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx, uint32_t ma
             Cory::ResourceLocator::Locate("sort_preprocess.comp.slang")};
         predicateShader_ = ctx.shaders().createShader(std::move(predicateSource));
     }
-
-    predicateLayout_ = ctx.pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
-        .label = "PointSpritePredicateLayout",
-        .bindGroupLayouts = ctx.descriptors().layouts(),
-    });
-    predicatePipeline_ = ctx.pipelineCache().queryComputePipeline(
-        "PointSpritePredicate",
-        Cory::ComputePipelineDescriptor{.pipelineLayout = predicateLayout_});
 }
 
 PointSpriteRenderSystem::~PointSpriteRenderSystem()
@@ -135,6 +122,11 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                           .depthTest = Cory::DepthTest::Less,
                           .depthWrite = Cory::DepthWrite::Disabled},
     });
+    auto predicatePass = builder.declareComputePass(Cory::ComputePassDeclaration{
+        .name = "PASS_PointSpriteSortPreprocess",
+        .shader = predicateShader_,
+    });
+    auto sortPasses = sorter_.declarePasses(builder);
 
     /// ^^^^     DECLARATION      ^^^^
     Cory::RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
@@ -152,15 +144,14 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
 
     // update the uniform buffer early so compute passes see the latest camera
-    PointSpriteGlobals &uboVal = (*globalUbo_)[frameCtx.inFlightIndex];
-    uboVal.view = viewMatrix;
-    uboVal.projection = projectionMatrix;
-    uboVal.viewProjection = viewProjection;
-    uboVal.lightPosition = camera_.position;
+    auto globals = renderApi.bindingContext->alloc<PointSpriteGlobals>();
+    globals->view = viewMatrix;
+    globals->projection = projectionMatrix;
+    globals->viewProjection = viewProjection;
+    globals->lightPosition = camera_.position;
     const glm::mat3 viewInverse = glm::mat3(glm::inverse(viewMatrix));
-    uboVal.cameraRight = glm::normalize(viewInverse[0]);
-    uboVal.cameraUp = glm::normalize(viewInverse[1]);
-    globalUbo_->flush(frameCtx.inFlightIndex);
+    globals->cameraRight = glm::normalize(viewInverse[0]);
+    globals->cameraUp = glm::normalize(viewInverse[1]);
 
     if (instanceCount > 0) {
         auto &sortBuf = sorter_.scratchForFrame(frameCtx.inFlightIndex, instanceCount);
@@ -175,10 +166,9 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         instanceBuffer.buffer.unmap();
 
         {
-            auto pass = renderApi.cmd->beginComputePass({});
-            pass.setPipeline(predicatePipeline_);
+            auto pass = predicatePass.begin(*renderApi.cmd);
+            pass.bindShader(ctx_->shaders()[predicateShader_].shaderHandle());
             ctx_->descriptors()
-                .write(frameCtx.inFlightIndex, *globalUbo_)
                 .write(Cory::BufferBindPoint::StorageBufferReadOnly,
                        frameCtx.inFlightIndex,
                        kInstanceBufferIndex,
@@ -188,10 +178,11 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                        kSortKeysBufferIndex,
                        sortBuf.keysA)
                 .bind(pass, frameCtx.inFlightIndex);
-            struct {
+            struct SortPreprocessPushConstants {
                 uint32_t numInstances;
                 uint32_t pad;
-            } pc{instanceCount, 0u};
+                Cory::BufferDeviceAddress globals;
+            } pc{instanceCount, 0u, globals.gpu};
             pass.pushConstant(
                 Gpu::PushConstantRange{.offset = 0,
                                        .size = sizeof(pc),
@@ -204,13 +195,13 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         auto &sortedIndices = sorter_.sort(*renderApi.cmd,
                                            ctx_->descriptors(),
                                            sortBuf,
+                                           sortPasses,
                                            sortBuf.keysA,
                                            instanceCount,
                                            sortBuf.indicesA,
                                            frameCtx.inFlightIndex);
 
         ctx_->descriptors()
-            .write(frameCtx.inFlightIndex, *globalUbo_)
             .write(Cory::BufferBindPoint::StorageBufferReadOnly,
                    frameCtx.inFlightIndex,
                    kInstanceBufferIndex,
@@ -236,6 +227,15 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
 
     auto &descriptorSets = ctx_->descriptors();
     descriptorSets.bind(passRecorder, frameCtx.inFlightIndex, spritePass.pipelineLayoutHandle());
+    const Cory::BufferDeviceAddress globalsAddress = globals.gpu;
+    passRecorder.pushConstant(
+        Gpu::PushConstantRange{
+            .offset = 0,
+            .size = sizeof(Cory::BufferDeviceAddress),
+            .shaderStages = Gpu::ShaderStageFlagBits::All,
+        },
+        &globalsAddress,
+        spritePass.pipelineLayoutHandle());
 
     if (instanceCount > 0) {
         passRecorder.draw(Gpu::DrawCommand{

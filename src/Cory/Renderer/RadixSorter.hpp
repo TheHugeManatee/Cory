@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Cory/Framegraph/TransientComputePass.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -11,6 +12,9 @@
 #include <vector>
 
 namespace Cory {
+class FramegraphResourceManager;
+class RenderTaskBuilder;
+
 class RadixSorter {
   public:
     explicit RadixSorter(Context &ctx);
@@ -28,12 +32,22 @@ class RadixSorter {
         uint32_t workgroups{0};
     };
 
+    struct Passes {
+        TransientComputePass histogram;
+        TransientComputePass scan;
+        TransientComputePass scatter;
+    };
+
+    Passes declarePasses(RenderTaskBuilder &builder);
+    Passes declarePasses(FramegraphResourceManager &resources);
+
     ScratchBuffers &scratchForFrame(uint32_t frameIndex, uint32_t instanceCount);
 
     /// Dispatches the histogram pass for the given keys buffer.
     void dispatchHistogram(Gpu::CommandRecorder &cmd,
                            DescriptorSets &descriptors,
                            ScratchBuffers &scratch,
+                           TransientComputePass &pass,
                            const Gpu::Buffer &keys,
                            uint32_t instanceCount,
                            uint32_t bitOffset,
@@ -43,12 +57,14 @@ class RadixSorter {
     void dispatchScan(Gpu::CommandRecorder &cmd,
                       DescriptorSets &descriptors,
                       ScratchBuffers &scratch,
+                      TransientComputePass &pass,
                       uint32_t frameInFlightIndex);
 
     /// Dispatches the scatter pass into the provided output buffers.
     void dispatchScatter(Gpu::CommandRecorder &cmd,
                          DescriptorSets &descriptors,
                          ScratchBuffers &scratch,
+                         TransientComputePass &pass,
                          const Gpu::Buffer &keysIn,
                          const Gpu::Buffer &indicesIn,
                          Gpu::Buffer &keysOut,
@@ -61,14 +77,13 @@ class RadixSorter {
     Gpu::Buffer &sort(Gpu::CommandRecorder &cmd,
                       DescriptorSets &descriptors,
                       ScratchBuffers &scratch,
+                      Passes &passes,
                       const Gpu::Buffer &predicateBuffer,
                       uint32_t instanceCount,
                       Gpu::Buffer &outputIndices,
                       uint32_t frameInFlightIndex);
 
   private:
-    void ensurePipelineLayout();
-    void ensurePipeline();
     void ensureScratch(ScratchBuffers &scratch, uint32_t instanceCount, uint32_t scratchIndex);
 
     Context *ctx_{nullptr};
@@ -76,9 +91,6 @@ class RadixSorter {
     ShaderHandle histogramShader_;
     ShaderHandle scanShader_;
     ShaderHandle scatterShader_;
-
-    Gpu::PipelineLayoutHandle pipelineLayout_;
-    Gpu::ComputePipelineHandle computePipeline_;
 
     std::vector<ScratchBuffers> perFrameScratch_;
 };

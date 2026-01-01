@@ -131,8 +131,6 @@ set(CORY_SOURCES
         Renderer/Swapchain.hpp
         Renderer/Synchronization.cpp
         Renderer/Synchronization.hpp
-        Renderer/UniformBufferObject.cpp
-        Renderer/UniformBufferObject.hpp
         SceneGraph/Common.hpp
         SceneGraph/SceneGraph.cpp
         SceneGraph/SceneGraph.hpp

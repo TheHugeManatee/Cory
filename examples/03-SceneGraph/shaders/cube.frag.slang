@@ -7,7 +7,7 @@ struct CubeUBO
     float padding;
 };
 
-ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
+[[vk::push_constant]] CubeUBO* gGlobals;
 
 struct FSInput
 {
@@ -21,7 +21,7 @@ struct FSInput
 float4 main(FSInput input) : SV_Target0
 {
     const float ambient = 0.1f;
-    const float3 posToLight = gGlobals.lightPosition - input.worldPosition;
+    const float3 posToLight = gGlobals->lightPosition - input.worldPosition;
     const float3 lightVector = normalize(posToLight);
     const float diffuse = abs(dot(input.normal, lightVector));
     const float4 albedo = lerp(input.color, input.instanceColor, input.blend);

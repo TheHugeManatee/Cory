@@ -2,18 +2,18 @@
 
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/gpu_core.h>
 
 #include <cstddef>
 
-CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight)
+CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx)
     : Base()
     , ctx_(&ctx)
 {
@@ -24,8 +24,6 @@ CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFligh
         .indexBuffer = std::move(cube.indexBuffer),
         .indexCount = cube.indexCount,
     });
-
-    globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(ctx, maxFramesInFlight);
 
     vertexShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.vert.slang"));
     fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
@@ -113,17 +111,23 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
     // update the uniform buffer
-    CubeUBO &ubo = (*globalUbo_)[frameCtx.inFlightIndex];
-    ubo.view = viewMatrix;
-    ubo.projection = projectionMatrix;
-    ubo.viewProjection = viewProjection;
-    ubo.lightPosition = camera_.position;
-    // need explicit flush otherwise the mapped memory is not synced to the GPU
-    globalUbo_->flush(frameCtx.inFlightIndex);
+    auto drawData = renderApi.bindingContext->alloc<CubeUBO>();
+    drawData->view = viewMatrix;
+    drawData->projection = projectionMatrix;
+    drawData->viewProjection = viewProjection;
+    drawData->lightPosition = camera_.position;
+
+    passRecorder.pushConstant(
+        KDGpu::PushConstantRange{
+            .offset = 0,
+            .size = sizeof(Cory::BufferDeviceAddress),
+            .shaderStages = KDGpu::ShaderStageFlagBits::All,
+        },
+        &drawData.gpu,
+        cubePass.pipelineLayoutHandle());
 
     auto &descriptorSets = ctx_->descriptors();
     constexpr Cory::BufferHeapIndex kInstanceBufferIndex = 0;
-    descriptorSets.write(frameCtx.inFlightIndex, *globalUbo_);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     if (instanceCount > 0) {

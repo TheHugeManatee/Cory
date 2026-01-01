@@ -5,16 +5,15 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/bind_group.h>
 #include <KDGpu/bind_group_description.h>
 #include <KDGpu/bind_group_layout.h>
 #include <KDGpu/bind_group_layout_options.h>
 #include <KDGpu/bind_group_options.h>
-
 #include <KDGpu/bind_group_pool_options.h>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
+
 #include <vector>
 
 namespace Cory {
@@ -146,19 +145,6 @@ Gpu::BindGroup &DescriptorSets::get(DescriptorSetType type, gsl::index frameInFl
 {
     CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
     return data_->bindGroups[type][frameInFlightIndex];
-}
-
-DescriptorSets &DescriptorSets::write(gsl::index frameInFlightIndex,
-                                      const UniformBufferObjectBase &ubo)
-{
-    CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized");
-    data_->pendingWrites[DescriptorSetType::GlobalData][frameInFlightIndex].emplace_back(
-        Gpu::BindGroupEntry{
-            .binding = 0,
-            .resource = Gpu::UniformBufferBinding{.buffer = ubo.handle()},
-            .arrayElement = 0,
-        });
-    return *this;
 }
 
 DescriptorSets &DescriptorSets::write(ImageBindPoint bindPoint,

@@ -96,16 +96,6 @@ class DescriptorSets : NoCopy {
     [[nodiscard]] const std::vector<Gpu::BindGroupLayoutHandle> &layouts() const noexcept;
 
     /**
-     * Record a descriptor write for updating an UBO reference
-     * @param type
-     * @param frameInFlightIndex
-     * @param ubo
-     *
-     * @note This write will not be issued until @b flush() is called.
-     */
-    DescriptorSets &write(gsl::index frameInFlightIndex, const UniformBufferObjectBase &ubo);
-
-    /**
      * Record a descriptor write for updating an image and potentially view and sampler.
      * Depending on the bind point, the additional parameters may not be required.
      */

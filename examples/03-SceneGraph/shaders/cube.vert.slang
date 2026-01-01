@@ -15,8 +15,8 @@ struct InstanceData
     float4 parameters;
 };
 
-[[vk::binding(0, 0)]] ConstantBuffer<CubeUBO> gGlobals;
 [[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
+[[vk::push_constant]] CubeUBO* gGlobals;
 
 struct VSInput
 {
@@ -45,7 +45,7 @@ VSOutput main(VSInput input)
     float4 worldPosition = mul(instance.modelToWorld, localPosition);
 
     VSOutput output;
-    output.position = mul(gGlobals.viewProjection, worldPosition);
+    output.position = mul(gGlobals->viewProjection, worldPosition);
     output.worldPosition = worldPosition.xyz;
     output.normal = mul(normalMatrix, float4(input.normal, 0.0f)).xyz;
     output.color = input.color;

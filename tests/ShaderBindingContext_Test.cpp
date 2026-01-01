@@ -4,6 +4,7 @@
 
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
+
 #include <KDGpu/texture_options.h>
 
 TEST_CASE("Shader binding context: Memory bump allocation", "[ShaderBindingContext]")

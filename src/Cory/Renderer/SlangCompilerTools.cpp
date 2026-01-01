@@ -9,39 +9,35 @@
 
 namespace Cory {
 namespace detail {
+
 struct DumpWriter {
     std::string buffer;
     int indentWidth{2};
     int indentLevel{0};
-
-    void addIndent() { ++indentLevel; }
-
-    void removeIndent()
-    {
-        if (indentLevel > 0) {
-            --indentLevel;
-        }
-    }
 
     struct IndentScope {
         DumpWriter &writer;
         explicit IndentScope(DumpWriter &writerIn)
             : writer(writerIn)
         {
-            writer.addIndent();
+            ++writer.indentLevel;
         }
-        ~IndentScope() { writer.removeIndent(); }
+        ~IndentScope() { --writer.indentLevel; }
     };
     auto indent() { return IndentScope(*this); }
 
-    template <typename... Args> void line(fmt::format_string<Args...> fmtString, Args &&...args)
+    template <typename... Args> void append(fmt::format_string<Args...> fmtString, Args &&...args)
     {
+        buffer.append("|| ");
         buffer.append(static_cast<size_t>(indentLevel * indentWidth), ' ');
         fmt::format_to(std::back_inserter(buffer), fmtString, std::forward<Args>(args)...);
+    }
+    template <typename... Args> void line(fmt::format_string<Args...> fmtString, Args &&...args)
+    {
+        append(fmtString, args...);
         buffer.push_back('\n');
     }
-
-    void blank() { buffer.push_back('\n'); }
+    void blank() { buffer.append("|| \n"); }
 };
 
 template <typename T> std::string enumLabel(T value)
@@ -151,11 +147,11 @@ void dumpType(slang::TypeReflection *type,
 
     if (depthRemaining > 0) {
         const auto kind = type->getKind();
-        const bool hasElementType = (kind == slang::TypeReflection::Kind::ConstantBuffer)
-                                 || (kind == slang::TypeReflection::Kind::ParameterBlock)
-                                 || (kind == slang::TypeReflection::Kind::Resource)
-                                 || (kind == slang::TypeReflection::Kind::ShaderStorageBuffer)
-                                 || (kind == slang::TypeReflection::Kind::TextureBuffer);
+        const bool hasElementType = (kind == slang::TypeReflection::Kind::ConstantBuffer) ||
+                                    (kind == slang::TypeReflection::Kind::ParameterBlock) ||
+                                    (kind == slang::TypeReflection::Kind::Resource) ||
+                                    (kind == slang::TypeReflection::Kind::ShaderStorageBuffer) ||
+                                    (kind == slang::TypeReflection::Kind::TextureBuffer);
         if (hasElementType) {
             if (auto *elementType = type->getElementType()) {
                 auto indent = out.indent();

@@ -35,10 +35,6 @@ class PipelineCache;
 struct SwapchainSupportDetails;
 struct FrameContext;
 class Swapchain;
-class UniformBufferObjectBase;
-template <typename BufferStruct>
-    requires std::is_trivial_v<BufferStruct>
-class UniformBufferObject;
 class DescriptorSets;
 
 class SlangCompiler;

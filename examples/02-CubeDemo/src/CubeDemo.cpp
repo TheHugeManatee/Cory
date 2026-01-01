@@ -20,7 +20,6 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>

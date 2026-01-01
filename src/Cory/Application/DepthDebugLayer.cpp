@@ -14,7 +14,6 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/device.h>
 #include <KDGpu/sampler.h>

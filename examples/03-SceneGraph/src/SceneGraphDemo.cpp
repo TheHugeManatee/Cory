@@ -163,7 +163,7 @@ void SceneGraphDemoApplication::setupSystems()
     systems_.emplace<Cory::TransformSystem>();
 
     // render system should go last to be aware of the latest state
-    renderSystem_ = &systems_.emplace<CubeRenderSystem>(ctx(), Cory::MAX_FRAMES_IN_FLIGHT);
+    renderSystem_ = &systems_.emplace<CubeRenderSystem>(ctx());
 }
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()

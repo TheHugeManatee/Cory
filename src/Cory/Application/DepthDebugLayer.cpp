@@ -51,8 +51,8 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
     state_ = std::make_unique<State>(State{
         .fullscreenTriShader{
             res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
-        .depthDebugShader{
-            res.createShader(ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
+        .depthDebugShader{res.createShader(
+            ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
         .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
             .magFilter = Gpu::FilterMode::Linear, .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
@@ -131,7 +131,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     builder.read(previousLayer.depth,
                  Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
-    auto cubePass = builder.declareRenderPass(RenderPassDeclaration{
+    auto depthDebugPass = builder.declareRenderPass(RenderPassDeclaration{
         .name = "PASS_DepthDebug",
         .options = PassOptionFlagBits::DisableMeshInput,
         .shaders = {state_->fullscreenTriShader, state_->depthDebugShader},
@@ -158,7 +158,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     const auto depthLayout = static_cast<Gpu::TextureLayout>(
         Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess));
 
-    auto recorder = cubePass.begin(*renderApi.cmd);
+    auto recorder = depthDebugPass.begin(*renderApi.cmd);
 
     renderApi.descriptors
         ->write(ImageBindPoint::Texture2D,
@@ -167,18 +167,16 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                 depthLayout,
                 resources.imageView(previousLayer.depth),
                 state_->sampler.handle())
-        .bind(recorder, frameCtx.inFlightIndex, cubePass.pipelineLayoutHandle());
+        .bind(recorder, frameCtx.inFlightIndex);
 
     auto d = renderApi.bindingContext->alloc<DrawData>();
     d->center = center.get();
     d->size = size.get();
     d->window = window.get();
-    recorder.pushConstant(
-        Gpu::PushConstantRange{.offset = 0,
-                               .size = sizeof(BufferDeviceAddress),
-                               .shaderStages = Gpu::ShaderStageFlagBits::All},
-        &d.gpu,
-        cubePass.pipelineLayoutHandle());
+    recorder.pushConstant(Gpu::PushConstantRange{.offset = 0,
+                                                 .size = sizeof(BufferDeviceAddress),
+                                                 .shaderStages = Gpu::ShaderStageFlagBits::All},
+                          &d.gpu);
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
 
     recorder.end();

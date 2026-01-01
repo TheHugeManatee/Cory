@@ -34,7 +34,7 @@ struct DumpWriter {
     }
     template <typename... Args> void line(fmt::format_string<Args...> fmtString, Args &&...args)
     {
-        append(fmtString, args...);
+        append(std::forward<fmt::format_string<Args...>>(fmtString), std::forward<Args>(args)...);
         buffer.push_back('\n');
     }
     void blank() { buffer.append("|| \n"); }
@@ -202,7 +202,7 @@ std::string SlangCompilerTools::dumpProgramLayout(slang::IComponentType *program
         out.blank();
     }
 
-    out.line("=== End Reflection Dump ===");
+    out.append("=== End Reflection Dump ===");
     return out.buffer;
 }
 

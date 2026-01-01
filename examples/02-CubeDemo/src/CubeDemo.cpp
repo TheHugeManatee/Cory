@@ -323,8 +323,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
             .size = sizeof(Cory::BufferDeviceAddress),
             .shaderStages = Gpu::ShaderStageFlagBits::All,
         },
-        &data.gpu,
-        cubePass.pipelineLayoutHandle());
+        &data.gpu);
 
     auto &descriptorSets = ctx().descriptors();
     constexpr Cory::BufferHeapIndex kInstanceBufferIndex = 0;
@@ -347,7 +346,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                              kInstanceBufferIndex,
                              instanceBuffer.buffer);
     }
-    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex, cubePass.pipelineLayoutHandle());
+    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
 
     if (instanceCount > 0) {
         // draw all instances in a single call

@@ -145,6 +145,7 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
             stages.emplace_back(shader.type());
             handles.emplace_back(shader.shaderHandle());
         }
+        renderPassRecorder.setPipelineLayout(pipelineLayoutHandle());
         renderPassRecorder.bindShaders(stages, handles);
 
         renderPassRecorder.setPrimitiveTopology(Gpu::PrimitiveTopology::TriangleList);

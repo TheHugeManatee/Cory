@@ -226,7 +226,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     // instance data already uploaded before sorting
 
     auto &descriptorSets = ctx_->descriptors();
-    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex, spritePass.pipelineLayoutHandle());
+    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
     const Cory::BufferDeviceAddress globalsAddress = globals.gpu;
     passRecorder.pushConstant(
         Gpu::PushConstantRange{

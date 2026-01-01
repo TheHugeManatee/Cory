@@ -143,7 +143,7 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
                              instanceBuffer.buffer);
     }
 
-    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex, cubePass.pipelineLayoutHandle());
+    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
 
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);

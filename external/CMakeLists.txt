@@ -20,7 +20,7 @@ FetchContent_Declare(
         #GIT_TAG v0.8.0
         SOURCE_DIR "C:/dev/KDGpu"
         #GIT_REPOSITORY https://github.com/TheHugeManatee/KDGpu.git
-        #GIT_TAG 2933f3946e8ccbd36effd4f1254776928140ab6a
+        #GIT_TAG a19e7d28e2d282fdc6711b3c9d1d44f8f2bf3038
 )
 FetchContent_MakeAvailable(KDGpu)
 

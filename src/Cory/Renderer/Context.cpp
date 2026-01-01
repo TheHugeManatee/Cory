@@ -152,9 +152,10 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     // We are now able to query the adapter for swapchain properties and presentation support
     // with the window surface
     const auto swapchainProperties = selectedAdapter->swapchainProperties(surface);
-    CO_CORE_INFO("Supported swapchain present modes:");
+    CO_CORE_INFO("Supported swapchain present modes ({}):",
+                 swapchainProperties.presentModes.size());
     for (const auto &mode : swapchainProperties.presentModes) {
-        CO_CORE_INFO("  - {}", presentModeToString(mode));
+        CO_CORE_INFO("||  - {}", presentModeToString(mode));
     }
 
     const bool supportsPresentation =
@@ -162,37 +163,37 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     CO_CORE_INFO("Queue family 0 supports presentation: {}", supportsPresentation);
 
     const auto adapterExtensions = selectedAdapter->extensions();
-    CO_CORE_TRACE("Supported adapter extensions:");
+    CO_CORE_INFO("Supported adapter extensions ({}):", adapterExtensions.size());
     for ([[maybe_unused]] const auto &extension : adapterExtensions) {
-        CO_CORE_TRACE("  - {} Version {}", extension.name, extension.version);
+        CO_CORE_INFO("||  - {} Version {}", extension.name, extension.version);
     }
 
     if (!supportsPresentation || !hasGraphicsAndCompute) {
         CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
         return {};
     }
-
+    CO_CORE_INFO("Feature support: ");
     const bool supportsMultiView = selectedAdapter->features().multiView;
-    CO_CORE_INFO("Supports multiview: {}", supportsMultiView);
+    CO_CORE_INFO("|| - multiview: {}", supportsMultiView);
 
     const bool supportsUBOIndexing =
         selectedAdapter->features().shaderUniformBufferArrayNonUniformIndexing &&
         selectedAdapter->features().bindGroupBindingUniformBufferUpdateAfterBind;
-    CO_CORE_INFO("Supports Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
+    CO_CORE_INFO("|| - Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
 
     const bool supportsAccelerationStructures = selectedAdapter->features().accelerationStructures;
-    CO_CORE_INFO("Supports acceleration structures: {}", supportsAccelerationStructures);
+    CO_CORE_INFO("|| - acceleration structures: {}", supportsAccelerationStructures);
 
     const bool supportsRayTracing = selectedAdapter->features().rayTracingPipeline;
-    CO_CORE_INFO("Supports raytracing: {}", supportsRayTracing);
+    CO_CORE_INFO("|| - raytracing: {}", supportsRayTracing);
 
     const bool supportsMeshShader = selectedAdapter->features().meshShader;
     const bool supportsTaskShader = selectedAdapter->features().taskShader;
-    CO_CORE_INFO("Supports meshShader: {}", supportsMeshShader);
-    CO_CORE_INFO("Supports taskShader: {}", supportsTaskShader);
+    CO_CORE_INFO("|| - meshShader: {}", supportsMeshShader);
+    CO_CORE_INFO("|| - taskShader: {}", supportsTaskShader);
 
     const bool supportsHostToImageCopy = selectedAdapter->features().hostImageCopy;
-    CO_CORE_INFO("Supports host to image copy: {}", supportsHostToImageCopy);
+    CO_CORE_INFO("|| - host to image copy: {}", supportsHostToImageCopy);
 
     // Now we can create a device from the selected adapter that we can then use to interact
     // with the GPU.

@@ -206,7 +206,7 @@ DescriptorSets &DescriptorSets::write(gsl::index instanceIndex,
 DescriptorSets &DescriptorSets::write(BufferBindPoint type,
                                       gsl::index instanceIndex,
                                       BufferHeapIndex bufferIndex,
-                                      const Gpu::Buffer &buffer)
+                                      Gpu::BufferHandle buffer)
 {
     CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
     CO_CORE_ASSERT(bufferIndex < MAX_BUFFERS, "Buffer index out of range");
@@ -214,7 +214,7 @@ DescriptorSets &DescriptorSets::write(BufferBindPoint type,
     data_->pendingWrites[DescriptorSetType::BindlessBuffers][instanceIndex].emplace_back(
         Gpu::BindGroupEntry{
             .binding = type,
-            .resource = Gpu::StorageBufferBinding{.buffer = buffer.handle()},
+            .resource = Gpu::StorageBufferBinding{.buffer = buffer},
             .arrayElement = bufferIndex,
         });
     return *this;

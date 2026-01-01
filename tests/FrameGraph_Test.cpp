@@ -11,6 +11,7 @@
 
 #include <KDGpu/texture_options.h>
 #include <cppcoro/fmap.hpp>
+#include <range/v3/algorithm/contains.hpp>
 
 #include <gsl/gsl>
 
@@ -217,6 +218,27 @@ RenderTaskDeclaration<PostProcessOut> postProcess(RenderTaskBuilder builder,
 
     CO_APP_INFO("[Postprocess] Pass render commands are executed");
 }
+
+struct TempResourceOut {
+    TransientTextureHandle color;
+    TransientBufferHandle scratch;
+};
+RenderTaskDeclaration<TempResourceOut> tempResourcePass(RenderTaskBuilder builder,
+                                                        glm::u32vec3 size)
+{
+    auto color = builder.create("TEX_tempColor",
+                                size,
+                                TextureFormat::R8G8B8A8_SRGB,
+                                Sync::AccessType::ColorAttachmentWrite);
+    auto scratch = builder.create("BUF_tempScratch",
+                                  512u,
+                                  Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                  Sync::AccessType::AnyShaderWrite);
+
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(TempResourceOut{color, scratch});
+    CO_APP_INFO("[TempResource] Pass render commands are executed");
+}
 } // namespace passes
 
 TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
@@ -305,4 +327,36 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     CHECK(!g.buffers.empty());
     CHECK(!g.bufferTransitions.empty());
     CO_APP_INFO(graph.dump(g));
+}
+
+TEST_CASE("Framegraph allocates temp resources for scheduled tasks",
+          "[Cory/Framegraph/Framegraph]")
+{
+    testing::VulkanTester t;
+    Framegraph graph(t.ctx(), 0);
+
+    auto pass = passes::tempResourcePass(graph.declareTask("PASS_TempResource"), {128, 128, 1});
+    auto [outputInfo, outputState] = graph.declareOutput(
+        pass.output().color, Sync::AccessType::ColorAttachmentWrite);
+    CHECK(outputInfo.size.x == 128);
+    CHECK(outputState.status == TextureMemoryStatus::Virtual);
+
+    CommandRecorder recorder = t.ctx().device().createCommandRecorder(Gpu::CommandRecorderOptions{
+        .label = "CMD_FramegraphTempResourceTest",
+        .queue = t.ctx().graphicsQueue().handle(),
+        .level = Gpu::CommandBufferLevel::Primary,
+    });
+
+    FrameContext frameCtx{
+        .inFlightIndex = 0,
+        .swapchainImageIndex = 0,
+        .frameNumber = 1,
+        .commandBuffer = std::move(recorder),
+    };
+
+    auto execInfo = graph.record(frameCtx);
+    const auto scratchHandle = FramegraphBufferHandle{pass.output().scratch};
+
+    CHECK(ranges::contains(execInfo.buffers, scratchHandle));
+    //CHECK(graph.resources().state(scratchHandle).status == BufferMemoryStatus::Allocated);
 }

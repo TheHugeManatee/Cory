@@ -67,7 +67,6 @@ class CubeDemoApplication : public Cory::Application {
 
     void setupCameraCallbacks();
     Gpu::VertexOptions vertexOptions() const;
-    InstanceBuffer &instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount);
     uint32_t prepareInstanceData(float timeSeconds);
 
   private:

@@ -34,6 +34,7 @@
 #include <gsl/narrow>
 #include <imgui.h>
 
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <algorithm>
 #include <chrono>
@@ -165,8 +166,8 @@ void CubeDemoApplication::createShaders()
 {
     const Cory::ScopeTimer st{"Init/Shaders"};
 
-    vertexShader_ =
-        ctx().shaders().createShader(Cory::ShaderSource{Cory::ResourceLocator::Locate("cube.vert.slang")});
+    vertexShader_ = ctx().shaders().createShader(
+        Cory::ShaderSource{Cory::ResourceLocator::Locate("cube.vert.slang")});
     fragmentShader_ = ctx().shaders().createShader(
         Cory::ShaderSource{Cory::ResourceLocator::Locate("cube.frag.slang")});
 }
@@ -269,6 +270,13 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
+    auto requiredSize = ad.num_cubes * sizeof(InstanceData);
+    auto instanceBufferHandle = builder.create("Cube Instance Buffer",
+                                               requiredSize,
+                                               Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                               Cory::Sync::AccessType::VertexShaderReadOther,
+                                               Gpu::MemoryUsage::CpuToGpu);
+
     auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
         .name = "PASS_Cubes",
         .shaders = {vertexShader_, fragmentShader_},
@@ -334,17 +342,18 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
 
     const uint32_t instanceCount = prepareInstanceData(t);
     if (instanceCount > 0) {
-        auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
-        auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
+        auto [bufferHandle, instanceBuffer] =
+            renderApi.resources->bufferResource(instanceBufferHandle);
+        auto *mapped = static_cast<std::byte *>(instanceBuffer->map());
         std::memcpy(mapped,
                     instanceData_.data(),
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-        instanceBuffer.buffer.unmap();
+        instanceBuffer->unmap();
 
         descriptorSets.write(Cory::BufferBindPoint::StorageBufferReadOnly,
                              frameCtx.inFlightIndex,
                              kInstanceBufferIndex,
-                             instanceBuffer.buffer);
+                             bufferHandle);
     }
     descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
 
@@ -380,29 +389,6 @@ Gpu::VertexOptions CubeDemoApplication::vertexOptions() const
             },
         .attributes = std::move(attributes),
     };
-}
-
-InstanceBuffer &CubeDemoApplication::instanceBufferForFrame(uint32_t frameIndex,
-                                                            uint32_t instanceCount)
-{
-    if (instanceBuffers_.size() <= frameIndex) {
-        instanceBuffers_.resize(frameIndex + 1);
-    }
-
-    const Gpu::DeviceSize requiredSize =
-        gsl::narrow_cast<Gpu::DeviceSize>(instanceCount) * sizeof(InstanceData);
-    auto &instanceBuffer = instanceBuffers_[frameIndex];
-    if (!instanceBuffer.buffer.isValid() || instanceBuffer.capacity < requiredSize) {
-        instanceBuffer.buffer = ctx().device().createBuffer(Gpu::BufferOptions{
-            .label = "Cube Instance Buffer",
-            .size = requiredSize,
-            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
-            .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
-        });
-        instanceBuffer.capacity = requiredSize;
-    }
-
-    return instanceBuffer;
 }
 
 uint32_t CubeDemoApplication::prepareInstanceData(float timeSeconds)

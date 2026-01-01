@@ -202,7 +202,7 @@ TextureState FramegraphResourceManager::state(FramegraphTextureHandle handle) co
 
 FramegraphBufferHandle FramegraphResourceManager::declareBuffer(BufferInfo info)
 {
-    CO_CORE_DEBUG("Declaring buffer '{}' ({} bytes)", info.name, info.size);
+    CO_CORE_TRACE("Declaring buffer '{}' ({} bytes)", info.name, info.size);
 
     auto handle = data_->bufferResources_.emplace(BufferResource{
         info,
@@ -227,7 +227,7 @@ void FramegraphResourceManager::allocate(FramegraphBufferHandle handle)
     BufferResource &res = data_->bufferResources_[handle];
     Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
     auto &resources = data_->ctx_->resources();
-    CO_CORE_DEBUG("Allocating buffer '{}' ({} bytes)", res.info.name, res.info.size);
+    CO_CORE_TRACE("Allocating buffer '{}' ({} bytes)", res.info.name, res.info.size);
 
     res.buffer =
         resources.createBuffer(deviceHandle,
@@ -256,12 +256,14 @@ Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBuffe
                                                                  Sync::AccessType access)
 {
     auto &state = data_->bufferResources_[handle].state;
-    VkBuffer vkBufferHandle = data_->ctx_->resources().getBuffer(buffer(handle))->buffer;
+    auto *bufferResource = data_->ctx_->resources().getBuffer(buffer(handle));
+    CO_CORE_DEBUG_ASSERT(bufferResource != nullptr, "Buffer resource is null");
+
     Sync::BufferBarrier barrier{.prevAccesses{state.lastAccess},
                                 .nextAccesses{access},
                                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                .buffer = vkBufferHandle,
+                                .buffer = bufferResource->buffer,
                                 .offset = 0,
                                 .size = data_->bufferResources_[handle].info.size};
 
@@ -282,6 +284,14 @@ const BufferInfo &FramegraphResourceManager::info(FramegraphBufferHandle handle)
 Gpu::BufferHandle FramegraphResourceManager::buffer(FramegraphBufferHandle handle) const
 {
     return data_->bufferResources_[handle].buffer;
+}
+std::pair<Gpu::BufferHandle, Gpu::VulkanBuffer *>
+FramegraphResourceManager::bufferResource(FramegraphBufferHandle handle) const
+{
+    auto resourceHandle = data_->bufferResources_[handle].buffer;
+    auto resource = data_->ctx_->resources().getBuffer(resourceHandle);
+    CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
+    return {resourceHandle, resource};
 }
 
 BufferState FramegraphResourceManager::state(FramegraphBufferHandle handle) const

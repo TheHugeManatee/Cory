@@ -370,6 +370,21 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     std::vector<FramegraphBufferHandle>
         requiredBuffers; // collects all actually required buffer resources
 
+    auto appendCreatedResources = [&](const RenderTaskInfo &taskInfo) {
+        for (const RenderTaskInfo::TextureDependency &created :
+             taskInfo.textureDependencies | ranges::views::filter([](const auto &outputDesc) {
+                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+             })) {
+            requiredResources.push_back(created.handle);
+        }
+        for (const RenderTaskInfo::BufferDependency &created :
+             taskInfo.bufferDependencies | ranges::views::filter([](const auto &outputDesc) {
+                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+             })) {
+            requiredBuffers.push_back(created.handle);
+        }
+    };
+
     // flood-fill the graph starting at the resources requested from the outside
     std::deque<TransientTextureHandle> nextTexturesToResolve{requestedResources.cbegin(),
                                                              requestedResources.cend()};
@@ -400,14 +415,9 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                           textures[nextResource].name,
                           nextResource.version(),
                           data_->renderTasks[writingTask].name);
-            data_->renderTasks[writingTask].executionPriority = ++executionPrio;
-
-            for (const RenderTaskInfo::TextureDependency &created :
-                 data_->renderTasks[writingTask].textureDependencies |
-                     ranges::views::filter([](const auto &outputDesc) {
-                         return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-                     })) {
-                requiredResources.push_back(created.handle);
+            if (data_->renderTasks[writingTask].executionPriority < 0) {
+                data_->renderTasks[writingTask].executionPriority = ++executionPrio;
+                appendCreatedResources(data_->renderTasks[writingTask]);
             }
 
             auto texInputs = taskTextureInputs.equal_range(writingTask);
@@ -456,14 +466,9 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                           buffers[nextBuffer].name,
                           nextBuffer.version(),
                           data_->renderTasks[writingTask].name);
-            data_->renderTasks[writingTask].executionPriority = ++executionPrio;
-
-            for (const RenderTaskInfo::BufferDependency &created :
-                 data_->renderTasks[writingTask].bufferDependencies |
-                     ranges::views::filter([](const auto &outputDesc) {
-                         return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-                     })) {
-                requiredBuffers.push_back(created.handle);
+            if (data_->renderTasks[writingTask].executionPriority < 0) {
+                data_->renderTasks[writingTask].executionPriority = ++executionPrio;
+                appendCreatedResources(data_->renderTasks[writingTask]);
             }
 
             auto bufInputs = taskBufferInputs.equal_range(writingTask);
@@ -477,6 +482,11 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                                                 it.second.version());
                                   return it.second;
                               });
+
+            if (executionPrio > 10000) {
+                CO_CORE_ERROR("Possible cyclic dependency detected in framegraph!");
+                throw std::runtime_error("Cyclic dependency detected in framegraph");
+            }
         }
     }
 

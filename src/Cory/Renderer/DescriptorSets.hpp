@@ -107,14 +107,15 @@ class DescriptorSets : NoCopy {
                           Gpu::TextureSamplerHandle sampler = {});
 
     /// Write just an image sampler to the specified sampler index
-    DescriptorSets &
-    write(gsl::index instanceIndex, SamplerHeapIndex samplerIndex, Gpu::TextureSamplerHandle sampler);
+    DescriptorSets &write(gsl::index instanceIndex,
+                          SamplerHeapIndex samplerIndex,
+                          Gpu::TextureSamplerHandle sampler);
 
     /// Write a buffer pointer to the given bind point & index
     DescriptorSets &write(BufferBindPoint type,
                           gsl::index instanceIndex,
                           BufferHeapIndex bufferIndex,
-                          const Gpu::Buffer &buffer);
+                          Gpu::BufferHandle buffer);
 
     /// Access the bind group for the given set type and instance index
     [[nodiscard]] Gpu::BindGroup &get(DescriptorSetType type, gsl::index instanceIndex);

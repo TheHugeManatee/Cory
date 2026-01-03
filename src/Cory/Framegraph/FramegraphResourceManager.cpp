@@ -151,7 +151,9 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
     auto aspectMask = flagsForFormat(info.format);
     auto &state = data_->textureResources_[handle].state;
 
-    VkImage vkImageHandle = data_->ctx_->resources().getTexture(image(handle))->image;
+    auto* texture = data_->ctx_->resources().getTexture(image(handle));
+    CO_CORE_DEBUG_ASSERT(texture != nullptr, "Texture resource is null");
+    VkImage vkImageHandle = texture->image;
     const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
     Sync::ImageBarrier barrier{.prevAccesses{state.lastAccess},
                                .nextAccesses{access},

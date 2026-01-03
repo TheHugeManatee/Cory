@@ -147,4 +147,10 @@ TransientComputePass RenderTaskBuilder::declareComputePass(ComputePassDeclaratio
 {
     return TransientComputePass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
 }
+
+RenderTaskBuilder RenderTaskBuilder::subtask(std::string_view name) const
+{
+    auto subtask_name = fmt::format("{}::{}", info_.name, name);
+    return {ctx_, framegraph_, subtask_name};
+}
 } // namespace Cory

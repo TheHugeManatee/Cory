@@ -98,6 +98,10 @@ class Framegraph : NoCopy {
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &outputs() const;
 
+    /// Mostly for observability
+    [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
+    renderTasks() const;
+
     [[nodiscard]] std::string dump(const ExecutionInfo &info);
 
   private: /* member functions */
@@ -127,9 +131,6 @@ class Framegraph : NoCopy {
         std::vector<ExecutionInfo::BufferTransitionInfo> bufferTransitions;
     };
     [[nodiscard]] PassTransitions executePass(CommandRecorder &cmd, RenderTaskHandle handle);
-
-    [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
-    renderTasks() const;
 
     /// Ensure that all output resources are transitioned to their final access states
     void finalizeOutputs(ExecutionInfo executionInfo);

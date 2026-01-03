@@ -132,21 +132,21 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
     auto renderPassRecorder = cmd.beginRenderPass(renderPassOptions);
 
     if (!pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
-        CO_CORE_ASSERT(
-            !pass_.shaders.empty(), "Render pass '{}' has no shaders to bind", pass_.name);
-        std::vector<Gpu::ShaderStageFlags> stages;
-        std::vector<Gpu::Handle<Gpu::ShaderObject_t>> handles;
-        stages.reserve(pass_.shaders.size());
-        handles.reserve(pass_.shaders.size());
+        if (!pass_.shaders.empty()) {
+            std::vector<Gpu::ShaderStageFlags> stages;
+            std::vector<Gpu::Handle<Gpu::ShaderObject_t>> handles;
+            stages.reserve(pass_.shaders.size());
+            handles.reserve(pass_.shaders.size());
 
-        auto &shaders = ctx_->shaders();
-        for (auto shaderHandle : pass_.shaders) {
-            auto &shader = shaders[shaderHandle];
-            stages.emplace_back(shader.type());
-            handles.emplace_back(shader.shaderHandle());
+            auto &shaders = ctx_->shaders();
+            for (auto shaderHandle : pass_.shaders) {
+                auto &shader = shaders[shaderHandle];
+                stages.emplace_back(shader.type());
+                handles.emplace_back(shader.shaderHandle());
+            }
+            renderPassRecorder.bindShaders(stages, handles);
         }
         renderPassRecorder.setPipelineLayout(pipelineLayoutHandle());
-        renderPassRecorder.bindShaders(stages, handles);
 
         renderPassRecorder.setPrimitiveTopology(Gpu::PrimitiveTopology::TriangleList);
         renderPassRecorder.setFrontFace(Gpu::FrontFace::CounterClockwise);

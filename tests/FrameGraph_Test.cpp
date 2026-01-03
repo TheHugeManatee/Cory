@@ -241,16 +241,16 @@ RenderTaskDeclaration<TempResourceOut> tempResourcePass(RenderTaskBuilder builde
 }
 } // namespace passes
 
-TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
+struct GraphInput {
+    Texture texture;
+    TextureView textureView;
+    TransientTextureHandle handle;
+};
+GraphInput createGraphInput(Gpu::Device &device, Framegraph &graph)
 {
-    testing::VulkanTester t;
-
-    Framegraph graph(t.ctx(), 0);
-
-    auto &device = t.ctx().device();
-
+    GraphInput input;
     // Create a 2D sRGB color texture to use as a color attachment and for sampling
-    Texture previousFrame = device.createTexture(Gpu::TextureOptions{
+    input.texture = device.createTexture(Gpu::TextureOptions{
         .label = "TEX_previousFrameColor (IMG)",
         .type = Gpu::TextureType::TextureType2D,
         .format = TextureFormat::R8G8B8A8_SRGB,
@@ -264,17 +264,29 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     });
 
     // Create a default 2D view of the texture (keeps same format)
-    TextureView previousFrameView = previousFrame.createView(Gpu::TextureViewOptions{
+    input.textureView = input.texture.createView(Gpu::TextureViewOptions{
         .label = "TEX_previousFrameColor (VIEW)",
         .viewType = Gpu::ViewType::ViewType2D,
         .format = TextureFormat::R8G8B8A8_SRGB,
     });
 
-    const TransientTextureHandle prevFrameColor = graph.declareInput(
+    input.handle = graph.declareInput(
         {"TEX_previousFrameColor", glm::u32vec3{1024, 768, 1}, TextureFormat::R8G8B8A8_SRGB},
         Sync::AccessType::None,
-        previousFrame,
-        previousFrameView);
+        input.texture,
+        input.textureView);
+    return input;
+}
+
+TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
+{
+    testing::VulkanTester t;
+
+    Framegraph graph(t.ctx(), 0);
+
+    auto &device = t.ctx().device();
+
+    auto prevFrame = createGraphInput(device, graph);
 
     auto depthPass = passes::depthPass(t.ctx(), graph.declareTask("PASS_DepthPre"), {800, 600, 1});
     auto depthTex = depthPass.output().depthTexture;
@@ -296,7 +308,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
         graph, {depthDebugPass.output().debugColor, normalDebugPass.output().debugColor}, 0);
 
     auto postProcess = passes::postProcess(
-        graph.declareTask("TASK_Postprocess"), addMainPass.output().color, prevFrameColor);
+        graph.declareTask("TASK_Postprocess"), addMainPass.output().color, prevFrame.handle);
 
     // provoke the coroutines to run so we have some stuff to cull in the graph - otherwise
     // they won't even, that's how neat using coroutines is :)
@@ -329,15 +341,14 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     CO_APP_INFO(graph.dump(g));
 }
 
-TEST_CASE("Framegraph allocates temp resources for scheduled tasks",
-          "[Cory/Framegraph/Framegraph]")
+TEST_CASE("Framegraph allocates temp resources for scheduled tasks", "[Cory/Framegraph/Framegraph]")
 {
     testing::VulkanTester t;
     Framegraph graph(t.ctx(), 0);
 
     auto pass = passes::tempResourcePass(graph.declareTask("PASS_TempResource"), {128, 128, 1});
-    auto [outputInfo, outputState] = graph.declareOutput(
-        pass.output().color, Sync::AccessType::ColorAttachmentWrite);
+    auto [outputInfo, outputState] =
+        graph.declareOutput(pass.output().color, Sync::AccessType::ColorAttachmentWrite);
     CHECK(outputInfo.size.x == 128);
     CHECK(outputState.status == TextureMemoryStatus::Virtual);
 
@@ -358,5 +369,85 @@ TEST_CASE("Framegraph allocates temp resources for scheduled tasks",
     const auto scratchHandle = FramegraphBufferHandle{pass.output().scratch};
 
     CHECK(ranges::contains(execInfo.buffers, scratchHandle));
-    //CHECK(graph.resources().state(scratchHandle).status == BufferMemoryStatus::Allocated);
+    // CHECK(graph.resources().state(scratchHandle).status == BufferMemoryStatus::Allocated);
+}
+
+namespace passes {
+struct MainSubtaskOut {
+    TransientTextureHandle color;
+};
+
+RenderTaskDeclaration<MainSubtaskOut> mainPassWithSubpasses(RenderTaskBuilder builder,
+                                                            TransientTextureHandle colorInput)
+{
+
+    auto sub1 = [](RenderTaskBuilder builder) -> RenderTaskDeclaration<TransientBufferHandle> {
+        auto buffer = builder.create("BUF_subtask1",
+                                     128u,
+                                     Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                     Sync::AccessType::AnyShaderWrite);
+
+        [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(buffer);
+
+        CO_CORE_INFO("Subpass 1 running, created buffer handle {}", buffer.buffer());
+    }(builder.subtask("InstanceBuffer"));
+
+    auto sub2 =
+        [](RenderTaskBuilder builder,
+           TransientBufferHandle instanceBuffer) -> RenderTaskDeclaration<TransientTextureHandle> {
+        const auto &bi = builder.read(instanceBuffer, Sync::AccessType::ComputeShaderReadOther);
+        auto texture = builder.create("TEX_subtask2",
+                                      {256, 256, 1},
+                                      TextureFormat::R8G8B8A8_SRGB,
+                                      Sync::AccessType::ColorAttachmentWrite);
+
+        [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(texture);
+
+        CO_CORE_INFO("Subpass 2 running on instance buffer handle {}, renders to {}",
+                     instanceBuffer.buffer(),
+                     texture.texture());
+    }(builder.subtask("Texture"), sub1.output());
+
+    auto subOut = sub2.output();
+    auto blendIn = builder.read(subOut, Sync::AccessType::FragmentShaderReadOther);
+    auto colorOutput =
+        builder.readWrite(colorInput, Sync::AccessType::ColorAttachmentReadWrite).first;
+
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(MainSubtaskOut{colorOutput});
+
+    CO_APP_INFO("{} Pass render commands are executed", builder.name());
+}
+} // namespace passes
+
+TEST_CASE("Framegraph subtask definition")
+{
+    testing::VulkanTester t;
+    Framegraph graph(t.ctx(), 0);
+
+    auto prevFrame = createGraphInput(t.ctx().device(), graph);
+
+    auto mainPass = passes::mainPassWithSubpasses(graph.declareTask("PASS_Main"), prevFrame.handle);
+
+    CommandRecorder recorder = t.ctx().device().createCommandRecorder(Gpu::CommandRecorderOptions{
+        .label = "CMD_FramegraphTempSubtaskTest",
+        .queue = t.ctx().graphicsQueue().handle(),
+        .level = Gpu::CommandBufferLevel::Primary,
+    });
+
+    FrameContext frameCtx{
+        .inFlightIndex = 0,
+        .swapchainImageIndex = 0,
+        .frameNumber = 1,
+        .commandBuffer = std::move(recorder),
+    };
+
+    auto [outputInfo, outputState] =
+        graph.declareOutput(mainPass.output().color, Sync::AccessType::ColorAttachmentWrite);
+
+    auto execInfo = graph.record(frameCtx);
+
+    CHECK(execInfo.tasks.size() == 3); // main pass + 2 subtasks
+    // input, buffer from subtask1, texture from subtask2, output texture
+    CHECK(execInfo.resources.size() == 4);
 }

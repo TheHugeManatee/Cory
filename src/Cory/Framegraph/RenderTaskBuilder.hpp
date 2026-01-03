@@ -142,6 +142,13 @@ class RenderTaskBuilder : NoCopy {
     /// the name of the render task that is being created
     const std::string &name() const { return info_.name; }
 
+    /// Declare a subtask of the current render task.
+    ///
+    /// Subpasses are not treated any different from tasks, they just get the parent pass as a
+    /// naming prefix and can be used to compose larger render tasks and benefit from the
+    /// synchronization.
+    [[nodiscard]] RenderTaskBuilder subtask(std::string_view name) const;
+
   private:
     Context &ctx_;
     RenderTaskInfo info_;

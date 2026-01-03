@@ -7,7 +7,7 @@ struct Globals {
 
 [[vk::push_constant]] Globals* globals;
 
-[[vk::binding(1, 1)]] Sampler2DMS<float4> textures[];
+[[vk::binding(0, 1)]] Sampler2DMS<float4> textures[];
 
 struct PSIn {
     float4 pos : SV_Position;

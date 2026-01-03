@@ -25,7 +25,6 @@ struct RenderInput {
     Context *ctx{};
     FrameContext *frameCtx{};
     FramegraphResourceManager *resources{};
-    DescriptorSets *descriptors{};
     ShaderBindingContext *bindingContext{};
     // eventually, add accessors modify descriptors, push constants etc
     CommandRecorder *cmd{};

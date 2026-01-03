@@ -10,7 +10,6 @@
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -24,6 +23,7 @@ struct DrawData {
     glm::vec2 center;
     glm::vec2 size;
     glm::vec2 window;
+    TextureHeapIndex textureIndex;
 };
 struct DepthDebugLayer::State {
     ShaderHandle fullscreenTriShader;
@@ -152,7 +152,6 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
         LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth});
     /// vvvv  RENDERING COMMANDS  vvvv
 
-    FrameContext &frameCtx = *renderApi.frameCtx;
     FramegraphResourceManager &resources = *renderApi.resources;
 
     const auto depthLayout = static_cast<Gpu::TextureLayout>(
@@ -160,19 +159,15 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
 
     auto recorder = depthDebugPass.begin(*renderApi.cmd);
 
-    renderApi.descriptors
-        ->write(ImageBindPoint::Texture2D,
-                frameCtx.inFlightIndex,
-                0,
-                depthLayout,
-                resources.imageView(previousLayer.depth),
-                state_->sampler.handle())
-        .bind(recorder, frameCtx.inFlightIndex);
+    const auto textureIndex = renderApi.bindingContext->bindTexture2D(
+        previousLayer.depth, depthLayout, state_->sampler.handle());
+    renderApi.bindingContext->bind(recorder);
 
     auto d = renderApi.bindingContext->alloc<DrawData>();
     d->center = center.get();
     d->size = size.get();
     d->window = window.get();
+    d->textureIndex = textureIndex;
     recorder.pushConstant(Gpu::PushConstantRange{.offset = 0,
                                                  .size = sizeof(BufferDeviceAddress),
                                                  .shaderStages = Gpu::ShaderStageFlagBits::All},

@@ -45,7 +45,6 @@ class RadixSorter {
 
     /// Dispatches the histogram pass for the given keys buffer.
     void dispatchHistogram(Gpu::CommandRecorder &cmd,
-                           DescriptorSets &descriptors,
                            ScratchBuffers &scratch,
                            TransientComputePass &pass,
                            const Gpu::Buffer &keys,
@@ -55,14 +54,12 @@ class RadixSorter {
 
     /// Dispatches the scan pass over the histogram buffer.
     void dispatchScan(Gpu::CommandRecorder &cmd,
-                      DescriptorSets &descriptors,
                       ScratchBuffers &scratch,
                       TransientComputePass &pass,
                       uint32_t frameInFlightIndex);
 
     /// Dispatches the scatter pass into the provided output buffers.
     void dispatchScatter(Gpu::CommandRecorder &cmd,
-                         DescriptorSets &descriptors,
                          ScratchBuffers &scratch,
                          TransientComputePass &pass,
                          const Gpu::Buffer &keysIn,
@@ -75,7 +72,6 @@ class RadixSorter {
 
     /// Runs the GPU radix sort over the predicate values (uint keys). Returns the sorted indices.
     Gpu::Buffer &sort(Gpu::CommandRecorder &cmd,
-                      DescriptorSets &descriptors,
                       ScratchBuffers &scratch,
                       Passes &passes,
                       const Gpu::Buffer &predicateBuffer,

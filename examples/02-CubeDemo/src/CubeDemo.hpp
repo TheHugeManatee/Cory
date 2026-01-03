@@ -12,6 +12,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -21,6 +22,7 @@ struct CubeUBO {
     glm::mat4 view;
     glm::mat4 viewProjection;
     glm::vec3 lightPosition;
+    Cory::BufferHeapIndex bufferIndex;
 };
 
 struct alignas(16) InstanceData {

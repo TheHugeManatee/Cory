@@ -22,6 +22,9 @@ struct PointSpriteGlobals {
     float padding1;
     glm::vec3 cameraUp;
     float padding2;
+    Cory::BufferHeapIndex instanceBufferIndex;
+    Cory::BufferHeapIndex sortedIndicesBufferIndex;
+    Cory::BufferHeapIndex sortKeysBufferIndex;
 };
 
 struct alignas(16) InstanceData {

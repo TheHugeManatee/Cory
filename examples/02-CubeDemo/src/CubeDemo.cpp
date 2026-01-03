@@ -16,7 +16,6 @@
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -319,27 +318,6 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
 
     Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
-    // update the per-frame data
-    auto data = renderApi.bindingContext->alloc<CubeUBO>();
-    data->view = viewMatrix;
-    data->projection = projectionMatrix;
-    data->viewProjection = viewProjection;
-    data->lightPosition = camera_.getCameraPosition();
-    passRecorder.pushConstant(
-        Gpu::PushConstantRange{
-            .offset = 0,
-            .size = sizeof(Cory::BufferDeviceAddress),
-            .shaderStages = Gpu::ShaderStageFlagBits::All,
-        },
-        &data.gpu);
-
-    auto &descriptorSets = ctx().descriptors();
-    constexpr Cory::BufferHeapIndex kInstanceBufferIndex = 0;
-
-    // bind the mesh buffers
-    passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
-    passRecorder.setIndexBuffer(mesh_->indexBuffer);
-
     const uint32_t instanceCount = prepareInstanceData(t);
     if (instanceCount > 0) {
         auto [bufferHandle, instanceBuffer] =
@@ -349,13 +327,28 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                     instanceData_.data(),
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         instanceBuffer->unmap();
-
-        descriptorSets.write(Cory::BufferBindPoint::StorageBufferReadOnly,
-                             frameCtx.inFlightIndex,
-                             kInstanceBufferIndex,
-                             bufferHandle);
     }
-    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
+
+    // update the per-frame data
+    auto data = renderApi.bindingContext->alloc<CubeUBO>();
+    data->view = viewMatrix;
+    data->projection = projectionMatrix;
+    data->viewProjection = viewProjection;
+    data->lightPosition = camera_.getCameraPosition();
+    data->bufferIndex = renderApi.bindingContext->bindBuffer(instanceBufferHandle);
+    passRecorder.pushConstant(
+        Gpu::PushConstantRange{
+            .offset = 0,
+            .size = sizeof(Cory::BufferDeviceAddress),
+            .shaderStages = Gpu::ShaderStageFlagBits::All,
+        },
+        &data.gpu);
+
+    renderApi.bindingContext->bind(passRecorder);
+
+    // bind the mesh buffers
+    passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
+    passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
     if (instanceCount > 0) {
         // draw all instances in a single call

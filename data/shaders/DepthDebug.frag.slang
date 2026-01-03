@@ -2,6 +2,7 @@ struct Globals {
     float2 center;
     float2 size;
     float2 window;
+    uint textureIndex;
 };
 
 [[vk::push_constant]] Globals* globals;
@@ -31,7 +32,7 @@ float4 main(PSIn input)
         discard;
     }
 
-    float4 texColor = textures[0].Load(int2(input.pos.xy), input.sampleID);
+    float4 texColor = textures[globals->textureIndex].Load(int2(input.pos.xy), input.sampleID);
 
     float depthNorm = (texColor.r - globals.window.x) / (globals.window.y - globals.window.x);
 

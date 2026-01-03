@@ -55,9 +55,9 @@ using CompilationResult = std::expected<ShaderCompilationOutput, CompilationErro
 
 using BufferDeviceAddress = uint64_t;
 
-using TextureHeapIndex = uint16_t;
-using BufferHeapIndex = uint16_t;
-using SamplerHeapIndex = uint16_t;
+using TextureHeapIndex = uint32_t;
+using BufferHeapIndex = uint32_t;
+using SamplerHeapIndex = uint32_t;
 
 // enums
 static constexpr Gpu::ShaderStageFlagBits SHADER_TYPE_UNKNOWN = Gpu::ShaderStageFlagBits{};

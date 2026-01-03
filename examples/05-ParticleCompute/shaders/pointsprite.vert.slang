@@ -8,6 +8,9 @@ struct PointSpriteGlobals {
     float padding1;
     float3 cameraUp;
     float padding2;
+    uint instanceBufferIndex;
+    uint sortedIndicesBufferIndex;
+    uint sortKeysBufferIndex;
 };
 
 struct InstanceData {
@@ -33,8 +36,8 @@ struct VSOutput {
 
 VSOutput main(VSInput input)
 {
-    const uint sortedIndex = gReadWriteBuffers[1][input.instanceId];
-    const InstanceData instance = gReadOnlyBuffers[0][sortedIndex];
+    const uint sortedIndex = gReadWriteBuffers[globals->sortedIndicesBufferIndex][input.instanceId];
+    const InstanceData instance = gReadOnlyBuffers[globals->instanceBufferIndex][sortedIndex];
     static const float2 quadCorners[6] = {
         float2(-1.0, -1.0),
         float2(1.0, -1.0),

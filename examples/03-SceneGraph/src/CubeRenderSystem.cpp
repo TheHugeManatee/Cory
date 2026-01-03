@@ -4,7 +4,6 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
@@ -116,6 +115,7 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     drawData->projection = projectionMatrix;
     drawData->viewProjection = viewProjection;
     drawData->lightPosition = camera_.position;
+    drawData->bufferIndex = 0;
 
     passRecorder.pushConstant(
         KDGpu::PushConstantRange{
@@ -126,9 +126,6 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
         &drawData.gpu,
         cubePass.pipelineLayoutHandle());
 
-    auto &descriptorSets = ctx_->descriptors();
-    constexpr Cory::BufferHeapIndex kInstanceBufferIndex = 0;
-
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     if (instanceCount > 0) {
         auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
@@ -136,14 +133,11 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
         std::memcpy(
             mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         instanceBuffer.buffer.unmap();
-
-        descriptorSets.write(Cory::BufferBindPoint::StorageBufferReadOnly,
-                             frameCtx.inFlightIndex,
-                             kInstanceBufferIndex,
-                             instanceBuffer.buffer);
+        drawData->bufferIndex = renderApi.bindingContext->bindBuffer(
+            instanceBuffer.buffer.handle(), Cory::BufferBindPoint::StorageBufferReadOnly);
     }
 
-    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
+    renderApi.bindingContext->bind(passRecorder);
 
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);

@@ -4,7 +4,7 @@ struct CubeUBO
     float4x4 view;
     float4x4 viewProjection;
     float3 lightPosition;
-    float padding;
+    uint bufferIndex;
 };
 
 [[vk::push_constant]] CubeUBO* gGlobals;

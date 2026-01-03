@@ -8,6 +8,9 @@ struct PointSpriteGlobals {
     float padding1;
     float3 cameraUp;
     float padding2;
+    uint instanceBufferIndex;
+    uint sortedIndicesBufferIndex;
+    uint sortKeysBufferIndex;
 };
 
 [[vk::push_constant]] PointSpriteGlobals *globals;

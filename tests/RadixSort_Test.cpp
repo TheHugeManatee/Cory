@@ -4,7 +4,6 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -135,14 +134,8 @@ TEST_CASE("Radix sort compute pipeline matches CPU reference")
     auto &scratch = sorter.scratchForFrame(0, count);
 
     auto recorder = device.createCommandRecorder();
-    auto &sorted = sorter.sort(recorder,
-                               ctx.descriptors(),
-                               scratch,
-                               passes,
-                               predicateBuffer,
-                               count,
-                               sortedIndicesBuffer,
-                               0);
+    auto &sorted = sorter.sort(
+        recorder, scratch, passes, predicateBuffer, count, sortedIndicesBuffer, 0);
 
     auto readback = device.createBuffer(Gpu::BufferOptions{
         .label = "SortedReadback",
@@ -230,15 +223,13 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
             .buffer = scratch.keysA.handle(),
         });
-        sorter.dispatchHistogram(
-            recorder,
-            ctx.descriptors(),
-            scratch,
-            passes.histogram,
-            scratch.keysA,
-            count,
-            bitOffset,
-            0);
+        sorter.dispatchHistogram(recorder,
+                                 scratch,
+                                 passes.histogram,
+                                 scratch.keysA,
+                                 count,
+                                 bitOffset,
+                                 0);
 
         auto histo = readbackBuffer(device,
                                     ctx.graphicsQueue(),
@@ -271,7 +262,7 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
             .buffer = scratch.histograms.handle(),
         });
-        sorter.dispatchScan(recorder, ctx.descriptors(), scratch, passes.scan, 0);
+        sorter.dispatchScan(recorder, scratch, passes.scan, 0);
 
         auto scanned = readbackBuffer(device,
                                       ctx.graphicsQueue(),
@@ -327,7 +318,6 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .buffer = scratch.histograms.handle(),
         });
         sorter.dispatchScatter(recorder,
-                               ctx.descriptors(),
                                scratch,
                                passes.scatter,
                                scratch.keysA,

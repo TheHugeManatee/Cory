@@ -201,7 +201,6 @@ Gpu::BindGroup &pushBindGroup(Context &ctx,
 } // namespace
 
 Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
-                               DescriptorSets &descriptors,
                                ScratchBuffers &scratch,
                                Passes &passes,
                                const Gpu::Buffer &predicateBuffer,
@@ -273,28 +272,21 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
 
     for (uint32_t bitOffset = 0; bitOffset < 32; bitOffset += 4) {
         // Histogram
-        dispatchHistogram(cmd,
-                          descriptors,
-                          scratch,
-                          passes.histogram,
-                          *keysIn,
-                          instanceCount,
-                          bitOffset,
-                          frameInFlightIndex);
+        dispatchHistogram(
+            cmd, scratch, passes.histogram, *keysIn, instanceCount, bitOffset, frameInFlightIndex);
         barrier(scratch.histograms,
                 Gpu::AccessFlagBit::ShaderStorageWriteBit,
                 Gpu::AccessFlags(Gpu::AccessFlagBit::ShaderStorageReadBit |
                                  Gpu::AccessFlagBit::ShaderStorageWriteBit));
 
         // Scan
-        dispatchScan(cmd, descriptors, scratch, passes.scan, frameInFlightIndex);
+        dispatchScan(cmd, scratch, passes.scan, frameInFlightIndex);
         barrier(scratch.histograms,
                 Gpu::AccessFlagBit::ShaderStorageWriteBit,
                 Gpu::AccessFlagBit::ShaderStorageReadBit);
 
         // Scatter
         dispatchScatter(cmd,
-                        descriptors,
                         scratch,
                         passes.scatter,
                         *keysIn,
@@ -337,7 +329,6 @@ Gpu::Buffer &RadixSorter::sort(Gpu::CommandRecorder &cmd,
 }
 
 void RadixSorter::dispatchHistogram(Gpu::CommandRecorder &cmd,
-                                    DescriptorSets &descriptors,
                                     ScratchBuffers &scratch,
                                     TransientComputePass &computePass,
                                     const Gpu::Buffer &keys,
@@ -346,7 +337,6 @@ void RadixSorter::dispatchHistogram(Gpu::CommandRecorder &cmd,
                                     uint32_t frameInFlightIndex)
 {
     ensureScratch(scratch, instanceCount, frameInFlightIndex);
-    (void)descriptors;
 
     auto &shaders = ctx_->shaders();
     auto pass = computePass.begin(cmd);
@@ -388,12 +378,10 @@ void RadixSorter::dispatchHistogram(Gpu::CommandRecorder &cmd,
 }
 
 void RadixSorter::dispatchScan(Gpu::CommandRecorder &cmd,
-                               DescriptorSets &descriptors,
                                ScratchBuffers &scratch,
                                TransientComputePass &computePass,
                                uint32_t frameInFlightIndex)
 {
-    (void)descriptors;
     auto &shaders = ctx_->shaders();
     auto pass = computePass.begin(cmd);
     pass.bindShader(shaders[scanShader_].shaderHandle());
@@ -424,7 +412,6 @@ void RadixSorter::dispatchScan(Gpu::CommandRecorder &cmd,
 }
 
 void RadixSorter::dispatchScatter(Gpu::CommandRecorder &cmd,
-                                  DescriptorSets &descriptors,
                                   ScratchBuffers &scratch,
                                   TransientComputePass &computePass,
                                   const Gpu::Buffer &keysIn,
@@ -436,7 +423,6 @@ void RadixSorter::dispatchScatter(Gpu::CommandRecorder &cmd,
                                   uint32_t frameInFlightIndex)
 {
     ensureScratch(scratch, instanceCount, frameInFlightIndex);
-    (void)descriptors;
 
     auto &shaders = ctx_->shaders();
     auto pass = computePass.begin(cmd);

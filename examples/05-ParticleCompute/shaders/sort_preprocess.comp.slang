@@ -15,6 +15,9 @@ struct PointSpriteGlobals {
     float padding1;
     float3 cameraUp;
     float padding2;
+    uint instanceBufferIndex;
+    uint sortedIndicesBufferIndex;
+    uint sortKeysBufferIndex;
 };
 
 // Bindings
@@ -34,7 +37,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     uint i = dispatchThreadId.x;
     if (i >= p.numInstances) return;
 
-    float3 pos = gReadOnlyBuffers[0][i].positionAndSize.xyz;
+    float3 pos = gReadOnlyBuffers[p.globals->instanceBufferIndex][i].positionAndSize.xyz;
     float4 viewPos = mul(p.globals->view, float4(pos, 1.0));
 
     // View space Z is negative in front of camera in many systems
@@ -45,5 +48,5 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     uint key = (bits & 0x80000000u) != 0 ? ~bits                 // negative: flip all bits
                                          : (bits ^ 0x80000000u); // positive: flip sign bit
 
-    gReadWriteBuffers[0][i] = key;
+    gReadWriteBuffers[p.globals->sortKeysBufferIndex][i] = key;
 }

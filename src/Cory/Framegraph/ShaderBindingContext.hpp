@@ -1,6 +1,10 @@
 #pragma once
 
+#include <Cory/Framegraph/Common.hpp>
+
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/GpuBumpAllocator.hpp>
 
 #include <KDGpu/buffer.h>
@@ -26,33 +30,82 @@ namespace Cory {
 class ShaderBindingContext : NoCopy, NoMove {
   public:
     explicit ShaderBindingContext(Gpu::Device &device,
+                                  FramegraphResourceManager &resources,
                                   DescriptorSets &descriptorSets,
                                   uint32_t instanceIndex,
                                   size_t drawDataBufferSize);
 
     ~ShaderBindingContext();
 
-    template<typename T>
+    template <typename T>
     GpuAllocation<T> alloc(size_t count = 1)
         requires std::is_trivially_constructible_v<T>
     {
         return allocator_.alloc<T>(count);
     }
 
-    TextureHeapIndex bindTexture2D(Gpu::TextureViewHandle textureHandle);
+    [[nodiscard]] TextureHeapIndex bindTexture2D(TransientTextureHandle textureHandle,
+                                                 Gpu::TextureLayout layout,
+                                                 Gpu::TextureSamplerHandle sampler = {});
+    [[nodiscard]] TextureHeapIndex bindTexture2D(Gpu::TextureViewHandle view,
+                                                 Gpu::TextureLayout layout,
+                                                 Gpu::TextureSamplerHandle sampler = {});
+
+    [[nodiscard]] TextureHeapIndex bindTexture3D(TransientTextureHandle textureHandle,
+                                                 Gpu::TextureLayout layout,
+                                                 Gpu::TextureSamplerHandle sampler = {});
+    [[nodiscard]] TextureHeapIndex bindTexture3D(Gpu::TextureViewHandle view,
+                                                 Gpu::TextureLayout layout,
+                                                 Gpu::TextureSamplerHandle sampler = {});
+
+    [[nodiscard]] TextureHeapIndex bindStorageImage2D(TransientTextureHandle textureHandle,
+                                                      Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage2D(Gpu::TextureViewHandle view,
+                                                      Gpu::TextureLayout layout);
+
+    [[nodiscard]] TextureHeapIndex bindStorageImage3D(TransientTextureHandle textureHandle,
+                                                      Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage3D(Gpu::TextureViewHandle view,
+                                                      Gpu::TextureLayout layout);
+
+    [[nodiscard]] SamplerHeapIndex bindSampler(Gpu::TextureSamplerHandle sampler);
+
+    [[nodiscard]] BufferHeapIndex
+    bindBuffer(TransientBufferHandle bufferHandle,
+               BufferBindPoint bindPoint = BufferBindPoint::StorageBufferReadOnly);
+    [[nodiscard]] BufferHeapIndex
+    bindBuffer(Gpu::BufferHandle bufferHandle,
+               BufferBindPoint bindPoint = BufferBindPoint::StorageBufferReadOnly);
+
+    void bind(Gpu::RenderPassCommandRecorder &cmd);
+    void bind(Gpu::RenderPassCommandRecorder &cmd, Gpu::PipelineLayoutHandle pipelineLayout);
+    void bind(Gpu::ComputePassCommandRecorder &cmd);
 
     void reset();
 
   private:
-    Gpu::Device* device_;
+    TextureHeapIndex &nextTextureIndex(ImageBindPoint bindPoint);
+    BufferHeapIndex &nextBufferIndex(BufferBindPoint bindPoint);
+
+    TextureHeapIndex bindTexture(ImageBindPoint bindPoint,
+                                 Gpu::TextureViewHandle view,
+                                 Gpu::TextureLayout layout,
+                                 Gpu::TextureSamplerHandle sampler);
+
+    Gpu::Device *device_;
     Gpu::Buffer perDrawDataBuffer_;
     GpuBumpAllocator allocator_;
+    FramegraphResourceManager *resources_;
     DescriptorSets *descriptorSets_;
     uint32_t instanceIndex_;
 
     // Bump allocation indices
-    TextureHeapIndex nextTextureIndex_{0};
-    BufferHeapIndex nextBufferIndex_{0};
+    TextureHeapIndex nextTexture2DIndex_{0};
+    TextureHeapIndex nextTexture3DIndex_{0};
+    TextureHeapIndex nextStorageImage2DIndex_{0};
+    TextureHeapIndex nextStorageImage3DIndex_{0};
+    BufferHeapIndex nextReadOnlyBufferIndex_{0};
+    BufferHeapIndex nextReadWriteBufferIndex_{0};
     SamplerHeapIndex nextSamplerIndex_{0};
 };
 } // namespace Cory

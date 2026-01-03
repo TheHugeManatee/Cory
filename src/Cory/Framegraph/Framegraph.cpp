@@ -30,7 +30,8 @@ struct FramegraphPrivate {
     FramegraphPrivate(Context &ctx_param, uint32_t instanceIndex)
         : ctx{&ctx_param}
         , resources{ctx_param}
-        , shaderBindingContext{ctx->device(), ctx->descriptors(), instanceIndex, 2 * 1024 * 1024}
+        , shaderBindingContext{
+              ctx->device(), resources, ctx->descriptors(), instanceIndex, 2 * 1024 * 1024}
     {
     }
 
@@ -524,7 +525,6 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
         .ctx = data_->ctx,
         .frameCtx = data_->currentFrameCtx,
         .resources = &data_->resources,
-        .descriptors = &data_->ctx->descriptors(),
         .bindingContext = &data_->shaderBindingContext,
         .cmd = data_->commandListInProgress,
     };

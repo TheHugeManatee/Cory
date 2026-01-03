@@ -4,7 +4,6 @@
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -152,32 +151,28 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     const glm::mat3 viewInverse = glm::mat3(glm::inverse(viewMatrix));
     globals->cameraRight = glm::normalize(viewInverse[0]);
     globals->cameraUp = glm::normalize(viewInverse[1]);
+    globals->instanceBufferIndex = 0;
+    globals->sortedIndicesBufferIndex = 0;
+    globals->sortKeysBufferIndex = 0;
 
     if (instanceCount > 0) {
         auto &sortBuf = sorter_.scratchForFrame(frameCtx.inFlightIndex, instanceCount);
         auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
-        constexpr Cory::BufferHeapIndex kInstanceBufferIndex = 0;
-        constexpr Cory::BufferHeapIndex kSortedIndicesBufferIndex = 1;
-        constexpr Cory::BufferHeapIndex kSortKeysBufferIndex = 0;
 
         auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
         std::memcpy(
             mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         instanceBuffer.buffer.unmap();
 
+        globals->instanceBufferIndex = renderApi.bindingContext->bindBuffer(
+            instanceBuffer.buffer.handle(), Cory::BufferBindPoint::StorageBufferReadOnly);
+        globals->sortKeysBufferIndex = renderApi.bindingContext->bindBuffer(
+            sortBuf.keysA.handle(), Cory::BufferBindPoint::StorageBufferReadWrite);
+
         {
             auto pass = predicatePass.begin(*renderApi.cmd);
             pass.bindShader(ctx_->shaders()[predicateShader_].shaderHandle());
-            ctx_->descriptors()
-                .write(Cory::BufferBindPoint::StorageBufferReadOnly,
-                       frameCtx.inFlightIndex,
-                       kInstanceBufferIndex,
-                       instanceBuffer.buffer)
-                .write(Cory::BufferBindPoint::StorageBufferReadWrite,
-                       frameCtx.inFlightIndex,
-                       kSortKeysBufferIndex,
-                       sortBuf.keysA)
-                .bind(pass, frameCtx.inFlightIndex);
+            renderApi.bindingContext->bind(pass);
             struct SortPreprocessPushConstants {
                 uint32_t numInstances;
                 uint32_t pad;
@@ -193,7 +188,6 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         }
 
         auto &sortedIndices = sorter_.sort(*renderApi.cmd,
-                                           ctx_->descriptors(),
                                            sortBuf,
                                            sortPasses,
                                            sortBuf.keysA,
@@ -201,15 +195,8 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                                            sortBuf.indicesA,
                                            frameCtx.inFlightIndex);
 
-        ctx_->descriptors()
-            .write(Cory::BufferBindPoint::StorageBufferReadOnly,
-                   frameCtx.inFlightIndex,
-                   kInstanceBufferIndex,
-                   instanceBuffer.buffer)
-            .write(Cory::BufferBindPoint::StorageBufferReadWrite,
-                   frameCtx.inFlightIndex,
-                   kSortedIndicesBufferIndex,
-                   sortedIndices);
+        globals->sortedIndicesBufferIndex = renderApi.bindingContext->bindBuffer(
+            sortedIndices.handle(), Cory::BufferBindPoint::StorageBufferReadWrite);
 
         renderApi.cmd->bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
             .srcStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
@@ -225,8 +212,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
 
     // instance data already uploaded before sorting
 
-    auto &descriptorSets = ctx_->descriptors();
-    descriptorSets.bind(passRecorder, frameCtx.inFlightIndex);
+    renderApi.bindingContext->bind(passRecorder);
     const Cory::BufferDeviceAddress globalsAddress = globals.gpu;
     passRecorder.pushConstant(
         Gpu::PushConstantRange{

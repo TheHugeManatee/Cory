@@ -4,7 +4,7 @@ struct CubeUBO
     float4x4 view;
     float4x4 viewProjection;
     float3 lightPosition;
-    float padding;
+    uint bufferIndex;
 };
 
 struct InstanceData
@@ -38,7 +38,7 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    const InstanceData instance = gReadOnlyBuffers[0][input.instanceId];
+    const InstanceData instance = gReadOnlyBuffers[gGlobals->bufferIndex][input.instanceId];
     const float4 localPosition = float4(input.position, 1.0f);
     const float4x4 normalMatrix = instance.normalToWorld;
 

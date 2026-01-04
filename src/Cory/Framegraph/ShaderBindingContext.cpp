@@ -47,10 +47,8 @@ TextureHeapIndex ShaderBindingContext::bindTexture2D(TransientTextureHandle text
                                                      Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    return bindTexture(ImageBindPoint::Texture2D,
-                       resources_->imageView(textureHandle),
-                       layout,
-                       sampler);
+    return bindTexture(
+        ImageBindPoint::Texture2D, resources_->imageView(textureHandle), layout, sampler);
 }
 
 TextureHeapIndex ShaderBindingContext::bindTexture2D(Gpu::TextureViewHandle view,
@@ -65,10 +63,8 @@ TextureHeapIndex ShaderBindingContext::bindTexture3D(TransientTextureHandle text
                                                      Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    return bindTexture(ImageBindPoint::Texture3D,
-                       resources_->imageView(textureHandle),
-                       layout,
-                       sampler);
+    return bindTexture(
+        ImageBindPoint::Texture3D, resources_->imageView(textureHandle), layout, sampler);
 }
 
 TextureHeapIndex ShaderBindingContext::bindTexture3D(Gpu::TextureViewHandle view,
@@ -82,10 +78,8 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage2D(TransientTextureHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    return bindTexture(ImageBindPoint::StorageImage2D,
-                       resources_->imageView(textureHandle),
-                       layout,
-                       {});
+    return bindTexture(
+        ImageBindPoint::StorageImage2D, resources_->imageView(textureHandle), layout, {});
 }
 
 TextureHeapIndex ShaderBindingContext::bindStorageImage2D(Gpu::TextureViewHandle view,
@@ -98,10 +92,8 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage3D(TransientTextureHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    return bindTexture(ImageBindPoint::StorageImage3D,
-                       resources_->imageView(textureHandle),
-                       layout,
-                       {});
+    return bindTexture(
+        ImageBindPoint::StorageImage3D, resources_->imageView(textureHandle), layout, {});
 }
 
 TextureHeapIndex ShaderBindingContext::bindStorageImage3D(Gpu::TextureViewHandle view,
@@ -112,6 +104,8 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage3D(Gpu::TextureViewHandle
 
 SamplerHeapIndex ShaderBindingContext::bindSampler(Gpu::TextureSamplerHandle sampler)
 {
+    CO_CORE_DEBUG_ASSERT(descriptorSets_ != nullptr,
+                         "ShaderBindingContext has no resource manager");
     auto index = nextSamplerIndex_++;
     descriptorSets_->write(instanceIndex_, index, sampler);
     return index;
@@ -120,13 +114,15 @@ SamplerHeapIndex ShaderBindingContext::bindSampler(Gpu::TextureSamplerHandle sam
 BufferHeapIndex ShaderBindingContext::bindBuffer(TransientBufferHandle bufferHandle,
                                                  BufferBindPoint bindPoint)
 {
-    CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    CO_CORE_DEBUG_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
     return bindBuffer(resources_->buffer(bufferHandle), bindPoint);
 }
 
 BufferHeapIndex ShaderBindingContext::bindBuffer(Gpu::BufferHandle bufferHandle,
                                                  BufferBindPoint bindPoint)
 {
+    CO_CORE_DEBUG_ASSERT(descriptorSets_ != nullptr,
+                         "ShaderBindingContext has no resource manager");
     auto &nextIndex = nextBufferIndex(bindPoint);
     const BufferHeapIndex index = nextIndex++;
     descriptorSets_->write(bindPoint, instanceIndex_, index, bufferHandle);
@@ -141,44 +137,42 @@ void ShaderBindingContext::bind(Gpu::RenderPassCommandRecorder &cmd)
 void ShaderBindingContext::bind(Gpu::RenderPassCommandRecorder &cmd,
                                 Gpu::PipelineLayoutHandle pipelineLayout)
 {
+
     descriptorSets_->bind(cmd, instanceIndex_, pipelineLayout);
 }
 
 void ShaderBindingContext::bind(Gpu::ComputePassCommandRecorder &cmd)
 {
+
     descriptorSets_->bind(cmd, instanceIndex_);
 }
 
 TextureHeapIndex &ShaderBindingContext::nextTextureIndex(ImageBindPoint bindPoint)
 {
     switch (bindPoint) {
-        case ImageBindPoint::Texture2D:
-            return nextTexture2DIndex_;
-        case ImageBindPoint::Texture3D:
-            return nextTexture3DIndex_;
-        case ImageBindPoint::StorageImage2D:
-            return nextStorageImage2DIndex_;
-        case ImageBindPoint::StorageImage3D:
-            return nextStorageImage3DIndex_;
-        case ImageBindPoint::Samplers:
-            CO_CORE_ASSERT(false, "Sampler bindings should use bindSampler");
-            break;
+    case ImageBindPoint::Texture2D:
+        return nextTexture2DIndex_;
+    case ImageBindPoint::Texture3D:
+        return nextTexture3DIndex_;
+    case ImageBindPoint::StorageImage2D:
+        return nextStorageImage2DIndex_;
+    case ImageBindPoint::StorageImage3D:
+        return nextStorageImage3DIndex_;
+    case ImageBindPoint::Samplers:
+        CO_CORE_ASSERT(false, "Sampler bindings should use bindSampler");
     }
-    return nextTexture2DIndex_;
+    CO_CORE_ASSERT(false, "Unknown bind point {}", bindPoint.value);
 }
 
 BufferHeapIndex &ShaderBindingContext::nextBufferIndex(BufferBindPoint bindPoint)
 {
     switch (bindPoint.value) {
-        case BufferBindPoint::StorageBufferReadOnly:
-            return nextReadOnlyBufferIndex_;
-        case BufferBindPoint::StorageBufferReadWrite:
-            return nextReadWriteBufferIndex_;
-        default:
-            CO_CORE_ASSERT(false, "Unknown buffer bind point");
-            break;
+    case BufferBindPoint::StorageBufferReadOnly:
+        return nextReadOnlyBufferIndex_;
+    case BufferBindPoint::StorageBufferReadWrite:
+        return nextReadWriteBufferIndex_;
     }
-    return nextReadOnlyBufferIndex_;
+    CO_CORE_ASSERT(false, "Unknown buffer bind point");
 }
 
 TextureHeapIndex ShaderBindingContext::bindTexture(ImageBindPoint bindPoint,

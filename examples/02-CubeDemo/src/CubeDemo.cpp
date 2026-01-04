@@ -361,7 +361,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         });
     }
 
-    passRecorder.end();
+    cubePass.end(std::move(passRecorder));
 }
 
 Gpu::VertexOptions CubeDemoApplication::vertexOptions() const

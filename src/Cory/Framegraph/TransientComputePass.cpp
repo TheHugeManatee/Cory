@@ -9,6 +9,7 @@
 #include <KDGpu/compute_pass_command_recorder.h>
 #include <KDGpu/compute_pipeline_options.h>
 
+#include <Cory/Base/Log.hpp>
 #include <array>
 
 namespace Cory {
@@ -22,7 +23,11 @@ TransientComputePass::TransientComputePass(Context &ctx,
 {
 }
 
-TransientComputePass::~TransientComputePass() {}
+TransientComputePass::~TransientComputePass()
+{
+    CO_CORE_ASSERT(
+        wasEnded_, "TransientRenderPass '{}' was not end()ed before destruction!", pass_.name);
+}
 
 Gpu::ComputePassCommandRecorder TransientComputePass::begin(CommandRecorder &cmd)
 {
@@ -32,6 +37,11 @@ Gpu::ComputePassCommandRecorder TransientComputePass::begin(CommandRecorder &cmd
     // Set the pipeline layout so it is known for things like bind groups etc.
     recorder.setPipelineLayout(pipelineLayoutHandle());
     return recorder;
+}
+void TransientComputePass::end(Gpu::RenderPassCommandRecorder &&recorder)
+{
+    recorder.end();
+    wasEnded_ = true;
 }
 
 Gpu::PipelineLayoutHandle TransientComputePass::pipelineLayoutHandle() noexcept

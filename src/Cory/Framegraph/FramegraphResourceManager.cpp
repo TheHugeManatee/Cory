@@ -151,7 +151,7 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
     auto aspectMask = flagsForFormat(info.format);
     auto &state = data_->textureResources_[handle].state;
 
-    auto* texture = data_->ctx_->resources().getTexture(image(handle));
+    auto *texture = data_->ctx_->resources().getTexture(image(handle));
     CO_CORE_DEBUG_ASSERT(texture != nullptr, "Texture resource is null");
     VkImage vkImageHandle = texture->image;
     const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
@@ -206,10 +206,11 @@ FramegraphBufferHandle FramegraphResourceManager::declareBuffer(BufferInfo info)
 {
     CO_CORE_TRACE("Declaring buffer '{}' ({} bytes)", info.name, info.size);
 
-    auto handle = data_->bufferResources_.emplace(BufferResource{
-        info,
-        BufferState{.lastAccess = Sync::AccessType::None, .status = BufferMemoryStatus::Virtual},
-        Gpu::Buffer{}});
+    auto handle = data_->bufferResources_.emplace(
+        BufferResource{.info = std::move(info),
+                       .state = BufferState{.lastAccess = Sync::AccessType::None,
+                                            .status = BufferMemoryStatus::Virtual},
+                       .buffer = Gpu::Buffer{}});
     return handle;
 }
 
@@ -218,7 +219,7 @@ FramegraphBufferHandle FramegraphResourceManager::registerExternal(BufferInfo in
                                                                    Gpu::BufferHandle resource)
 {
     auto handle = data_->bufferResources_.emplace(BufferResource{
-        .info = info,
+        .info = std::move(info),
         .state = BufferState{.lastAccess = lastWriteAccess, .status = BufferMemoryStatus::External},
         .buffer = resource});
     return handle;

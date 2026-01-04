@@ -130,13 +130,12 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
                                       .clearColor = {},
                                   },
                               }},
-                              .depthAttachment =
-                                  DepthStencilAttachment{
-                                      .target = writtenDepthHandle,
-                                      .load = Gpu::AttachmentLoadOperation::Load,
-                                      .store = Gpu::AttachmentStoreOperation::Store,
-                                      .clearDepthStencil = {},
-                                  }});
+                              .depthAttachment = DepthStencilAttachment{
+                                  .target = writtenDepthHandle,
+                                  .load = Gpu::AttachmentLoadOperation::Load,
+                                  .store = Gpu::AttachmentStoreOperation::Store,
+                                  .clearDepthStencil = {},
+                              }});
 
     RenderInput renderApi = co_await builder.finishDeclaration(
         LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle});
@@ -145,7 +144,7 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
 
     auto renderPass = imguiPass.begin(frameCtx.commandBuffer);
     recordFrameCommands(frameCtx, &renderPass);
-    renderPass.end();
+    imguiPass.end(std::move(renderPass));
 }
 
 void ImGuiLayer::recordFrameCommands(FrameContext &frameCtx,

@@ -69,7 +69,11 @@ TransientRenderPass::TransientRenderPass(Context &ctx,
 {
 }
 
-TransientRenderPass::~TransientRenderPass() {}
+TransientRenderPass::~TransientRenderPass()
+{
+    CO_CORE_ASSERT(
+        wasEnded_, "TransientRenderPass '{}' was not end()ed before destruction!", pass_.name);
+}
 
 Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
 {
@@ -226,6 +230,13 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
     }
 
     return renderPassRecorder;
+}
+
+void TransientRenderPass::end(Gpu::RenderPassCommandRecorder &&recorder)
+{
+    recorder.end();
+
+    wasEnded_ = true;
 }
 
 Gpu::PipelineLayoutHandle TransientRenderPass::pipelineLayoutHandle() noexcept

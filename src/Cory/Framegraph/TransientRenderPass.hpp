@@ -71,6 +71,12 @@ class TransientRenderPass : NoCopy {
      */
     Gpu::RenderPassCommandRecorder begin(CommandRecorder &cmd);
 
+    /**
+     * Ends the render pass.
+     * @param recorder must provide the recorder obtained from begin() via move semantics
+     */
+    void end(Gpu::RenderPassCommandRecorder &&recorder);
+
     /// Obtain the pipeline layout handle. Creates the layout if necessary.
     [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;
 
@@ -78,6 +84,7 @@ class TransientRenderPass : NoCopy {
     Gpu::SampleCountFlagBits determineSampleCount() const;
     Gpu::Rect2D determineRenderArea() const;
 
+    bool wasEnded_ = false;
     Context *ctx_;
     FramegraphResourceManager *textures_;
 

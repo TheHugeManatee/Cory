@@ -174,7 +174,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                           &d.gpu);
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
 
-    recorder.end();
+    depthDebugPass.end(std::move(recorder));
 }
 
 } // namespace Cory

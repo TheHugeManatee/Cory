@@ -5,6 +5,8 @@
 struct PushConstants {
     uint numInstances;
     uint bitOffset;
+    uint keysIndex;
+    uint histogramIndex;
 };
 [[vk::push_constant]]
 PushConstants p;
@@ -23,13 +25,14 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID,
 
     uint i = dispatchThreadId.x;
     if (i < p.numInstances) {
-        uint key = gReadOnlyBuffers[0][i];
+        uint key = gReadOnlyBuffers[p.keysIndex][i];
         uint digit = (key >> p.bitOffset) & 0xF;
         InterlockedAdd(s_Hist[digit], 1);
     }
     GroupMemoryBarrierWithGroupSync();
 
     if (groupThreadId.x < 16) {
-        gReadWriteBuffers[0][groupId.x * 16 + groupThreadId.x] = s_Hist[groupThreadId.x];
+        gReadWriteBuffers[p.histogramIndex][groupId.x * 16 + groupThreadId.x] =
+            s_Hist[groupThreadId.x];
     }
 }

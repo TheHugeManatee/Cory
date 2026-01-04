@@ -120,9 +120,9 @@ class ShaderBindingContext : NoCopy, NoMove {
     DescriptorSets *descriptorSets_;
     uint32_t instanceIndex_;
 
-    std::variant<Gpu::RenderPassCommandRecorder *, //
-                 Gpu::ComputePassCommandRecorder *,
-                 std::monostate>
+    std::variant<std::monostate,                   //
+                 Gpu::RenderPassCommandRecorder *,
+                 Gpu::ComputePassCommandRecorder *>
         passRecorder_;
 
     // Bump allocation indices

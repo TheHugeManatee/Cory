@@ -73,7 +73,7 @@ TransientRenderPass::TransientRenderPass(Context &ctx,
 
 TransientRenderPass::~TransientRenderPass()
 {
-    CO_CORE_ASSERT(currentRenderApi_ != nullptr && wasEnded_,
+    CO_CORE_ASSERT(currentRenderApi_ == nullptr || wasEnded_,
                    "TransientRenderPass '{}' was not end()ed before destruction!",
                    pass_.name);
 }
@@ -152,6 +152,10 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(const RenderInput &ren
         auto &shaders = ctx_->shaders();
         for (auto shaderHandle : pass_.shaders) {
             auto &shader = shaders[shaderHandle];
+            CO_CORE_ASSERT(shader.valid(),
+                           "Shader handle is not valid in render pass '{}':\n{}",
+                           pass_.name,
+                           shader.error());
             stages.emplace_back(shader.type());
             handles.emplace_back(shader.shaderHandle());
         }
@@ -194,6 +198,9 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(const RenderInput &ren
         };
         const auto vertexOptions = pass_.vertexOptions.value_or(defaultVertexOptions);
         renderPassRecorder.setVertexInput(vertexOptions.buffers, vertexOptions.attributes);
+    }
+    else {
+        renderPassRecorder.setVertexInput({}, {});
     }
 
     Gpu::Rect2D scissorRect = dynamicStates_.renderArea;
@@ -241,9 +248,9 @@ void TransientRenderPass::end(Gpu::RenderPassCommandRecorder &&recorder)
 {
     if (!pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
         CO_CORE_ASSERT(currentRenderApi_ != nullptr, "Begin was never called on this pass!");
-        recorder.end();
         currentRenderApi_->bindingContext->unbind();
     }
+    recorder.end();
 
     wasEnded_ = true;
 }

@@ -15,6 +15,9 @@
 
 #include <gsl/gsl>
 
+#include <unordered_map>
+#include <unordered_set>
+
 using namespace Cory;
 
 namespace passes {
@@ -88,9 +91,9 @@ PSOutput main(VSOutput input) {
 
     RenderInput render = co_await builder.finishDeclaration(outputs);
     CO_CORE_ASSERT(render.cmd != nullptr, "Uh-oh");
-    auto recorder = depthPass.begin(*render.cmd);
+    auto recorder = depthPass.begin(render);
     CO_APP_INFO("[DepthPrepass] render commands executing");
-    recorder.end();
+    depthPass.end(std::move(recorder));
 }
 
 struct DepthDebugOut {
@@ -239,6 +242,191 @@ RenderTaskDeclaration<TempResourceOut> tempResourcePass(RenderTaskBuilder builde
         co_await builder.finishDeclaration(TempResourceOut{color, scratch});
     CO_APP_INFO("[TempResource] Pass render commands are executed");
 }
+
+struct ToyScatterOut {
+    TransientBufferHandle keys;
+    TransientBufferHandle indices;
+};
+
+RenderTaskDeclaration<TransientBufferHandle> toyInit(RenderTaskBuilder builder,
+                                                     TransientBufferHandle indices)
+{
+    auto [writtenIndices, info] = builder.write(indices, Sync::AccessType::HostWrite);
+    (void)info;
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenIndices);
+}
+
+RenderTaskDeclaration<TransientBufferHandle> toyPreprocess(RenderTaskBuilder builder,
+                                                           TransientBufferHandle keys)
+{
+    auto [writtenKeys, info] = builder.write(keys, Sync::AccessType::ComputeShaderWrite);
+    (void)info;
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenKeys);
+}
+
+RenderTaskDeclaration<TransientBufferHandle> toyHistogram(RenderTaskBuilder builder,
+                                                          TransientBufferHandle keys,
+                                                          TransientBufferHandle indices,
+                                                          TransientBufferHandle histograms)
+{
+    builder.read(keys, Sync::AccessType::ComputeShaderReadOther);
+    builder.read(indices, Sync::AccessType::ComputeShaderReadOther);
+    auto [writtenHistograms, info] =
+        builder.write(histograms, Sync::AccessType::ComputeShaderWrite);
+    (void)info;
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenHistograms);
+}
+
+RenderTaskDeclaration<TransientBufferHandle> toyScan(RenderTaskBuilder builder,
+                                                     TransientBufferHandle histograms)
+{
+    auto [writtenHistograms, info] =
+        builder.readWrite(histograms, Sync::AccessType::ComputeShaderWrite);
+    (void)info;
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenHistograms);
+}
+
+RenderTaskDeclaration<ToyScatterOut> toyScatter(RenderTaskBuilder builder,
+                                                TransientBufferHandle keysIn,
+                                                TransientBufferHandle indicesIn,
+                                                TransientBufferHandle keysOut,
+                                                TransientBufferHandle indicesOut,
+                                                TransientBufferHandle histograms)
+{
+    builder.read(keysIn, Sync::AccessType::ComputeShaderReadOther);
+    builder.read(indicesIn, Sync::AccessType::ComputeShaderReadOther);
+    builder.read(histograms, Sync::AccessType::ComputeShaderReadOther);
+    auto [writtenKeys, keysInfo] = builder.write(keysOut, Sync::AccessType::ComputeShaderWrite);
+    auto [writtenIndices, indicesInfo] =
+        builder.write(indicesOut, Sync::AccessType::ComputeShaderWrite);
+    (void)keysInfo;
+    (void)indicesInfo;
+
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(ToyScatterOut{writtenKeys, writtenIndices});
+}
+
+struct ToyRadixOut {
+    TransientBufferHandle indices;
+};
+
+RenderTaskDeclaration<ToyRadixOut> toyRadix(RenderTaskBuilder builder)
+{
+    auto keysA = builder.create("BUF_ToyKeysA",
+                                256u,
+                                Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                Sync::AccessType::ComputeShaderWrite);
+    auto keysB = builder.create("BUF_ToyKeysB",
+                                256u,
+                                Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                Sync::AccessType::ComputeShaderWrite);
+    auto indicesA = builder.create("BUF_ToyIndicesA",
+                                   256u,
+                                   Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                   Sync::AccessType::HostWrite,
+                                   Gpu::MemoryUsage::CpuToGpu);
+    auto indicesB = builder.create("BUF_ToyIndicesB",
+                                   256u,
+                                   Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                   Sync::AccessType::ComputeShaderWrite);
+    auto histograms = builder.create("BUF_ToyHistograms",
+                                     16u * sizeof(uint32_t),
+                                     Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                     Sync::AccessType::ComputeShaderWrite);
+
+    auto initTask = toyInit(builder.subtask("Init"), indicesA);
+    auto preprocessTask = toyPreprocess(builder.subtask("Preprocess"), keysA);
+
+    auto keysIn = preprocessTask.output();
+    auto keysOut = keysB;
+    auto indicesIn = initTask.output();
+    auto indicesOut = indicesB;
+    auto histogramsHandle = histograms;
+
+    for (uint32_t pass = 0; pass < 2; ++pass) {
+        auto histogramTask =
+            toyHistogram(builder.subtask(std::string("Histogram_") + std::to_string(pass)),
+                         keysIn,
+                         indicesIn,
+                         histogramsHandle);
+        auto scanTask = toyScan(builder.subtask(std::string("Scan_") + std::to_string(pass)),
+                                histogramTask.output());
+        auto scatterTask =
+            toyScatter(builder.subtask(std::string("Scatter_") + std::to_string(pass)),
+                       keysIn,
+                       indicesIn,
+                       keysOut,
+                       indicesOut,
+                       scanTask.output());
+
+        auto scatterOut = scatterTask.output();
+        keysOut = keysIn;
+        indicesOut = indicesIn;
+        keysIn = scatterOut.keys;
+        indicesIn = scatterOut.indices;
+        histogramsHandle = scanTask.output();
+    }
+
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(ToyRadixOut{indicesIn});
+}
+
+RenderTaskDeclaration<TransientTextureHandle> toySink(RenderTaskBuilder builder,
+                                                      TransientBufferHandle indices)
+{
+    builder.read(indices, Sync::AccessType::ComputeShaderReadOther);
+    auto color = builder.create("TEX_ToySink",
+                                {1, 1, 1},
+                                TextureFormat::R8G8B8A8_SRGB,
+                                Sync::AccessType::ColorAttachmentWrite);
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(color);
+}
+
+struct SharedBufferOut {
+    TransientBufferHandle buffer;
+};
+RenderTaskDeclaration<SharedBufferOut> sharedBufferProducer(RenderTaskBuilder builder)
+{
+    auto buffer = builder.create("BUF_Shared",
+                                 256u,
+                                 Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                 Sync::AccessType::AnyShaderWrite);
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(SharedBufferOut{
+        buffer,
+    });
+}
+
+struct BufferConsumerOut {
+    TransientTextureHandle color;
+};
+RenderTaskDeclaration<BufferConsumerOut> bufferConsumer(RenderTaskBuilder builder,
+                                                        std::string_view name,
+                                                        TransientBufferHandle sharedBuffer,
+                                                        glm::u32vec3 size)
+{
+    builder.read(sharedBuffer, Sync::AccessType::ComputeShaderReadOther);
+    auto color = builder.create(std::string{name},
+                                size,
+                                TextureFormat::R8G8B8A8_SRGB,
+                                Sync::AccessType::ColorAttachmentWrite);
+    [[maybe_unused]] RenderInput render =
+        co_await builder.finishDeclaration(BufferConsumerOut{color});
+}
+
+struct CombineOut {
+    TransientTextureHandle color;
+};
+RenderTaskDeclaration<CombineOut> combineConsumers(RenderTaskBuilder builder,
+                                                   TransientTextureHandle inputA,
+                                                   TransientTextureHandle inputB,
+                                                   glm::u32vec3 size)
+{
+    builder.read(inputA, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    builder.read(inputB, Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto color = builder.create(
+        "TEX_Combine", size, TextureFormat::R8G8B8A8_SRGB, Sync::AccessType::ColorAttachmentWrite);
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(CombineOut{color});
+}
 } // namespace passes
 
 struct GraphInput {
@@ -278,7 +466,7 @@ GraphInput createGraphInput(Gpu::Device &device, Framegraph &graph)
     return input;
 }
 
-TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
+TEST_CASE("Framegraph API", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
 
@@ -341,7 +529,7 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph/Framegraph]")
     CO_APP_INFO(graph.dump(g));
 }
 
-TEST_CASE("Framegraph allocates temp resources for scheduled tasks", "[Cory/Framegraph/Framegraph]")
+TEST_CASE("Framegraph allocates temp resources for scheduled tasks", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
     Framegraph graph(t.ctx(), 0);
@@ -420,7 +608,7 @@ RenderTaskDeclaration<MainSubtaskOut> mainPassWithSubpasses(RenderTaskBuilder bu
 }
 } // namespace passes
 
-TEST_CASE("Framegraph subtask definition")
+TEST_CASE("Framegraph subtask definition", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
     Framegraph graph(t.ctx(), 0);
@@ -448,6 +636,107 @@ TEST_CASE("Framegraph subtask definition")
     auto execInfo = graph.record(frameCtx);
 
     CHECK(execInfo.tasks.size() == 3); // main pass + 2 subtasks
-    // input, buffer from subtask1, texture from subtask2, output texture
-    CHECK(execInfo.resources.size() == 4);
+    // unique textures: external input/output share the same handle + subtask texture
+    CHECK(execInfo.resources.size() == 2);
+    CHECK(execInfo.buffers.size() == 1);
+}
+
+TEST_CASE("Framegraph resolve avoids repeated buffer visits", "[Cory/Framegraph]")
+{
+    testing::VulkanTester t;
+    Framegraph graph(t.ctx(), 0);
+
+    auto shared = passes::sharedBufferProducer(graph.declareTask("PASS_SharedBuffer"));
+    auto consumerA = passes::bufferConsumer(graph.declareTask("PASS_ConsumerA"),
+                                            "TEX_ConsumerA",
+                                            shared.output().buffer,
+                                            {128, 128, 1});
+    auto consumerB = passes::bufferConsumer(graph.declareTask("PASS_ConsumerB"),
+                                            "TEX_ConsumerB",
+                                            shared.output().buffer,
+                                            {128, 128, 1});
+    auto combine = passes::combineConsumers(graph.declareTask("PASS_Combine"),
+                                            consumerA.output().color,
+                                            consumerB.output().color,
+                                            {128, 128, 1});
+
+    auto [outputInfo, outputState] =
+        graph.declareOutput(combine.output().color, Sync::AccessType::ColorAttachmentWrite);
+    (void)outputInfo;
+    (void)outputState;
+
+    CommandRecorder recorder = t.ctx().device().createCommandRecorder(Gpu::CommandRecorderOptions{
+        .label = "CMD_FramegraphResolveVisitedTest",
+        .queue = t.ctx().graphicsQueue().handle(),
+        .level = Gpu::CommandBufferLevel::Primary,
+    });
+
+    FrameContext frameCtx{
+        .inFlightIndex = 0,
+        .swapchainImageIndex = 0,
+        .frameNumber = 1,
+        .commandBuffer = std::move(recorder),
+    };
+
+    auto execInfo = graph.record(frameCtx);
+
+    std::unordered_set<FramegraphBufferHandle> uniqueBuffers;
+    for (const auto &bufferHandle : execInfo.buffers) {
+        uniqueBuffers.insert(bufferHandle);
+    }
+    CHECK(uniqueBuffers.size() == execInfo.buffers.size());
+    CHECK(execInfo.buffers.size() == 1);
+}
+
+TEST_CASE("Framegraph resolves toy radix ordering", "[Cory/Framegraph]")
+{
+    testing::VulkanTester t;
+    Framegraph graph(t.ctx(), 0);
+
+    auto radixTask = passes::toyRadix(graph.declareTask("TASK_ToyRadix"));
+    auto sinkTask = passes::toySink(graph.declareTask("TASK_ToySink"), radixTask.output().indices);
+
+    auto [outputInfo, outputState] =
+        graph.declareOutput(sinkTask.output(), Sync::AccessType::ColorAttachmentWrite);
+    (void)outputInfo;
+    (void)outputState;
+
+    CommandRecorder recorder = t.ctx().device().createCommandRecorder(Gpu::CommandRecorderOptions{
+        .label = "CMD_FramegraphToyRadixResolveTest",
+        .queue = t.ctx().graphicsQueue().handle(),
+        .level = Gpu::CommandBufferLevel::Primary,
+    });
+
+    FrameContext frameCtx{
+        .inFlightIndex = 0,
+        .swapchainImageIndex = 0,
+        .frameNumber = 1,
+        .commandBuffer = std::move(recorder),
+    };
+
+    auto execInfo = graph.record(frameCtx);
+
+    std::unordered_map<RenderTaskHandle, std::string> names;
+    for (const auto &[handle, info] : graph.renderTasks()) {
+        names.emplace(handle, info.name);
+    }
+
+    auto taskIndex = [&](std::string_view name) {
+        for (size_t i = 0; i < execInfo.tasks.size(); ++i) {
+            if (names[execInfo.tasks[i]] == name) {
+                return i;
+            }
+        }
+        FAIL("Task not found");
+        return execInfo.tasks.size();
+    };
+
+    CHECK(taskIndex("TASK_ToyRadix::Init") < taskIndex("TASK_ToyRadix::Histogram_0"));
+    CHECK(taskIndex("TASK_ToyRadix::Preprocess") < taskIndex("TASK_ToyRadix::Histogram_0"));
+    CHECK(taskIndex("TASK_ToyRadix::Histogram_0") < taskIndex("TASK_ToyRadix::Scan_0"));
+    CHECK(taskIndex("TASK_ToyRadix::Scan_0") < taskIndex("TASK_ToyRadix::Scatter_0"));
+    CHECK(taskIndex("TASK_ToyRadix::Scatter_0") < taskIndex("TASK_ToyRadix::Histogram_1"));
+    CHECK(taskIndex("TASK_ToyRadix::Histogram_1") < taskIndex("TASK_ToyRadix::Scan_1"));
+    CHECK(taskIndex("TASK_ToyRadix::Scan_1") < taskIndex("TASK_ToyRadix::Scatter_1"));
+    CHECK(taskIndex("TASK_ToyRadix::Scatter_1") < taskIndex("TASK_ToySink"));
 }

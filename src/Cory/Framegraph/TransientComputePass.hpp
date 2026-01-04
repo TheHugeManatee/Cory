@@ -30,7 +30,7 @@ class TransientComputePass {
      * Ends the render pass.
      * @param recorder must provide the recorder obtained from begin() via move semantics
      */
-    void end(Gpu::RenderPassCommandRecorder &&recorder);
+    void end(Gpu::ComputePassCommandRecorder &&recorder);
 
     /// Obtain the pipeline layout handle. Creates the layout if necessary.
     [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;

@@ -56,14 +56,14 @@ TransientBufferHandle RenderTaskBuilder::create(std::string name,
     return handle;
 }
 
-TextureInfo RenderTaskBuilder::read(TransientTextureHandle &handle, Sync::AccessType readAccess)
+TextureInfo RenderTaskBuilder::read(TransientTextureHandle handle, Sync::AccessType readAccess)
 {
     info_.textureDependencies.push_back(RenderTaskInfo::TextureDependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
     return framegraph_.resources().info(handle.texture());
 }
 
-BufferInfo RenderTaskBuilder::read(TransientBufferHandle &handle, Sync::AccessType readAccess)
+BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle, Sync::AccessType readAccess)
 {
     info_.bufferDependencies.push_back(RenderTaskInfo::BufferDependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});

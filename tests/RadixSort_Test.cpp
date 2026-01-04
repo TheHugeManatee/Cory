@@ -2,7 +2,11 @@
 
 #include <../src/Cory/Renderer/RadixSorter.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
+#include <Cory/Framegraph/RenderTaskDeclaration.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
@@ -18,11 +22,19 @@
 #include <filesystem>
 #include <numeric>
 #include <span>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace fs = std::filesystem;
 
 namespace {
+class FramegraphTestAdapter : public Cory::Framegraph {
+  public:
+    using Framegraph::compile;
+    using Framegraph::Framegraph;
+};
+
 std::vector<uint32_t> readbackBuffer(Gpu::Device &device,
                                      Gpu::Queue &queue,
                                      Gpu::CommandRecorder &recorder,
@@ -81,6 +93,44 @@ void uploadBuffer(Gpu::Buffer &buffer, std::span<const uint32_t> data)
     buffer.flush();
     buffer.unmap();
 }
+
+struct SortTaskOut {
+    Cory::TransientBufferHandle indices;
+};
+
+Cory::RenderTaskDeclaration<Cory::TransientBufferHandle>
+writePredicateTask(Cory::RenderTaskBuilder builder, Cory::TransientBufferHandle keys)
+{
+    auto [writtenKeys, info] = builder.write(keys, Cory::Sync::AccessType::HostWrite);
+    (void)info;
+    [[maybe_unused]] Cory::RenderInput render = co_await builder.finishDeclaration(writtenKeys);
+}
+
+Cory::RenderTaskDeclaration<SortTaskOut> framegraphSortTask(Cory::RenderTaskBuilder builder,
+                                                            Cory::RadixSorter &sorter)
+{
+    auto keys = builder.create("BUF_FramegraphSortKeys",
+                               256u,
+                               Gpu::BufferUsageFlagBits::StorageBufferBit,
+                               Cory::Sync::AccessType::HostWrite,
+                               Gpu::MemoryUsage::CpuToGpu);
+    auto keysWritten = writePredicateTask(builder.subtask("PreprocessKeys"), keys);
+    auto sorted = sorter.sort(builder, keysWritten.output(), 64u);
+
+    [[maybe_unused]] Cory::RenderInput render =
+        co_await builder.finishDeclaration(SortTaskOut{sorted.indices});
+}
+
+Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
+sortSinkTask(Cory::RenderTaskBuilder builder, Cory::TransientBufferHandle indices)
+{
+    builder.read(indices, Cory::Sync::AccessType::ComputeShaderReadOther);
+    auto color = builder.create("TEX_RadixSortSink",
+                                {1, 1, 1},
+                                Cory::TextureFormat::R8G8B8A8_SRGB,
+                                Cory::Sync::AccessType::ColorAttachmentWrite);
+    [[maybe_unused]] Cory::RenderInput render = co_await builder.finishDeclaration(color);
+}
 } // namespace
 
 TEST_CASE("Radix sort compute pipeline matches CPU reference")
@@ -92,6 +142,8 @@ TEST_CASE("Radix sort compute pipeline matches CPU reference")
     Cory::RadixSorter sorter{ctx};
     Cory::FramegraphResourceManager resources{ctx};
     auto passes = sorter.declarePasses(resources);
+    Cory::ShaderBindingContext bindingContext{
+        ctx.device(), resources, ctx.descriptors(), 0, 1024 * 1024};
 
     // Toy distances (larger = farther)
     std::vector<float> distances{5.0f, 1.0f, 3.5f, 8.0f, 0.5f, 2.5f, 7.0f, 4.0f};
@@ -134,7 +186,7 @@ TEST_CASE("Radix sort compute pipeline matches CPU reference")
     auto &scratch = sorter.scratchForFrame(0, count);
 
     auto recorder = device.createCommandRecorder();
-    auto &sorted = sorter.sort(
+    auto &sorted = sorter.sortImmediate(
         recorder, scratch, passes, predicateBuffer, count, sortedIndicesBuffer, 0);
 
     auto readback = device.createBuffer(Gpu::BufferOptions{
@@ -199,6 +251,8 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
     Cory::RadixSorter sorter{ctx};
     Cory::FramegraphResourceManager resources{ctx};
     auto passes = sorter.declarePasses(resources);
+    Cory::ShaderBindingContext bindingContext{
+        ctx.device(), resources, ctx.descriptors(), 0, 1024 * 1024};
 
     const std::array<uint32_t, 8> keys = {0x1u, 0xFu, 0x2u, 0x1u, 0x0u, 0xAu, 0xFu, 0x2u};
     const uint32_t count = static_cast<uint32_t>(keys.size());
@@ -216,6 +270,13 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
     SECTION("Histogram")
     {
         auto recorder = device.createCommandRecorder();
+        Cory::RenderInput renderApi{
+            .ctx = &ctx,
+            .frameCtx = nullptr,
+            .resources = &resources,
+            .bindingContext = &bindingContext,
+            .cmd = &recorder,
+        };
         recorder.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
             .srcStages = Gpu::PipelineStageFlagBit::HostBit,
             .srcMask = Gpu::AccessFlagBit::HostWriteBit,
@@ -223,13 +284,8 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
             .buffer = scratch.keysA.handle(),
         });
-        sorter.dispatchHistogram(recorder,
-                                 scratch,
-                                 passes.histogram,
-                                 scratch.keysA,
-                                 count,
-                                 bitOffset,
-                                 0);
+        sorter.dispatchHistogram(
+            renderApi, scratch, passes.histogram, scratch.keysA, count, bitOffset, 0);
 
         auto histo = readbackBuffer(device,
                                     ctx.graphicsQueue(),
@@ -250,6 +306,13 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
     SECTION("Scan (upload histogram directly to isolate scan)")
     {
         auto recorder = device.createCommandRecorder();
+        Cory::RenderInput renderApi{
+            .ctx = &ctx,
+            .frameCtx = nullptr,
+            .resources = &resources,
+            .bindingContext = &bindingContext,
+            .cmd = &recorder,
+        };
         std::array<uint32_t, 16> counts{};
         for (uint32_t key : keys) {
             counts[key & 0xFu] += 1;
@@ -262,7 +325,7 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
             .buffer = scratch.histograms.handle(),
         });
-        sorter.dispatchScan(recorder, scratch, passes.scan, 0);
+        sorter.dispatchScan(renderApi, scratch, passes.scan, 0);
 
         auto scanned = readbackBuffer(device,
                                       ctx.graphicsQueue(),
@@ -285,6 +348,13 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
     SECTION("Scatter (upload scanned histogram directly to isolate scatter)")
     {
         auto recorder = device.createCommandRecorder();
+        Cory::RenderInput renderApi{
+            .ctx = &ctx,
+            .frameCtx = nullptr,
+            .resources = &resources,
+            .bindingContext = &bindingContext,
+            .cmd = &recorder,
+        };
         recorder.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
             .srcStages = Gpu::PipelineStageFlagBit::HostBit,
             .srcMask = Gpu::AccessFlagBit::HostWriteBit,
@@ -317,7 +387,7 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
             .dstMask = Gpu::AccessFlagBit::ShaderStorageReadBit,
             .buffer = scratch.histograms.handle(),
         });
-        sorter.dispatchScatter(recorder,
+        sorter.dispatchScatter(renderApi,
                                scratch,
                                passes.scatter,
                                scratch.keysA,
@@ -409,4 +479,47 @@ TEST_CASE("Radix sort stages produce expected buffers for a single pass")
         CHECK(keysOut == expectedKeys);
         CHECK(indicesOut == expectedIndices);
     }
+}
+
+TEST_CASE("Radix sorter can be scheduled via framegraph")
+{
+    Cory::testing::VulkanTester t;
+    auto &ctx = t.ctx();
+    FramegraphTestAdapter graph(ctx, 0);
+
+    const auto shaderDir = fs::path{__FILE__}.parent_path().parent_path() / "data/shaders";
+    Cory::ResourceLocator::addSearchPath(shaderDir);
+
+    Cory::RadixSorter sorter{ctx};
+    auto sortTask = framegraphSortTask(graph.declareTask("TASK_RadixSort"), sorter);
+    auto sinkTask =
+        sortSinkTask(graph.declareTask("TASK_RadixSortSink"), sortTask.output().indices);
+
+    graph.declareOutput(sinkTask.output(), Cory::Sync::AccessType::ColorAttachmentWrite);
+
+    auto execInfo = graph.compile();
+    CHECK(!execInfo.tasks.empty());
+
+    std::unordered_map<Cory::RenderTaskHandle, std::string> names;
+    for (const auto &[handle, info] : graph.renderTasks()) {
+        names.emplace(handle, info.name);
+    }
+
+    auto taskIndex = [&](std::string_view name) {
+        for (size_t i = 0; i < execInfo.tasks.size(); ++i) {
+            if (names[execInfo.tasks[i]] == name) {
+                return i;
+            }
+        }
+        FAIL("Task not found");
+        return execInfo.tasks.size();
+    };
+
+    CHECK(taskIndex("TASK_RadixSort::RadixInitIndices") <
+          taskIndex("TASK_RadixSort::RadixHistogram_0"));
+    CHECK(taskIndex("TASK_RadixSort::PreprocessKeys") <
+          taskIndex("TASK_RadixSort::RadixHistogram_0"));
+    CHECK(taskIndex("TASK_RadixSort::RadixScatter_0") <
+          taskIndex("TASK_RadixSort::RadixHistogram_4"));
+    CHECK(taskIndex("TASK_RadixSort::RadixScatter_28") < taskIndex("TASK_RadixSortSink"));
 }

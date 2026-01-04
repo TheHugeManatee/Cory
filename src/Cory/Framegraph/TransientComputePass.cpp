@@ -45,7 +45,7 @@ Gpu::ComputePassCommandRecorder TransientComputePass::begin(const RenderInput &r
     return recorder;
 }
 
-void TransientComputePass::end(Gpu::RenderPassCommandRecorder &&recorder)
+void TransientComputePass::end(Gpu::ComputePassCommandRecorder &&recorder)
 {
     CO_CORE_ASSERT(currentRenderApi_ != nullptr, "Begin was never called on this pass!");
     recorder.end();

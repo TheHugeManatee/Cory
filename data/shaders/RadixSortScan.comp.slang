@@ -3,7 +3,7 @@
 
 struct PushConstants {
     uint numWorkgroups;
-    uint pad;
+    uint histogramIndex;
 };
 [[vk::push_constant]] PushConstants p;
 
@@ -23,8 +23,8 @@ void main(uint3 groupThreadId: SV_GroupThreadID)
         for (uint digit = 0; digit < 16; ++digit) {
             for (uint wg = 0; wg < p.numWorkgroups; ++wg) {
                 uint idx = wg * 16 + digit;
-                uint val = gReadWriteBuffers[0][idx];
-                gReadWriteBuffers[0][idx] = sum;
+                uint val = gReadWriteBuffers[p.histogramIndex][idx];
+                gReadWriteBuffers[p.histogramIndex][idx] = sum;
                 sum += val;
             }
         }

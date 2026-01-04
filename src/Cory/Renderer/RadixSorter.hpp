@@ -38,13 +38,17 @@ class RadixSorter {
         TransientComputePass scatter;
     };
 
-    Passes declarePasses(RenderTaskBuilder &builder);
+    struct SortOutput {
+        TransientBufferHandle keys;
+        TransientBufferHandle indices;
+    };
+
     Passes declarePasses(FramegraphResourceManager &resources);
 
     ScratchBuffers &scratchForFrame(uint32_t frameIndex, uint32_t instanceCount);
 
     /// Dispatches the histogram pass for the given keys buffer.
-    void dispatchHistogram(Gpu::CommandRecorder &cmd,
+    void dispatchHistogram(RenderInput &renderApi,
                            ScratchBuffers &scratch,
                            TransientComputePass &pass,
                            const Gpu::Buffer &keys,
@@ -53,13 +57,13 @@ class RadixSorter {
                            uint32_t frameInFlightIndex);
 
     /// Dispatches the scan pass over the histogram buffer.
-    void dispatchScan(Gpu::CommandRecorder &cmd,
+    void dispatchScan(RenderInput &renderApi,
                       ScratchBuffers &scratch,
                       TransientComputePass &pass,
                       uint32_t frameInFlightIndex);
 
     /// Dispatches the scatter pass into the provided output buffers.
-    void dispatchScatter(Gpu::CommandRecorder &cmd,
+    void dispatchScatter(RenderInput &renderApi,
                          ScratchBuffers &scratch,
                          TransientComputePass &pass,
                          const Gpu::Buffer &keysIn,
@@ -70,14 +74,20 @@ class RadixSorter {
                          uint32_t bitOffset,
                          uint32_t frameInFlightIndex);
 
+    /// Runs the GPU radix sort over the predicate values using framegraph subtasks.
+    SortOutput sort(RenderTaskBuilder &builder,
+                    TransientBufferHandle predicateBuffer,
+                    uint32_t instanceCount);
+
     /// Runs the GPU radix sort over the predicate values (uint keys). Returns the sorted indices.
-    Gpu::Buffer &sort(Gpu::CommandRecorder &cmd,
-                      ScratchBuffers &scratch,
-                      Passes &passes,
-                      const Gpu::Buffer &predicateBuffer,
-                      uint32_t instanceCount,
-                      Gpu::Buffer &outputIndices,
-                      uint32_t frameInFlightIndex);
+    /// Legacy path used by tests and immediate command recording.
+    Gpu::Buffer &sortImmediate(Gpu::CommandRecorder &cmd,
+                               ScratchBuffers &scratch,
+                               Passes &passes,
+                               const Gpu::Buffer &predicateBuffer,
+                               uint32_t instanceCount,
+                               Gpu::Buffer &outputIndices,
+                               uint32_t frameInFlightIndex);
 
   private:
     void ensureScratch(ScratchBuffers &scratch, uint32_t instanceCount, uint32_t scratchIndex);

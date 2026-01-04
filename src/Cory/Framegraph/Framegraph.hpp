@@ -104,7 +104,7 @@ class Framegraph : NoCopy {
 
     [[nodiscard]] std::string dump(const ExecutionInfo &info);
 
-  private: /* member functions */
+  protected:
     RenderTaskHandle finishTaskDeclaration(RenderTaskInfo &&info);
 
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a

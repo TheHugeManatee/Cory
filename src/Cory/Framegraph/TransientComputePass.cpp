@@ -1,5 +1,7 @@
 #include "TransientComputePass.hpp"
 
+#include "ShaderBindingContext.hpp"
+
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
@@ -25,22 +27,30 @@ TransientComputePass::TransientComputePass(Context &ctx,
 
 TransientComputePass::~TransientComputePass()
 {
-    CO_CORE_ASSERT(
-        wasEnded_, "TransientRenderPass '{}' was not end()ed before destruction!", pass_.name);
+    CO_CORE_ASSERT(currentRenderApi_ != nullptr && wasEnded_,
+                   "TransientComputePass '{}' was not end()ed before destruction!",
+                   pass_.name);
 }
 
-Gpu::ComputePassCommandRecorder TransientComputePass::begin(CommandRecorder &cmd)
+Gpu::ComputePassCommandRecorder TransientComputePass::begin(const RenderInput &renderApi)
 {
     auto options = Gpu::ComputePassCommandRecorderOptions{};
-    auto recorder = cmd.beginComputePass(std::move(options));
+    auto recorder = renderApi.cmd->beginComputePass(std::move(options));
 
     // Set the pipeline layout so it is known for things like bind groups etc.
     recorder.setPipelineLayout(pipelineLayoutHandle());
+    renderApi.bindingContext->bind(recorder);
+    currentRenderApi_ = &renderApi;
+
     return recorder;
 }
+
 void TransientComputePass::end(Gpu::RenderPassCommandRecorder &&recorder)
 {
+    CO_CORE_ASSERT(currentRenderApi_ != nullptr, "Begin was never called on this pass!");
     recorder.end();
+    currentRenderApi_->bindingContext->unbind();
+
     wasEnded_ = true;
 }
 

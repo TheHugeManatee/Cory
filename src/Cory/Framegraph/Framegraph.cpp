@@ -151,64 +151,67 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, Render
 {
     PassTransitions transitions;
     const RenderTaskInfo &rpInfo = data_->renderTasks[handle];
-    const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
+    const ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
+    {
+        auto emitBarrier = [&](const RenderTaskInfo::TextureDependency &resourceInfo) {
+            transitions.imageTransitions.push_back(ExecutionInfo::TransitionInfo{
+                .kind = resourceInfo.kind,
+                .task = handle,
+                .resource = resourceInfo.handle,
+                .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
+                .stateAfter = resourceInfo.access});
 
-    auto emitBarrier = [&](const RenderTaskInfo::TextureDependency &resourceInfo) {
-        transitions.imageTransitions.push_back(ExecutionInfo::TransitionInfo{
-            .kind = resourceInfo.kind,
-            .task = handle,
-            .resource = resourceInfo.handle,
-            .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
-            .stateAfter = resourceInfo.access});
+            // only discard if it is not a read/write dependency
+            const auto contentsMode = resourceInfo.kind.is_set(TaskDependencyKindBits::Read)
+                                          ? ImageContents::Retain
+                                          : ImageContents::Discard;
 
-        // only discard if it is not a read/write dependency
-        const auto contentsMode = resourceInfo.kind.is_set(TaskDependencyKindBits::Read)
-                                      ? ImageContents::Retain
-                                      : ImageContents::Discard;
+            return data_->resources.synchronizeTexture(
+                resourceInfo.handle, resourceInfo.access, contentsMode);
+        };
 
-        return data_->resources.synchronizeTexture(
-            resourceInfo.handle, resourceInfo.access, contentsMode);
-    };
+        auto emitBufferBarrier = [&](const RenderTaskInfo::BufferDependency &resourceInfo) {
+            transitions.bufferTransitions.push_back(ExecutionInfo::BufferTransitionInfo{
+                .kind = resourceInfo.kind,
+                .task = handle,
+                .resource = resourceInfo.handle,
+                .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
+                .stateAfter = resourceInfo.access});
 
-    auto emitBufferBarrier = [&](const RenderTaskInfo::BufferDependency &resourceInfo) {
-        transitions.bufferTransitions.push_back(ExecutionInfo::BufferTransitionInfo{
-            .kind = resourceInfo.kind,
-            .task = handle,
-            .resource = resourceInfo.handle,
-            .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
-            .stateAfter = resourceInfo.access});
+            return data_->resources.synchronizeBuffer(resourceInfo.handle, resourceInfo.access);
+        };
 
-        return data_->resources.synchronizeBuffer(resourceInfo.handle, resourceInfo.access);
-    };
+        // fill the barriers from the inputs and outputs
+        const std::vector<Sync::ImageBarrier> imageBarriers =
+            rpInfo.textureDependencies | ranges::views::transform(emitBarrier) |
+            ranges::to<std::vector>;
+        const std::vector<Sync::BufferBarrier> bufferBarriers =
+            rpInfo.bufferDependencies | ranges::views::transform(emitBufferBarrier) |
+            ranges::to<std::vector>;
 
-    // fill the barriers from the inputs and outputs
-    const std::vector<Sync::ImageBarrier> imageBarriers = rpInfo.textureDependencies |
-                                                          ranges::views::transform(emitBarrier) |
-                                                          ranges::to<std::vector>;
-    const std::vector<Sync::BufferBarrier> bufferBarriers =
-        rpInfo.bufferDependencies | ranges::views::transform(emitBufferBarrier) |
-        ranges::to<std::vector>;
-
-    const auto &rsrc = data_->ctx->resources();
-    auto device = rsrc.getDevice(data_->ctx->device());
-    auto commandBuffer = rsrc.getCommandRecorder(cmd);
-    Sync::CmdPipelineBarrier(
-        *device, commandBuffer->commandBuffer, nullptr, bufferBarriers, imageBarriers);
-
-    CO_CORE_TRACE("Recording rendering commands for {}", rpInfo.name);
-    const auto &coroHandle = rpInfo.coroHandle;
-    if (!coroHandle.done()) {
-        cmd.beginDebugLabel(Gpu::DebugLabelOptions{
-            .label = "Render Task " + rpInfo.name,
-            .color = {0.0f, 0.5f, 1.0f, 1.0f},
-        });
-        coroHandle.resume();
-        cmd.endDebugLabel();
+        const auto &rsrc = data_->ctx->resources();
+        auto device = rsrc.getDevice(data_->ctx->device());
+        auto commandBuffer = rsrc.getCommandRecorder(cmd);
+        Sync::CmdPipelineBarrier(
+            *device, commandBuffer->commandBuffer, nullptr, bufferBarriers, imageBarriers);
     }
 
-    CO_CORE_ASSERT(coroHandle.done(),
+    CO_CORE_TRACE("Recording rendering commands for {}", rpInfo.name);
+    {
+        const auto &coroHandle = rpInfo.coroHandle;
+        if (!coroHandle.done()) {
+            cmd.beginDebugLabel(Gpu::DebugLabelOptions{
+                .label = "Render Task " + rpInfo.name,
+                .color = {0.0f, 0.5f, 1.0f, 1.0f},
+            });
+            coroHandle.resume();
+            cmd.endDebugLabel();
+        }
+    }
+
+    CO_CORE_ASSERT(rpInfo.coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
                    "points! A render task should only wait on the builder's finishDeclaration() "
                    "exactly once!");

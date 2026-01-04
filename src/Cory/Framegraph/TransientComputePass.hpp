@@ -23,8 +23,8 @@ class TransientComputePass {
     TransientComputePass(TransientComputePass &&) = default;
     TransientComputePass &operator=(TransientComputePass &&) = default;
 
-    ///
-    Gpu::ComputePassCommandRecorder begin(CommandRecorder &cmd);
+    /// begin a render pass. automatically binds the shader binding context
+    Gpu::ComputePassCommandRecorder begin(const RenderInput &renderApi);
 
     /**
      * Ends the render pass.
@@ -44,6 +44,7 @@ class TransientComputePass {
 
     Gpu::ComputePipelineHandle pipeline_;
     Gpu::PipelineLayoutHandle pipelineLayout_;
+    const RenderInput *currentRenderApi_;
 };
 
 } // namespace Cory

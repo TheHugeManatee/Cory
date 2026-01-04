@@ -1,6 +1,8 @@
 
 #include <Cory/Framegraph/TransientRenderPass.hpp>
 
+#include "ShaderBindingContext.hpp"
+
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/Common.hpp>
@@ -71,11 +73,12 @@ TransientRenderPass::TransientRenderPass(Context &ctx,
 
 TransientRenderPass::~TransientRenderPass()
 {
-    CO_CORE_ASSERT(
-        wasEnded_, "TransientRenderPass '{}' was not end()ed before destruction!", pass_.name);
+    CO_CORE_ASSERT(currentRenderApi_ != nullptr && wasEnded_,
+                   "TransientRenderPass '{}' was not end()ed before destruction!",
+                   pass_.name);
 }
 
-Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
+Gpu::RenderPassCommandRecorder TransientRenderPass::begin(const RenderInput &renderApi)
 {
     // if a render area has not been set up explicitly, we determine it by checking the attachments
     if (dynamicStates_.renderArea.offset.x == 0 && dynamicStates_.renderArea.offset.y == 0 &&
@@ -133,108 +136,114 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(CommandRecorder &cmd)
         .framebufferArrayLayers = fbArrayLayers,
     };
 
-    auto renderPassRecorder = cmd.beginRenderPass(renderPassOptions);
+    auto renderPassRecorder = renderApi.cmd->beginRenderPass(renderPassOptions);
 
-    if (!pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
-        if (!pass_.shaders.empty()) {
-            std::vector<Gpu::ShaderStageFlags> stages;
-            std::vector<Gpu::Handle<Gpu::ShaderObject_t>> handles;
-            stages.reserve(pass_.shaders.size());
-            handles.reserve(pass_.shaders.size());
-
-            auto &shaders = ctx_->shaders();
-            for (auto shaderHandle : pass_.shaders) {
-                auto &shader = shaders[shaderHandle];
-                stages.emplace_back(shader.type());
-                handles.emplace_back(shader.shaderHandle());
-            }
-            renderPassRecorder.bindShaders(stages, handles);
-        }
-        renderPassRecorder.setPipelineLayout(pipelineLayoutHandle());
-
-        renderPassRecorder.setPrimitiveTopology(Gpu::PrimitiveTopology::TriangleList);
-        renderPassRecorder.setFrontFace(Gpu::FrontFace::CounterClockwise);
-        renderPassRecorder.setPolygonMode(Gpu::PolygonMode::Fill);
-        renderPassRecorder.setRasterizationSamples(determineSampleCount());
-        renderPassRecorder.setCullMode(toCullMode(pass_.dynamicStates.cullMode));
-        renderPassRecorder.setRasterizerDiscardEnabled(false);
-
-        const bool depthTestEnabled = pass_.dynamicStates.depthTest != DepthTest::Disabled;
-        renderPassRecorder.setDepthTestEnabled(depthTestEnabled);
-        renderPassRecorder.setDepthWriteEnabled(pass_.dynamicStates.depthWrite ==
-                                                DepthWrite::Enabled);
-        renderPassRecorder.setDepthCompareOp(toCompareOp(pass_.dynamicStates.depthTest));
-        renderPassRecorder.setDepthBiasEnabled(false);
-        renderPassRecorder.setDepthBoundsTestEnabled(false);
-        renderPassRecorder.setDepthClampEnabled(false);
-        renderPassRecorder.setStencilTestEnabled(false);
-        renderPassRecorder.setAlphaToCoverageEnabled(false);
-        renderPassRecorder.setAlphaToOneEnabled(false);
-        renderPassRecorder.setLogicOpEnabled(false);
-        renderPassRecorder.setPrimitiveRestartEnabled(false);
-
-        const std::vector<Gpu::SampleMask> sampleMasks(1, 0xffffffffu);
-        renderPassRecorder.setSampleMask(determineSampleCount(), sampleMasks);
-
-        if (!pass_.options.is_set(PassOptionFlagBits::DisableMeshInput)) {
-            const auto defaultVertexOptions = Gpu::VertexOptions{
-                .buffers = {Gpu::VertexBufferLayout{
-                    .binding = 0,
-                    .stride = sizeof(Mesh::Vertex),
-                    .inputRate = Gpu::VertexRate::Vertex,
-                }},
-                .attributes = Mesh::vertexAttributes(),
-            };
-            const auto vertexOptions = pass_.vertexOptions.value_or(defaultVertexOptions);
-            renderPassRecorder.setVertexInput(vertexOptions.buffers, vertexOptions.attributes);
-        }
-
-        Gpu::Rect2D scissorRect = dynamicStates_.renderArea;
-        if (scissorRect.extent.width == 0 && scissorRect.extent.height == 0) {
-            scissorRect = renderArea;
-        }
-        renderPassRecorder.setViewportWithCount({Gpu::Viewport{
-            .x = static_cast<float>(scissorRect.offset.x),
-            .y = static_cast<float>(scissorRect.offset.y),
-            .width = static_cast<float>(scissorRect.extent.width),
-            .height = static_cast<float>(scissorRect.extent.height),
-            .minDepth = 0.0f,
-            .maxDepth = 1.0f,
-        }});
-        renderPassRecorder.setScissorWithCount({scissorRect});
-
-        if (!pass_.attachments.empty()) {
-            Gpu::ColorComponentFlags colorMask{};
-            colorMask.setFlag(Gpu::ColorComponentFlagBits::RedBit, true);
-            colorMask.setFlag(Gpu::ColorComponentFlagBits::GreenBit, true);
-            colorMask.setFlag(Gpu::ColorComponentFlagBits::BlueBit, true);
-            colorMask.setFlag(Gpu::ColorComponentFlagBits::AlphaBit, true);
-
-            for (size_t i = 0; i < pass_.attachments.size(); ++i) {
-                const auto blend = pass_.attachments[i].blend.value_or(Gpu::BlendOptions{});
-                const Gpu::ColorBlendEquation blendEquation{
-                    .srcColorBlendFactor = blend.color.srcFactor,
-                    .dstColorBlendFactor = blend.color.dstFactor,
-                    .colorBlendOp = blend.color.operation,
-                    .srcAlphaBlendFactor = blend.alpha.srcFactor,
-                    .dstAlphaBlendFactor = blend.alpha.dstFactor,
-                    .alphaBlendOp = blend.alpha.operation,
-                };
-                renderPassRecorder.setColorBlendEnabled(static_cast<uint32_t>(i),
-                                                        {blend.blendingEnabled});
-                renderPassRecorder.setColorBlendEquations(static_cast<uint32_t>(i),
-                                                          {blendEquation});
-                renderPassRecorder.setColorWriteMasks(static_cast<uint32_t>(i), {colorMask});
-            }
-        }
+    // If the SkipPipelineBind option is set, we do not do any pipeline/dynamic state setup
+    if (pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
+        return renderPassRecorder;
     }
 
+    if (!pass_.shaders.empty()) {
+        std::vector<Gpu::ShaderStageFlags> stages;
+        std::vector<Gpu::Handle<Gpu::ShaderObject_t>> handles;
+        stages.reserve(pass_.shaders.size());
+        handles.reserve(pass_.shaders.size());
+
+        auto &shaders = ctx_->shaders();
+        for (auto shaderHandle : pass_.shaders) {
+            auto &shader = shaders[shaderHandle];
+            stages.emplace_back(shader.type());
+            handles.emplace_back(shader.shaderHandle());
+        }
+        renderPassRecorder.bindShaders(stages, handles);
+    }
+    renderPassRecorder.setPipelineLayout(pipelineLayoutHandle());
+    renderApi.bindingContext->bind(renderPassRecorder);
+
+    renderPassRecorder.setPrimitiveTopology(Gpu::PrimitiveTopology::TriangleList);
+    renderPassRecorder.setFrontFace(Gpu::FrontFace::CounterClockwise);
+    renderPassRecorder.setPolygonMode(Gpu::PolygonMode::Fill);
+    renderPassRecorder.setRasterizationSamples(determineSampleCount());
+    renderPassRecorder.setCullMode(toCullMode(pass_.dynamicStates.cullMode));
+    renderPassRecorder.setRasterizerDiscardEnabled(false);
+
+    const bool depthTestEnabled = pass_.dynamicStates.depthTest != DepthTest::Disabled;
+    renderPassRecorder.setDepthTestEnabled(depthTestEnabled);
+    renderPassRecorder.setDepthWriteEnabled(pass_.dynamicStates.depthWrite == DepthWrite::Enabled);
+    renderPassRecorder.setDepthCompareOp(toCompareOp(pass_.dynamicStates.depthTest));
+    renderPassRecorder.setDepthBiasEnabled(false);
+    renderPassRecorder.setDepthBoundsTestEnabled(false);
+    renderPassRecorder.setDepthClampEnabled(false);
+    renderPassRecorder.setStencilTestEnabled(false);
+    renderPassRecorder.setAlphaToCoverageEnabled(false);
+    renderPassRecorder.setAlphaToOneEnabled(false);
+    renderPassRecorder.setLogicOpEnabled(false);
+    renderPassRecorder.setPrimitiveRestartEnabled(false);
+
+    const std::vector<Gpu::SampleMask> sampleMasks(1, 0xffffffffu);
+    renderPassRecorder.setSampleMask(determineSampleCount(), sampleMasks);
+
+    if (!pass_.options.is_set(PassOptionFlagBits::DisableMeshInput)) {
+        const auto defaultVertexOptions = Gpu::VertexOptions{
+            .buffers = {Gpu::VertexBufferLayout{
+                .binding = 0,
+                .stride = sizeof(Mesh::Vertex),
+                .inputRate = Gpu::VertexRate::Vertex,
+            }},
+            .attributes = Mesh::vertexAttributes(),
+        };
+        const auto vertexOptions = pass_.vertexOptions.value_or(defaultVertexOptions);
+        renderPassRecorder.setVertexInput(vertexOptions.buffers, vertexOptions.attributes);
+    }
+
+    Gpu::Rect2D scissorRect = dynamicStates_.renderArea;
+    if (scissorRect.extent.width == 0 && scissorRect.extent.height == 0) {
+        scissorRect = renderArea;
+    }
+    renderPassRecorder.setViewportWithCount({Gpu::Viewport{
+        .x = static_cast<float>(scissorRect.offset.x),
+        .y = static_cast<float>(scissorRect.offset.y),
+        .width = static_cast<float>(scissorRect.extent.width),
+        .height = static_cast<float>(scissorRect.extent.height),
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    }});
+    renderPassRecorder.setScissorWithCount({scissorRect});
+
+    if (!pass_.attachments.empty()) {
+        Gpu::ColorComponentFlags colorMask{};
+        colorMask.setFlag(Gpu::ColorComponentFlagBits::RedBit, true);
+        colorMask.setFlag(Gpu::ColorComponentFlagBits::GreenBit, true);
+        colorMask.setFlag(Gpu::ColorComponentFlagBits::BlueBit, true);
+        colorMask.setFlag(Gpu::ColorComponentFlagBits::AlphaBit, true);
+
+        for (size_t i = 0; i < pass_.attachments.size(); ++i) {
+            const auto blend = pass_.attachments[i].blend.value_or(Gpu::BlendOptions{});
+            const Gpu::ColorBlendEquation blendEquation{
+                .srcColorBlendFactor = blend.color.srcFactor,
+                .dstColorBlendFactor = blend.color.dstFactor,
+                .colorBlendOp = blend.color.operation,
+                .srcAlphaBlendFactor = blend.alpha.srcFactor,
+                .dstAlphaBlendFactor = blend.alpha.dstFactor,
+                .alphaBlendOp = blend.alpha.operation,
+            };
+            renderPassRecorder.setColorBlendEnabled(static_cast<uint32_t>(i),
+                                                    {blend.blendingEnabled});
+            renderPassRecorder.setColorBlendEquations(static_cast<uint32_t>(i), {blendEquation});
+            renderPassRecorder.setColorWriteMasks(static_cast<uint32_t>(i), {colorMask});
+        }
+    }
+    currentRenderApi_ = &renderApi;
     return renderPassRecorder;
 }
 
 void TransientRenderPass::end(Gpu::RenderPassCommandRecorder &&recorder)
 {
-    recorder.end();
+    if (!pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
+        CO_CORE_ASSERT(currentRenderApi_ != nullptr, "Begin was never called on this pass!");
+        recorder.end();
+        currentRenderApi_->bindingContext->unbind();
+    }
 
     wasEnded_ = true;
 }

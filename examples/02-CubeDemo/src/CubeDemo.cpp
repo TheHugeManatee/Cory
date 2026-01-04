@@ -308,15 +308,13 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());
 
-    auto passRecorder = cubePass.begin(*renderApi.cmd);
+    auto passRecorder = cubePass.begin(renderApi);
 
     float fovy = glm::radians(70.0f);
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
     glm::mat4 viewMatrix = camera_.getViewMatrix();
     glm::mat4 projectionMatrix = Cory::makePerspective(fovy, aspect, 1.0f, 10.0f);
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
-
-    Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
     const uint32_t instanceCount = prepareInstanceData(t);
     if (instanceCount > 0) {
@@ -336,20 +334,13 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     data->viewProjection = viewProjection;
     data->lightPosition = camera_.getCameraPosition();
     data->bufferIndex = renderApi.bindingContext->bindBuffer(instanceBufferHandle);
-    passRecorder.pushConstant(
-        Gpu::PushConstantRange{
-            .offset = 0,
-            .size = sizeof(Cory::BufferDeviceAddress),
-            .shaderStages = Gpu::ShaderStageFlagBits::All,
-        },
-        &data.gpu);
-
-    renderApi.bindingContext->bind(passRecorder);
+    renderApi.bindingContext->push(data.gpu);
 
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
+    renderApi.bindingContext->flush();
     if (instanceCount > 0) {
         // draw all instances in a single call
         passRecorder.drawIndexed(Gpu::DrawIndexedCommand{

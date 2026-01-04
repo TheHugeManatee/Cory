@@ -142,7 +142,7 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
 
     FrameContext &frameCtx = *renderApi.frameCtx;
 
-    auto renderPass = imguiPass.begin(frameCtx.commandBuffer);
+    auto renderPass = imguiPass.begin(renderApi);
     recordFrameCommands(frameCtx, &renderPass);
     imguiPass.end(std::move(renderPass));
 }

@@ -47,6 +47,7 @@ TextureHeapIndex ShaderBindingContext::bindTexture2D(TransientTextureHandle text
                                                      Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::Texture2D, resources_->imageView(textureHandle), layout, sampler);
 }
@@ -55,6 +56,7 @@ TextureHeapIndex ShaderBindingContext::bindTexture2D(Gpu::TextureViewHandle view
                                                      Gpu::TextureLayout layout,
                                                      Gpu::TextureSamplerHandle sampler)
 {
+    isDirty_ = true;
     return bindTexture(ImageBindPoint::Texture2D, view, layout, sampler);
 }
 
@@ -62,6 +64,7 @@ TextureHeapIndex ShaderBindingContext::bindTexture3D(TransientTextureHandle text
                                                      Gpu::TextureLayout layout,
                                                      Gpu::TextureSamplerHandle sampler)
 {
+    isDirty_ = true;
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
     return bindTexture(
         ImageBindPoint::Texture3D, resources_->imageView(textureHandle), layout, sampler);
@@ -71,6 +74,7 @@ TextureHeapIndex ShaderBindingContext::bindTexture3D(Gpu::TextureViewHandle view
                                                      Gpu::TextureLayout layout,
                                                      Gpu::TextureSamplerHandle sampler)
 {
+    isDirty_ = true;
     return bindTexture(ImageBindPoint::Texture3D, view, layout, sampler);
 }
 
@@ -78,6 +82,7 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage2D(TransientTextureHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::StorageImage2D, resources_->imageView(textureHandle), layout, {});
 }
@@ -85,6 +90,7 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage2D(TransientTextureHandle
 TextureHeapIndex ShaderBindingContext::bindStorageImage2D(Gpu::TextureViewHandle view,
                                                           Gpu::TextureLayout layout)
 {
+    isDirty_ = true;
     return bindTexture(ImageBindPoint::StorageImage2D, view, layout, {});
 }
 
@@ -92,6 +98,7 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage3D(TransientTextureHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::StorageImage3D, resources_->imageView(textureHandle), layout, {});
 }
@@ -99,6 +106,7 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage3D(TransientTextureHandle
 TextureHeapIndex ShaderBindingContext::bindStorageImage3D(Gpu::TextureViewHandle view,
                                                           Gpu::TextureLayout layout)
 {
+    isDirty_ = true;
     return bindTexture(ImageBindPoint::StorageImage3D, view, layout, {});
 }
 
@@ -106,6 +114,7 @@ SamplerHeapIndex ShaderBindingContext::bindSampler(Gpu::TextureSamplerHandle sam
 {
     CO_CORE_DEBUG_ASSERT(descriptorSets_ != nullptr,
                          "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
     auto index = nextSamplerIndex_++;
     descriptorSets_->write(instanceIndex_, index, sampler);
     return index;
@@ -115,6 +124,7 @@ BufferHeapIndex ShaderBindingContext::bindBuffer(TransientBufferHandle bufferHan
                                                  BufferBindPoint bindPoint)
 {
     CO_CORE_DEBUG_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
     return bindBuffer(resources_->buffer(bufferHandle), bindPoint);
 }
 
@@ -123,6 +133,7 @@ BufferHeapIndex ShaderBindingContext::bindBuffer(Gpu::BufferHandle bufferHandle,
 {
     CO_CORE_DEBUG_ASSERT(descriptorSets_ != nullptr,
                          "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
     auto &nextIndex = nextBufferIndex(bindPoint);
     const BufferHeapIndex index = nextIndex++;
     descriptorSets_->write(bindPoint, instanceIndex_, index, bufferHandle);
@@ -131,20 +142,69 @@ BufferHeapIndex ShaderBindingContext::bindBuffer(Gpu::BufferHandle bufferHandle,
 
 void ShaderBindingContext::bind(Gpu::RenderPassCommandRecorder &cmd)
 {
+    CO_CORE_ASSERT(std::holds_alternative<std::monostate>(passRecorder_),
+                   "ShaderBindingContext is already bound to a pass recorder! Seems like a "
+                   "previous pass did not unbind/end correctly!");
+    passRecorder_ = &cmd;
     descriptorSets_->bind(cmd, instanceIndex_);
 }
 
 void ShaderBindingContext::bind(Gpu::RenderPassCommandRecorder &cmd,
                                 Gpu::PipelineLayoutHandle pipelineLayout)
 {
-
+    CO_CORE_ASSERT(std::holds_alternative<std::monostate>(passRecorder_),
+                   "ShaderBindingContext is already bound to a pass recorder! Seems like a "
+                   "previous pass did not unbind/end correctly!");
+    passRecorder_ = &cmd;
     descriptorSets_->bind(cmd, instanceIndex_, pipelineLayout);
 }
 
 void ShaderBindingContext::bind(Gpu::ComputePassCommandRecorder &cmd)
 {
-
+    CO_CORE_ASSERT(std::holds_alternative<std::monostate>(passRecorder_),
+                   "ShaderBindingContext is already bound to a pass recorder! Seems like a "
+                   "previous pass did not unbind/end correctly!");
+    passRecorder_ = &cmd;
     descriptorSets_->bind(cmd, instanceIndex_);
+}
+
+void ShaderBindingContext::unbind()
+{
+    if (isDirty_) {
+        CO_CORE_WARN("Unbind() called without a flush() after bindings were changed - you likely "
+                     "forgot to flush() before drawing/dispatching!");
+    }
+    CO_CORE_ASSERT(!std::holds_alternative<std::monostate>(passRecorder_),
+                   "Trying to unbind but there was no previous matched call to bind()!")
+    passRecorder_ = std::monostate{};
+}
+
+void ShaderBindingContext::push(std::span<const std::byte> data)
+{
+    CO_CORE_DEBUG_ASSERT(data.size() <= MAX_PUSH_CONSTANT_SIZE,
+                         "Push constant data exceeds maximum size of {} bytes",
+                         MAX_PUSH_CONSTANT_SIZE);
+
+    std::visit(lambda_visitor{[&](std::monostate) {
+                                  CO_CORE_ASSERT(false,
+                                                 "No active pass recorder to push constants to!");
+                              },
+                              [&](auto *recorder) {
+                                  recorder->pushConstant(
+                                      Gpu::PushConstantRange{
+                                          .offset = 0,
+                                          .size = gsl::narrow<uint32_t>(data.size()),
+                                          .shaderStages = Gpu::ShaderStageFlagBits::All,
+                                      },
+                                      data.data());
+                              }},
+               passRecorder_);
+}
+
+void ShaderBindingContext::flush()
+{
+    descriptorSets_->flush(instanceIndex_);
+    isDirty_ = false;
 }
 
 TextureHeapIndex &ShaderBindingContext::nextTextureIndex(ImageBindPoint bindPoint)

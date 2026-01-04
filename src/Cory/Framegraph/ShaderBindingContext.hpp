@@ -2,12 +2,17 @@
 
 #include <Cory/Framegraph/Common.hpp>
 
+#include <Cory/Base/Utils.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/GpuBumpAllocator.hpp>
 
 #include <KDGpu/buffer.h>
+
+#include <cstdint>
+#include <span>
+#include <variant>
 
 namespace Cory {
 
@@ -80,7 +85,22 @@ class ShaderBindingContext : NoCopy, NoMove {
     void bind(Gpu::RenderPassCommandRecorder &cmd);
     void bind(Gpu::RenderPassCommandRecorder &cmd, Gpu::PipelineLayoutHandle pipelineLayout);
     void bind(Gpu::ComputePassCommandRecorder &cmd);
+    void unbind();
 
+    /// Push a push constant value
+    template <typename T>
+    void push(const T &data)
+        requires(sizeof(T) <= MAX_PUSH_CONSTANT_SIZE)
+    {
+        push(std::span{reinterpret_cast<const std::byte *>(&data), sizeof(data)});
+    }
+    /// Push raw push constant data - usually the templated version should be preferred
+    void push(std::span<const std::byte> data);
+
+    /// Flush all writes to the bindings
+    void flush();
+
+    /// Reset the binding context for a new frame
     void reset();
 
   private:
@@ -92,12 +112,18 @@ class ShaderBindingContext : NoCopy, NoMove {
                                  Gpu::TextureLayout layout,
                                  Gpu::TextureSamplerHandle sampler);
 
+    bool isDirty_{false};
     Gpu::Device *device_;
     Gpu::Buffer perDrawDataBuffer_;
     GpuBumpAllocator allocator_;
     FramegraphResourceManager *resources_;
     DescriptorSets *descriptorSets_;
     uint32_t instanceIndex_;
+
+    std::variant<Gpu::RenderPassCommandRecorder *, //
+                 Gpu::ComputePassCommandRecorder *,
+                 std::monostate>
+        passRecorder_;
 
     // Bump allocation indices
     TextureHeapIndex nextTexture2DIndex_{0};

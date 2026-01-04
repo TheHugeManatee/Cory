@@ -157,22 +157,20 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     const auto depthLayout = static_cast<Gpu::TextureLayout>(
         Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess));
 
-    auto recorder = depthDebugPass.begin(*renderApi.cmd);
+    auto recorder = depthDebugPass.begin(renderApi);
 
     const auto textureIndex = renderApi.bindingContext->bindTexture2D(
         previousLayer.depth, depthLayout, state_->sampler.handle());
-    renderApi.bindingContext->bind(recorder);
 
     auto d = renderApi.bindingContext->alloc<DrawData>();
     d->center = center.get();
     d->size = size.get();
     d->window = window.get();
     d->textureIndex = textureIndex;
-    recorder.pushConstant(Gpu::PushConstantRange{.offset = 0,
-                                                 .size = sizeof(BufferDeviceAddress),
-                                                 .shaderStages = Gpu::ShaderStageFlagBits::All},
-                          &d.gpu);
+    renderApi.bindingContext->push(d.gpu);
+    renderApi.bindingContext->flush();
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
+
 
     depthDebugPass.end(std::move(recorder));
 }

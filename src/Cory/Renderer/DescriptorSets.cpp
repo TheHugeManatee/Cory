@@ -267,9 +267,6 @@ DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
 {
     CO_CORE_ASSERT(data_ != nullptr, "DescriptorSets not initialized");
 
-    // Convenience - binding implies flushing any pending writes
-    flush(frameInFlightIndex);
-
     for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
         cmd.setBindGroup(static_cast<uint32_t>(type), data_->bindGroups[type][frameInFlightIndex]);
     }
@@ -281,8 +278,6 @@ DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
                                      Gpu::PipelineLayoutHandle pipelineLayout)
 {
     CO_CORE_ASSERT(data_ != nullptr, "DescriptorSets not initialized");
-
-    flush(frameInFlightIndex);
 
     for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
         cmd.setBindGroup(static_cast<uint32_t>(type),

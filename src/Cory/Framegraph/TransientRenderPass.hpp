@@ -15,8 +15,9 @@ namespace Cory {
 enum class PassOptionFlagBits {
     None = 0,
     /// Skip automatic shader binding and state setup in TransientRenderPass::begin().
+    /// Intended for passes that perform their own custom binding setup via lower-level APIs.
     SkipPipelineBind = 1 << 0,
-    // Disable binding of mesh input (vertex/index buffers) when beginning the render pass
+    /// Disable binding of mesh input (vertex/index buffers) when beginning the render pass
     DisableMeshInput = 2 << 1,
 };
 using PassOptionFlags = BitField<PassOptionFlagBits>;
@@ -69,7 +70,7 @@ class TransientRenderPass : NoCopy {
      * starts the rendering and sets up the render pass according to
      * the information described in the builder.
      */
-    Gpu::RenderPassCommandRecorder begin(CommandRecorder &cmd);
+    [[nodiscard]] Gpu::RenderPassCommandRecorder begin(const RenderInput &renderApi);
 
     /**
      * Ends the render pass.
@@ -93,6 +94,7 @@ class TransientRenderPass : NoCopy {
     DynamicStates dynamicStates_;
 
     Gpu::PipelineLayoutHandle pipelineLayout_;
+    const RenderInput* currentRenderApi_{};
 };
 
 } // namespace Cory

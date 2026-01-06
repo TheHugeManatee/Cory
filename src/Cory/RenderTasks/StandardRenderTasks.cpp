@@ -15,8 +15,7 @@ RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
     auto [outputWriteHandle, swapchainInfo] =
         builder.write(targetImage, Sync::AccessType::TransferWrite);
 
-    co_yield outputWriteHandle;
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    RenderInput renderApi = co_await builder.finishDeclaration(outputWriteHandle);
 
     auto extent = Cory::glmu::to<Gpu::Extent3D>(swapchainInfo.size);
 

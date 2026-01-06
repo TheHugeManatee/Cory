@@ -9,11 +9,14 @@
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Base/Time.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
+#include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
@@ -24,9 +27,7 @@
 #include <gsl/gsl>
 #include <gsl/narrow>
 
-#include <Cory/Base/Time.hpp>
-#include <Cory/RenderTasks/StandardRenderTasks.hpp>
-#include <Cory/Renderer/FrameContext.hpp>
+
 #include <algorithm>
 
 ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const char *> args)
@@ -129,7 +130,7 @@ void ParticleComputeDemoApplication::setupSystems()
     systems_.emplace<Cory::TransformSystem>();
 
     // render system should go last to be aware of the latest state
-    renderSystem_ = &systems_.emplace<PointSpriteRenderSystem>(ctx(), Cory::MAX_FRAMES_IN_FLIGHT);
+    renderSystem_ = &systems_.emplace<PointSpriteRenderSystem>(ctx());
 }
 
 ParticleComputeDemoApplication::~ParticleComputeDemoApplication()
@@ -141,9 +142,11 @@ void ParticleComputeDemoApplication::run()
 {
     // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
+    uint32_t idx = 0;
     std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
-        return Cory::Framegraph(ctx());
+        return Cory::Framegraph(ctx(), idx++);
     });
+
     auto time = Cory::AppClock::now();
     while (!window_->shouldClose()) {
         processEvents(0);

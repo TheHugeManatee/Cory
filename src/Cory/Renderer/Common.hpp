@@ -11,13 +11,16 @@
 #include <vulkan/vulkan.h>
 
 #include <expected>
-#include <vector>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace Cory {
 
 // maximum number of frames in flight at a time
 static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+/// Hard limit for maximum size of push constants. 128 bytes is guaranteed by Vulkan spec.
+static constexpr uint32_t MAX_PUSH_CONSTANT_SIZE = 128;
 
 // forward declared classes/structs
 class Context;
@@ -32,16 +35,29 @@ class PipelineCache;
 struct SwapchainSupportDetails;
 struct FrameContext;
 class Swapchain;
-class UniformBufferObjectBase;
-template <typename BufferStruct>
-    requires std::is_trivial_v<BufferStruct>
-class UniformBufferObject;
 class DescriptorSets;
 
 class SlangCompiler;
 using SpirvByteCode = std::vector<uint32_t>;
 using CompilationError = std::string;
-using CompilationResult = std::expected<SpirvByteCode, CompilationError>;
+
+struct PushConstantReflection {
+    size_t size{};
+    bool isPointer{};
+};
+
+struct ShaderCompilationOutput {
+    SpirvByteCode spirv;
+    std::optional<PushConstantReflection> pushConstants;
+    std::string compilerOutput;
+};
+
+using CompilationResult = std::expected<ShaderCompilationOutput, CompilationError>;
+
+using BufferDeviceAddress = uint64_t;
+
+using TextureHeapIndex = uint32_t;
+using SamplerHeapIndex = uint32_t;
 
 // enums
 static constexpr Gpu::ShaderStageFlagBits SHADER_TYPE_UNKNOWN = Gpu::ShaderStageFlagBits{};

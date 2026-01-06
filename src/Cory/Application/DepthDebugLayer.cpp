@@ -7,27 +7,27 @@
 #include <Cory/Base/Utils.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/device.h>
 #include <KDGpu/sampler.h>
 
 namespace Cory {
 
-struct Uniforms {
+struct DrawData {
     glm::vec2 center;
     glm::vec2 size;
     glm::vec2 window;
+    TextureHeapIndex textureIndex;
 };
 struct DepthDebugLayer::State {
     ShaderHandle fullscreenTriShader;
     ShaderHandle depthDebugShader;
-    UniformBufferObject<Uniforms> ubo;
     Gpu::Sampler sampler;
 
     glm::vec2 viewportDimensions{1.0f};
@@ -51,9 +51,8 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
     state_ = std::make_unique<State>(State{
         .fullscreenTriShader{
             res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
-        .depthDebugShader{
-            res.createShader(ResourceLocator::Locate("shaders/DepthDebug.frag.slang"))},
-        .ubo{Cory::UniformBufferObject<Uniforms>(ctx, info.maxFramesInFlight)},
+        .depthDebugShader{res.createShader(
+            ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
         .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
             .magFilter = Gpu::FilterMode::Linear, .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
@@ -132,7 +131,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     builder.read(previousLayer.depth,
                  Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
-    auto cubePass = builder.declareRenderPass(RenderPassDeclaration{
+    auto depthDebugPass = builder.declareRenderPass(RenderPassDeclaration{
         .name = "PASS_DepthDebug",
         .options = PassOptionFlagBits::DisableMeshInput,
         .shaders = {state_->fullscreenTriShader, state_->depthDebugShader},
@@ -143,43 +142,37 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
             .clearColor = {},
             .blend = std::nullopt,
         }},
+        .dynamicStates = {.cullMode = CullMode::None,
+                          .depthTest = DepthTest::Disabled,
+                          .depthWrite = DepthWrite::Disabled},
     });
 
     /// ^^^^     DECLARATION      ^^^^
-    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    RenderInput renderApi = co_await builder.finishDeclaration(
+        LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth});
     /// vvvv  RENDERING COMMANDS  vvvv
-
-    FrameContext &frameCtx = *renderApi.frameCtx;
-
-    // update the uniform buffer
-    Uniforms &frameUniforms = state_->ubo[frameCtx.inFlightIndex];
-    frameUniforms.size = size.get();
-    frameUniforms.center = center.get();
-    frameUniforms.window = window.get();
-    state_->ubo.flush(frameCtx.inFlightIndex);
 
     FramegraphResourceManager &resources = *renderApi.resources;
 
     const auto depthLayout = static_cast<Gpu::TextureLayout>(
         Sync::GetVkImageLayout(resources.state(previousLayer.depth).lastAccess));
-    std::array<Gpu::TextureLayout, 1> layouts{depthLayout};
-    std::array textures{resources.imageView(previousLayer.depth)};
-    std::array samplers{state_->sampler.handle()};
 
-    auto &descriptorSets = *renderApi.descriptors;
-    descriptorSets
-        .write(DescriptorSets::SetType::Frame, frameCtx.inFlightIndex, layouts, textures, samplers)
-        .write(DescriptorSets::SetType::Frame, frameCtx.inFlightIndex, state_->ubo)
-        .flushWrites();
+    auto recorder = depthDebugPass.begin(renderApi);
 
-    auto recorder = cubePass.begin(*renderApi.cmd);
-    recorder.setDepthTestEnabled(false);
-    recorder.setDepthWriteEnabled(false);
-    descriptorSets.bind(recorder, frameCtx.inFlightIndex);
+    const auto textureIndex = renderApi.bindingContext->bindTexture2D(
+        previousLayer.depth, depthLayout, state_->sampler.handle());
+
+    auto d = renderApi.bindingContext->alloc<DrawData>();
+    d->center = center.get();
+    d->size = size.get();
+    d->window = window.get();
+    d->textureIndex = textureIndex;
+    renderApi.bindingContext->push(d.gpu);
+    renderApi.bindingContext->flush();
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
 
-    recorder.end();
+
+    depthDebugPass.end(std::move(recorder));
 }
 
 } // namespace Cory

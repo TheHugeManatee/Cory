@@ -5,6 +5,12 @@
 
 namespace Cory {
 
+/// Buffe rhandle paired with pointer to the actual resource
+struct GpuBufferResource {
+    Gpu::BufferHandle handle;
+    Gpu::VulkanBuffer *vulkanBuffer;
+};
+
 /**
  * @brief handles the transient resources created/destroyed during a frame
  *
@@ -63,9 +69,8 @@ class FramegraphResourceManager : NoCopy {
 
     // Adopt an external buffer into the framegraph - will participate in synchronization, but
     // will not be destroyed by the framegraph
-    FramegraphBufferHandle registerExternal(BufferInfo info,
-                                            Sync::AccessType lastWriteAccess,
-                                            Gpu::BufferHandle resource);
+    FramegraphBufferHandle
+    registerExternal(BufferInfo info, Sync::AccessType lastWriteAccess, Gpu::BufferHandle resource);
 
     void allocate(const std::vector<FramegraphBufferHandle> &handles);
 
@@ -80,6 +85,9 @@ class FramegraphResourceManager : NoCopy {
 
     [[nodiscard]] const BufferInfo &info(FramegraphBufferHandle handle) const;
     [[nodiscard]] Gpu::BufferHandle buffer(FramegraphBufferHandle handle) const;
+
+    [[nodiscard]] GpuBufferResource bufferResource(FramegraphBufferHandle handle) const;
+    [[nodiscard]] BufferDeviceAddress deviceAddress(FramegraphBufferHandle handle) const;
     [[nodiscard]] BufferState state(FramegraphBufferHandle handle) const;
 
     void clear();

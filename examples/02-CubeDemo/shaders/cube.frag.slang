@@ -1,13 +1,13 @@
-struct CubeUBO
+struct ViewData
 {
     float4x4 projection;
     float4x4 view;
     float4x4 viewProjection;
     float3 lightPosition;
-    float padding;
+    uint bufferIndex;
 };
 
-ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
+[[vk::push_constant]] ViewData *globals;
 
 struct FSInput
 {
@@ -20,7 +20,7 @@ struct FSInput
 
 float4 main(FSInput input) : SV_Target0
 {
-    const float3 posToLight = gGlobals.lightPosition - input.worldPosition;
+    const float3 posToLight = globals->lightPosition - input.worldPosition;
     const float3 lightVector = normalize(posToLight);
     const float diffuse = max(0.0f, dot(input.normal, lightVector));
     const float4 albedo = lerp(input.color, input.instanceColor, input.blend);

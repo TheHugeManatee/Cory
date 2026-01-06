@@ -12,6 +12,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -21,6 +22,8 @@ struct CubeUBO {
     glm::mat4 view;
     glm::mat4 viewProjection;
     glm::vec3 lightPosition;
+    float padding0;
+    Cory::BufferDeviceAddress instances;
 };
 
 struct alignas(16) InstanceData {
@@ -41,14 +44,13 @@ struct InstanceBuffer {
 class CubeDemoApplication : public Cory::Application {
   public:
     CubeDemoApplication(int argc, const char **argv);
-    ~CubeDemoApplication();
+    ~CubeDemoApplication() override;
 
     void run() override;
 
   private:
     // create the mesh to be rendered
     void createGeometry();
-    void createUBO();
     void createShaders();
     void defineRenderPasses(Cory::Framegraph &framegraph, const Cory::FrameContext &frameCtx);
 
@@ -68,7 +70,6 @@ class CubeDemoApplication : public Cory::Application {
 
     void setupCameraCallbacks();
     Gpu::VertexOptions vertexOptions() const;
-    InstanceBuffer &instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount);
     uint32_t prepareInstanceData(float timeSeconds);
 
   private:
@@ -80,7 +81,6 @@ class CubeDemoApplication : public Cory::Application {
     Cory::ShaderHandle fragmentShader_;
     std::unique_ptr<Cory::Mesh> mesh_;
 
-    std::unique_ptr<Cory::UniformBufferObject<CubeUBO>> globalUbo_;
     std::vector<Gpu::BindGroup> bindGroups_;
     double startupTime_;
     bool dumpNextFramegraph_{false};

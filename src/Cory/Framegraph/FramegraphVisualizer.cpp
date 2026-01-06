@@ -1,5 +1,7 @@
 #include "FramegraphVisualizer.h"
 
+#include "RenderTaskBuilder.hpp"
+
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 

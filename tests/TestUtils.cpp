@@ -1,5 +1,6 @@
 #include "TestUtils.hpp"
 
+#include <Cory/Base/Debugger.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -37,6 +38,7 @@ VulkanTester::VulkanTester()
         if (info.severity == DebugMessageSeverity::Error) {
             std::lock_guard lck{data->debugMessagesMtx};
             data->debugMessages.push_back(info);
+            BreakpointIfDebugging();
         }
     });
 }

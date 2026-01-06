@@ -5,12 +5,11 @@
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
+#include <Cory/Renderer/RadixSorter.hpp>
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
-#include "../../../src/Cory/Renderer/RadixSorter.hpp"
-
+#include <KDGpu/buffer.h>
 #include <type_traits>
 #include <vector>
 
@@ -24,6 +23,9 @@ struct PointSpriteGlobals {
     float padding1;
     glm::vec3 cameraUp;
     float padding2;
+    Cory::BufferDeviceAddress sortKeys;
+    Cory::BufferDeviceAddress sortIndices;
+    Cory::BufferDeviceAddress instances;
 };
 
 struct alignas(16) InstanceData {
@@ -35,14 +37,14 @@ struct alignas(16) InstanceData {
 static_assert(std::is_trivially_copyable_v<InstanceData>);
 
 struct InstanceBuffer {
-    KDGpu::Buffer buffer;
-    KDGpu::DeviceSize capacity{0};
+    Gpu::Buffer buffer;
+    Gpu::DeviceSize capacity{0};
 };
 
 class PointSpriteRenderSystem
     : public Cory::BasicSystem<PointSpriteRenderSystem, PointSpriteComponent> {
   public:
-    explicit PointSpriteRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight);
+    explicit PointSpriteRenderSystem(Cory::Context &ctx);
     ~PointSpriteRenderSystem();
 
     void beforeUpdate(Cory::SceneGraph &sg);
@@ -58,8 +60,8 @@ class PointSpriteRenderSystem
     };
     Cory::RenderTaskDeclaration<PassOutputs>
     spriteRenderTask(Cory::RenderTaskBuilder builder,
-                   Cory::TransientTextureHandle colorTarget,
-                   Cory::TransientTextureHandle depthTarget);
+                     Cory::TransientTextureHandle colorTarget,
+                     Cory::TransientTextureHandle depthTarget);
 
   private:
     InstanceBuffer &instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount);
@@ -69,12 +71,10 @@ class PointSpriteRenderSystem
     Cory::Components::CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};
-    std::unique_ptr<Cory::UniformBufferObject<PointSpriteGlobals>> globalUbo_;
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     Cory::ShaderHandle predicateShader_;
     KDGpu::PipelineLayoutHandle predicateLayout_;
-    KDGpu::ComputePipelineHandle predicatePipeline_;
 
     Cory::RadixSorter sorter_;
 };

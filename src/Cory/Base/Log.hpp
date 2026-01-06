@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 
 #include <memory>
+#include <source_location>
 
 namespace Cory {
 class Log {
@@ -47,6 +48,11 @@ class Log {
     static std::shared_ptr<spdlog::logger> s_appLogger;
 };
 
+/// Log assertion failure and abort in a controlled manner. Intended usage via CO_CORE_ASSERT.
+[[noreturn]] void AssertionFailed(std::string_view condition,
+                                  std::string_view messageWithDetails,
+                                  std::source_location location = std::source_location::current());
+
 } // namespace Cory
 
 #define CO_CORE_FATAL(...) ::Cory::Log::GetCoreLogger()->critical(__VA_ARGS__)
@@ -72,13 +78,9 @@ class Log {
 #define CO_APP_INFO(...) ::Cory::Log::GetAppLogger()->info(__VA_ARGS__)
 
 #define CO_CORE_ASSERT(condition, message, ...)                                                    \
-    if (auto val = bool(condition); !(val)) {                                                      \
-        auto formatted_message = fmt::format(message, __VA_ARGS__);                                \
-        auto assertion_string =                                                                    \
-            fmt::format("Assertion failed: {}\n{} == {}.\n", formatted_message, #condition, val);  \
-        CO_CORE_FATAL(assertion_string);                                                           \
-        ::Cory::Log::Shutdown();                                                                   \
-        std::abort();                                                                              \
+    if (!(condition)) {                                                                            \
+        const auto formattedMessage = fmt::format(message, __VA_ARGS__);                           \
+        Cory::AssertionFailed(#condition, formattedMessage);                                       \
     }
 
 #ifdef _DEBUG

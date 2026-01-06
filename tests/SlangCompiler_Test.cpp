@@ -25,7 +25,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
             FAIL(result.error());
         }
         REQUIRE(result.has_value());
-        CHECK(result.value().size() > 0);
+        CHECK(result.value().spirv.size() > 0);
     }
     SECTION("Compiling an invalid compute shader")
     {
@@ -64,5 +64,68 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
         REQUIRE(!result);
         INFO(result.error());
         CHECK(result.error().size() > 0);
+    }
+
+    SECTION("Reflecting a pointer push constant")
+    {
+        Cory::ShaderSource source{R"(
+            struct Globals { float4x4 m; };
+            [[vk::push_constant]] Globals* globals;
+            [shader("compute")]
+            [numthreads(1,1,1)]
+            void computeMain(uint3 tid : SV_DispatchThreadID) { })",
+                                  Gpu::ShaderStageFlagBits::ComputeBit,
+                                  "TestShader.slang"};
+
+        auto result = compiler.compileShader(source, "computeMain", false);
+        if (!result) {
+            FAIL(result.error());
+        }
+        REQUIRE(result.has_value());
+        REQUIRE(result->pushConstants.has_value());
+        CHECK(result->pushConstants->isPointer);
+        CHECK(result->pushConstants->size == sizeof(Cory::BufferDeviceAddress));
+    }
+
+    SECTION("Reflecting a struct push constant")
+    {
+        Cory::ShaderSource source{R"(
+            struct Push { float4 color; float2 uv; };
+            [[vk::push_constant]] Push pc;
+            [shader("compute")]
+            [numthreads(1,1,1)]
+            void computeMain(uint3 tid : SV_DispatchThreadID) { })",
+                                  Gpu::ShaderStageFlagBits::ComputeBit,
+                                  "TestShader.slang"};
+
+        auto result = compiler.compileShader(source, "computeMain", false);
+        if (!result) {
+            FAIL(result.error());
+        }
+        REQUIRE(result.has_value());
+        REQUIRE(result->pushConstants.has_value());
+        CHECK_FALSE(result->pushConstants->isPointer);
+        CHECK(result->pushConstants->size > 0);
+    }
+
+    SECTION("No push constant yields empty reflection")
+    {
+        Cory::ShaderSource source{R"(
+            RWStructuredBuffer<float> result;
+            [shader("compute")]
+            [numthreads(1,1,1)]
+            void computeMain(uint3 threadId : SV_DispatchThreadID)
+            {
+              result[threadId.x] = threadId.x;
+            })",
+                                  Gpu::ShaderStageFlagBits::ComputeBit,
+                                  "TestShader.slang"};
+
+        auto result = compiler.compileShader(source, "computeMain", false);
+        if (!result) {
+            FAIL(result.error());
+        }
+        REQUIRE(result.has_value());
+        CHECK_FALSE(result->pushConstants.has_value());
     }
 }

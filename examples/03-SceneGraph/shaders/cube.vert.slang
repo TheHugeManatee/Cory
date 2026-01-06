@@ -4,7 +4,9 @@ struct CubeUBO
     float4x4 view;
     float4x4 viewProjection;
     float3 lightPosition;
-    float padding;
+    float padding0;
+    Ptr<InstanceData, Access::Read> instances;
+
 };
 
 struct InstanceData
@@ -15,8 +17,8 @@ struct InstanceData
     float4 parameters;
 };
 
-ConstantBuffer<CubeUBO> gGlobals : register(b0, space0);
-StructuredBuffer<InstanceData> gInstances : register(t2, space0);
+[[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
+[[vk::push_constant]] CubeUBO* gGlobals;
 
 struct VSInput
 {
@@ -38,14 +40,14 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    const InstanceData instance = gInstances[input.instanceId];
+    const InstanceData instance = gGlobals->instances[input.instanceId];
     const float4 localPosition = float4(input.position, 1.0f);
     const float4x4 normalMatrix = instance.normalToWorld;
 
     float4 worldPosition = mul(instance.modelToWorld, localPosition);
 
     VSOutput output;
-    output.position = mul(gGlobals.viewProjection, worldPosition);
+    output.position = mul(gGlobals->viewProjection, worldPosition);
     output.worldPosition = worldPosition.xyz;
     output.normal = mul(normalMatrix, float4(input.normal, 0.0f)).xyz;
     output.color = input.color;

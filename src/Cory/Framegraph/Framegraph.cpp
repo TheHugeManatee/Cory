@@ -4,6 +4,8 @@
 
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
+#include <Cory/Framegraph/RenderTaskBuilder.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 
@@ -18,21 +20,26 @@
 #include <KDGpu/texture_view.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
+#include <algorithm>
 #include <deque>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace Cory {
 
 struct FramegraphPrivate {
-    FramegraphPrivate(Context &ctx_param)
+    FramegraphPrivate(Context &ctx_param, uint32_t instanceIndex)
         : ctx{&ctx_param}
         , resources{ctx_param}
+        , shaderBindingContext{
+              ctx->device(), resources, ctx->descriptors(), instanceIndex, 2 * 1024 * 1024}
     {
     }
 
     Context *ctx;
     FramegraphResourceManager resources;
+    ShaderBindingContext shaderBindingContext;
     std::vector<TransientTextureHandle> externalInputs;
     std::vector<TransientTextureHandle> outputs;
 
@@ -49,8 +56,8 @@ RenderTaskBuilder Framegraph::declareTask(std::string_view name)
     return RenderTaskBuilder{*data_->ctx, *this, name};
 }
 
-Framegraph::Framegraph(Context &ctx)
-    : data_{std::make_unique<FramegraphPrivate>(ctx)}
+Framegraph::Framegraph(Context &ctx, uint32_t instanceIndex)
+    : data_{std::make_unique<FramegraphPrivate>(ctx, instanceIndex)}
 {
 }
 
@@ -116,13 +123,13 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
     auto resetCmdList = gsl::finally([this]() { data_->commandListInProgress = nullptr; });
 
     for (const auto &handle : executionInfo.tasks) {
-    auto transitions = executePass(*data_->commandListInProgress, handle);
-    executionInfo.transitions.insert(executionInfo.transitions.end(),
-                                     transitions.imageTransitions.begin(),
-                                     transitions.imageTransitions.end());
-    executionInfo.bufferTransitions.insert(executionInfo.bufferTransitions.end(),
-                                           transitions.bufferTransitions.begin(),
-                                           transitions.bufferTransitions.end());
+        auto transitions = executePass(*data_->commandListInProgress, handle);
+        executionInfo.transitions.insert(executionInfo.transitions.end(),
+                                         transitions.imageTransitions.begin(),
+                                         transitions.imageTransitions.end());
+        executionInfo.bufferTransitions.insert(executionInfo.bufferTransitions.end(),
+                                               transitions.bufferTransitions.begin(),
+                                               transitions.bufferTransitions.end());
     }
 
     finalizeOutputs(executionInfo);
@@ -131,6 +138,7 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
 
 void Framegraph::resetForNextFrame()
 {
+    data_->shaderBindingContext.reset();
     data_->resources.clear();
     data_->externalInputs.clear();
     data_->outputs.clear();
@@ -141,67 +149,74 @@ void Framegraph::resetForNextFrame()
     data_->renderTasks.clear();
 }
 
-Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd,
-                                                    RenderTaskHandle handle)
+Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, RenderTaskHandle handle)
 {
     PassTransitions transitions;
     const RenderTaskInfo &rpInfo = data_->renderTasks[handle];
-    const Cory::ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
+    const ScopeTimer s1{fmt::format("Framegraph/Execute/Record/{}", rpInfo.name)};
 
     CO_CORE_TRACE("Setting up Render pass {}", rpInfo.name);
+    {
+        auto emitBarrier = [&](const RenderTaskInfo::TextureDependency &resourceInfo) {
+            transitions.imageTransitions.push_back(ExecutionInfo::TransitionInfo{
+                .kind = resourceInfo.kind,
+                .task = handle,
+                .resource = resourceInfo.handle,
+                .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
+                .stateAfter = resourceInfo.access});
 
-    auto emitBarrier = [&](const RenderTaskInfo::TextureDependency &resourceInfo) {
-        transitions.imageTransitions.push_back(ExecutionInfo::TransitionInfo{
-            .kind = resourceInfo.kind,
-            .task = handle,
-            .resource = resourceInfo.handle,
-            .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
-            .stateAfter = resourceInfo.access});
+            // only discard if it is not a read/write dependency
+            const auto contentsMode = resourceInfo.kind.is_set(TaskDependencyKindBits::Read)
+                                          ? ImageContents::Retain
+                                          : ImageContents::Discard;
 
-        // only discard if it is not a read/write dependency
-        const auto contentsMode = resourceInfo.kind.is_set(TaskDependencyKindBits::Read)
-                                      ? ImageContents::Retain
-                                      : ImageContents::Discard;
+            return data_->resources.synchronizeTexture(
+                resourceInfo.handle, resourceInfo.access, contentsMode);
+        };
 
-        return data_->resources.synchronizeTexture(
-            resourceInfo.handle, resourceInfo.access, contentsMode);
-    };
+        auto emitBufferBarrier = [&](const RenderTaskInfo::BufferDependency &resourceInfo) {
+            transitions.bufferTransitions.push_back(ExecutionInfo::BufferTransitionInfo{
+                .kind = resourceInfo.kind,
+                .task = handle,
+                .resource = resourceInfo.handle,
+                .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
+                .stateAfter = resourceInfo.access});
 
-    auto emitBufferBarrier = [&](const RenderTaskInfo::BufferDependency &resourceInfo) {
-        transitions.bufferTransitions.push_back(ExecutionInfo::BufferTransitionInfo{
-            .kind = resourceInfo.kind,
-            .task = handle,
-            .resource = resourceInfo.handle,
-            .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
-            .stateAfter = resourceInfo.access});
+            return data_->resources.synchronizeBuffer(resourceInfo.handle, resourceInfo.access);
+        };
 
-        return data_->resources.synchronizeBuffer(resourceInfo.handle, resourceInfo.access);
-    };
+        // fill the barriers from the inputs and outputs
+        const std::vector<Sync::ImageBarrier> imageBarriers =
+            rpInfo.textureDependencies | ranges::views::transform(emitBarrier) |
+            ranges::to<std::vector>;
+        const std::vector<Sync::BufferBarrier> bufferBarriers =
+            rpInfo.bufferDependencies | ranges::views::transform(emitBufferBarrier) |
+            ranges::to<std::vector>;
 
-    // fill the barriers from the inputs and outputs
-    const std::vector<Sync::ImageBarrier> imageBarriers =
-        rpInfo.textureDependencies | ranges::views::transform(emitBarrier) |
-        ranges::to<std::vector>;
-    const std::vector<Sync::BufferBarrier> bufferBarriers =
-        rpInfo.bufferDependencies | ranges::views::transform(emitBufferBarrier) |
-        ranges::to<std::vector>;
-
-    const auto &rsrc = data_->ctx->resources();
-    auto device = rsrc.getDevice(data_->ctx->device());
-    auto commandBuffer = rsrc.getCommandRecorder(cmd);
-    Sync::CmdPipelineBarrier(
-        *device, commandBuffer->commandBuffer, nullptr, bufferBarriers, imageBarriers);
-
-    CO_CORE_TRACE("Recording rendering commands for {}", rpInfo.name);
-    const auto &coroHandle = rpInfo.coroHandle;
-    if (!coroHandle.done()) {
-        coroHandle.resume();
+        const auto &rsrc = data_->ctx->resources();
+        auto device = rsrc.getDevice(data_->ctx->device());
+        auto commandBuffer = rsrc.getCommandRecorder(cmd);
+        Sync::CmdPipelineBarrier(
+            *device, commandBuffer->commandBuffer, nullptr, bufferBarriers, imageBarriers);
     }
 
-    CO_CORE_ASSERT(coroHandle.done(),
+    CO_CORE_TRACE("Recording rendering commands for {}", rpInfo.name);
+    {
+        const auto &coroHandle = rpInfo.coroHandle;
+        if (!coroHandle.done()) {
+            cmd.beginDebugLabel(Gpu::DebugLabelOptions{
+                .label = "Render Task " + rpInfo.name,
+                .color = {0.0f, 0.5f, 1.0f, 1.0f},
+            });
+            coroHandle.resume();
+            cmd.endDebugLabel();
+        }
+    }
+
+    CO_CORE_ASSERT(rpInfo.coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
-                   "points! A render task should only have a single co_yield and should wait on "
-                   "the builder's finishTaskDeclaration() exactly once!");
+                   "points! A render task should only wait on the builder's finishDeclaration() "
+                   "exactly once!");
 
     return transitions;
 }
@@ -318,10 +333,6 @@ const std::vector<TransientTextureHandle> &Framegraph::outputs() const
 
 ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResources)
 {
-    // counter to assign render tasks an increasing execution priority - tasks
-    // with higher priority should be executed earlier
-    int32_t executionPrio{-1};
-
     // first, reorder the information into a more convenient graph representation
     // essentially, in- and out-edges
     std::unordered_map<TransientTextureHandle, RenderTaskHandle> textureToTask;
@@ -330,6 +341,8 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
     std::unordered_map<TransientBufferHandle, RenderTaskHandle> bufferToTask;
     std::unordered_multimap<RenderTaskHandle, TransientBufferHandle> taskBufferInputs;
     std::unordered_map<TransientBufferHandle, BufferInfo> buffers;
+    std::unordered_set<TransientTextureHandle> resolvedTextures;
+    std::unordered_set<TransientBufferHandle> resolvedBuffers;
     for (const auto &[taskHandle, taskInfo] : data_->renderTasks.items()) {
         for (const RenderTaskInfo::TextureDependency &dependency : taskInfo.textureDependencies) {
             const auto kind = dependency.kind;
@@ -360,6 +373,44 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         requiredResources; // collects all actually required texture resources
     std::vector<FramegraphBufferHandle>
         requiredBuffers; // collects all actually required buffer resources
+    std::unordered_set<FramegraphTextureHandle> requiredResourceSet;
+    std::unordered_set<FramegraphBufferHandle> requiredBufferSet;
+    std::unordered_set<RenderTaskHandle> requiredTasks;
+
+    auto appendCreatedResources = [&](const RenderTaskInfo &taskInfo) {
+        for (const RenderTaskInfo::TextureDependency &created :
+             taskInfo.textureDependencies | ranges::views::filter([](const auto &outputDesc) {
+                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+             })) {
+            if (requiredResourceSet.insert(created.handle).second) {
+                requiredResources.push_back(created.handle);
+            }
+        }
+        for (const RenderTaskInfo::BufferDependency &created :
+             taskInfo.bufferDependencies | ranges::views::filter([](const auto &outputDesc) {
+                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+             })) {
+            if (requiredBufferSet.insert(created.handle).second) {
+                requiredBuffers.push_back(created.handle);
+            }
+        }
+    };
+
+    auto recordTextureHandle = [&](TransientTextureHandle handle) {
+        if (!resolvedTextures.insert(handle).second) return false;
+        if (requiredResourceSet.insert(handle).second) {
+            requiredResources.push_back(handle);
+        }
+        return true;
+    };
+
+    auto recordBufferHandle = [&](TransientBufferHandle handle) {
+        if (!resolvedBuffers.insert(handle).second) return false;
+        if (requiredBufferSet.insert(handle).second) {
+            requiredBuffers.push_back(handle);
+        }
+        return true;
+    };
 
     // flood-fill the graph starting at the resources requested from the outside
     std::deque<TransientTextureHandle> nextTexturesToResolve{requestedResources.cbegin(),
@@ -369,7 +420,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         while (!nextTexturesToResolve.empty()) {
             auto nextResource = nextTexturesToResolve.front();
             nextTexturesToResolve.pop_front();
-            requiredResources.push_back(nextResource);
+            if (!recordTextureHandle(nextResource)) continue;
 
             auto writingTaskIt = textureToTask.find(nextResource);
             if (writingTaskIt == textureToTask.end()) {
@@ -391,14 +442,8 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                           textures[nextResource].name,
                           nextResource.version(),
                           data_->renderTasks[writingTask].name);
-            data_->renderTasks[writingTask].executionPriority = ++executionPrio;
-
-            for (const RenderTaskInfo::TextureDependency &created :
-                 data_->renderTasks[writingTask].textureDependencies |
-                     ranges::views::filter([](const auto &outputDesc) {
-                         return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-                     })) {
-                requiredResources.push_back(created.handle);
+            if (requiredTasks.insert(writingTask).second) {
+                appendCreatedResources(data_->renderTasks[writingTask]);
             }
 
             auto texInputs = taskTextureInputs.equal_range(writingTask);
@@ -429,7 +474,7 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         while (!nextBuffersToResolve.empty()) {
             auto nextBuffer = nextBuffersToResolve.front();
             nextBuffersToResolve.pop_front();
-            requiredBuffers.push_back(nextBuffer);
+            if (!recordBufferHandle(nextBuffer)) continue;
 
             auto writingTaskIt = bufferToTask.find(nextBuffer);
             if (writingTaskIt == bufferToTask.end()) {
@@ -447,14 +492,8 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
                           buffers[nextBuffer].name,
                           nextBuffer.version(),
                           data_->renderTasks[writingTask].name);
-            data_->renderTasks[writingTask].executionPriority = ++executionPrio;
-
-            for (const RenderTaskInfo::BufferDependency &created :
-                 data_->renderTasks[writingTask].bufferDependencies |
-                     ranges::views::filter([](const auto &outputDesc) {
-                         return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-                     })) {
-                requiredBuffers.push_back(created.handle);
+            if (requiredTasks.insert(writingTask).second) {
+                appendCreatedResources(data_->renderTasks[writingTask]);
             }
 
             auto bufInputs = taskBufferInputs.equal_range(writingTask);
@@ -471,32 +510,136 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         }
     }
 
-    auto items = data_->renderTasks.items();
-    auto tasksToExecute =
-        items | ranges::views::transform([](const auto &it) {
-            return std::make_pair(RenderTaskHandle{it.first}, it.second.executionPriority);
-        }) |
-        ranges::views::filter([](const auto &it) { return it.second >= 0; }) |
-        ranges::to<std::vector>;
-
-    // sort in descending order so the tasks with the highest priority come first
-    ranges::sort(tasksToExecute, {}, [](const auto &it) { return -it.second; });
-
-    CO_CORE_TRACE("Render task order after resolve:");
-    for (const auto &[handle, prio] : tasksToExecute) {
-        CO_CORE_TRACE("  [{}] {}", prio, data_->renderTasks[handle].name);
+    std::unordered_map<RenderTaskHandle, std::unordered_set<RenderTaskHandle>> adjacency;
+    std::unordered_map<RenderTaskHandle, size_t> indegree;
+    for (const auto &task : requiredTasks) {
+        indegree.emplace(task, 0u);
     }
 
-    auto tasks = tasksToExecute |
-                 ranges::views::transform([](const auto &it) { return it.first; }) |
-                 ranges::to<std::vector<RenderTaskHandle>>;
+    auto addEdge = [&](RenderTaskHandle from, RenderTaskHandle to) {
+        if (from == to) return;
+        if (!requiredTasks.contains(from) || !requiredTasks.contains(to)) return;
+        if (adjacency[from].insert(to).second) {
+            indegree[to] += 1;
+        }
+    };
 
-    return {
-        .tasks = std::move(tasks),
-        .resources = std::move(requiredResources),
-        .buffers = std::move(requiredBuffers),
-        .transitions = {},
-        .bufferTransitions = {}};
+    for (const auto &task : requiredTasks) {
+        auto texInputs = taskTextureInputs.equal_range(task);
+        for (auto it = texInputs.first; it != texInputs.second; ++it) {
+            if (auto writer = textureToTask.find(it->second); writer != textureToTask.end()) {
+                addEdge(writer->second, task);
+            }
+        }
+
+        auto bufInputs = taskBufferInputs.equal_range(task);
+        for (auto it = bufInputs.first; it != bufInputs.second; ++it) {
+            if (auto writer = bufferToTask.find(it->second); writer != bufferToTask.end()) {
+                addEdge(writer->second, task);
+            }
+        }
+    }
+
+    std::vector<RenderTaskHandle> ready;
+    ready.reserve(requiredTasks.size());
+    for (const auto &[task, degree] : indegree) {
+        if (degree == 0) {
+            ready.push_back(task);
+        }
+    }
+    auto sortReady = [&]() {
+        std::sort(ready.begin(), ready.end(), [&](RenderTaskHandle a, RenderTaskHandle b) {
+            return data_->renderTasks[a].name < data_->renderTasks[b].name;
+        });
+    };
+    sortReady();
+
+    std::vector<RenderTaskHandle> tasks;
+    tasks.reserve(requiredTasks.size());
+    while (!ready.empty()) {
+        auto next = ready.front();
+        ready.erase(ready.begin());
+        tasks.push_back(next);
+        auto it = adjacency.find(next);
+        if (it == adjacency.end()) {
+            continue;
+        }
+        for (const auto &dest : it->second) {
+            auto &deg = indegree[dest];
+            if (deg > 0) {
+                deg -= 1;
+            }
+            if (deg == 0) {
+                ready.push_back(dest);
+            }
+        }
+        sortReady();
+    }
+
+    if (tasks.size() != requiredTasks.size()) {
+        CO_CORE_ERROR("Could not resolve frame dependency graph: cyclic task dependency detected");
+
+        std::unordered_set<RenderTaskHandle> unresolvedTasks;
+        unresolvedTasks.reserve(requiredTasks.size());
+        for (const auto &task : requiredTasks) {
+            unresolvedTasks.insert(task);
+        }
+        for (const auto &task : tasks) {
+            unresolvedTasks.erase(task);
+        }
+
+        std::unordered_map<RenderTaskHandle, std::vector<RenderTaskHandle>> reverseAdjacency;
+        reverseAdjacency.reserve(adjacency.size());
+        for (const auto &[from, targets] : adjacency) {
+            for (const auto &to : targets) {
+                reverseAdjacency[to].push_back(from);
+            }
+        }
+
+        for (const auto &task : unresolvedTasks) {
+            CO_CORE_ERROR("Unresolved task '{}' (indegree {})",
+                          data_->renderTasks[task].name,
+                          indegree[task]);
+            for (const auto &pred : reverseAdjacency[task]) {
+                CO_CORE_ERROR("  blocked by '{}'", data_->renderTasks[pred].name);
+            }
+
+            auto texInputs = taskTextureInputs.equal_range(task);
+            for (auto it = texInputs.first; it != texInputs.second; ++it) {
+                const auto handle = it->second;
+                if (auto writer = textureToTask.find(handle); writer != textureToTask.end()) {
+                    CO_CORE_ERROR("  texture input '{}' v{} written by '{}'",
+                                  textures[handle].name,
+                                  handle.version(),
+                                  data_->renderTasks[writer->second].name);
+                }
+            }
+
+            auto bufInputs = taskBufferInputs.equal_range(task);
+            for (auto it = bufInputs.first; it != bufInputs.second; ++it) {
+                const auto handle = it->second;
+                if (auto writer = bufferToTask.find(handle); writer != bufferToTask.end()) {
+                    CO_CORE_ERROR("  buffer input '{}' v{} written by '{}'",
+                                  buffers[handle].name,
+                                  handle.version(),
+                                  data_->renderTasks[writer->second].name);
+                }
+            }
+        }
+
+        throw std::runtime_error("Cyclic task dependency detected in framegraph");
+    }
+
+    CO_CORE_TRACE("Render task order after resolve:");
+    for (size_t i = 0; i < tasks.size(); ++i) {
+        CO_CORE_TRACE("  [{}] {}", tasks.size() - i - 1, data_->renderTasks[tasks[i]].name);
+    }
+
+    return {.tasks = std::move(tasks),
+            .resources = std::move(requiredResources),
+            .buffers = std::move(requiredBuffers),
+            .transitions = {},
+            .bufferTransitions = {}};
 }
 
 RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
@@ -506,7 +649,7 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
         .ctx = data_->ctx,
         .frameCtx = data_->currentFrameCtx,
         .resources = &data_->resources,
-        .descriptors = &data_->ctx->descriptors(),
+        .bindingContext = &data_->shaderBindingContext,
         .cmd = data_->commandListInProgress,
     };
 }

@@ -7,6 +7,7 @@
 #include <KDGpu/shader_module.h>
 #include <KDGpu/shader_object.h>
 
+#include <array>
 #include <filesystem>
 #include <map>
 #include <string>
@@ -14,6 +15,9 @@
 #include <vector>
 
 namespace Cory {
+
+class PipelineCache;
+class ShaderManager;
 
 class ShaderSource {
   public:
@@ -58,15 +62,20 @@ class ShaderSource {
 
 class Shader : NoCopy {
   public:
+    // Every shader in the engine is declared with a push range of MAX_PUSH_CONSTANT_SIZE for
+    // consistency. Whether the shader actually uses it or not does not matter much for performance.
+    static constexpr auto globalPushConstantRange = Gpu::PushConstantRange{
+        .offset = 0,
+        .size = MAX_PUSH_CONSTANT_SIZE,
+        .shaderStages = Gpu::ShaderStageFlagBits::All,
+    };
+
     static CompilationResult CompileToSpv(const ShaderSource &source,
                                           bool optimize = true,
                                           std::string_view entryPoint = "main");
 
     Shader();
-    Shader(Context &ctx,
-           ShaderSource source,
-           std::string entryPoint = "main",
-           std::vector<Gpu::PushConstantRange> pushConstantRanges = {});
+    Shader(Context &ctx, ShaderSource source, std::string entryPoint = "main");
 
     // movable!
     Shader(Shader &&rhs) = default;
@@ -76,11 +85,22 @@ class Shader : NoCopy {
     const Gpu::ShaderObject &shaderObject() const { return shaderObject_; }
     Gpu::Handle<Gpu::ShaderObject_t> shaderHandle() const { return shaderObject_.handle(); }
     Gpu::ShaderStageFlags nextStages() const { return nextStages_; }
-    Gpu::ShaderModule createShaderModule() const;
     Gpu::ShaderStageFlagBits type() const { return type_; }
     const std::string &entryPoint() const { return entryPoint_; }
     bool valid() const;
     [[nodiscard]] CompilationError error() const { return error_; }
+    const std::optional<PushConstantReflection> &pushConstantReflection() const
+    {
+        return pushConstantReflection_;
+    }
+    bool usesRootConstant() const
+    {
+        return pushConstantReflection_.has_value() && pushConstantReflection_->isPointer;
+    }
+    size_t pushConstantSize() const
+    {
+        return pushConstantReflection_.has_value() ? pushConstantReflection_->size : 0u;
+    }
 
     // the size in bytes of the compiled shader module
     size_t size() const { return size_; }
@@ -88,6 +108,9 @@ class Shader : NoCopy {
     static Gpu::ShaderStageFlagBits deduceTypeFromPath(const std::filesystem::path &path);
 
   private:
+    friend class PipelineCache;
+
+    Gpu::ShaderModule createShaderModule() const;
     Context *ctx_{};
     ShaderSource source_;
     Gpu::ShaderStageFlagBits type_{};
@@ -96,7 +119,7 @@ class Shader : NoCopy {
     Gpu::ShaderObject shaderObject_;
     Gpu::ShaderStageFlags nextStages_{};
     std::string entryPoint_{"main"};
-    std::vector<Gpu::PushConstantRange> pushConstantRanges_;
+    std::optional<PushConstantReflection> pushConstantReflection_;
     CompilationError error_;
 };
 } // namespace Cory

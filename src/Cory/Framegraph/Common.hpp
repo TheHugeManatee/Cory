@@ -7,11 +7,13 @@
 namespace Cory {
 
 struct RenderTaskInfo;
-struct RenderTaskExecutionAwaiter;
+template <typename> struct RenderTaskExecutionAwaiter;
+struct RenderInput;
 class Framegraph;
 class RenderTaskBuilder;
 class FramegraphResourceManager;
 class FramegraphVisualizer;
+class ShaderBindingContext;
 
 enum class CullMode { None, Front, Back, FrontAndBack };
 enum class DepthTest {
@@ -144,6 +146,24 @@ class TransientBufferHandle {
         , version_{version} {};
     FramegraphBufferHandle buffer_{};
     uint32_t version_{0xFFFFFFFF};
+};
+
+/**
+ * passed to the render task coroutines when they actually execute.
+ *
+ * A render pass coroutine obtains this object with a
+ * `co_await builder.finishDeclaration(outputs)`.
+ * It will be (potentially) resumed inside the Framegraph::execute() function,
+ * after all resources have been resolved and can be queried through the @a resources
+ * member.
+ */
+struct RenderInput {
+    Context *ctx{};
+    FrameContext *frameCtx{};
+    FramegraphResourceManager *resources{};
+    ShaderBindingContext *bindingContext{};
+    // eventually, add accessors modify descriptors, push constants etc
+    CommandRecorder *cmd{};
 };
 
 } // namespace Cory

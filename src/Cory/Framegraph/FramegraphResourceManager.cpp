@@ -151,7 +151,9 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
     auto aspectMask = flagsForFormat(info.format);
     auto &state = data_->textureResources_[handle].state;
 
-    VkImage vkImageHandle = data_->ctx_->resources().getTexture(image(handle))->image;
+    auto *texture = data_->ctx_->resources().getTexture(image(handle));
+    CO_CORE_DEBUG_ASSERT(texture != nullptr, "Texture resource is null");
+    VkImage vkImageHandle = texture->image;
     const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
     Sync::ImageBarrier barrier{.prevAccesses{state.lastAccess},
                                .nextAccesses{access},
@@ -202,12 +204,13 @@ TextureState FramegraphResourceManager::state(FramegraphTextureHandle handle) co
 
 FramegraphBufferHandle FramegraphResourceManager::declareBuffer(BufferInfo info)
 {
-    CO_CORE_DEBUG("Declaring buffer '{}' ({} bytes)", info.name, info.size);
+    CO_CORE_TRACE("Declaring buffer '{}' ({} bytes)", info.name, info.size);
 
-    auto handle = data_->bufferResources_.emplace(BufferResource{
-        info,
-        BufferState{.lastAccess = Sync::AccessType::None, .status = BufferMemoryStatus::Virtual},
-        Gpu::Buffer{}});
+    auto handle = data_->bufferResources_.emplace(
+        BufferResource{.info = std::move(info),
+                       .state = BufferState{.lastAccess = Sync::AccessType::None,
+                                            .status = BufferMemoryStatus::Virtual},
+                       .buffer = Gpu::Buffer{}});
     return handle;
 }
 
@@ -216,7 +219,7 @@ FramegraphBufferHandle FramegraphResourceManager::registerExternal(BufferInfo in
                                                                    Gpu::BufferHandle resource)
 {
     auto handle = data_->bufferResources_.emplace(BufferResource{
-        .info = info,
+        .info = std::move(info),
         .state = BufferState{.lastAccess = lastWriteAccess, .status = BufferMemoryStatus::External},
         .buffer = resource});
     return handle;
@@ -227,7 +230,7 @@ void FramegraphResourceManager::allocate(FramegraphBufferHandle handle)
     BufferResource &res = data_->bufferResources_[handle];
     Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
     auto &resources = data_->ctx_->resources();
-    CO_CORE_DEBUG("Allocating buffer '{}' ({} bytes)", res.info.name, res.info.size);
+    CO_CORE_TRACE("Allocating buffer '{}' ({} bytes)", res.info.name, res.info.size);
 
     res.buffer =
         resources.createBuffer(deviceHandle,
@@ -256,12 +259,14 @@ Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBuffe
                                                                  Sync::AccessType access)
 {
     auto &state = data_->bufferResources_[handle].state;
-    VkBuffer vkBufferHandle = data_->ctx_->resources().getBuffer(buffer(handle))->buffer;
+    auto *bufferResource = data_->ctx_->resources().getBuffer(buffer(handle));
+    CO_CORE_DEBUG_ASSERT(bufferResource != nullptr, "Buffer resource is null");
+
     Sync::BufferBarrier barrier{.prevAccesses{state.lastAccess},
                                 .nextAccesses{access},
                                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                .buffer = vkBufferHandle,
+                                .buffer = bufferResource->buffer,
                                 .offset = 0,
                                 .size = data_->bufferResources_[handle].info.size};
 
@@ -282,6 +287,24 @@ const BufferInfo &FramegraphResourceManager::info(FramegraphBufferHandle handle)
 Gpu::BufferHandle FramegraphResourceManager::buffer(FramegraphBufferHandle handle) const
 {
     return data_->bufferResources_[handle].buffer;
+}
+
+GpuBufferResource FramegraphResourceManager::bufferResource(FramegraphBufferHandle handle) const
+{
+    auto resourceHandle = data_->bufferResources_[handle].buffer;
+    auto resource = data_->ctx_->resources().getBuffer(resourceHandle);
+    CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
+    return {resourceHandle, resource};
+}
+BufferDeviceAddress FramegraphResourceManager::deviceAddress(FramegraphBufferHandle handle) const
+{
+    auto resourceHandle = data_->bufferResources_[handle].buffer;
+    auto resource = data_->ctx_->resources().getBuffer(resourceHandle);
+    CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
+
+    auto address = resource->bufferDeviceAddress();
+    CO_CORE_ASSERT(address != 0, "Queried Buffer device address for buffer is zero");
+    return address;
 }
 
 BufferState FramegraphResourceManager::state(FramegraphBufferHandle handle) const

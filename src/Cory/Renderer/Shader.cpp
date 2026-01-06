@@ -5,10 +5,13 @@
 #include <Cory/Base/Utils.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
 
 #include <KDGpu/shader_object_options.h>
 
 #include "SlangCompiler.hpp"
+
+#include <algorithm>
 
 namespace {
 
@@ -79,22 +82,25 @@ Shader::Shader()
 {
 }
 
-Shader::Shader(Context &ctx,
-               ShaderSource source,
-               std::string entryPoint,
-               std::vector<Gpu::PushConstantRange> pushConstantRanges)
+Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
     : ctx_{&ctx}
     , source_{std::move(source)}
     , type_{source_.type()}
     , entryPoint_{std::move(entryPoint)}
-    , pushConstantRanges_{std::move(pushConstantRanges)}
 {
     auto result = CompileToSpv(source_, false, entryPoint_);
     if (result.has_value()) {
-        spirvBinary_ = result.value();
+        auto compiled = std::move(result.value());
+        spirvBinary_ = std::move(compiled.spirv);
+        pushConstantReflection_ = std::move(compiled.pushConstants);
+        error_ = std::move(compiled.compilerOutput);
     }
     else {
         error_ = result.error();
+    }
+    if (valid() && !error_.empty()) {
+        CO_CORE_WARN(
+            "Shader compilation warnings for shader {}: \n{}", source_.filePath().string(), error_);
     }
     // No spirv code means invalid shader, not worth trying to create the object
     if (spirvBinary_.empty()) {
@@ -113,6 +119,16 @@ Shader::Shader(Context &ctx,
         label = source_.filePath().filename().string();
     }
 
+    if (pushConstantReflection_ && pushConstantReflection_->size > 0) {
+        CO_CORE_ASSERT(pushConstantReflection_->size <= MAX_PUSH_CONSTANT_SIZE,
+                       "{}: Push constant size exceeds maximum allowed size (uses {} bytes, "
+                       "MAX_PUSH_CONSTANT_SIZE = {} bytes",
+                       source_.filePath().string(),
+                       pushConstantReflection_->size,
+                       MAX_PUSH_CONSTANT_SIZE);
+    }
+
+    auto pushConstantRanges = std::vector{globalPushConstantRange};
     Gpu::ShaderObjectOptions options{
         .label = label,
         .stage = type_,
@@ -120,7 +136,7 @@ Shader::Shader(Context &ctx,
         .code = spirvBinary_,
         .entryPoint = entryPoint_,
         .bindGroupLayouts = layouts,
-        .pushConstantRanges = pushConstantRanges_,
+        .pushConstantRanges = pushConstantRanges,
     };
 
     shaderObject_ = ctx_->device().createShaderObject(options);

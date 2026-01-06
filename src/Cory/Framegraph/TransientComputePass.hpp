@@ -11,7 +11,6 @@ namespace Cory {
 struct ComputePassDeclaration {
     std::string name;
     ShaderHandle shader;
-    std::vector<Gpu::PushConstantRange> pushConstantRanges;
 };
 
 class TransientComputePass {
@@ -24,17 +23,20 @@ class TransientComputePass {
     TransientComputePass(TransientComputePass &&) = default;
     TransientComputePass &operator=(TransientComputePass &&) = default;
 
-    ///
-    Gpu::ComputePassCommandRecorder begin(CommandRecorder &cmd);
+    /// begin a render pass. automatically binds the shader binding context
+    Gpu::ComputePassCommandRecorder begin(const RenderInput &renderApi);
+
+    /**
+     * Ends the render pass.
+     * @param recorder must provide the recorder obtained from begin() via move semantics
+     */
+    void end(Gpu::ComputePassCommandRecorder &&recorder);
 
     /// Obtain the pipeline layout handle. Creates the layout if necessary.
     [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;
 
-    /// Obtain the pipeline handle for the graphics pipeline associated with this pass. Creates the
-    /// pipeline if necessary.
-    [[nodiscard]] Gpu::ComputePipelineHandle pipelineHandle() noexcept;
-
   private:
+    bool wasEnded_;
     Context *ctx_;
     FramegraphResourceManager *textures_;
 
@@ -42,6 +44,7 @@ class TransientComputePass {
 
     Gpu::ComputePipelineHandle pipeline_;
     Gpu::PipelineLayoutHandle pipelineLayout_;
+    const RenderInput *currentRenderApi_;
 };
 
 } // namespace Cory

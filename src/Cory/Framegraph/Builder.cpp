@@ -6,17 +6,6 @@
 
 namespace Cory {
 
-RenderInput RenderTaskExecutionAwaiter::await_resume() const noexcept
-{
-    return fg.renderInput(passHandle);
-}
-
-void RenderTaskExecutionAwaiter::await_suspend(
-    cppcoro::coroutine_handle<> coroHandle) const noexcept
-{
-    fg.enqueueRenderPass(passHandle, coroHandle);
-}
-
 RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
                                      Framegraph &framegraph,
                                      std::string_view taskName)
@@ -28,12 +17,6 @@ RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
     CO_CORE_TRACE("Pass {}: declaration started", info_.name);
 }
 RenderTaskBuilder::~RenderTaskBuilder() {}
-
-RenderTaskExecutionAwaiter RenderTaskBuilder::finishDeclaration()
-{
-    const RenderTaskHandle passHandle = framegraph_.finishTaskDeclaration(std::move(info_));
-    return RenderTaskExecutionAwaiter{passHandle, framegraph_};
-}
 
 TransientTextureHandle RenderTaskBuilder::create(std::string name,
                                                  glm::u32vec3 size,
@@ -73,14 +56,14 @@ TransientBufferHandle RenderTaskBuilder::create(std::string name,
     return handle;
 }
 
-TextureInfo RenderTaskBuilder::read(TransientTextureHandle &handle, Sync::AccessType readAccess)
+TextureInfo RenderTaskBuilder::read(TransientTextureHandle handle, Sync::AccessType readAccess)
 {
     info_.textureDependencies.push_back(RenderTaskInfo::TextureDependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
     return framegraph_.resources().info(handle.texture());
 }
 
-BufferInfo RenderTaskBuilder::read(TransientBufferHandle &handle, Sync::AccessType readAccess)
+BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle, Sync::AccessType readAccess)
 {
     info_.bufferDependencies.push_back(RenderTaskInfo::BufferDependency{
         .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
@@ -163,5 +146,11 @@ TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration p
 TransientComputePass RenderTaskBuilder::declareComputePass(ComputePassDeclaration passDeclaration)
 {
     return TransientComputePass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
+}
+
+RenderTaskBuilder RenderTaskBuilder::subtask(std::string_view name) const
+{
+    auto subtask_name = fmt::format("{}::{}", info_.name, name);
+    return {ctx_, framegraph_, subtask_name};
 }
 } // namespace Cory

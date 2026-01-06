@@ -6,7 +6,6 @@
 #include <slang.h>
 
 #include <expected>
-#include <string>
 #include <string_view>
 
 namespace Cory {

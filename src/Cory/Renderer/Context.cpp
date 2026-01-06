@@ -152,9 +152,10 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     // We are now able to query the adapter for swapchain properties and presentation support
     // with the window surface
     const auto swapchainProperties = selectedAdapter->swapchainProperties(surface);
-    CO_CORE_INFO("Supported swapchain present modes:");
+    CO_CORE_INFO("Supported swapchain present modes ({}):",
+                 swapchainProperties.presentModes.size());
     for (const auto &mode : swapchainProperties.presentModes) {
-        CO_CORE_INFO("  - {}", presentModeToString(mode));
+        CO_CORE_INFO("||  - {}", presentModeToString(mode));
     }
 
     const bool supportsPresentation =
@@ -162,37 +163,37 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     CO_CORE_INFO("Queue family 0 supports presentation: {}", supportsPresentation);
 
     const auto adapterExtensions = selectedAdapter->extensions();
-    CO_CORE_TRACE("Supported adapter extensions:");
+    CO_CORE_INFO("Supported adapter extensions ({}):", adapterExtensions.size());
     for ([[maybe_unused]] const auto &extension : adapterExtensions) {
-        CO_CORE_TRACE("  - {} Version {}", extension.name, extension.version);
+        CO_CORE_INFO("||  - {} Version {}", extension.name, extension.version);
     }
 
     if (!supportsPresentation || !hasGraphicsAndCompute) {
         CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
         return {};
     }
-
+    CO_CORE_INFO("Feature support: ");
     const bool supportsMultiView = selectedAdapter->features().multiView;
-    CO_CORE_INFO("Supports multiview: {}", supportsMultiView);
+    CO_CORE_INFO("|| - multiview: {}", supportsMultiView);
 
     const bool supportsUBOIndexing =
         selectedAdapter->features().shaderUniformBufferArrayNonUniformIndexing &&
         selectedAdapter->features().bindGroupBindingUniformBufferUpdateAfterBind;
-    CO_CORE_INFO("Supports Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
+    CO_CORE_INFO("|| - Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
 
     const bool supportsAccelerationStructures = selectedAdapter->features().accelerationStructures;
-    CO_CORE_INFO("Supports acceleration structures: {}", supportsAccelerationStructures);
+    CO_CORE_INFO("|| - acceleration structures: {}", supportsAccelerationStructures);
 
     const bool supportsRayTracing = selectedAdapter->features().rayTracingPipeline;
-    CO_CORE_INFO("Supports raytracing: {}", supportsRayTracing);
+    CO_CORE_INFO("|| - raytracing: {}", supportsRayTracing);
 
     const bool supportsMeshShader = selectedAdapter->features().meshShader;
     const bool supportsTaskShader = selectedAdapter->features().taskShader;
-    CO_CORE_INFO("Supports meshShader: {}", supportsMeshShader);
-    CO_CORE_INFO("Supports taskShader: {}", supportsTaskShader);
+    CO_CORE_INFO("|| - meshShader: {}", supportsMeshShader);
+    CO_CORE_INFO("|| - taskShader: {}", supportsTaskShader);
 
     const bool supportsHostToImageCopy = selectedAdapter->features().hostImageCopy;
-    CO_CORE_INFO("Supports host to image copy: {}", supportsHostToImageCopy);
+    CO_CORE_INFO("|| - host to image copy: {}", supportsHostToImageCopy);
 
     // Now we can create a device from the selected adapter that we can then use to interact
     // with the GPU.
@@ -214,25 +215,34 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
 
     return {selectedAdapter, std::move(device)};
 }
-Gpu::AdapterFeatures Context::getRequiredFeatures() const
+Gpu::AdapterFeatures Context::getRequiredFeatures()
 {
     Gpu::AdapterFeatures features{};
-    features.sampleRateShading = true;
+    // Dynamic rendering extensions to avoid pipeline permutations
+    features.dynamicRendering = true;
+    features.shaderObjectDynamicRendering = true;
+    features.logicOp = true;
+
     // synchronization2 is automatically enabled by kdgpu
 
+    // Features for modern bindless resource access
     features.bindGroupBindingUniformBufferUpdateAfterBind = true;
     features.bindGroupBindingSampledImageUpdateAfterBind = true;
     features.bindGroupBindingStorageBufferUpdateAfterBind = true;
+    features.bindGroupBindingStorageImageUpdateAfterBind = true;
     features.bindGroupBindingPartiallyBound = true;
     features.runtimeBindGroupArray = true;
-    features.dynamicRendering = true;
-    features.logicOp = true;
+    features.shaderSampledImageArrayNonUniformIndexing = true;
+    features.shaderStorageBufferArrayNonUniformIndexing = true;
+    features.bufferDeviceAddress = true;
+
+    // Enable shader storage image multisampling
+    features.shaderStorageImageMultisample = true;
+    // Sample rate shading to enable MSAA on e.g. raymarched volumes
+    features.sampleRateShading = true;
+    // Other features
     features.wideLines = true;
     features.largePoints = true;
-    features.shaderObjectDynamicRendering = true;
-    features.bindGroupBindingUniformBufferUpdateAfterBind = true;
-    features.bindGroupBindingPartiallyBound = true;
-    features.shaderStorageImageMultisample = true;
     return features;
 }
 
@@ -328,74 +338,8 @@ void Context::setupDescriptors()
     bindless_flags |= Gpu::ResourceBindingFlagBits::PartiallyBoundBit;
     bindless_flags |= Gpu::ResourceBindingFlagBits::UpdateAfterBindBit;
 
-    using BindPoints = DescriptorSets::BindPoints;
-
-    data_->descriptorSets.init(
-        data_->device,
-        Gpu::BindGroupLayoutOptions{
-            .label = "Default Bind Group Layout",
-            .bindings =
-                {
-                    {
-                        {
-                            .binding = std::to_underlying(BindPoints::UniformBufferObject),
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::UniformBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = std::to_underlying(BindPoints::CombinedImageSampler),
-                            .count = 8,
-                            .resourceType = Gpu::ResourceBindingType::CombinedImageSampler,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = std::to_underlying(BindPoints::StorageBuffer),
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 3,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 4,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 5,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 6,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                        {
-                            .binding = 7,
-                            .count = 1,
-                            .resourceType = Gpu::ResourceBindingType::StorageBuffer,
-                            .shaderStages = Gpu::ShaderStageFlagBits::All,
-                            .flags = bindless_flags,
-                        },
-                    },
-                },
-            .flags = KDGpu::BindGroupLayoutFlagBits::UpdateAfterBind});
+    data_->descriptorSets.init(data_->device,
+                               DescriptorSetOptions{.label = "Default Bind Group Layout"});
 }
 
 Gpu::Instance &Context::instance()
@@ -470,6 +414,12 @@ void ContextPrivate::receiveDebugUtilsMessage(
                           .messageType = static_cast<DebugMessageType>(messageTypes),
                           .messageIdNumber = pCallbackData->messageIdNumber,
                           .message = pCallbackData->pMessage ? pCallbackData->pMessage : ""};
+
+    if (pCallbackData->messageIdNumber == 0 && info.severity != DebugMessageSeverity::Error) {
+        // ignore message ID 0 - this is the loader itself, usually complaining about some system
+        // layers
+        return;
+    }
 
     if (validationMessageCallback) {
         validationMessageCallback(info);

@@ -1,12 +1,18 @@
 #include "TransientComputePass.hpp"
 
+#include "ShaderBindingContext.hpp"
+
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
+#include <Cory/Renderer/Shader.hpp>
 
 #include <KDGpu/command_recorder.h>
 #include <KDGpu/compute_pass_command_recorder.h>
 #include <KDGpu/compute_pipeline_options.h>
+
+#include <Cory/Base/Log.hpp>
+#include <array>
 
 namespace Cory {
 
@@ -19,15 +25,33 @@ TransientComputePass::TransientComputePass(Context &ctx,
 {
 }
 
-TransientComputePass::~TransientComputePass() {}
+TransientComputePass::~TransientComputePass()
+{
+    CO_CORE_ASSERT(currentRenderApi_ != nullptr && wasEnded_,
+                   "TransientComputePass '{}' was not end()ed before destruction!",
+                   pass_.name);
+}
 
-Gpu::ComputePassCommandRecorder TransientComputePass::begin(CommandRecorder &cmd)
+Gpu::ComputePassCommandRecorder TransientComputePass::begin(const RenderInput &renderApi)
 {
     auto options = Gpu::ComputePassCommandRecorderOptions{};
-    auto recorder = cmd.beginComputePass(std::move(options));
+    auto recorder = renderApi.cmd->beginComputePass(std::move(options));
 
-    recorder.setPipeline(pipelineHandle());
+    // Set the pipeline layout so it is known for things like bind groups etc.
+    recorder.setPipelineLayout(pipelineLayoutHandle());
+    renderApi.bindingContext->bind(recorder);
+    currentRenderApi_ = &renderApi;
+
     return recorder;
+}
+
+void TransientComputePass::end(Gpu::ComputePassCommandRecorder &&recorder)
+{
+    CO_CORE_ASSERT(currentRenderApi_ != nullptr, "Begin was never called on this pass!");
+    recorder.end();
+    currentRenderApi_->bindingContext->unbind();
+
+    wasEnded_ = true;
 }
 
 Gpu::PipelineLayoutHandle TransientComputePass::pipelineLayoutHandle() noexcept
@@ -39,24 +63,10 @@ Gpu::PipelineLayoutHandle TransientComputePass::pipelineLayoutHandle() noexcept
     pipelineLayout_ = ctx_->pipelineCache().queryLayout(Gpu::PipelineLayoutOptions{
         .label = fmt::format("Pipeline Layout {}", pass_.name),
         .bindGroupLayouts = ctx_->descriptors().layouts(),
-        .pushConstantRanges = pass_.pushConstantRanges,
+        .pushConstantRanges = {Shader::globalPushConstantRange},
     });
 
     return pipelineLayout_;
-}
-
-Gpu::ComputePipelineHandle TransientComputePass::pipelineHandle() noexcept
-{
-    if (pipeline_.isValid()) {
-        return pipeline_;
-    }
-    pipeline_ = ctx_->pipelineCache().queryComputePipeline(
-        fmt::format("Compute Pipeline {}", pass_.name),
-        ComputePipelineDescriptor{
-            .shader = pass_.shader,
-            .pipelineLayout = pipelineLayoutHandle(),
-        });
-    return pipeline_;
 }
 
 } // namespace Cory

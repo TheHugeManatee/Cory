@@ -19,11 +19,12 @@ find_package(spdlog REQUIRED)
 find_package(efsw REQUIRED)
 
 set(CORY_SOURCES
+
         Application/Application.cpp
         Application/Application.hpp
         Application/ApplicationLayer.hpp
-        Application/CameraLayer.hpp
         Application/CameraLayer.cpp
+        Application/CameraLayer.hpp
         Application/CameraManipulator.cpp
         Application/CameraManipulator.hpp
         Application/Common.hpp
@@ -42,17 +43,30 @@ set(CORY_SOURCES
         Base/Callback.hpp
         Base/Common.hpp
         Base/Concepts.hpp
+        Base/Coro.hpp
         Base/CpuBuffer.hpp
+        Base/Debugger.cpp
+        Base/Debugger.hpp
+        Base/EnumMap.hpp
+        Base/FileWatchManager.cpp
+        Base/FileWatchManager.hpp
         Base/FmtUtils.hpp
+        Base/Function.hpp
         Base/FutureFrameQueue.hpp
+        Base/GlmUtils.hpp
+        Base/Locked.hpp
         Base/Log.cpp
         Base/Log.hpp
         Base/Math.hpp
+        Base/Primitives.hpp
         Base/Profiling.cpp
         Base/Profiling.hpp
         Base/Random.hpp
         Base/ResourceLocator.cpp
         Base/ResourceLocator.hpp
+        Base/Result.hpp
+        Base/SignalTree.cpp
+        Base/SignalTree.hpp
         Base/SimulationClock.cpp
         Base/SimulationClock.hpp
         Base/SlotMap.hpp
@@ -61,48 +75,62 @@ set(CORY_SOURCES
         Base/Time.hpp
         Base/Utils.cpp
         Base/Utils.hpp
-        Base/Debugger.hpp
-        Base/Debugger.cpp
+        Base/ValOptional.hpp
+        Base/WorkContractGroup.cpp
+        Base/WorkContractGroup.hpp
         Cory.cpp
         Cory.hpp
         Framegraph/Builder.cpp
         Framegraph/Common.hpp
         Framegraph/Framegraph.cpp
         Framegraph/Framegraph.hpp
+        Framegraph/FramegraphResourceManager.cpp
+        Framegraph/FramegraphResourceManager.hpp
         Framegraph/FramegraphVisualizer.cpp
         Framegraph/FramegraphVisualizer.h
         Framegraph/RenderTaskBuilder.hpp
         Framegraph/RenderTaskDeclaration.hpp
-        Framegraph/FramegraphResourceManager.cpp
-        Framegraph/FramegraphResourceManager.hpp
+        Framegraph/ShaderBindingContext.cpp
+        Framegraph/ShaderBindingContext.hpp
+        Framegraph/TransientComputePass.cpp
+        Framegraph/TransientComputePass.hpp
         Framegraph/TransientRenderPass.cpp
         Framegraph/TransientRenderPass.hpp
+        ImGui/ImguiRenderer.cpp
+        ImGui/ImguiRenderer.hpp
         ImGui/Inputs.hpp
         ImGui/Widgets.cpp
         ImGui/Widgets.hpp
-        ImGui/ImguiRenderer.cpp
-        ImGui/ImguiRenderer.hpp
+        RenderTasks/StandardRenderTasks.cpp
+        RenderTasks/StandardRenderTasks.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
         Renderer/Context.cpp
         Renderer/Context.hpp
         Renderer/DescriptorSets.cpp
         Renderer/DescriptorSets.hpp
+        Renderer/FrameContext.hpp
+        Renderer/FrameResourceLifetimeHelper.hpp
+        Renderer/Gpu.cpp
+        Renderer/Gpu.hpp
+        Renderer/GpuBumpAllocator.cpp
+        Renderer/GpuBumpAllocator.hpp
+        Renderer/PipelineCache.cpp
+        Renderer/PipelineCache.hpp
         Renderer/RadixSorter.cpp
         Renderer/RadixSorter.hpp
-        Renderer/ShaderManager.cpp
-        Renderer/ShaderManager.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
+        Renderer/ShaderManager.cpp
+        Renderer/ShaderManager.hpp
         Renderer/SingleShotCommandRecorder.cpp
         Renderer/SingleShotCommandRecorder.hpp
+        Renderer/SlangCompiler.cpp
+        Renderer/SlangCompiler.hpp
         Renderer/Swapchain.cpp
         Renderer/Swapchain.hpp
         Renderer/Synchronization.cpp
         Renderer/Synchronization.hpp
-        Renderer/UniformBufferObject.cpp
-        Renderer/UniformBufferObject.hpp
-
         SceneGraph/Common.hpp
         SceneGraph/SceneGraph.cpp
         SceneGraph/SceneGraph.hpp
@@ -113,32 +141,8 @@ set(CORY_SOURCES
         Systems/SystemCoordinator.hpp
         Systems/TransformSystem.cpp
         Systems/TransformSystem.hpp
-        Base/SignalTree.cpp
-        Base/SignalTree.hpp
-        Base/WorkContractGroup.cpp
-        Base/WorkContractGroup.hpp
-        Base/ValOptional.hpp
-        Base/Function.hpp
-        Renderer/Gpu.hpp
-        Renderer/FrameContext.hpp
-        Base/GlmUtils.hpp
-        Base/Result.hpp
-        Base/Primitives.hpp
-        Renderer/Gpu.cpp
-        Renderer/PipelineCache.cpp
-        Renderer/PipelineCache.hpp
-        Base/EnumMap.hpp
-        RenderTasks/StandardRenderTasks.cpp
-        RenderTasks/StandardRenderTasks.hpp
-        Renderer/SlangCompiler.cpp
-        Renderer/SlangCompiler.hpp
-        Base/FileWatchManager.cpp
-        Base/FileWatchManager.hpp
-        Renderer/FrameResourceLifetimeHelper.hpp
-        Base/Locked.hpp
-        Base/Coro.hpp
-        Framegraph/TransientComputePass.cpp
-        Framegraph/TransientComputePass.hpp
+        Renderer/SlangCompilerTools.cpp
+        Renderer/SlangCompilerTools.hpp
 )
 
 

@@ -2,18 +2,17 @@
 
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/UniformBufferObject.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/gpu_core.h>
 
 #include <cstddef>
 
-CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFlight)
+CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx)
     : Base()
     , ctx_(&ctx)
 {
@@ -24,8 +23,6 @@ CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx, uint32_t maxFramesInFligh
         .indexBuffer = std::move(cube.indexBuffer),
         .indexCount = cube.indexCount,
     });
-
-    globalUbo_ = std::make_unique<Cory::UniformBufferObject<CubeUBO>>(ctx, maxFramesInFlight);
 
     vertexShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.vert.slang"));
     fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
@@ -95,13 +92,14 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
             },
     });
 
-    co_yield PassOutputs{.colorOut = writtenColorHandle, .depthOut = writtenDepthHandle};
-
     /// ^^^^     DECLARATION      ^^^^
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration();
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
+        .colorOut = writtenColorHandle,
+        .depthOut = writtenDepthHandle,
+    });
     /// vvvv  RENDERING COMMANDS  vvvv
 
-    auto passRecorder = cubePass.begin(*renderApi.cmd);
+    auto passRecorder = cubePass.begin(renderApi);
 
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
     glm::mat4 viewMatrix = camera_.viewMatrix;
@@ -112,53 +110,38 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Cory::FrameContext &frameCtx = *renderApi.frameCtx;
 
     // update the uniform buffer
-    CubeUBO &ubo = (*globalUbo_)[frameCtx.inFlightIndex];
-    ubo.view = viewMatrix;
-    ubo.projection = projectionMatrix;
-    ubo.viewProjection = viewProjection;
-    ubo.lightPosition = camera_.position;
-    // need explicit flush otherwise the mapped memory is not synced to the GPU
-    globalUbo_->flush(frameCtx.inFlightIndex);
-
-    auto &descriptorSets = ctx_->descriptors();
-    descriptorSets.write(
-        Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, *globalUbo_);
+    auto drawData = renderApi.bindingContext->alloc<CubeUBO>();
+    drawData->view = viewMatrix;
+    drawData->projection = projectionMatrix;
+    drawData->viewProjection = viewProjection;
+    drawData->lightPosition = camera_.position;
+    drawData->instances = 0;
+    renderApi.bindingContext->push(drawData.gpu);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
-    if (instanceCount > 0) {
-        auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
-        auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
-        std::memcpy(
-            mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-        instanceBuffer.buffer.unmap();
+    CO_CORE_ASSERT(instanceCount > 0, "No instances to render in CubeRenderSystem!");
 
-        descriptorSets.write(
-            Cory::DescriptorSets::SetType::Static, frameCtx.inFlightIndex, instanceBuffer.buffer);
-    }
-
-    descriptorSets.flushWrites().bind(passRecorder, frameCtx.inFlightIndex);
-
-    // Set dynamic states
-    passRecorder.setCullMode(KDGpu::CullModeFlagBits::BackBit);
-    passRecorder.setDepthTestEnabled(true);
-    passRecorder.setDepthWriteEnabled(true);
-    passRecorder.setDepthCompareOp(KDGpu::CompareOperation::Less);
+    auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
+    auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
+    std::memcpy(
+        mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+    instanceBuffer.buffer.unmap();
+    drawData->instances = instanceBuffer.buffer.bufferDeviceAddress();
 
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
-    if (instanceCount > 0) {
-        passRecorder.drawIndexed(KDGpu::DrawIndexedCommand{
-            .indexCount = mesh_->indexCount,
-            .instanceCount = instanceCount,
-            .firstIndex = 0,
-            .vertexOffset = 0,
-            .firstInstance = 0,
-        });
-    }
+    renderApi.bindingContext->flush();
+    passRecorder.drawIndexed(KDGpu::DrawIndexedCommand{
+        .indexCount = mesh_->indexCount,
+        .instanceCount = instanceCount,
+        .firstIndex = 0,
+        .vertexOffset = 0,
+        .firstInstance = 0,
+    });
 
-    passRecorder.end();
+    cubePass.end(std::move(passRecorder));
 }
 
 InstanceBuffer &CubeRenderSystem::instanceBufferForFrame(uint32_t frameIndex,
@@ -175,7 +158,8 @@ InstanceBuffer &CubeRenderSystem::instanceBufferForFrame(uint32_t frameIndex,
         instanceBuffer.buffer = ctx_->device().createBuffer(KDGpu::BufferOptions{
             .label = "SceneGraph Instance Buffer",
             .size = requiredSize,
-            .usage = KDGpu::BufferUsageFlagBits::StorageBufferBit,
+            .usage = KDGpu::BufferUsageFlagBits::StorageBufferBit |
+                     KDGpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
             .memoryUsage = KDGpu::MemoryUsage::CpuToGpu,
         });
         instanceBuffer.capacity = requiredSize;

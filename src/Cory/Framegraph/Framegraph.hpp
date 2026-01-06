@@ -2,7 +2,6 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <cppcoro/generator.hpp>
@@ -40,7 +39,9 @@ struct ExecutionInfo {
  */
 class Framegraph : NoCopy {
   public:
-    explicit Framegraph(Context &ctx);
+    // Create a new framegraph with the given context, using the given instance index for resource
+    // allocation
+    explicit Framegraph(Context &ctx, uint32_t instanceIndex);
     ~Framegraph();
 
     Framegraph(Framegraph &&) noexcept;
@@ -97,9 +98,13 @@ class Framegraph : NoCopy {
     [[nodiscard]] const std::vector<TransientTextureHandle> &externalInputs() const;
     [[nodiscard]] const std::vector<TransientTextureHandle> &outputs() const;
 
+    /// Mostly for observability
+    [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
+    renderTasks() const;
+
     [[nodiscard]] std::string dump(const ExecutionInfo &info);
 
-  private: /* member functions */
+  protected:
     RenderTaskHandle finishTaskDeclaration(RenderTaskInfo &&info);
 
     /// to be called from RenderTaskExecutionAwaiter - the Framegraph takes ownership of the @a
@@ -127,16 +132,14 @@ class Framegraph : NoCopy {
     };
     [[nodiscard]] PassTransitions executePass(CommandRecorder &cmd, RenderTaskHandle handle);
 
-    [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
-    renderTasks() const;
-
     /// Ensure that all output resources are transitioned to their final access states
     void finalizeOutputs(ExecutionInfo executionInfo);
 
-  private:                             /* members */
-    friend RenderTaskBuilder;          // convenience so it can call finishTaskDeclaration
-    friend RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
-    friend FramegraphVisualizer;       // accesses all the internals
+  private:                    /* members */
+    friend RenderTaskBuilder; // convenience so it can call finishTaskDeclaration
+    template <typename>
+    friend struct RenderTaskExecutionAwaiter; // so it can call enqueueRenderPass
+    friend FramegraphVisualizer;              // accesses all the internals
 
     std::unique_ptr<struct FramegraphPrivate> data_;
 };

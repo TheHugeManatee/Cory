@@ -1,17 +1,19 @@
 #include "SlangCompiler.hpp"
 
 #include <Cory/Base/Log.hpp>
+#include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Renderer/SlangCompilerTools.hpp>
 
 #include <slang-com-helper.h>
 #include <slang-com-ptr.h>
 #include <slang.h>
 
-#include <Cory/Base/ResourceLocator.hpp>
 #include <array>
 #include <atomic>
 #include <cstring>
 #include <fstream>
 #include <mutex>
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -153,6 +155,19 @@ static slang::IGlobalSession *getGlobalSession()
 
 } // namespace detail
 
+namespace {
+template <typename T>
+auto getElementTypeLayout(T *layout, int) -> decltype(layout->getElementTypeLayout())
+{
+    return layout->getElementTypeLayout();
+}
+
+template <typename T> slang::TypeLayoutReflection *getElementTypeLayout(T *, ...)
+{
+    return nullptr;
+}
+} // namespace
+
 SlangCompiler::SlangCompiler()
 {
     initSession();
@@ -226,16 +241,9 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
         return std::unexpected{"Unsupported shader stage for Slang compilation"};
     }
 
-    auto detectLanguage = [&source]() {
-        auto ext = source.filePath().extension();
-        if (ext == ".slang" || ext == ".hlsl") {
-            return SLANG_SOURCE_LANGUAGE_SLANG;
-        }
-        return SLANG_SOURCE_LANGUAGE_SLANG;
-    };
-
     const char *translationUnitName = moduleName.empty() ? nullptr : moduleName.c_str();
-    const int translationUnit = request->addTranslationUnit(detectLanguage(), translationUnitName);
+    const int translationUnit =
+        request->addTranslationUnit(SLANG_SOURCE_LANGUAGE_SLANG, translationUnitName);
 
     for (const auto &[name, value] : source.defines()) {
         request->addTranslationUnitPreprocessorDefine(translationUnit, name.c_str(), value.c_str());
@@ -252,12 +260,16 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
         request->addEntryPoint(translationUnit, entryPointName.c_str(), stage);
 
     SlangResult compileResult = request->compile();
-    if (SLANG_FAILED(compileResult)) {
+    std::string diagnosticsOutput;
+    {
         Slang::ComPtr<slang::IBlob> diagnostics;
         request->getDiagnosticOutputBlob(diagnostics.writeRef());
-        if (diagnostics) {
-            return std::unexpected{
-                std::string(static_cast<const char *>(diagnostics->getBufferPointer()))};
+        diagnosticsOutput = std::string(static_cast<const char *>(diagnostics->getBufferPointer()));
+    }
+    // Note - we currently use "warnings as errors"
+    if (SLANG_FAILED(compileResult) || !diagnosticsOutput.empty()) {
+        if (!diagnosticsOutput.empty()) {
+            return std::unexpected{diagnosticsOutput};
         }
         return std::unexpected{"Slang compilation failed"};
     }
@@ -273,7 +285,59 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
     result.resize(spirvCode->getBufferSize() / sizeof(uint32_t));
     std::memcpy(result.data(), spirvCode->getBufferPointer(), spirvCode->getBufferSize());
 
-    return result;
+    std::optional<PushConstantReflection> pushConstants;
+    Slang::ComPtr<slang::IComponentType> program;
+    SlangResult programResult = request->getProgram(program.writeRef());
+    if (!SLANG_FAILED(programResult) && program) {
+        const std::string dump = SlangCompilerTools::dumpProgramLayout(program);
+        CO_CORE_DEBUG("=== {}:0 ===\n{}", source.filePath().string(), dump);
+        if (auto layout = program->getLayout()) {
+            if (auto globals = layout->getGlobalParamsTypeLayout()) {
+                const uint32_t fieldCount = globals->getFieldCount();
+                for (uint32_t i = 0; i < fieldCount; ++i) {
+                    auto field = globals->getFieldByIndex(i);
+                    if (!field) continue;
+                    if (field->getCategory() != slang::ParameterCategory::PushConstantBuffer) {
+                        continue;
+                    }
+
+                    auto typeLayout = field->getTypeLayout();
+                    auto type = typeLayout ? typeLayout->getType() : nullptr;
+                    bool isPointer = false;
+                    if (type) {
+                        if (type->getKind() == slang::TypeReflection::Kind::Pointer) {
+                            isPointer = true;
+                        }
+                        else if (auto *elementType = type->getElementType()) {
+                            isPointer =
+                                elementType->getKind() == slang::TypeReflection::Kind::Pointer;
+                        }
+                    }
+                    size_t size = typeLayout ? typeLayout->getSize() : 0u;
+                    if (typeLayout) {
+                        if (auto *elementLayout = getElementTypeLayout(typeLayout, 0)) {
+                            const size_t elementSize = elementLayout->getSize();
+                            if (elementSize > size) {
+                                size = elementSize;
+                            }
+                        }
+                    }
+                    if (isPointer && size == 0u) {
+                        size = sizeof(BufferDeviceAddress);
+                    }
+
+                    pushConstants = PushConstantReflection{.size = size, .isPointer = isPointer};
+                    break;
+                }
+            }
+        }
+    }
+
+    return ShaderCompilationOutput{
+        .spirv = std::move(result),
+        .pushConstants = std::move(pushConstants),
+        .compilerOutput = std::move(diagnosticsOutput),
+    };
 }
 
 SlangStage SlangCompiler::toSlangStage(Gpu::ShaderStageFlagBits stage) const

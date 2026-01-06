@@ -121,7 +121,6 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
     auto imguiPass = builder.declareRenderPass(
         RenderPassDeclaration{.name = "PASS_ImGui",
                               .options = PassOptionFlagBits::SkipPipelineBind,
-                              .shaders = {},
                               .attachments = {{
                                   {
                                       // main color target
@@ -131,23 +130,21 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
                                       .clearColor = {},
                                   },
                               }},
-                              .depthAttachment =
-                                  DepthStencilAttachment{
-                                      .target = writtenDepthHandle,
-                                      .load = Gpu::AttachmentLoadOperation::Load,
-                                      .store = Gpu::AttachmentStoreOperation::Store,
-                                      .clearDepthStencil = {},
-                                  },
-                              .pushConstantRanges = {}});
+                              .depthAttachment = DepthStencilAttachment{
+                                  .target = writtenDepthHandle,
+                                  .load = Gpu::AttachmentLoadOperation::Load,
+                                  .store = Gpu::AttachmentStoreOperation::Store,
+                                  .clearDepthStencil = {},
+                              }});
 
-    co_yield LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle};
-    RenderInput renderApi = co_await builder.finishDeclaration();
+    RenderInput renderApi = co_await builder.finishDeclaration(
+        LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle});
 
     FrameContext &frameCtx = *renderApi.frameCtx;
 
-    auto renderPass = imguiPass.begin(frameCtx.commandBuffer);
+    auto renderPass = imguiPass.begin(renderApi);
     recordFrameCommands(frameCtx, &renderPass);
-    renderPass.end();
+    imguiPass.end(std::move(renderPass));
 }
 
 void ImGuiLayer::recordFrameCommands(FrameContext &frameCtx,

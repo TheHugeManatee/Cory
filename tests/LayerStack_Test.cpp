@@ -43,7 +43,8 @@ class MockLayer : public Cory::ApplicationLayer {
     renderTask(Cory::RenderTaskBuilder builder, Cory::LayerPassOutputs previousLayer) override
     {
         updatedIndex_ = counter++;
-        co_yield Cory::LayerPassOutputs{};
+        Cory::RenderInput render = co_await builder.finishDeclaration(previousLayer);
+        (void)render;
     }
 };
 
@@ -148,7 +149,7 @@ TEST_CASE("LayerStack", "[LayerStack]")
         }
         WHEN("Enqueueing the render tasks")
         {
-            Cory::Framegraph framegraph(tester.ctx());
+            Cory::Framegraph framegraph(tester.ctx(), 0);
 
             SECTION("No layers have a render task")
             {

@@ -5,7 +5,6 @@
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <KDGpu/graphics_pipeline_options.h>
-#include <KDGpu/pipeline_layout_options.h>
 
 #include <optional>
 #include <vector>
@@ -15,10 +14,10 @@ namespace Cory {
 // Options general options for the render pass
 enum class PassOptionFlagBits {
     None = 0,
-    /// Skip creating/binding the pipeline on TransientRenderPass::begin(), in order to allow
-    /// custom pipeline binding/switching (mostly interop with other libraries, e.g. imgui)
+    /// Skip automatic shader binding and state setup in TransientRenderPass::begin().
+    /// Intended for passes that perform their own custom binding setup via lower-level APIs.
     SkipPipelineBind = 1 << 0,
-    // Disable binding of mesh input (vertex/index buffers) when beginning the render pass
+    /// Disable binding of mesh input (vertex/index buffers) when beginning the render pass
     DisableMeshInput = 2 << 1,
 };
 using PassOptionFlags = BitField<PassOptionFlagBits>;
@@ -47,11 +46,10 @@ struct RenderPassDeclaration {
     std::string name;
     PassOptionFlags options{PassOptionFlagBits::None};
 
-    std::vector<ShaderHandle> shaders; // Unused if SkipPipelineBind is used
+    std::vector<ShaderHandle> shaders;
     std::vector<ColorAttachment> attachments;
     std::optional<DepthStencilAttachment> depthAttachment;
     std::optional<DepthStencilAttachment> stencilAttachment;
-    std::vector<Gpu::PushConstantRange> pushConstantRanges; // Unused if SkipPipelineBind is used
     std::optional<Gpu::VertexOptions> vertexOptions;
 
     DynamicStates dynamicStates;
@@ -71,23 +69,23 @@ class TransientRenderPass : NoCopy {
     /**
      * starts the rendering and sets up the render pass according to
      * the information described in the builder.
-     *
-     *  1. Binds a pipeline with the required layout -
-     *  2. Calls begin() on the render pass with the attachments
      */
-    Gpu::RenderPassCommandRecorder begin(CommandRecorder &cmd);
+    [[nodiscard]] Gpu::RenderPassCommandRecorder begin(const RenderInput &renderApi);
+
+    /**
+     * Ends the render pass.
+     * @param recorder must provide the recorder obtained from begin() via move semantics
+     */
+    void end(Gpu::RenderPassCommandRecorder &&recorder);
 
     /// Obtain the pipeline layout handle. Creates the layout if necessary.
     [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;
-
-    /// Obtain the pipeline handle for the graphics pipeline associated with this pass. Creates the
-    /// pipeline if necessary.
-    [[nodiscard]] Gpu::GraphicsPipelineHandle pipelineHandle() noexcept;
 
   private:
     Gpu::SampleCountFlagBits determineSampleCount() const;
     Gpu::Rect2D determineRenderArea() const;
 
+    bool wasEnded_ = false;
     Context *ctx_;
     FramegraphResourceManager *textures_;
 
@@ -95,8 +93,8 @@ class TransientRenderPass : NoCopy {
 
     DynamicStates dynamicStates_;
 
-    Gpu::GraphicsPipelineHandle pipeline_;
     Gpu::PipelineLayoutHandle pipelineLayout_;
+    const RenderInput* currentRenderApi_{};
 };
 
 } // namespace Cory

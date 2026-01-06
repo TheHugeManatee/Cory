@@ -3,8 +3,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
+#include <Cory/Renderer/DescriptorSets.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/sampler_options.h>
@@ -88,7 +88,7 @@ TEST_CASE("Shader binding context: Texture 2D allocation", "[ShaderBindingContex
 
     TextureHeapIndex index3 =
         bindingContext.bindTexture2D(view, Gpu::TextureLayout::ShaderReadOnlyOptimal, sampler);
-    CHECK(index3 < index1);
+    CHECK(index3 == index1);
 }
 
 TEST_CASE("Shader binding context: Texture 3D and storage image allocation",
@@ -117,6 +117,7 @@ TEST_CASE("Shader binding context: Texture 3D and storage image allocation",
     });
     auto view3d = tex3d.createView(Gpu::TextureViewOptions{
         .label = "Test Texture 3D View",
+        .viewType = KDGpu::ViewType::ViewType3D,
     });
     auto sampler = tester.ctx().device().createSampler(Gpu::SamplerOptions{
         .magFilter = Gpu::FilterMode::Linear,
@@ -144,7 +145,7 @@ TEST_CASE("Shader binding context: Texture 3D and storage image allocation",
         .extent{4, 4, 1},
         .mipLevels = 1,
         .arrayLayers = 1,
-        .usage = Gpu::TextureUsageFlagBits::StorageBit,
+        .usage = Gpu::TextureUsageFlagBits::SampledBit,
         .memoryUsage = Gpu::MemoryUsage::GpuOnly,
     });
     auto view2d = tex2d.createView(Gpu::TextureViewOptions{

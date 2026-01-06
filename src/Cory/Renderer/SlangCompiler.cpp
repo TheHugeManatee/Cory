@@ -155,6 +155,19 @@ static slang::IGlobalSession *getGlobalSession()
 
 } // namespace detail
 
+namespace {
+template <typename T>
+auto getElementTypeLayout(T *layout, int) -> decltype(layout->getElementTypeLayout())
+{
+    return layout->getElementTypeLayout();
+}
+
+template <typename T> slang::TypeLayoutReflection *getElementTypeLayout(T *, ...)
+{
+    return nullptr;
+}
+} // namespace
+
 SlangCompiler::SlangCompiler()
 {
     initSession();
@@ -304,6 +317,14 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
                         }
                     }
                     size_t size = typeLayout ? typeLayout->getSize() : 0u;
+                    if (typeLayout) {
+                        if (auto *elementLayout = getElementTypeLayout(typeLayout, 0)) {
+                            const size_t elementSize = elementLayout->getSize();
+                            if (elementSize > size) {
+                                size = elementSize;
+                            }
+                        }
+                    }
                     if (isPointer && size == 0u) {
                         size = sizeof(BufferDeviceAddress);
                     }

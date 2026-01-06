@@ -44,9 +44,8 @@ struct RadixSortBuffers {
     TransientBufferHandle histograms;
 };
 
-RenderTaskDeclaration<RadixSortBuffers> radixSetupTask(RenderTaskBuilder builder,
-                                                       Gpu::DeviceSize required,
-                                                       Gpu::DeviceSize histogramSize)
+RenderTaskDeclaration<RadixSortBuffers>
+radixSetupTask(RenderTaskBuilder builder, Gpu::DeviceSize required, Gpu::DeviceSize histogramSize)
 {
     auto keysB = builder.create("BUF_RadixSortKeysB",
                                 required,
@@ -65,19 +64,16 @@ RenderTaskDeclaration<RadixSortBuffers> radixSetupTask(RenderTaskBuilder builder
                                      histogramSize,
                                      Gpu::BufferUsageFlagBits::StorageBufferBit,
                                      Sync::AccessType::ComputeShaderWrite);
-    [[maybe_unused]] RenderInput render =
-        co_await builder.finishDeclaration(RadixSortBuffers{
-            .keysB = keysB,
-            .indicesA = indicesA,
-            .indicesB = indicesB,
-            .histograms = histograms,
-        });
+    [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(RadixSortBuffers{
+        .keysB = keysB,
+        .indicesA = indicesA,
+        .indicesB = indicesB,
+        .histograms = histograms,
+    });
 }
 
-RenderTaskDeclaration<TransientBufferHandle>
-radixInitIndicesTask(RenderTaskBuilder builder,
-                     TransientBufferHandle indicesHandle,
-                     uint32_t instanceCount)
+RenderTaskDeclaration<TransientBufferHandle> radixInitIndicesTask(
+    RenderTaskBuilder builder, TransientBufferHandle indicesHandle, uint32_t instanceCount)
 {
     auto [writtenIndices, info] = builder.write(indicesHandle, Sync::AccessType::HostWrite);
     (void)info;
@@ -137,12 +133,11 @@ radixHistogramTask(RenderTaskBuilder builder,
     pass.end(std::move(recorder));
 }
 
-RenderTaskDeclaration<TransientBufferHandle>
-radixScanTask(RenderTaskBuilder builder,
-              TransientBufferHandle histogramsHandle,
-              uint32_t workgroups,
-              uint32_t bitOffset,
-              ShaderHandle scanShader)
+RenderTaskDeclaration<TransientBufferHandle> radixScanTask(RenderTaskBuilder builder,
+                                                           TransientBufferHandle histogramsHandle,
+                                                           uint32_t workgroups,
+                                                           uint32_t bitOffset,
+                                                           ShaderHandle scanShader)
 {
     auto [writtenHistograms, info] =
         builder.readWrite(histogramsHandle, Sync::AccessType::ComputeShaderWrite);
@@ -173,23 +168,21 @@ radixScanTask(RenderTaskBuilder builder,
     pass.end(std::move(recorder));
 }
 
-RenderTaskDeclaration<ScatterOutput>
-radixScatterTask(RenderTaskBuilder builder,
-                 TransientBufferHandle keysIn,
-                 TransientBufferHandle indicesIn,
-                 TransientBufferHandle keysOut,
-                 TransientBufferHandle indicesOut,
-                 TransientBufferHandle histogramsHandle,
-                 uint32_t instanceCount,
-                 uint32_t workgroups,
-                 uint32_t bitOffset,
-                 ShaderHandle scatterShader)
+RenderTaskDeclaration<ScatterOutput> radixScatterTask(RenderTaskBuilder builder,
+                                                      TransientBufferHandle keysIn,
+                                                      TransientBufferHandle indicesIn,
+                                                      TransientBufferHandle keysOut,
+                                                      TransientBufferHandle indicesOut,
+                                                      TransientBufferHandle histogramsHandle,
+                                                      uint32_t instanceCount,
+                                                      uint32_t workgroups,
+                                                      uint32_t bitOffset,
+                                                      ShaderHandle scatterShader)
 {
     builder.read(keysIn, Sync::AccessType::ComputeShaderReadOther);
     builder.read(indicesIn, Sync::AccessType::ComputeShaderReadOther);
     builder.read(histogramsHandle, Sync::AccessType::ComputeShaderReadOther);
-    auto [writtenKeys, keysInfo] =
-        builder.write(keysOut, Sync::AccessType::ComputeShaderWrite);
+    auto [writtenKeys, keysInfo] = builder.write(keysOut, Sync::AccessType::ComputeShaderWrite);
     auto [writtenIndices, indicesInfo] =
         builder.write(indicesOut, Sync::AccessType::ComputeShaderWrite);
     (void)keysInfo;
@@ -212,8 +205,8 @@ radixScatterTask(RenderTaskBuilder builder,
         renderApi.bindingContext->bindBuffer(indicesIn, BufferBindPoint::StorageBufferReadOnly);
     const auto histogramIndex = renderApi.bindingContext->bindBuffer(
         histogramsHandle, BufferBindPoint::StorageBufferReadOnly);
-    const auto keysOutIndex = renderApi.bindingContext->bindBuffer(
-        writtenKeys, BufferBindPoint::StorageBufferReadWrite);
+    const auto keysOutIndex =
+        renderApi.bindingContext->bindBuffer(writtenKeys, BufferBindPoint::StorageBufferReadWrite);
     const auto indicesOutIndex = renderApi.bindingContext->bindBuffer(
         writtenIndices, BufferBindPoint::StorageBufferReadWrite);
 
@@ -302,8 +295,7 @@ RadixSorter::SortOutput RadixSorter::sort(RenderTaskBuilder &builder,
         static_cast<Gpu::DeviceSize>(workgroups) * 16u * sizeof(uint32_t);
 
     auto keysA = predicateBuffer;
-    auto setupTask =
-        radixSetupTask(builder.subtask("RadixSetup"), required, histogramSize);
+    auto setupTask = radixSetupTask(builder.subtask("RadixSetup"), required, histogramSize);
     auto setup = setupTask.output();
     auto keysB = setup.keysB;
     auto indicesA = setup.indicesA;
@@ -336,16 +328,17 @@ RadixSorter::SortOutput RadixSorter::sort(RenderTaskBuilder &builder,
                                       bitOffset,
                                       scanShader_);
 
-        auto scatterTask = radixScatterTask(builder.subtask(fmt::format("RadixScatter_{}", bitOffset)),
-                                             keysIn,
-                                             indicesIn,
-                                             keysOut,
-                                             indicesOut,
-                                             scanTask.output(),
-                                             instanceCount,
-                                             workgroups,
-                                             bitOffset,
-                                             scatterShader_);
+        auto scatterTask =
+            radixScatterTask(builder.subtask(fmt::format("RadixScatter_{}", bitOffset)),
+                             keysIn,
+                             indicesIn,
+                             keysOut,
+                             indicesOut,
+                             scanTask.output(),
+                             instanceCount,
+                             workgroups,
+                             bitOffset,
+                             scatterShader_);
 
         auto scatterOut = scatterTask.output();
         keysOut = keysIn;
@@ -648,10 +641,7 @@ void RadixSorter::dispatchHistogram(RenderInput &renderApi,
         uint32_t keysIndex;
         uint32_t histogramIndex;
     } pc{instanceCount, bitOffset, kKeysIndex, kWriteBufferIndex};
-    pass.pushConstant(Gpu::PushConstantRange{.offset = 0,
-                                             .size = sizeof(pc),
-                                             .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
-                      &pc);
+    renderApi.bindingContext->push(pc);
     pass.dispatchCompute({scratch.workgroups, 1, 1});
     computePass.end(std::move(pass));
 }
@@ -685,10 +675,7 @@ void RadixSorter::dispatchScan(RenderInput &renderApi,
         uint32_t numWorkgroups;
         uint32_t histogramIndex;
     } pc{scratch.workgroups, kWriteBufferIndex};
-    pass.pushConstant(Gpu::PushConstantRange{.offset = 0,
-                                             .size = sizeof(pc),
-                                             .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
-                      &pc);
+    renderApi.bindingContext->push(pc);
     pass.dispatchCompute({1, 1, 1});
     computePass.end(std::move(pass));
 }
@@ -780,10 +767,7 @@ void RadixSorter::dispatchScatter(RenderInput &renderApi,
          kHistogramsIndex,
          kWriteBufferIndex,
          kWriteIndicesIndex};
-    pass.pushConstant(Gpu::PushConstantRange{.offset = 0,
-                                             .size = sizeof(pc),
-                                             .shaderStages = Gpu::ShaderStageFlagBits::ComputeBit},
-                      &pc);
+    renderApi.bindingContext->push(pc);
     pass.dispatchCompute({scratch.workgroups, 1, 1});
     computePass.end(std::move(pass));
 }

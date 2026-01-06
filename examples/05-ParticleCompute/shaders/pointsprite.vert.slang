@@ -2,15 +2,19 @@ struct PointSpriteGlobals {
     float4x4 projection;
     float4x4 view;
     float4x4 viewProjection;
+
     float3 lightPosition;
     float padding0;
+
     float3 cameraRight;
     float padding1;
+
     float3 cameraUp;
     float padding2;
-    uint instanceBufferIndex;
-    uint sortedIndicesBufferIndex;
-    uint sortKeysBufferIndex;
+
+    Ptr<uint, Access::Read> sortKeys;
+    Ptr<uint, Access::Read> sortIndices;
+    Ptr<InstanceData, Access::Read> instances;
 };
 
 struct InstanceData {
@@ -19,8 +23,6 @@ struct InstanceData {
     float4 parameters;
 };
 
-[[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gInstanceBuffers[];
-[[vk::binding(1, 2)]] RWStructuredBuffer<uint> gSortedIndicesBuffers[];
 [[vk::push_constant]] PointSpriteGlobals *globals;
 
 struct VSInput {
@@ -36,9 +38,9 @@ struct VSOutput {
 
 VSOutput main(VSInput input)
 {
-    const uint sortedIndex =
-        gSortedIndicesBuffers[globals->sortedIndicesBufferIndex][input.instanceId];
-    const InstanceData instance = gInstanceBuffers[globals->instanceBufferIndex][sortedIndex];
+    const uint sortedIndex = globals->sortIndices[input.instanceId];
+    const InstanceData instance = globals->instances[sortedIndex];
+
     static const float2 quadCorners[6] = {
         float2(-1.0, -1.0),
         float2(1.0, -1.0),

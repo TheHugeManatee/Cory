@@ -241,16 +241,9 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
         return std::unexpected{"Unsupported shader stage for Slang compilation"};
     }
 
-    auto detectLanguage = [&source]() {
-        auto ext = source.filePath().extension();
-        if (ext == ".slang" || ext == ".hlsl") {
-            return SLANG_SOURCE_LANGUAGE_SLANG;
-        }
-        return SLANG_SOURCE_LANGUAGE_SLANG;
-    };
-
     const char *translationUnitName = moduleName.empty() ? nullptr : moduleName.c_str();
-    const int translationUnit = request->addTranslationUnit(detectLanguage(), translationUnitName);
+    const int translationUnit =
+        request->addTranslationUnit(SLANG_SOURCE_LANGUAGE_SLANG, translationUnitName);
 
     for (const auto &[name, value] : source.defines()) {
         request->addTranslationUnitPreprocessorDefine(translationUnit, name.c_str(), value.c_str());
@@ -267,12 +260,16 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
         request->addEntryPoint(translationUnit, entryPointName.c_str(), stage);
 
     SlangResult compileResult = request->compile();
-    if (SLANG_FAILED(compileResult)) {
+    std::string diagnosticsOutput;
+    {
         Slang::ComPtr<slang::IBlob> diagnostics;
         request->getDiagnosticOutputBlob(diagnostics.writeRef());
-        if (diagnostics) {
-            return std::unexpected{
-                std::string(static_cast<const char *>(diagnostics->getBufferPointer()))};
+        diagnosticsOutput = std::string(static_cast<const char *>(diagnostics->getBufferPointer()));
+    }
+    // Note - we currently use "warnings as errors"
+    if (SLANG_FAILED(compileResult) || !diagnosticsOutput.empty()) {
+        if (!diagnosticsOutput.empty()) {
+            return std::unexpected{diagnosticsOutput};
         }
         return std::unexpected{"Slang compilation failed"};
     }
@@ -339,6 +336,7 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
     return ShaderCompilationOutput{
         .spirv = std::move(result),
         .pushConstants = std::move(pushConstants),
+        .compilerOutput = std::move(diagnosticsOutput),
     };
 }
 

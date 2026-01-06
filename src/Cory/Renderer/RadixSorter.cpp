@@ -41,20 +41,24 @@ radixSetupTask(RenderTaskBuilder builder, Gpu::DeviceSize required, Gpu::DeviceS
 {
     auto keysB = builder.create("BUF_RadixSortKeysB",
                                 required,
-                                Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                    Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                                 Sync::AccessType::ComputeShaderWrite);
     auto indicesA = builder.create("BUF_RadixSortIndicesA",
                                    required,
-                                   Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                   Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                       Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                                    Sync::AccessType::HostWrite,
                                    Gpu::MemoryUsage::CpuToGpu);
     auto indicesB = builder.create("BUF_RadixSortIndicesB",
                                    required,
-                                   Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                   Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                       Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                                    Sync::AccessType::ComputeShaderWrite);
     auto histograms = builder.create("BUF_RadixSortHistograms",
                                      histogramSize,
-                                     Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                     Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                         Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                                      Sync::AccessType::ComputeShaderWrite);
     [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(RadixSortBuffers{
         .keysB = keysB,

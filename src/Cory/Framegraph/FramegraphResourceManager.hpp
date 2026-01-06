@@ -5,6 +5,12 @@
 
 namespace Cory {
 
+/// Buffe rhandle paired with pointer to the actual resource
+struct GpuBufferResource {
+    Gpu::BufferHandle handle;
+    Gpu::VulkanBuffer *vulkanBuffer;
+};
+
 /**
  * @brief handles the transient resources created/destroyed during a frame
  *
@@ -79,8 +85,8 @@ class FramegraphResourceManager : NoCopy {
 
     [[nodiscard]] const BufferInfo &info(FramegraphBufferHandle handle) const;
     [[nodiscard]] Gpu::BufferHandle buffer(FramegraphBufferHandle handle) const;
-    [[nodiscard]] std::pair<Gpu::BufferHandle, Gpu::VulkanBuffer *>
-    bufferResource(FramegraphBufferHandle handle) const;
+
+    [[nodiscard]] GpuBufferResource bufferResource(FramegraphBufferHandle handle) const;
     [[nodiscard]] BufferState state(FramegraphBufferHandle handle) const;
 
     void clear();

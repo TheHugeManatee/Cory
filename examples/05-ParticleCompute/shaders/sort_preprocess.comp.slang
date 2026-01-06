@@ -9,15 +9,19 @@ struct PointSpriteGlobals {
     float4x4 projection;
     float4x4 view;
     float4x4 viewProjection;
+
     float3 lightPosition;
     float padding0;
+
     float3 cameraRight;
     float padding1;
+
     float3 cameraUp;
     float padding2;
-    uint instanceBufferIndex;
-    uint sortedIndicesBufferIndex;
-    uint sortKeysBufferIndex;
+
+    Ptr<uint, Access::ReadWrite> sortKeys;
+    Ptr<uint, Access::Read> sortIndices;
+    Ptr<InstanceData, Access::Read> instances;
 };
 
 // Bindings
@@ -37,7 +41,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     uint i = dispatchThreadId.x;
     if (i >= p.numInstances) return;
 
-    float3 pos = gReadOnlyBuffers[p.globals->instanceBufferIndex][i].positionAndSize.xyz;
+    float3 pos = p.globals->instances[i].positionAndSize.xyz;
     float4 viewPos = mul(p.globals->view, float4(pos, 1.0));
 
     // View space Z is negative in front of camera in many systems
@@ -48,5 +52,5 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     uint key = (bits & 0x80000000u) != 0 ? ~bits                 // negative: flip all bits
                                          : (bits ^ 0x80000000u); // positive: flip sign bit
 
-    gReadWriteBuffers[p.globals->sortKeysBufferIndex][i] = key;
+    p.globals->sortKeys[i] = key;
 }

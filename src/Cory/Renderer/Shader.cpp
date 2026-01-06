@@ -93,9 +93,14 @@ Shader::Shader(Context &ctx, ShaderSource source, std::string entryPoint)
         auto compiled = std::move(result.value());
         spirvBinary_ = std::move(compiled.spirv);
         pushConstantReflection_ = std::move(compiled.pushConstants);
+        error_ = std::move(compiled.compilerOutput);
     }
     else {
         error_ = result.error();
+    }
+    if (valid() && !error_.empty()) {
+        CO_CORE_WARN(
+            "Shader compilation warnings for shader {}: \n{}", source_.filePath().string(), error_);
     }
     // No spirv code means invalid shader, not worth trying to create the object
     if (spirvBinary_.empty()) {

@@ -15,9 +15,9 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 
+#include <KDGpu/vulkan/vulkan_buffer.h>
 #include <cstddef>
 #include <span>
-#include <variant>
 
 namespace {
 InstanceBuffer &getInstanceBufferForFrame(std::vector<InstanceBuffer> &instanceBuffers,
@@ -36,7 +36,8 @@ InstanceBuffer &getInstanceBufferForFrame(std::vector<InstanceBuffer> &instanceB
         instanceBuffer.buffer = ctx.device().createBuffer(Gpu::BufferOptions{
             .label = "SceneGraph Sprite Instance Buffer",
             .size = requiredSize,
-            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
             .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
         });
         instanceBuffer.capacity = requiredSize;
@@ -78,9 +79,6 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
     const glm::mat3 viewInverse = glm::mat3(glm::inverse(viewMatrix));
     globals->cameraRight = glm::normalize(viewInverse[0]);
     globals->cameraUp = glm::normalize(viewInverse[1]);
-    globals->instanceBufferIndex = 0;
-    globals->sortedIndicesBufferIndex = 0;
-    globals->sortKeysBufferIndex = 0;
 
     auto &instanceBuffer = getInstanceBufferForFrame(
         instanceBuffers, *renderApi.ctx, renderApi.frameCtx->inFlightIndex, instanceCount);
@@ -89,10 +87,10 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
         mapped, instanceData.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
     instanceBuffer.buffer.unmap();
 
-    globals->instanceBufferIndex = renderApi.bindingContext->bindBuffer(
-        instanceBuffer.buffer.handle(), Cory::BufferBindPoint::StorageBufferReadOnly);
-    globals->sortKeysBufferIndex = renderApi.bindingContext->bindBuffer(
-        writtenSortKeys, Cory::BufferBindPoint::StorageBufferReadWrite);
+    globals->instances = instanceBuffer.buffer.bufferDeviceAddress();
+    globals->sortKeys =
+        renderApi.resources->bufferResource(writtenSortKeys).vulkanBuffer->bufferDeviceAddress();
+    CO_CORE_ASSERT(globals->sortKeys != 0 && globals->instances != 0, "Invalid BDAs");
 
     auto pass = predicatePass.begin(renderApi);
     pass.bindShader(renderApi.ctx->shaders()[predicateShader].shaderHandle());
@@ -174,6 +172,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         builder.write(depthTarget, Sync::AccessType::DepthStencilAttachmentWrite);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
+    CO_CORE_ASSERT(instanceCount > 0, "Invalid instance count");
 
     static constexpr Gpu::ColorBlendEquation alphaBlend{
         .srcColorBlendFactor = Gpu::BlendFactor::SrcAlpha,
@@ -194,12 +193,12 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
 
     TransientBufferHandle sortKeys;
     RadixSorter::SortOutput sortOutput{};
-    if (instanceCount > 0) {
-        sortKeys = builder.create("BUF_PointSpriteSortKeys",
-                                  static_cast<Gpu::DeviceSize>(instanceCount) * sizeof(uint32_t),
-                                  Gpu::BufferUsageFlagBits::StorageBufferBit,
-                                  Sync::AccessType::ComputeShaderWrite);
-    }
+
+    sortKeys = builder.create("BUF_PointSpriteSortKeys",
+                              static_cast<Gpu::DeviceSize>(instanceCount) * sizeof(uint32_t),
+                              Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                  Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                              Sync::AccessType::ComputeShaderWrite);
 
     auto spritePass = builder.declareRenderPass(RenderPassDeclaration{
         .name = "PASS_PointSprites",
@@ -225,20 +224,20 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                           .depthTest = DepthTest::Less,
                           .depthWrite = DepthWrite::Disabled},
     });
-    if (instanceCount > 0) {
-        auto predicateTask = pointSpriteSortPreprocessTask(
-            builder.subtask("PointSpriteSortPreprocess"),
-            predicateShader_,
-            camera_,
-            std::span<const InstanceData>{renderState_.data(), renderState_.size()},
-            instanceBuffers_,
-            sortKeys,
-            static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y),
-            instanceCount);
 
-        sortOutput = sorter_.sort(builder, predicateTask.output(), instanceCount);
+    auto predicateTask = pointSpriteSortPreprocessTask(
+        builder.subtask("PointSpriteSortPreprocess"),
+        predicateShader_,
+        camera_,
+        std::span<const InstanceData>{renderState_.data(), renderState_.size()},
+        instanceBuffers_,
+        sortKeys,
+        static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y),
+        instanceCount);
+
+    sortOutput = sorter_.sort(builder, predicateTask.output(), instanceCount);
+    auto sortedIndicesInfo =
         builder.read(sortOutput.indices, Sync::AccessType::VertexShaderReadOther);
-    }
 
     /// ^^^^     DECLARATION      ^^^^
     RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
@@ -262,34 +261,23 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     const glm::mat3 viewInverse = glm::mat3(glm::inverse(viewMatrix));
     globals->cameraRight = glm::normalize(viewInverse[0]);
     globals->cameraUp = glm::normalize(viewInverse[1]);
-    globals->instanceBufferIndex = 0;
-    globals->sortedIndicesBufferIndex = 0;
-    globals->sortKeysBufferIndex = 0;
 
-    if (instanceCount > 0) {
-        auto &instanceBuffer =
-            instanceBufferForFrame(renderApi.frameCtx->inFlightIndex, instanceCount);
-        globals->instanceBufferIndex = renderApi.bindingContext->bindBuffer(
-            instanceBuffer.buffer.handle(), BufferBindPoint::StorageBufferReadOnly);
-        globals->sortedIndicesBufferIndex = renderApi.bindingContext->bindBuffer(
-            sortOutput.indices, BufferBindPoint::StorageBufferReadWrite);
-    }
+    auto &instanceBuffer = instanceBufferForFrame(renderApi.frameCtx->inFlightIndex, instanceCount);
+    globals->instances = instanceBuffer.buffer.bufferDeviceAddress();
+    globals->sortIndices =
+        renderApi.resources->bufferResource(sortOutput.indices).vulkanBuffer->bufferDeviceAddress();
+    CO_CORE_ASSERT(globals->sortIndices != 0 && globals->instances != 0, "Invalid BDAs");
 
     auto passRecorder = spritePass.begin(renderApi);
-
-    // instance data already uploaded before sorting
-
     renderApi.bindingContext->flush();
     renderApi.bindingContext->push(globals.gpu);
 
-    if (instanceCount > 0) {
-        passRecorder.draw(Gpu::DrawCommand{
-            .vertexCount = 6,
-            .instanceCount = instanceCount,
-            .firstVertex = 0,
-            .firstInstance = 0,
-        });
-    }
+    passRecorder.draw(Gpu::DrawCommand{
+        .vertexCount = 6,
+        .instanceCount = instanceCount,
+        .firstVertex = 0,
+        .firstInstance = 0,
+    });
 
     spritePass.end(std::move(passRecorder));
 }

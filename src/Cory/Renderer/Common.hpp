@@ -49,6 +49,7 @@ struct PushConstantReflection {
 struct ShaderCompilationOutput {
     SpirvByteCode spirv;
     std::optional<PushConstantReflection> pushConstants;
+    std::string compilerOutput;
 };
 
 using CompilationResult = std::expected<ShaderCompilationOutput, CompilationError>;

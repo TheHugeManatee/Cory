@@ -9,6 +9,7 @@
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
+#include <KDGpu/buffer.h>
 #include <type_traits>
 #include <vector>
 
@@ -22,9 +23,9 @@ struct PointSpriteGlobals {
     float padding1;
     glm::vec3 cameraUp;
     float padding2;
-    Cory::BufferHeapIndex instanceBufferIndex;
-    Cory::BufferHeapIndex sortedIndicesBufferIndex;
-    Cory::BufferHeapIndex sortKeysBufferIndex;
+    Cory::BufferDeviceAddress sortKeys;
+    Cory::BufferDeviceAddress sortIndices;
+    Cory::BufferDeviceAddress instances;
 };
 
 struct alignas(16) InstanceData {
@@ -36,8 +37,8 @@ struct alignas(16) InstanceData {
 static_assert(std::is_trivially_copyable_v<InstanceData>);
 
 struct InstanceBuffer {
-    KDGpu::Buffer buffer;
-    KDGpu::DeviceSize capacity{0};
+    Gpu::Buffer buffer;
+    Gpu::DeviceSize capacity{0};
 };
 
 class PointSpriteRenderSystem

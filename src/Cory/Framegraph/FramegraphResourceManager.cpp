@@ -288,8 +288,8 @@ Gpu::BufferHandle FramegraphResourceManager::buffer(FramegraphBufferHandle handl
 {
     return data_->bufferResources_[handle].buffer;
 }
-std::pair<Gpu::BufferHandle, Gpu::VulkanBuffer *>
-FramegraphResourceManager::bufferResource(FramegraphBufferHandle handle) const
+
+GpuBufferResource FramegraphResourceManager::bufferResource(FramegraphBufferHandle handle) const
 {
     auto resourceHandle = data_->bufferResources_[handle].buffer;
     auto resource = data_->ctx_->resources().getBuffer(resourceHandle);

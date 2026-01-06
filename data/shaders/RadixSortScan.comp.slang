@@ -1,9 +1,8 @@
 
-[[vk::binding(1, 2)]] RWStructuredBuffer<uint> gReadWriteBuffers[]; // [numWorkgroups][16]
-
 struct PushConstants {
     uint numWorkgroups;
-    uint histogramIndex;
+    uint pad;
+    Ptr<uint, Access::ReadWrite> histograms; // [numWorkgroups][16]
 };
 [[vk::push_constant]] PushConstants p;
 
@@ -23,8 +22,8 @@ void main(uint3 groupThreadId: SV_GroupThreadID)
         for (uint digit = 0; digit < 16; ++digit) {
             for (uint wg = 0; wg < p.numWorkgroups; ++wg) {
                 uint idx = wg * 16 + digit;
-                uint val = gReadWriteBuffers[p.histogramIndex][idx];
-                gReadWriteBuffers[p.histogramIndex][idx] = sum;
+                uint val = p.histograms[idx];
+                p.histograms[idx] = sum;
                 sum += val;
             }
         }

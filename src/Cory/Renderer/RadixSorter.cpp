@@ -110,19 +110,18 @@ radixHistogramTask(RenderTaskBuilder builder,
     auto recorder = pass.begin(renderApi);
     recorder.bindShader(renderApi.ctx->shaders()[histogramShader].shaderHandle());
 
-    const auto keysIndex =
-        renderApi.bindingContext->bindBuffer(keysHandle, BufferBindPoint::StorageBufferReadOnly);
-    const auto histogramIndex = renderApi.bindingContext->bindBuffer(
-        writtenHistograms, BufferBindPoint::StorageBufferReadWrite);
-
-    renderApi.bindingContext->flush();
+    const auto keysResource = renderApi.resources->bufferResource(keysHandle);
+    const auto histogramsResource = renderApi.resources->bufferResource(writtenHistograms);
 
     struct RadixHistogramPushConstants {
         uint32_t numInstances;
         uint32_t bitOffset;
-        uint32_t keysIndex;
-        uint32_t histogramIndex;
-    } pc{instanceCount, bitOffset, keysIndex, histogramIndex};
+        BufferDeviceAddress keys;
+        BufferDeviceAddress histograms;
+    } pc{instanceCount,
+         bitOffset,
+         keysResource.vulkanBuffer->bufferDeviceAddress(),
+         histogramsResource.vulkanBuffer->bufferDeviceAddress()};
 
     renderApi.bindingContext->push(pc);
     recorder.dispatchCompute({workgroups, 1, 1});
@@ -149,15 +148,13 @@ RenderTaskDeclaration<TransientBufferHandle> radixScanTask(RenderTaskBuilder bui
     auto recorder = pass.begin(renderApi);
     recorder.bindShader(renderApi.ctx->shaders()[scanShader].shaderHandle());
 
-    const auto histogramIndex = renderApi.bindingContext->bindBuffer(
-        writtenHistograms, BufferBindPoint::StorageBufferReadWrite);
-
-    renderApi.bindingContext->flush();
+    const auto histogramsResource = renderApi.resources->bufferResource(writtenHistograms);
 
     struct RadixScanPushConstants {
         uint32_t numWorkgroups;
-        uint32_t histogramIndex;
-    } pc{workgroups, histogramIndex};
+        uint32_t pad;
+        BufferDeviceAddress histograms;
+    } pc{workgroups, 0u, histogramsResource.vulkanBuffer->bufferDeviceAddress()};
 
     renderApi.bindingContext->push(pc);
     recorder.dispatchCompute({1, 1, 1});
@@ -195,34 +192,27 @@ RenderTaskDeclaration<ScatterOutput> radixScatterTask(RenderTaskBuilder builder,
     auto recorder = pass.begin(renderApi);
     recorder.bindShader(renderApi.ctx->shaders()[scatterShader].shaderHandle());
 
-    const auto keysIndex =
-        renderApi.bindingContext->bindBuffer(keysIn, BufferBindPoint::StorageBufferReadOnly);
-    const auto indicesIndex =
-        renderApi.bindingContext->bindBuffer(indicesIn, BufferBindPoint::StorageBufferReadOnly);
-    const auto histogramIndex = renderApi.bindingContext->bindBuffer(
-        histogramsHandle, BufferBindPoint::StorageBufferReadOnly);
-    const auto keysOutIndex =
-        renderApi.bindingContext->bindBuffer(writtenKeys, BufferBindPoint::StorageBufferReadWrite);
-    const auto indicesOutIndex = renderApi.bindingContext->bindBuffer(
-        writtenIndices, BufferBindPoint::StorageBufferReadWrite);
-
-    renderApi.bindingContext->flush();
+    const auto keysResource = renderApi.resources->bufferResource(keysIn);
+    const auto indicesResource = renderApi.resources->bufferResource(indicesIn);
+    const auto histogramsResource = renderApi.resources->bufferResource(histogramsHandle);
+    const auto keysOutResource = renderApi.resources->bufferResource(writtenKeys);
+    const auto indicesOutResource = renderApi.resources->bufferResource(writtenIndices);
 
     struct RadixScatterPushConstants {
         uint32_t numInstances;
         uint32_t bitOffset;
-        uint32_t keysIndex;
-        uint32_t indicesIndex;
-        uint32_t histogramIndex;
-        uint32_t keysOutIndex;
-        uint32_t indicesOutIndex;
+        BufferDeviceAddress keys;
+        BufferDeviceAddress indices;
+        BufferDeviceAddress histograms;
+        BufferDeviceAddress keysOut;
+        BufferDeviceAddress indicesOut;
     } pc{instanceCount,
          bitOffset,
-         keysIndex,
-         indicesIndex,
-         histogramIndex,
-         keysOutIndex,
-         indicesOutIndex};
+         keysResource.vulkanBuffer->bufferDeviceAddress(),
+         indicesResource.vulkanBuffer->bufferDeviceAddress(),
+         histogramsResource.vulkanBuffer->bufferDeviceAddress(),
+         keysOutResource.vulkanBuffer->bufferDeviceAddress(),
+         indicesOutResource.vulkanBuffer->bufferDeviceAddress()};
 
     renderApi.bindingContext->push(pc);
     recorder.dispatchCompute({workgroups, 1, 1});

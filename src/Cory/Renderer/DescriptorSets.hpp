@@ -12,7 +12,6 @@ namespace Cory {
 enum class DescriptorSetType : uint32_t {
     GlobalData = 0,
     BindlessTextures = 1,
-    BindlessBuffers = 2,
 };
 
 struct ImageBindPoint {
@@ -28,19 +27,6 @@ struct ImageBindPoint {
         StorageImage2D = 2,
         StorageImage3D = 3,
         Samplers = 4,
-    };
-};
-
-struct BufferBindPoint {
-    uint32_t value;
-    BufferBindPoint(uint32_t v)
-        : value(v)
-    {
-    }
-    constexpr operator uint32_t() const noexcept { return value; }
-    enum Enum : uint32_t {
-        StorageBufferReadOnly = 0,
-        StorageBufferReadWrite = 1,
     };
 };
 
@@ -62,9 +48,6 @@ struct DescriptorSetOptions {
  *      - binding 2: 3D combined image samplers
  *      - binding 3: Read-write storage images (2D)
  *      - binding 4: Read-write storage images (3D)
- *   - Set 2: Bindless Storage Buffers (MAX_BUFFERS entries each):
- *      - binding 0: read-only storage buffers
- *      - binding 1: read-write storage buffers
  *
  * General usage idea is:
  *   - Initialization allocates and initializes the descriptor sets for each frame in flight
@@ -78,7 +61,6 @@ struct DescriptorSetOptions {
 class DescriptorSets : NoCopy {
   public:
     static constexpr size_t MAX_IMAGES = 1024;
-    static constexpr size_t MAX_BUFFERS = 1024;
     static constexpr size_t MAX_SAMPLERS = 1024;
 
     /// by default constructs an uninitialized object - needs an init() call to initialize!
@@ -110,12 +92,6 @@ class DescriptorSets : NoCopy {
     DescriptorSets &write(gsl::index instanceIndex,
                           SamplerHeapIndex samplerIndex,
                           Gpu::TextureSamplerHandle sampler);
-
-    /// Write a buffer pointer to the given bind point & index
-    DescriptorSets &write(BufferBindPoint type,
-                          gsl::index instanceIndex,
-                          BufferHeapIndex bufferIndex,
-                          Gpu::BufferHandle buffer);
 
     /// Access the bind group for the given set type and instance index
     [[nodiscard]] Gpu::BindGroup &get(DescriptorSetType type, gsl::index instanceIndex);

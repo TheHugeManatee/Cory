@@ -20,7 +20,8 @@ struct CubeUBO {
     glm::mat4 view;
     glm::mat4 viewProjection;
     glm::vec3 lightPosition;
-    Cory::BufferHeapIndex bufferIndex;
+    float padding0;
+    Cory::BufferDeviceAddress instances;
 };
 
 struct alignas(16) InstanceData {

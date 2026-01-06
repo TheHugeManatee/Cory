@@ -1,13 +1,3 @@
-struct ViewData
-{
-    float4x4 projection;
-    float4x4 view;
-    float4x4 viewProjection;
-    float3 lightPosition;
-    uint bufferIndex;
-};
-[[vk::push_constant]] ViewData *globals;
-
 struct InstanceData
 {
     float4x4 modelTransform;
@@ -15,7 +5,19 @@ struct InstanceData
     float4 color;
     float4 parameters;
 };
-[[vk::binding(0, 2)]] StructuredBuffer<InstanceData> gReadOnlyBuffers[];
+
+struct ViewData
+{
+    float4x4 projection;
+    float4x4 view;
+    float4x4 viewProjection;
+    float3 lightPosition;
+    float padding0;
+    Ptr<InstanceData, Access::Read> instances;
+};
+[[vk::push_constant]] ViewData *globals;
+
+
 
 struct VSInput
 {
@@ -37,7 +39,7 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    const InstanceData instance = gReadOnlyBuffers[globals->bufferIndex][input.instanceId];
+    const InstanceData instance = globals->instances[input.instanceId];
     const float4 localPosition = float4(input.position, 1.0f);
     const float4x4 normalMatrix = instance.normalTransform;
 

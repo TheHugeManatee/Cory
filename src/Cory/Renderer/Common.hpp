@@ -57,7 +57,6 @@ using CompilationResult = std::expected<ShaderCompilationOutput, CompilationErro
 using BufferDeviceAddress = uint64_t;
 
 using TextureHeapIndex = uint32_t;
-using BufferHeapIndex = uint32_t;
 using SamplerHeapIndex = uint32_t;
 
 // enums

@@ -115,34 +115,31 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     drawData->projection = projectionMatrix;
     drawData->viewProjection = viewProjection;
     drawData->lightPosition = camera_.position;
-    drawData->bufferIndex = 0;
+    drawData->instances = 0;
     renderApi.bindingContext->push(drawData.gpu);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
-    if (instanceCount > 0) {
-        auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
-        auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
-        std::memcpy(
-            mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-        instanceBuffer.buffer.unmap();
-        drawData->bufferIndex = renderApi.bindingContext->bindBuffer(
-            instanceBuffer.buffer.handle(), Cory::BufferBindPoint::StorageBufferReadOnly);
-    }
+    CO_CORE_ASSERT(instanceCount > 0, "No instances to render in CubeRenderSystem!");
+
+    auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
+    auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
+    std::memcpy(
+        mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+    instanceBuffer.buffer.unmap();
+    drawData->instances = instanceBuffer.buffer.bufferDeviceAddress();
 
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
     renderApi.bindingContext->flush();
-    if (instanceCount > 0) {
-        passRecorder.drawIndexed(KDGpu::DrawIndexedCommand{
-            .indexCount = mesh_->indexCount,
-            .instanceCount = instanceCount,
-            .firstIndex = 0,
-            .vertexOffset = 0,
-            .firstInstance = 0,
-        });
-    }
+    passRecorder.drawIndexed(KDGpu::DrawIndexedCommand{
+        .indexCount = mesh_->indexCount,
+        .instanceCount = instanceCount,
+        .firstIndex = 0,
+        .vertexOffset = 0,
+        .firstInstance = 0,
+    });
 
     cubePass.end(std::move(passRecorder));
 }
@@ -161,7 +158,8 @@ InstanceBuffer &CubeRenderSystem::instanceBufferForFrame(uint32_t frameIndex,
         instanceBuffer.buffer = ctx_->device().createBuffer(KDGpu::BufferOptions{
             .label = "SceneGraph Instance Buffer",
             .size = requiredSize,
-            .usage = KDGpu::BufferUsageFlagBits::StorageBufferBit,
+            .usage = KDGpu::BufferUsageFlagBits::StorageBufferBit |
+                     KDGpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
             .memoryUsage = KDGpu::MemoryUsage::CpuToGpu,
         });
         instanceBuffer.capacity = requiredSize;

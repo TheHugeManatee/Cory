@@ -4,7 +4,9 @@ struct CubeUBO
     float4x4 view;
     float4x4 viewProjection;
     float3 lightPosition;
-    uint bufferIndex;
+    float padding0;
+    Ptr<InstanceData, Access::Read> instances;
+
 };
 
 struct InstanceData
@@ -38,7 +40,7 @@ struct VSOutput
 
 VSOutput main(VSInput input)
 {
-    const InstanceData instance = gReadOnlyBuffers[gGlobals->bufferIndex][input.instanceId];
+    const InstanceData instance = gGlobals->instances[input.instanceId];
     const float4 localPosition = float4(input.position, 1.0f);
     const float4x4 normalMatrix = instance.normalToWorld;
 

@@ -87,21 +87,6 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
             .flags = bindGroupLayoutFlags,
         });
 
-    data_->layouts[DescriptorSetType::BindlessBuffers] =
-        device.createBindGroupLayout(Gpu::BindGroupLayoutOptions{
-            .label = fmt::format("{} (BindlessBuffers)", options.label),
-            .bindings =
-                {
-                    makeBinding(BufferBindPoint::StorageBufferReadOnly,
-                                gsl::narrow_cast<uint32_t>(MAX_BUFFERS),
-                                Gpu::ResourceBindingType::StorageBuffer),
-                    makeBinding(BufferBindPoint::StorageBufferReadWrite,
-                                gsl::narrow_cast<uint32_t>(MAX_BUFFERS),
-                                Gpu::ResourceBindingType::StorageBuffer),
-                },
-            .flags = bindGroupLayoutFlags,
-        });
-
     data_->layoutHandles.resize(magic_enum::enum_count<DescriptorSetType>());
     for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
         data_->layoutHandles[static_cast<size_t>(type)] = data_->layouts[type].handle();
@@ -109,9 +94,9 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
 
     data_->bindGroupPool = device.createBindGroupPool(Gpu::BindGroupPoolOptions{
         .label = "Default BindGroupPool",
-        .uniformBufferCount = MAX_FRAMES_IN_FLIGHT,
+        .uniformBufferCount = 0,
         .dynamicUniformBufferCount = 0,
-        .storageBufferCount = gsl::narrow<uint16_t>(MAX_BUFFERS * MAX_FRAMES_IN_FLIGHT),
+        .storageBufferCount = 0,
         .textureSamplerCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
         .textureCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
         .samplerCount = gsl::narrow<uint16_t>(MAX_SAMPLERS),
@@ -200,23 +185,6 @@ DescriptorSets &DescriptorSets::write(gsl::index instanceIndex,
         .resource = Gpu::SamplerBinding{.sampler = sampler},
         .arrayElement = samplerIndex,
     });
-    return *this;
-}
-
-DescriptorSets &DescriptorSets::write(BufferBindPoint type,
-                                      gsl::index instanceIndex,
-                                      BufferHeapIndex bufferIndex,
-                                      Gpu::BufferHandle buffer)
-{
-    CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
-    CO_CORE_ASSERT(bufferIndex < MAX_BUFFERS, "Buffer index out of range");
-
-    data_->pendingWrites[DescriptorSetType::BindlessBuffers][instanceIndex].emplace_back(
-        Gpu::BindGroupEntry{
-            .binding = type,
-            .resource = Gpu::StorageBufferBinding{.buffer = buffer},
-            .arrayElement = bufferIndex,
-        });
     return *this;
 }
 

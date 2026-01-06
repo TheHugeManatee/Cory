@@ -120,26 +120,6 @@ SamplerHeapIndex ShaderBindingContext::bindSampler(Gpu::TextureSamplerHandle sam
     return index;
 }
 
-BufferHeapIndex ShaderBindingContext::bindBuffer(TransientBufferHandle bufferHandle,
-                                                 BufferBindPoint bindPoint)
-{
-    CO_CORE_DEBUG_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
-    return bindBuffer(resources_->buffer(bufferHandle), bindPoint);
-}
-
-BufferHeapIndex ShaderBindingContext::bindBuffer(Gpu::BufferHandle bufferHandle,
-                                                 BufferBindPoint bindPoint)
-{
-    CO_CORE_DEBUG_ASSERT(descriptorSets_ != nullptr,
-                         "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
-    auto &nextIndex = nextBufferIndex(bindPoint);
-    const BufferHeapIndex index = nextIndex++;
-    descriptorSets_->write(bindPoint, instanceIndex_, index, bufferHandle);
-    return index;
-}
-
 void ShaderBindingContext::bind(Gpu::RenderPassCommandRecorder &cmd)
 {
     CO_CORE_ASSERT(std::holds_alternative<std::monostate>(passRecorder_),
@@ -224,17 +204,6 @@ TextureHeapIndex &ShaderBindingContext::nextTextureIndex(ImageBindPoint bindPoin
     CO_CORE_ASSERT(false, "Unknown bind point {}", bindPoint.value);
 }
 
-BufferHeapIndex &ShaderBindingContext::nextBufferIndex(BufferBindPoint bindPoint)
-{
-    switch (bindPoint.value) {
-    case BufferBindPoint::StorageBufferReadOnly:
-        return nextReadOnlyBufferIndex_;
-    case BufferBindPoint::StorageBufferReadWrite:
-        return nextReadWriteBufferIndex_;
-    }
-    CO_CORE_ASSERT(false, "Unknown buffer bind point");
-}
-
 TextureHeapIndex ShaderBindingContext::bindTexture(ImageBindPoint bindPoint,
                                                    Gpu::TextureViewHandle view,
                                                    Gpu::TextureLayout layout,
@@ -254,8 +223,6 @@ void ShaderBindingContext::reset()
     nextTexture3DIndex_ = 0;
     nextStorageImage2DIndex_ = 0;
     nextStorageImage3DIndex_ = 0;
-    nextReadOnlyBufferIndex_ = 0;
-    nextReadWriteBufferIndex_ = 0;
     nextSamplerIndex_ = 0;
 }
 

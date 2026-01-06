@@ -157,7 +157,7 @@ TEST_CASE("Shader binding context: Texture 3D and storage image allocation",
     CHECK(s3 == 0);
 }
 
-TEST_CASE("Shader binding context: Sampler and buffer allocation", "[ShaderBindingContext]")
+TEST_CASE("Shader binding context: Sampler allocation", "[ShaderBindingContext]")
 {
     using namespace Cory;
 
@@ -178,28 +178,4 @@ TEST_CASE("Shader binding context: Sampler and buffer allocation", "[ShaderBindi
     const SamplerHeapIndex s1 = bindingContext.bindSampler(sampler.handle());
     const SamplerHeapIndex s2 = bindingContext.bindSampler(sampler.handle());
     CHECK(s2 > s1);
-
-    auto buffer = tester.ctx().device().createBuffer(Gpu::BufferOptions{
-        .label = "Test Buffer",
-        .size = 256,
-        .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
-        .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
-    });
-
-    const BufferHeapIndex b1 =
-        bindingContext.bindBuffer(buffer.handle(), BufferBindPoint::StorageBufferReadOnly);
-    const BufferHeapIndex b2 =
-        bindingContext.bindBuffer(buffer.handle(), BufferBindPoint::StorageBufferReadOnly);
-    const BufferHeapIndex b3 =
-        bindingContext.bindBuffer(buffer.handle(), BufferBindPoint::StorageBufferReadWrite);
-    const BufferHeapIndex b4 =
-        bindingContext.bindBuffer(buffer.handle(), BufferBindPoint::StorageBufferReadWrite);
-    CHECK(b2 > b1);
-    CHECK(b4 > b3);
-
-    bindingContext.reset();
-
-    const BufferHeapIndex b5 =
-        bindingContext.bindBuffer(buffer.handle(), BufferBindPoint::StorageBufferReadOnly);
-    CHECK(b5 == 0);
 }

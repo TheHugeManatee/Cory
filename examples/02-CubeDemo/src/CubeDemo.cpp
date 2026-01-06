@@ -272,7 +272,8 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto requiredSize = ad.num_cubes * sizeof(InstanceData);
     auto instanceBufferHandle = builder.create("Cube Instance Buffer",
                                                requiredSize,
-                                               Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                               Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                                   Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                                                Cory::Sync::AccessType::VertexShaderReadOther,
                                                Gpu::MemoryUsage::CpuToGpu);
 
@@ -333,7 +334,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     data->projection = projectionMatrix;
     data->viewProjection = viewProjection;
     data->lightPosition = camera_.getCameraPosition();
-    data->bufferIndex = renderApi.bindingContext->bindBuffer(instanceBufferHandle);
+    data->instances = renderApi.resources->deviceAddress(instanceBufferHandle);
     renderApi.bindingContext->push(data.gpu);
 
     // bind the mesh buffers

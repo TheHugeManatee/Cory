@@ -75,13 +75,6 @@ class ShaderBindingContext : NoCopy, NoMove {
 
     [[nodiscard]] SamplerHeapIndex bindSampler(Gpu::TextureSamplerHandle sampler);
 
-    [[nodiscard]] BufferHeapIndex
-    bindBuffer(TransientBufferHandle bufferHandle,
-               BufferBindPoint bindPoint = BufferBindPoint::StorageBufferReadOnly);
-    [[nodiscard]] BufferHeapIndex
-    bindBuffer(Gpu::BufferHandle bufferHandle,
-               BufferBindPoint bindPoint = BufferBindPoint::StorageBufferReadOnly);
-
     void bind(Gpu::RenderPassCommandRecorder &cmd);
     void bind(Gpu::RenderPassCommandRecorder &cmd, Gpu::PipelineLayoutHandle pipelineLayout);
     void bind(Gpu::ComputePassCommandRecorder &cmd);
@@ -105,7 +98,6 @@ class ShaderBindingContext : NoCopy, NoMove {
 
   private:
     TextureHeapIndex &nextTextureIndex(ImageBindPoint bindPoint);
-    BufferHeapIndex &nextBufferIndex(BufferBindPoint bindPoint);
 
     TextureHeapIndex bindTexture(ImageBindPoint bindPoint,
                                  Gpu::TextureViewHandle view,
@@ -130,8 +122,6 @@ class ShaderBindingContext : NoCopy, NoMove {
     TextureHeapIndex nextTexture3DIndex_{0};
     TextureHeapIndex nextStorageImage2DIndex_{0};
     TextureHeapIndex nextStorageImage3DIndex_{0};
-    BufferHeapIndex nextReadOnlyBufferIndex_{0};
-    BufferHeapIndex nextReadWriteBufferIndex_{0};
     SamplerHeapIndex nextSamplerIndex_{0};
 };
 } // namespace Cory

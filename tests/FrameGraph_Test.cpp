@@ -174,7 +174,7 @@ RenderTaskDeclaration<MainOut> mainPass(RenderTaskBuilder builder,
                                         TransientBufferHandle bufferInput)
 {
     auto depthInfo = builder.read(depthInput, Sync::AccessType::DepthStencilAttachmentRead);
-    builder.readWrite(bufferInput, Sync::AccessType::AnyShaderWrite);
+    auto bufferRW = builder.readWrite(bufferInput, Sync::AccessType::AnyShaderWrite);
 
     auto colorOut =
         colorInput

@@ -99,7 +99,7 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     });
     /// vvvv  RENDERING COMMANDS  vvvv
 
-    auto passRecorder = cubePass.begin(*renderApi.cmd);
+    auto passRecorder = cubePass.begin(renderApi);
 
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
     glm::mat4 viewMatrix = camera_.viewMatrix;
@@ -116,15 +116,7 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     drawData->viewProjection = viewProjection;
     drawData->lightPosition = camera_.position;
     drawData->bufferIndex = 0;
-
-    passRecorder.pushConstant(
-        KDGpu::PushConstantRange{
-            .offset = 0,
-            .size = sizeof(Cory::BufferDeviceAddress),
-            .shaderStages = KDGpu::ShaderStageFlagBits::All,
-        },
-        &drawData.gpu,
-        cubePass.pipelineLayoutHandle());
+    renderApi.bindingContext->push(drawData.gpu);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     if (instanceCount > 0) {
@@ -137,12 +129,11 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
             instanceBuffer.buffer.handle(), Cory::BufferBindPoint::StorageBufferReadOnly);
     }
 
-    renderApi.bindingContext->bind(passRecorder);
-
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
+    renderApi.bindingContext->flush();
     if (instanceCount > 0) {
         passRecorder.drawIndexed(KDGpu::DrawIndexedCommand{
             .indexCount = mesh_->indexCount,
@@ -153,7 +144,7 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
         });
     }
 
-    passRecorder.end();
+    cubePass.end(std::move(passRecorder));
 }
 
 InstanceBuffer &CubeRenderSystem::instanceBufferForFrame(uint32_t frameIndex,

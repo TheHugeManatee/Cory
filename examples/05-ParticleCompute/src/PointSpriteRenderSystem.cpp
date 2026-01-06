@@ -264,9 +264,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
 
     auto &instanceBuffer = instanceBufferForFrame(renderApi.frameCtx->inFlightIndex, instanceCount);
     globals->instances = instanceBuffer.buffer.bufferDeviceAddress();
-    globals->sortIndices =
-        renderApi.resources->bufferResource(sortOutput.indices).vulkanBuffer->bufferDeviceAddress();
-    CO_CORE_ASSERT(globals->sortIndices != 0 && globals->instances != 0, "Invalid BDAs");
+    globals->sortIndices = renderApi.resources->deviceAddress(sortOutput.indices);
 
     auto passRecorder = spritePass.begin(renderApi);
     renderApi.bindingContext->flush();

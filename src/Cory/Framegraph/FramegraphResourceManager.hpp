@@ -87,6 +87,7 @@ class FramegraphResourceManager : NoCopy {
     [[nodiscard]] Gpu::BufferHandle buffer(FramegraphBufferHandle handle) const;
 
     [[nodiscard]] GpuBufferResource bufferResource(FramegraphBufferHandle handle) const;
+    [[nodiscard]] BufferDeviceAddress deviceAddress(FramegraphBufferHandle handle) const;
     [[nodiscard]] BufferState state(FramegraphBufferHandle handle) const;
 
     void clear();

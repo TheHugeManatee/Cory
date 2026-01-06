@@ -296,6 +296,16 @@ GpuBufferResource FramegraphResourceManager::bufferResource(FramegraphBufferHand
     CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
     return {resourceHandle, resource};
 }
+BufferDeviceAddress FramegraphResourceManager::deviceAddress(FramegraphBufferHandle handle) const
+{
+    auto resourceHandle = data_->bufferResources_[handle].buffer;
+    auto resource = data_->ctx_->resources().getBuffer(resourceHandle);
+    CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
+
+    auto address = resource->bufferDeviceAddress();
+    CO_CORE_ASSERT(address != 0, "Queried Buffer device address for buffer is zero");
+    return address;
+}
 
 BufferState FramegraphResourceManager::state(FramegraphBufferHandle handle) const
 {

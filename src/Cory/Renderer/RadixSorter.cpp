@@ -110,9 +110,6 @@ radixHistogramTask(RenderTaskBuilder builder,
     auto recorder = pass.begin(renderApi);
     recorder.bindShader(renderApi.ctx->shaders()[histogramShader].shaderHandle());
 
-    const auto keysResource = renderApi.resources->bufferResource(keysHandle);
-    const auto histogramsResource = renderApi.resources->bufferResource(writtenHistograms);
-
     struct RadixHistogramPushConstants {
         uint32_t numInstances;
         uint32_t bitOffset;
@@ -120,8 +117,8 @@ radixHistogramTask(RenderTaskBuilder builder,
         BufferDeviceAddress histograms;
     } pc{instanceCount,
          bitOffset,
-         keysResource.vulkanBuffer->bufferDeviceAddress(),
-         histogramsResource.vulkanBuffer->bufferDeviceAddress()};
+         renderApi.resources->deviceAddress(keysHandle),
+         renderApi.resources->deviceAddress(writtenHistograms)};
 
     renderApi.bindingContext->push(pc);
     recorder.dispatchCompute({workgroups, 1, 1});
@@ -148,13 +145,11 @@ RenderTaskDeclaration<TransientBufferHandle> radixScanTask(RenderTaskBuilder bui
     auto recorder = pass.begin(renderApi);
     recorder.bindShader(renderApi.ctx->shaders()[scanShader].shaderHandle());
 
-    const auto histogramsResource = renderApi.resources->bufferResource(writtenHistograms);
-
     struct RadixScanPushConstants {
         uint32_t numWorkgroups;
         uint32_t pad;
         BufferDeviceAddress histograms;
-    } pc{workgroups, 0u, histogramsResource.vulkanBuffer->bufferDeviceAddress()};
+    } pc{workgroups, 0u, renderApi.resources->deviceAddress(writtenHistograms)};
 
     renderApi.bindingContext->push(pc);
     recorder.dispatchCompute({1, 1, 1});
@@ -192,12 +187,6 @@ RenderTaskDeclaration<ScatterOutput> radixScatterTask(RenderTaskBuilder builder,
     auto recorder = pass.begin(renderApi);
     recorder.bindShader(renderApi.ctx->shaders()[scatterShader].shaderHandle());
 
-    const auto keysResource = renderApi.resources->bufferResource(keysIn);
-    const auto indicesResource = renderApi.resources->bufferResource(indicesIn);
-    const auto histogramsResource = renderApi.resources->bufferResource(histogramsHandle);
-    const auto keysOutResource = renderApi.resources->bufferResource(writtenKeys);
-    const auto indicesOutResource = renderApi.resources->bufferResource(writtenIndices);
-
     struct RadixScatterPushConstants {
         uint32_t numInstances;
         uint32_t bitOffset;
@@ -208,11 +197,11 @@ RenderTaskDeclaration<ScatterOutput> radixScatterTask(RenderTaskBuilder builder,
         BufferDeviceAddress indicesOut;
     } pc{instanceCount,
          bitOffset,
-         keysResource.vulkanBuffer->bufferDeviceAddress(),
-         indicesResource.vulkanBuffer->bufferDeviceAddress(),
-         histogramsResource.vulkanBuffer->bufferDeviceAddress(),
-         keysOutResource.vulkanBuffer->bufferDeviceAddress(),
-         indicesOutResource.vulkanBuffer->bufferDeviceAddress()};
+         renderApi.resources->deviceAddress(keysIn),
+         renderApi.resources->deviceAddress(indicesIn),
+         renderApi.resources->deviceAddress(histogramsHandle),
+         renderApi.resources->deviceAddress(writtenKeys),
+         renderApi.resources->deviceAddress(writtenIndices)};
 
     renderApi.bindingContext->push(pc);
     recorder.dispatchCompute({workgroups, 1, 1});

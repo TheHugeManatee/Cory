@@ -109,6 +109,8 @@ set(CORY_SOURCES
         Renderer/Context.hpp
         Renderer/DescriptorSets.cpp
         Renderer/DescriptorSets.hpp
+        Renderer/FrameGenerator.cpp
+        Renderer/FrameGenerator.hpp
         Renderer/FrameContext.hpp
         Renderer/FrameResourceLifetimeHelper.hpp
         Renderer/Gpu.cpp

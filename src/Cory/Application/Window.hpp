@@ -4,6 +4,7 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Primitives.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/FrameGenerator.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <kdbindings/property.h>
@@ -35,6 +36,7 @@ class Window : NoCopy, NoMove {
 
     [[nodiscard]] FrameContext nextSwapchainImage();
     void submitAndPresent(FrameContext &frameCtx);
+    [[nodiscard]] FrameGenerator frames();
 
     /// pixel format of the offscreen color images
     [[nodiscard]] Gpu::Format colorFormat() const noexcept;
@@ -45,7 +47,8 @@ class Window : NoCopy, NoMove {
      * This signal is emitted whenever the swapchain is resized and the application should
      * create new, appropriately sized resources.
      *
-     * It is called from within `nextSwapchainImage()` if a swapchain resize event is detected.
+     * It is called from within `nextSwapchainImage()` or `frames()` if a swapchain resize event is
+     * detected.
      */
     KDBindings::Signal<SwapchainResizedEvent> onSwapchainResized;
 
@@ -72,6 +75,8 @@ class Window : NoCopy, NoMove {
 
   private:
     void createWindow();
+    FrameContext acquireFrameContext();
+    cppcoro::generator<FrameContext> frameGenerator();
     // Format the title out of the current window title and some stats/metadata
     void updateTitle();
 

@@ -116,12 +116,10 @@ void DynamicPipelineApplication::run()
     auto finalSync = gsl::finally([this]() { ctx().device().waitUntilIdle(); });
     double currentTime = getElapsedTimeSeconds();
 
-    while (!window_->shouldClose()) {
+    for (auto &frameCtx : window_->frames()) {
         processEvents();
         // Process any file changes - triggers e.g. shader reloads
         ctx().fileWatchManager().processPendingEvents();
-
-        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
         ctx().shaders().clearDeferredReleases(frameCtx.frameNumber);
 
@@ -141,7 +139,6 @@ void DynamicPipelineApplication::run()
         }
 
         recordCommands(frameCtx);
-        window_->submitAndPresent(frameCtx);
 
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
             break;

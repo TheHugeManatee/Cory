@@ -434,4 +434,22 @@ void Swapchain::present(FrameContext &fc)
     data_->present(fc);
 }
 
+cppcoro::generator<FrameContext> Swapchain::frameGenerator()
+{
+    while (true) {
+        auto nextImageResult = nextImage();
+        if (!nextImageResult.has_value()) {
+            co_return;
+        }
+
+        co_yield std::move(nextImageResult).value();
+    }
+}
+
+FrameGenerator Swapchain::frames()
+{
+    return FrameGenerator{frameGenerator(),
+                          [this](FrameContext &frameCtx) { data_->present(frameCtx); }};
+}
+
 } // namespace Cory

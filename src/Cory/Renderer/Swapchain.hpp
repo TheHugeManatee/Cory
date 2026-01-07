@@ -2,6 +2,7 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/FrameGenerator.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <KDGpu/gpu_core.h>
@@ -76,7 +77,15 @@ class Swapchain {
      */
     void present(FrameContext &frameCtx);
 
+    /**
+     * Coroutine-based frame generator that acquires frames and automatically submits/presents
+     * when advancing to the next frame or when the generator is destroyed.
+     */
+    [[nodiscard]] FrameGenerator frames();
+
   private:
+    cppcoro::generator<FrameContext> frameGenerator();
+
     friend struct SwapchainPrivate;
     std::unique_ptr<SwapchainPrivate> data_;
 };

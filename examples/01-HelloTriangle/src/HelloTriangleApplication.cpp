@@ -143,12 +143,10 @@ void HelloTriangleApplication::run()
 
     auto time = getElapsedTimeSeconds();
 
-    while (!window_->shouldClose()) {
+    for (auto &frameCtx : window_->frames()) {
 
         // Process KDGui events
         processEvents(0);
-
-        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
 
         // Update time
         auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
@@ -165,8 +163,6 @@ void HelloTriangleApplication::run()
         //drawImguiControls();
 
         recordCommands(frameCtx);
-
-        window_->submitAndPresent(frameCtx);
 
         // break if number of frames to render are reached
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }

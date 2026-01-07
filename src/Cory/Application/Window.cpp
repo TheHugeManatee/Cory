@@ -118,56 +118,60 @@ Swapchain &Window::swapchain()
 FrameContext Window::nextSwapchainImage()
 {
     const ScopeTimer s{"Window/NextSwapchainImage"};
+    return acquireFrameContext();
+}
 
-    auto nextImageResult = data_->swapchain->nextImage();
-    auto dims = dimensions();
-    if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
-        auto error = nextImageResult.error();
-        if (error == SwapchainError::Unknown) {
-            throw std::runtime_error(fmt::format(
-                "Failed to acquire next swapchain image for window '{}': {}", title(), error));
+FrameContext Window::acquireFrameContext()
+{
+    while (true) {
+        auto nextImageResult = data_->swapchain->nextImage();
+        auto dims = dimensions();
+        if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
+            auto error = nextImageResult.error();
+            if (error == SwapchainError::Unknown) {
+                throw std::runtime_error(fmt::format(
+                    "Failed to acquire next swapchain image for window '{}': {}", title(), error));
+            }
+
+            // wait until the surface dimensions are non-zero - this might happen
+            // while the app is minimized or the window has been resized to zero height
+            // or width, in which case we don't render anything
+            // do {
+            //     glfwPollEvents();
+            //     // VkSurfaceCapabilitiesKHR capabilities{};
+            //     // data_->ctx->instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
+            //     //     data_->ctx->physicalDevice(), surface_, &capabilities);
+            //     // size = {capabilities.currentExtent.width, capabilities.currentExtent.height};
+            //     std::this_thread::yield();
+            // } while (dimensions().x == 0 || dimensions().y == 0);
+
+            glfwGetWindowSize(data_->window.get(), &dims.x, &dims.y);
+            dimensions = dims;
+
+            // Hard sync to make sure no commands are in flight before recreating the swapchain
+            data_->ctx->device().waitUntilIdle();
+            // recreate the necessary resized resources and notify client code via
+            // the onSwaphcainResized callback
+            data_->swapchain.reset();
+            CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dims);
+            data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
+                                                           data_->surface,
+                                                           SwapchainCreateInfo{
+                                                               .label = title(),
+                                                               .size = dims,
+                                                               .samples = samples(),
+                                                           });
+            onSwapchainResized.emit(SwapchainResizedEvent{.size{dims}});
+
+            continue;
         }
 
-        // wait until the surface dimensions are non-zero - this might happen
-        // while the app is minimized or the window has been resized to zero height
-        // or width, in which case we don't render anything
-        // do {
-        //     glfwPollEvents();
-        //     // VkSurfaceCapabilitiesKHR capabilities{};
-        //     // data_->ctx->instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
-        //     //     data_->ctx->physicalDevice(), surface_, &capabilities);
-        //     // size = {capabilities.currentExtent.width, capabilities.currentExtent.height};
-        //     std::this_thread::yield();
-        // } while (dimensions().x == 0 || dimensions().y == 0);
-
-        glfwGetWindowSize(data_->window.get(), &dims.x, &dims.y);
-        dimensions = dims;
-
-        // Hard sync to make sure no commands are in flight before recreating the swapchain
-        data_->ctx->device().waitUntilIdle();
-        // recreate the necessary resized resources and notify client code via
-        // the onSwaphcainResized callback
-        data_->swapchain.reset();
-        CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dims);
-        data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
-                                                       data_->surface,
-                                                       SwapchainCreateInfo{
-                                                           .label = title(),
-                                                           .size = dims,
-                                                           .samples = samples(),
-                                                       });
-        onSwapchainResized.emit(SwapchainResizedEvent{.size{dims}});
-
-        // retry the whole thing
-        return nextSwapchainImage();
+        FrameContext frameCtx = std::move(nextImageResult).value();
+        CO_CORE_TRACE("Acquired swapchain image {} for frame {}",
+                      frameCtx.swapchainImageIndex,
+                      frameCtx.frameNumber);
+        return frameCtx;
     }
-
-    FrameContext frameCtx = std::move(nextImageResult).value();
-    CO_CORE_TRACE("Acquired swapchain image {} for frame {}",
-                  frameCtx.swapchainImageIndex,
-                  frameCtx.frameNumber);
-
-    return frameCtx;
 }
 
 void Window::submitAndPresent(FrameContext &frameCtx)
@@ -187,6 +191,24 @@ Gpu::Format Window::colorFormat() const noexcept
 Gpu::Format Window::depthFormat() const noexcept
 {
     return data_->swapchain->depthFormat();
+}
+
+cppcoro::generator<FrameContext> Window::frameGenerator()
+{
+    while (!shouldClose()) {
+        auto frameCtx = acquireFrameContext();
+        co_yield std::move(frameCtx);
+    }
+}
+
+FrameGenerator Window::frames()
+{
+    return FrameGenerator{frameGenerator(), [this](FrameContext &frameCtx) {
+                              data_->swapchain->present(frameCtx);
+                              if (data_->fpsCounter.lap()) {
+                                  updateTitle();
+                              }
+                          }};
 }
 
 gsl::not_null<GLFWwindow *> Window::getGlfwWindow() const

@@ -181,7 +181,7 @@ void SceneGraphDemoApplication::run()
     });
 
     auto time = Cory::AppClock::now();
-    while (!window_->shouldClose()) {
+    for (auto &frameCtx : window_->frames()) {
         processEvents(0);
 
         // Update time
@@ -199,7 +199,6 @@ void SceneGraphDemoApplication::run()
         auto tickInfo = clock_.tick();
         systems_.tick(sceneGraph_, tickInfo);
 
-        Cory::FrameContext frameCtx = window_->nextSwapchainImage();
         Cory::Framegraph &fg = framegraphs[frameCtx.inFlightIndex];
         // retire old resources from the last time this framegraph was
         // used - our frame synchronization ensures that the resources
@@ -209,8 +208,6 @@ void SceneGraphDemoApplication::run()
         defineRenderPasses(fg, frameCtx);
 
         auto execInfo = fg.record(frameCtx);
-
-        window_->submitAndPresent(frameCtx);
 
         if (dumpNextFramegraph_) {
             CO_APP_INFO(fg.dump(execInfo));

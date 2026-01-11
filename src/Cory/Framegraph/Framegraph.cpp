@@ -8,6 +8,7 @@
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/sort.hpp>

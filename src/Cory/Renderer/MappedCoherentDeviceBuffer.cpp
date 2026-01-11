@@ -5,6 +5,7 @@
 
 #include <KDGpu/vulkan/vulkan_adapter.h>
 #include <KDGpu/vulkan/vulkan_device.h>
+#include <KDGpu/vulkan/vulkan_graphics_api.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 #include <vulkan/vulkan.h>
@@ -53,16 +54,16 @@ void setDebugName(KDGpu::VulkanDevice *device,
 } // namespace
 
 MappedCoherentDeviceBuffer::MappedCoherentDeviceBuffer(
-    Context &ctx, const MappedCoherentDeviceBufferCreateInfo &info)
+    Gpu::Device &device, const MappedCoherentDeviceBufferCreateInfo &info)
 {
     if (info.size == 0) {
         CO_CORE_ERROR("MappedCoherentDeviceBuffer: size must be non-zero.");
         return;
     }
 
-    auto &resourceManager = ctx.resources();
-    auto *vulkanDevice = resourceManager.getDevice(ctx.device().handle());
-    CO_CORE_ASSERT(vulkanDevice, "MappedCoherentDeviceBuffer: Vulkan device was null.");
+    auto &resourceManager = *device.graphicsApi()->resourceManager();
+    auto *vulkanDevice = resourceManager.getDevice(device.handle());
+    CO_CORE_DEBUG_ASSERT(vulkanDevice, "MappedCoherentDeviceBuffer: Vulkan device was null.");
 
     auto *adapter = resourceManager.getAdapter(vulkanDevice->adapterHandle);
     CO_CORE_ASSERT(adapter, "MappedCoherentDeviceBuffer: Vulkan adapter was null.");
@@ -86,9 +87,9 @@ MappedCoherentDeviceBuffer::MappedCoherentDeviceBuffer(
     VkMemoryRequirements memoryRequirements{};
     vkGetBufferMemoryRequirements(device_, buffer_, &memoryRequirements);
 
-    constexpr VkMemoryPropertyFlags requiredFlags =
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    constexpr VkMemoryPropertyFlags requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+                                                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
     memoryTypeIndex_ =
         findMemoryType(adapter->physicalDevice, memoryRequirements.memoryTypeBits, requiredFlags);

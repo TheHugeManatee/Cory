@@ -20,7 +20,8 @@ struct MappedCoherentDeviceBufferCreateInfo {
 class MappedCoherentDeviceBuffer : NoCopy {
   public:
     MappedCoherentDeviceBuffer() = default;
-    MappedCoherentDeviceBuffer(Context &ctx, const MappedCoherentDeviceBufferCreateInfo &info);
+    MappedCoherentDeviceBuffer(Gpu::Device &device,
+                               const MappedCoherentDeviceBufferCreateInfo &info);
     ~MappedCoherentDeviceBuffer();
 
     MappedCoherentDeviceBuffer(MappedCoherentDeviceBuffer &&rhs) noexcept;

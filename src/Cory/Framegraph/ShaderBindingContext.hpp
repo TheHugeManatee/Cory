@@ -41,43 +41,34 @@ class ShaderBindingContext : NoCopy, NoMove {
 
     ~ShaderBindingContext();
 
+    // clang-format off
+    [[nodiscard]] TextureHeapIndex bindTexture2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+    [[nodiscard]] TextureHeapIndex bindTexture2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+
+    [[nodiscard]] TextureHeapIndex bindTexture3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+    [[nodiscard]] TextureHeapIndex bindTexture3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+
+    [[nodiscard]] TextureHeapIndex bindStorageImage2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
+
+    [[nodiscard]] TextureHeapIndex bindStorageImage3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
+
+    [[nodiscard]] SamplerHeapIndex bindSampler(Gpu::TextureSamplerHandle sampler);
+    // clang-format on
+
+    void bind(Gpu::RenderPassCommandRecorder &cmd);
+    void bind(Gpu::RenderPassCommandRecorder &cmd, Gpu::PipelineLayoutHandle pipelineLayout);
+    void bind(Gpu::ComputePassCommandRecorder &cmd);
+    void unbind();
+
+    /// Allocate a temp allocation in the per-draw data buffer
     template <typename T>
     GpuAllocation<T> alloc(size_t count = 1)
         requires std::is_trivially_constructible_v<T>
     {
         return allocator_.alloc<T>(count);
     }
-
-    [[nodiscard]] TextureHeapIndex bindTexture2D(TransientTextureHandle textureHandle,
-                                                 Gpu::TextureLayout layout,
-                                                 Gpu::TextureSamplerHandle sampler = {});
-    [[nodiscard]] TextureHeapIndex bindTexture2D(Gpu::TextureViewHandle view,
-                                                 Gpu::TextureLayout layout,
-                                                 Gpu::TextureSamplerHandle sampler = {});
-
-    [[nodiscard]] TextureHeapIndex bindTexture3D(TransientTextureHandle textureHandle,
-                                                 Gpu::TextureLayout layout,
-                                                 Gpu::TextureSamplerHandle sampler = {});
-    [[nodiscard]] TextureHeapIndex bindTexture3D(Gpu::TextureViewHandle view,
-                                                 Gpu::TextureLayout layout,
-                                                 Gpu::TextureSamplerHandle sampler = {});
-
-    [[nodiscard]] TextureHeapIndex bindStorageImage2D(TransientTextureHandle textureHandle,
-                                                      Gpu::TextureLayout layout);
-    [[nodiscard]] TextureHeapIndex bindStorageImage2D(Gpu::TextureViewHandle view,
-                                                      Gpu::TextureLayout layout);
-
-    [[nodiscard]] TextureHeapIndex bindStorageImage3D(TransientTextureHandle textureHandle,
-                                                      Gpu::TextureLayout layout);
-    [[nodiscard]] TextureHeapIndex bindStorageImage3D(Gpu::TextureViewHandle view,
-                                                      Gpu::TextureLayout layout);
-
-    [[nodiscard]] SamplerHeapIndex bindSampler(Gpu::TextureSamplerHandle sampler);
-
-    void bind(Gpu::RenderPassCommandRecorder &cmd);
-    void bind(Gpu::RenderPassCommandRecorder &cmd, Gpu::PipelineLayoutHandle pipelineLayout);
-    void bind(Gpu::ComputePassCommandRecorder &cmd);
-    void unbind();
 
     /// Push a push constant value
     template <typename T>
@@ -105,13 +96,13 @@ class ShaderBindingContext : NoCopy, NoMove {
 
     bool isDirty_{false};
     Gpu::Device *device_;
-    Gpu::Buffer perDrawDataBuffer_;
+    std::unique_ptr<MappedCoherentDeviceBuffer> perDrawDataBuffer_;
     GpuBumpAllocator allocator_;
     FramegraphResourceManager *resources_;
     DescriptorSets *descriptorSets_;
     uint32_t instanceIndex_;
 
-    std::variant<std::monostate,                   //
+    std::variant<std::monostate, //
                  Gpu::RenderPassCommandRecorder *,
                  Gpu::ComputePassCommandRecorder *>
         passRecorder_;

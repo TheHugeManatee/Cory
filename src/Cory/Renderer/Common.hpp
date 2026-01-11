@@ -36,6 +36,7 @@ struct SwapchainSupportDetails;
 struct FrameContext;
 class Swapchain;
 class DescriptorSets;
+class MappedCoherentDeviceBuffer;
 class GpuBumpAllocator;
 
 class SlangCompiler;
@@ -111,7 +112,6 @@ template <typename T = std::byte> struct GpuAllocation {
     T &operator[](size_t index) { return cpu[index]; }
     T *operator->() { return cpu; }
 };
-
 
 } // namespace Cory
 

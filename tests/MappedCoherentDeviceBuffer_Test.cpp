@@ -15,7 +15,7 @@ TEST_CASE("MappedCoherentDeviceBuffer basic allocation", "[Cory/Renderer]")
     auto &ctx = tester.ctx();
 
     Cory::MappedCoherentDeviceBuffer buffer{
-        ctx,
+        ctx.device(),
         Cory::MappedCoherentDeviceBufferCreateInfo{
             .label = "MappedCoherentDeviceBuffer Test",
             .size = 1024,
@@ -33,7 +33,7 @@ TEST_CASE("MappedCoherentDeviceBuffer basic allocation", "[Cory/Renderer]")
     data[0] = 0xDEADBEEF;
     CHECK(data[0] == 0xDEADBEEF);
 
-    auto b = Cory::MappedCoherentDeviceBuffer(ctx,
+    auto b = Cory::MappedCoherentDeviceBuffer(ctx.device(),
                                               Cory::MappedCoherentDeviceBufferCreateInfo{
                                                   .label = "Test Buffer",
                                                   .size = 2ull * 1024 * 1024 * 1024, /* 2 GiB */

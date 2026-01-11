@@ -162,7 +162,6 @@ struct RenderInput {
     FrameContext *frameCtx{};
     FramegraphResourceManager *resources{};
     ShaderBindingContext *bindingContext{};
-    GpuBumpAllocator *bumpAllocator{};
     CommandRecorder *cmd{};
 };
 

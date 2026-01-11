@@ -3,6 +3,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
+#include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 
 #include <KDGpu/buffer.h>
 #include <KDGpu/buffer_options.h>
@@ -12,15 +13,17 @@
 namespace Cory {
 
 namespace {
-Gpu::Buffer createPerDrawDataBuffer(Gpu::Device &device, size_t size)
+std::unique_ptr<MappedCoherentDeviceBuffer> createPerDrawDataBuffer(Gpu::Device &device,
+                                                                    size_t size)
 {
-    using enum Gpu::BufferUsageFlagBits;
-    return device.createBuffer(KDGpu::BufferOptions{
-        .label = "ShaderBindingContext Per-Draw Data Buffer",
-        .size = size,
-        .usage = ShaderDeviceAddressBit | StorageBufferBit,
-        .memoryUsage = Gpu::MemoryUsage::CpuToGpu,
-    });
+    return std::make_unique<MappedCoherentDeviceBuffer>(
+        device,
+        MappedCoherentDeviceBufferCreateInfo{
+            .label = "ShaderBindingContext Per-Draw Data Buffer",
+            .size = size,
+            .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+
+        });
 }
 } // namespace
 
@@ -31,11 +34,7 @@ ShaderBindingContext::ShaderBindingContext(Gpu::Device &device,
                                            size_t drawDataBufferSize)
     : device_{&device}
     , perDrawDataBuffer_(createPerDrawDataBuffer(device, drawDataBufferSize))
-    , allocator_(GpuAllocation{
-          .cpu = static_cast<std::byte *>(perDrawDataBuffer_.map()),
-          .gpu = perDrawDataBuffer_.bufferDeviceAddress(),
-          .size = drawDataBufferSize,
-      })
+    , allocator_(GpuAllocation{perDrawDataBuffer_->allocation()})
     , resources_(&resources)
     , descriptorSets_(&descriptorSets)
     , instanceIndex_(instanceIndex)
@@ -58,6 +57,7 @@ TextureHeapIndex ShaderBindingContext::bindTexture2D(Gpu::TextureViewHandle view
                                                      Gpu::TextureLayout layout,
                                                      Gpu::TextureSamplerHandle sampler)
 {
+    CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
     isDirty_ = true;
     return bindTexture(ImageBindPoint::Texture2D, view, layout, sampler);
 }
@@ -66,8 +66,8 @@ TextureHeapIndex ShaderBindingContext::bindTexture3D(TransientTextureHandle text
                                                      Gpu::TextureLayout layout,
                                                      Gpu::TextureSamplerHandle sampler)
 {
-    isDirty_ = true;
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::Texture3D, resources_->imageView(textureHandle), layout, sampler);
 }
@@ -76,6 +76,7 @@ TextureHeapIndex ShaderBindingContext::bindTexture3D(Gpu::TextureViewHandle view
                                                      Gpu::TextureLayout layout,
                                                      Gpu::TextureSamplerHandle sampler)
 {
+    CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
     isDirty_ = true;
     return bindTexture(ImageBindPoint::Texture3D, view, layout, sampler);
 }
@@ -92,6 +93,7 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage2D(TransientTextureHandle
 TextureHeapIndex ShaderBindingContext::bindStorageImage2D(Gpu::TextureViewHandle view,
                                                           Gpu::TextureLayout layout)
 {
+    CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
     isDirty_ = true;
     return bindTexture(ImageBindPoint::StorageImage2D, view, layout, {});
 }
@@ -108,6 +110,7 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage3D(TransientTextureHandle
 TextureHeapIndex ShaderBindingContext::bindStorageImage3D(Gpu::TextureViewHandle view,
                                                           Gpu::TextureLayout layout)
 {
+    CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
     isDirty_ = true;
     return bindTexture(ImageBindPoint::StorageImage3D, view, layout, {});
 }

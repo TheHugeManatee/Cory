@@ -28,9 +28,14 @@ class MappedCoherentDeviceBuffer : NoCopy {
 
     [[nodiscard]] bool isValid() const { return buffer_ != VK_NULL_HANDLE; }
     [[nodiscard]] VkBuffer buffer() const { return buffer_; }
-    [[nodiscard]] void *mappedData() const { return mapped_; }
-    [[nodiscard]] VkDeviceSize size() const { return size_; }
-    [[nodiscard]] BufferDeviceAddress deviceAddress() const { return deviceAddress_; }
+    [[nodiscard]] GpuAllocation<std::byte> allocation() const
+    {
+        return GpuAllocation<std::byte>{
+            .cpu = static_cast<std::byte *>(mapped_),
+            .gpu = deviceAddress_,
+            .size = size_,
+        };
+    }
 
   private:
     void reset() noexcept;

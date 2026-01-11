@@ -1,11 +1,12 @@
 #include "TestUtils.hpp"
 
+#include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <Cory/Base/Log.hpp>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
+
 #include <cstdint>
 
 TEST_CASE("MappedCoherentDeviceBuffer basic allocation", "[Cory/Renderer]")
@@ -23,11 +24,12 @@ TEST_CASE("MappedCoherentDeviceBuffer basic allocation", "[Cory/Renderer]")
     };
 
     REQUIRE(buffer.isValid());
-    CHECK(buffer.size() == 1024);
-    REQUIRE(buffer.mappedData() != nullptr);
-    CHECK(buffer.deviceAddress() != 0);
+    auto allocation = buffer.allocation();
+    CHECK(allocation.size == 1024);
+    REQUIRE(allocation.cpu != nullptr);
+    CHECK(allocation.gpu != 0);
 
-    auto *data = static_cast<std::uint32_t *>(buffer.mappedData());
+    auto *data = reinterpret_cast<std::uint32_t *>(allocation.cpu);
     data[0] = 0xDEADBEEF;
     CHECK(data[0] == 0xDEADBEEF);
 

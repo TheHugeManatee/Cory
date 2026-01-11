@@ -36,6 +36,7 @@ struct SwapchainSupportDetails;
 struct FrameContext;
 class Swapchain;
 class DescriptorSets;
+class GpuBumpAllocator;
 
 class SlangCompiler;
 using SpirvByteCode = std::vector<uint32_t>;
@@ -101,6 +102,16 @@ using MemoryFlags = BitField<MemoryFlagBits>;
 
 using ShaderHandle = PrivateTypedHandle<Shader, ShaderManager>;
 static_assert(std::movable<ShaderHandle> && std::copyable<ShaderHandle>);
+
+template <typename T = std::byte> struct GpuAllocation {
+    T *cpu;                  // pointer to the mapped (first) element
+    BufferDeviceAddress gpu; // GPU address in bytes
+    size_t size;             // The number of allocated T elements (NOT the bytes)
+
+    T &operator[](size_t index) { return cpu[index]; }
+    T *operator->() { return cpu; }
+};
+
 
 } // namespace Cory
 

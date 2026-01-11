@@ -3,7 +3,6 @@
 #include <Cory/Framegraph/Common.hpp>
 
 #include <Cory/Base/Utils.hpp>
-#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/GpuBumpAllocator.hpp>

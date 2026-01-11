@@ -117,6 +117,8 @@ set(CORY_SOURCES
         Renderer/Gpu.hpp
         Renderer/GpuBumpAllocator.cpp
         Renderer/GpuBumpAllocator.hpp
+        Renderer/MappedCoherentDeviceBuffer.cpp
+        Renderer/MappedCoherentDeviceBuffer.hpp
         Renderer/PipelineCache.cpp
         Renderer/PipelineCache.hpp
         Renderer/RadixSorter.cpp

@@ -7,16 +7,12 @@
 namespace Cory {
 
 template <typename T = uint8_t> struct GpuAllocation {
-    T *cpu;
-    BufferDeviceAddress gpu;
-    size_t size;
+    T *cpu;                  // pointer to the mapped (first) element
+    BufferDeviceAddress gpu; // GPU address in bytes
+    size_t size;             // The number of allocated T elements (NOT the bytes)
 
-    T& operator[](size_t index) {
-        return cpu[index];
-    }
-    T* operator->() {
-        return cpu;
-    }
+    T &operator[](size_t index) { return cpu[index]; }
+    T *operator->() { return cpu; }
 };
 
 /**
@@ -26,7 +22,7 @@ template <typename T = uint8_t> struct GpuAllocation {
  * bump allocation within that region.
  */
 class GpuBumpAllocator {
-public:
+  public:
     explicit GpuBumpAllocator(GpuAllocation<uint8_t> baseAllocation);
 
     constexpr size_t alignRoundUp(size_t offset, size_t alignment)
@@ -50,7 +46,7 @@ public:
 
     void reset() { offset_ = 0; }
 
-private:
+  private:
     GpuAllocation<uint8_t> baseAllocation_;
     size_t offset_{0};
 };

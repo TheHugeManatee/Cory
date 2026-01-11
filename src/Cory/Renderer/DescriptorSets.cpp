@@ -94,7 +94,7 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
 
     data_->bindGroupPool = device.createBindGroupPool(Gpu::BindGroupPoolOptions{
         .label = "Default BindGroupPool",
-        .uniformBufferCount = 0,
+        .uniformBufferCount = 1,
         .dynamicUniformBufferCount = 0,
         .storageBufferCount = 0,
         .textureSamplerCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),

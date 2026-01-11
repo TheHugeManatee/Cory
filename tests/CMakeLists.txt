@@ -50,6 +50,7 @@ add_library(Cory_TestLib OBJECT
         Locked_Test.cpp
         RadixSort_Test.cpp
         ShaderBindingContext_Test.cpp
+        MappedCoherentDeviceBuffer_Test.cpp
 )
 
 target_include_directories(Cory_TestLib PRIVATE ${CMAKE_SOURCE_DIR}/examples/05-ParticleCompute/src)

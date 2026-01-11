@@ -34,7 +34,7 @@ struct FramegraphPrivate {
         : ctx{&ctx_param}
         , resources{ctx_param}
         , shaderBindingContext{
-              ctx->device(), resources, ctx->descriptors(), instanceIndex, 2 * 1024 * 1024}
+              ctx->device(), resources, ctx->descriptors(), instanceIndex, 200 * 1024 * 1024}
     {
     }
 

@@ -266,14 +266,6 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     auto [writtenDepthHandle, depthInfo] =
         builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
-    auto requiredSize = ad.num_cubes * sizeof(InstanceData);
-    auto instanceBufferHandle = builder.create("Cube Instance Buffer",
-                                               requiredSize,
-                                               Gpu::BufferUsageFlagBits::StorageBufferBit |
-                                                   Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
-                                               Cory::Sync::AccessType::VertexShaderReadOther,
-                                               Gpu::MemoryUsage::CpuToGpu);
-
     auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
         .name = "PASS_Cubes",
         .shaders = {vertexShader_, fragmentShader_},
@@ -315,15 +307,11 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
 
     const uint32_t instanceCount = prepareInstanceData(t);
-    if (instanceCount > 0) {
-        auto [bufferHandle, instanceBuffer] =
-            renderApi.resources->bufferResource(instanceBufferHandle);
-        auto *mapped = static_cast<std::byte *>(instanceBuffer->map());
-        std::memcpy(mapped,
-                    instanceData_.data(),
-                    static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-        instanceBuffer->unmap();
-    }
+    CO_CORE_ASSERT(instanceCount > 0, "No instances to render!");
+
+    auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
+    std::memcpy(
+        alloc.cpu, instanceData_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
 
     // update the per-frame data
     auto data = renderApi.bindingContext->alloc<CubeUBO>();
@@ -331,7 +319,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     data->projection = projectionMatrix;
     data->viewProjection = viewProjection;
     data->lightPosition = camera_.getCameraPosition();
-    data->instances = renderApi.resources->deviceAddress(instanceBufferHandle);
+    data->instances = alloc.gpu;
     renderApi.bindingContext->push(data.gpu);
 
     // bind the mesh buffers
@@ -339,16 +327,15 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
     renderApi.bindingContext->flush();
-    if (instanceCount > 0) {
-        // draw all instances in a single call
-        passRecorder.drawIndexed(Gpu::DrawIndexedCommand{
-            .indexCount = mesh_->indexCount,
-            .instanceCount = instanceCount,
-            .firstIndex = 0,
-            .vertexOffset = 0,
-            .firstInstance = 0,
-        });
-    }
+
+    // draw all instances in a single call
+    passRecorder.drawIndexed(Gpu::DrawIndexedCommand{
+        .indexCount = mesh_->indexCount,
+        .instanceCount = instanceCount,
+        .firstIndex = 0,
+        .vertexOffset = 0,
+        .firstInstance = 0,
+    });
 
     cubePass.end(std::move(passRecorder));
 }

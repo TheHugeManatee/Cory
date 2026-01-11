@@ -5,7 +5,6 @@
 #include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 
-#include <KDGpu/buffer.h>
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/device.h>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>

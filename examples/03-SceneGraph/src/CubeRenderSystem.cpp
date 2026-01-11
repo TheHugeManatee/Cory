@@ -7,7 +7,6 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
-#include <KDGpu/buffer_options.h>
 #include <KDGpu/gpu_core.h>
 
 #include <cstddef>
@@ -107,8 +106,6 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
         Cory::makePerspective(camera_.fovy, aspect, camera_.nearPlane, camera_.farPlane);
     glm::mat4 viewProjection = projectionMatrix * viewMatrix;
 
-    Cory::FrameContext &frameCtx = *renderApi.frameCtx;
-
     // update the uniform buffer
     auto drawData = renderApi.bindingContext->alloc<CubeUBO>();
     drawData->view = viewMatrix;
@@ -120,13 +117,10 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     CO_CORE_ASSERT(instanceCount > 0, "No instances to render in CubeRenderSystem!");
-
-    auto &instanceBuffer = instanceBufferForFrame(frameCtx.inFlightIndex, instanceCount);
-    auto *mapped = static_cast<std::byte *>(instanceBuffer.buffer.map());
+    auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
     std::memcpy(
-        mapped, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-    instanceBuffer.buffer.unmap();
-    drawData->instances = instanceBuffer.buffer.bufferDeviceAddress();
+        alloc.cpu, renderState_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+    drawData->instances = alloc.gpu;
 
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
@@ -142,28 +136,4 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     });
 
     cubePass.end(std::move(passRecorder));
-}
-
-InstanceBuffer &CubeRenderSystem::instanceBufferForFrame(uint32_t frameIndex,
-                                                         uint32_t instanceCount)
-{
-    if (instanceBuffers_.size() <= frameIndex) {
-        instanceBuffers_.resize(frameIndex + 1);
-    }
-
-    const KDGpu::DeviceSize requiredSize =
-        static_cast<KDGpu::DeviceSize>(instanceCount) * sizeof(InstanceData);
-    auto &instanceBuffer = instanceBuffers_[frameIndex];
-    if (!instanceBuffer.buffer.isValid() || instanceBuffer.capacity < requiredSize) {
-        instanceBuffer.buffer = ctx_->device().createBuffer(KDGpu::BufferOptions{
-            .label = "SceneGraph Instance Buffer",
-            .size = requiredSize,
-            .usage = KDGpu::BufferUsageFlagBits::StorageBufferBit |
-                     KDGpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
-            .memoryUsage = KDGpu::MemoryUsage::CpuToGpu,
-        });
-        instanceBuffer.capacity = requiredSize;
-    }
-
-    return instanceBuffer;
 }

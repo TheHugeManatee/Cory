@@ -65,7 +65,7 @@ class ShaderBindingContext : NoCopy, NoMove {
     /// Allocate a temp allocation in the per-draw data buffer
     template <typename T>
     GpuAllocation<T> alloc(size_t count = 1)
-        requires std::is_trivially_constructible_v<T>
+        //requires std::is_trivially_constructible_v<T>
     {
         return allocator_.alloc<T>(count);
     }

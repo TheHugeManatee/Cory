@@ -244,6 +244,7 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
 
         // one latch per iteration, to synchronize all producers finishing their loop
         std::barrier iteration_barrier(cfg.NUM_PRODUCERS + cfg.NUM_CONSUMERS);
+        std::barrier consumers_drained(cfg.NUM_CONSUMERS);
         std::barrier consumers_done(cfg.NUM_PRODUCERS + cfg.NUM_CONSUMERS);
         std::atomic<size_t> producersActive{0};
 
@@ -300,6 +301,8 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
 
                     // producers have stopped setting signals, so we can drain the rest
                     drain_signals();
+
+                    consumers_drained.arrive_and_wait();
 
                     // all producers should now be done for this iteration, so we can do some
                     // single-threaded validity checks

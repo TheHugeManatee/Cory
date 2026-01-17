@@ -8,8 +8,10 @@
 
 #include <cppcoro/coroutine.hpp>
 
+#include <optional>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace Cory {
 /**
@@ -117,12 +119,22 @@ class RenderTaskBuilder : NoCopy {
               Gpu::BufferUsageFlags usage,
               Sync::AccessType readWriteAccess);
 
+    struct DeclaredRenderPass {
+        TransientRenderPass pass;
+        std::vector<TransientTextureHandle> colorOutputs;
+        std::optional<TransientTextureHandle> depthOutput;
+        std::optional<TransientTextureHandle> stencilOutput;
+    };
+
     /**
      * Declares a render pass and its attachments.
      * @param passDeclaration   the declaration of the pass
      * @return a builder class to set up the render pass. call finish() to obtain the pass object
      */
     TransientRenderPass declareRenderPass(RenderPassDeclaration passDeclaration);
+
+    /// Declares a render pass and registers implicit attachment dependencies.
+    DeclaredRenderPass declareRenderPassWithOutputs(RenderPassDeclaration passDeclaration);
 
     TransientComputePass declareComputePass(ComputePassDeclaration passDeclaration);
 
@@ -147,6 +159,9 @@ class RenderTaskBuilder : NoCopy {
     /// naming prefix and can be used to compose larger render tasks and benefit from the
     /// synchronization.
     [[nodiscard]] RenderTaskBuilder subtask(std::string_view name) const;
+
+    [[nodiscard]] const TextureInfo &textureInfo(TransientTextureHandle handle) const;
+    [[nodiscard]] const BufferInfo &bufferInfo(TransientBufferHandle handle) const;
 
   private:
     Context &ctx_;

@@ -170,14 +170,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     Gpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
-    auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget,
-                      Gpu::TextureUsageFlagBits::ColorAttachmentBit,
-                      Sync::AccessType::ColorAttachmentWrite);
-    auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget,
-                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
-                      Sync::AccessType::DepthStencilAttachmentWrite);
+    const auto &colorInfo = builder.textureInfo(colorTarget);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     CO_CORE_ASSERT(instanceCount > 0, "Invalid instance count");
@@ -208,7 +201,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                                   Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                               Sync::AccessType::ComputeShaderWrite);
 
-    auto spritePass = builder.declareRenderPass(RenderPassDeclaration{
+    auto declaredPass = builder.declareRenderPassWithOutputs(RenderPassDeclaration{
         .name = "PASS_PointSprites",
         .options = PassOptionFlagBits::DisableMeshInput,
         .shaders = {vertexShader_, fragmentShader_},
@@ -232,6 +225,9 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                           .depthTest = DepthTest::Less,
                           .depthWrite = DepthWrite::Disabled},
     });
+    auto spritePass = std::move(declaredPass.pass);
+    const auto colorOut = declaredPass.colorOutputs.front();
+    const auto depthOut = declaredPass.depthOutput.value();
 
     auto predicateTask = pointSpriteSortPreprocessTask(
         builder.subtask("PointSpriteSortPreprocess"),
@@ -249,10 +245,8 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                                           Sync::AccessType::VertexShaderReadOther);
 
     /// ^^^^     DECLARATION      ^^^^
-    RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
-        .colorOut = writtenColorHandle,
-        .depthOut = writtenDepthHandle,
-    });
+    RenderInput renderApi =
+        co_await builder.finishDeclaration(PassOutputs{.colorOut = colorOut, .depthOut = depthOut});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);

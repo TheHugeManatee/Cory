@@ -127,21 +127,12 @@ void DepthDebugLayer::onUpdate(const LogicUpdateContext &updateCtx)
 RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBuilder builder,
                                                                     LayerPassOutputs previousLayer)
 {
-    auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(previousLayer.color,
-                          Gpu::TextureUsageFlagBits::ColorAttachmentBit,
-                          Sync::AccessType::ColorAttachmentReadWrite);
-    (void)colorInfo;
-    builder.read(previousLayer.depth,
-                 Gpu::TextureUsageFlagBits::SampledBit,
-                 Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
-
-    auto depthDebugPass = builder.declareRenderPass(RenderPassDeclaration{
+    auto declaredPass = builder.declareRenderPassWithOutputs(RenderPassDeclaration{
         .name = "PASS_DepthDebug",
         .options = PassOptionFlagBits::DisableMeshInput,
         .shaders = {state_->fullscreenTriShader, state_->depthDebugShader},
         .attachments = {{
-            .target = writtenColorHandle,
+            .target = previousLayer.color,
             .load = Gpu::AttachmentLoadOperation::Load,
             .store = Gpu::AttachmentStoreOperation::Store,
             .clearColor = {},
@@ -151,10 +142,16 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                           .depthTest = DepthTest::Disabled,
                           .depthWrite = DepthWrite::Disabled},
     });
+    const auto colorOut = declaredPass.colorOutputs.front();
+    auto depthDebugPass = std::move(declaredPass.pass);
+
+    builder.read(previousLayer.depth,
+                 Gpu::TextureUsageFlagBits::SampledBit,
+                 Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     /// ^^^^     DECLARATION      ^^^^
     RenderInput renderApi = co_await builder.finishDeclaration(
-        LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth});
+        LayerPassOutputs{.color = colorOut, .depth = previousLayer.depth});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     FramegraphResourceManager &resources = *renderApi.resources;

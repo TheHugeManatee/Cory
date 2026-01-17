@@ -4,7 +4,31 @@
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 
+#include <optional>
+
 namespace Cory {
+namespace {
+std::optional<TransientTextureHandle>
+findWriteDependency(const std::vector<RenderTaskInfo::TextureDependency> &dependencies,
+                    FramegraphTextureHandle texture)
+{
+    for (const auto &dependency : dependencies) {
+        const auto kind = dependency.kind;
+        if (dependency.handle.texture() != texture) continue;
+        if (kind.is_set(TaskDependencyKindBits::Write) ||
+            kind.is_set(TaskDependencyKindBits::ReadWrite) ||
+            kind.is_set(TaskDependencyKindBits::CreateWrite)) {
+            return dependency.handle;
+        }
+    }
+    return std::nullopt;
+}
+
+bool shouldReadAttachment(Gpu::AttachmentLoadOperation loadOp)
+{
+    return loadOp == Gpu::AttachmentLoadOperation::Load;
+}
+} // namespace
 
 RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
                                      Framegraph &framegraph,
@@ -169,6 +193,95 @@ TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration p
     return TransientRenderPass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
 }
 
+RenderTaskBuilder::DeclaredRenderPass
+RenderTaskBuilder::declareRenderPassWithOutputs(RenderPassDeclaration passDeclaration)
+{
+    DeclaredRenderPass declared{
+        .pass = TransientRenderPass{ctx_, framegraph_.resources(), RenderPassDeclaration{}},
+    };
+
+    declared.colorOutputs.reserve(passDeclaration.attachments.size());
+    for (auto &attachment : passDeclaration.attachments) {
+        const auto existing =
+            findWriteDependency(info_.textureDependencies, attachment.target.texture());
+        TransientTextureHandle outputHandle{};
+        if (existing.has_value()) {
+            outputHandle = *existing;
+        }
+        else if (shouldReadAttachment(attachment.load)) {
+            outputHandle =
+                readWrite(attachment.target,
+                          Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                          Sync::AccessType::ColorAttachmentReadWrite)
+                    .first;
+        }
+        else {
+            outputHandle =
+                write(attachment.target,
+                      Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                      Sync::AccessType::ColorAttachmentWrite)
+                    .first;
+        }
+        attachment.target = outputHandle;
+        declared.colorOutputs.push_back(outputHandle);
+    }
+
+    if (passDeclaration.depthAttachment.has_value()) {
+        auto &depthAttachment = passDeclaration.depthAttachment.value();
+        const auto existing =
+            findWriteDependency(info_.textureDependencies, depthAttachment.target.texture());
+        TransientTextureHandle outputHandle{};
+        if (existing.has_value()) {
+            outputHandle = *existing;
+        }
+        else if (shouldReadAttachment(depthAttachment.load)) {
+            outputHandle =
+                readWrite(depthAttachment.target,
+                          Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                          Sync::AccessType::DepthStencilAttachmentReadWrite)
+                    .first;
+        }
+        else {
+            outputHandle =
+                write(depthAttachment.target,
+                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                      Sync::AccessType::DepthStencilAttachmentWrite)
+                    .first;
+        }
+        depthAttachment.target = outputHandle;
+        declared.depthOutput = outputHandle;
+    }
+
+    if (passDeclaration.stencilAttachment.has_value()) {
+        auto &stencilAttachment = passDeclaration.stencilAttachment.value();
+        const auto existing =
+            findWriteDependency(info_.textureDependencies, stencilAttachment.target.texture());
+        TransientTextureHandle outputHandle{};
+        if (existing.has_value()) {
+            outputHandle = *existing;
+        }
+        else if (shouldReadAttachment(stencilAttachment.load)) {
+            outputHandle =
+                readWrite(stencilAttachment.target,
+                          Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                          Sync::AccessType::DepthStencilAttachmentReadWrite)
+                    .first;
+        }
+        else {
+            outputHandle =
+                write(stencilAttachment.target,
+                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                      Sync::AccessType::DepthStencilAttachmentWrite)
+                    .first;
+        }
+        stencilAttachment.target = outputHandle;
+        declared.stencilOutput = outputHandle;
+    }
+
+    declared.pass = TransientRenderPass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
+    return declared;
+}
+
 TransientComputePass RenderTaskBuilder::declareComputePass(ComputePassDeclaration passDeclaration)
 {
     return TransientComputePass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
@@ -178,5 +291,15 @@ RenderTaskBuilder RenderTaskBuilder::subtask(std::string_view name) const
 {
     auto subtask_name = fmt::format("{}::{}", info_.name, name);
     return {ctx_, framegraph_, subtask_name};
+}
+
+const TextureInfo &RenderTaskBuilder::textureInfo(TransientTextureHandle handle) const
+{
+    return framegraph_.resources().info(handle.texture());
+}
+
+const BufferInfo &RenderTaskBuilder::bufferInfo(TransientBufferHandle handle) const
+{
+    return framegraph_.resources().info(handle.buffer());
 }
 } // namespace Cory

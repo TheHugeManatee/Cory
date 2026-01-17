@@ -288,16 +288,9 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Gpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
-    auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget,
-                      Gpu::TextureUsageFlagBits::ColorAttachmentBit,
-                      Cory::Sync::AccessType::ColorAttachmentWrite);
-    auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget,
-                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
-                      Cory::Sync::AccessType::DepthStencilAttachmentWrite);
+    const auto &colorInfo = builder.textureInfo(colorTarget);
 
-    auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
+    auto declaredPass = builder.declareRenderPassWithOutputs(Cory::RenderPassDeclaration{
         .name = "PASS_Cubes",
         .shaders = {vertexShader_, fragmentShader_},
         .attachments = {{
@@ -319,12 +312,13 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         .vertexOptions = vertexOptions(),
         .dynamicStates = {.cullMode = Cory::CullMode::None},
     });
+    auto cubePass = std::move(declaredPass.pass);
+    const auto colorOut = declaredPass.colorOutputs.front();
+    const auto depthOut = declaredPass.depthOutput.value();
 
     /// ^^^^     DECLARATION      ^^^^
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
-        .colorOut = writtenColorHandle,
-        .depthOut = writtenDepthHandle,
-    });
+    Cory::RenderInput renderApi =
+        co_await builder.finishDeclaration(PassOutputs{.colorOut = colorOut, .depthOut = depthOut});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());

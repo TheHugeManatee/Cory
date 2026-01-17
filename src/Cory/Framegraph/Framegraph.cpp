@@ -531,6 +531,33 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
         }
     }
 
+    std::unordered_map<FramegraphTextureHandle, Gpu::TextureUsageFlags> textureUsage;
+    std::unordered_map<FramegraphBufferHandle, Gpu::BufferUsageFlags> bufferUsage;
+
+    auto mergeTextureUsage = [&](const RenderTaskInfo::TextureDependency &dependency) {
+        textureUsage[dependency.handle.texture()] |= dependency.usage;
+    };
+    auto mergeBufferUsage = [&](const RenderTaskInfo::BufferDependency &dependency) {
+        bufferUsage[dependency.handle.buffer()] |= dependency.usage;
+    };
+
+    for (const auto &task : requiredTasks) {
+        const auto &taskInfo = data_->renderTasks[task];
+        for (const auto &dependency : taskInfo.textureDependencies) {
+            mergeTextureUsage(dependency);
+        }
+        for (const auto &dependency : taskInfo.bufferDependencies) {
+            mergeBufferUsage(dependency);
+        }
+    }
+
+    for (const auto &[handle, usage] : textureUsage) {
+        data_->resources.extendUsage(handle, usage);
+    }
+    for (const auto &[handle, usage] : bufferUsage) {
+        data_->resources.extendUsage(handle, usage);
+    }
+
     std::unordered_map<RenderTaskHandle, std::unordered_set<RenderTaskHandle>> adjacency;
     std::unordered_map<RenderTaskHandle, size_t> indegree;
     for (const auto &task : requiredTasks) {

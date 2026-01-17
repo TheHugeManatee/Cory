@@ -55,7 +55,7 @@ struct TextureInfo {
     std::string name;
     glm::u32vec3 size;
     Gpu::Format format;
-    Gpu::TextureUsageFlags usage;
+    Gpu::TextureUsageFlags usage{};
     Gpu::SampleCountFlagBits sampleCount{Gpu::SampleCountFlagBits::Samples1Bit};
 };
 

@@ -48,6 +48,7 @@ class FramegraphResourceManager : NoCopy {
                                              Gpu::TextureViewHandle resourceView);
 
     void allocate(const std::vector<FramegraphTextureHandle> &handles);
+    void extendUsage(FramegraphTextureHandle handle, Gpu::TextureUsageFlags usage);
 
     /**
      * @brief create a synchronization barrier object to sync subsequent reads
@@ -76,6 +77,7 @@ class FramegraphResourceManager : NoCopy {
     registerExternal(BufferInfo info, Sync::AccessType lastWriteAccess, Gpu::BufferHandle resource);
 
     void allocate(const std::vector<FramegraphBufferHandle> &handles);
+    void extendUsage(FramegraphBufferHandle handle, Gpu::BufferUsageFlags usage);
 
     /**
      * @brief create a synchronization barrier object to sync subsequent reads

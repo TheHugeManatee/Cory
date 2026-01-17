@@ -110,12 +110,7 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
         .depth = gsl::narrow<uint32_t>(res.info.size.z),
     };
 
-    // TODO: we should eventually infer the usage from the graph, not hardcode it here
-    Gpu::TextureUsageFlags usage = res.info.usage;
-    usage |= isDepthFormat(res.info.format) ? Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit
-                                            : Gpu::TextureUsageFlagBits::ColorAttachmentBit;
-    usage |= Gpu::TextureUsageFlagBits::SampledBit;
-    usage |= Gpu::TextureUsageFlagBits::InputAttachmentBit;
+    const auto usage = res.info.usage;
 
     // Create the texture (image)
     res.image = resources.createTexture(
@@ -161,6 +156,12 @@ void FramegraphResourceManager::allocate(const std::vector<FramegraphTextureHand
 
         allocate(handle);
     }
+}
+
+void FramegraphResourceManager::extendUsage(FramegraphTextureHandle handle,
+                                         Gpu::TextureUsageFlags usage)
+{
+    data_->textureResources_[handle].info.usage |= usage;
 }
 
 Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextureHandle handle,
@@ -277,6 +278,12 @@ void FramegraphResourceManager::allocate(const std::vector<FramegraphBufferHandl
 
         allocate(handle);
     }
+}
+
+void FramegraphResourceManager::extendUsage(FramegraphBufferHandle handle,
+                                         Gpu::BufferUsageFlags usage)
+{
+    data_->bufferResources_[handle].info.usage |= usage;
 }
 
 Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBufferHandle handle,

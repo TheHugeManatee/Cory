@@ -21,6 +21,7 @@ RenderTaskBuilder::~RenderTaskBuilder() {}
 TransientTextureHandle RenderTaskBuilder::create(std::string name,
                                                  glm::u32vec3 size,
                                                  TextureFormat format,
+                                                 Gpu::TextureUsageFlags usage,
                                                  Sync::AccessType writeAccess)
 {
     const TextureInfo info{.name = std::move(name), .size = size, .format = format};
@@ -30,6 +31,7 @@ TransientTextureHandle RenderTaskBuilder::create(std::string name,
     info_.textureDependencies.push_back(RenderTaskInfo::TextureDependency{
         .kind = TaskDependencyKindBits::CreateWrite,
         .handle = handle,
+        .usage = usage,
         .access = writeAccess,
     });
     return handle;
@@ -43,7 +45,6 @@ TransientBufferHandle RenderTaskBuilder::create(std::string name,
 {
     const BufferInfo info{.name = std::move(name),
                           .size = size,
-                          .usage = usage,
                           .memoryUsage = memoryUsage};
 
     auto handle = TransientBufferHandle{framegraph_.resources().declareBuffer(info)};
@@ -51,46 +52,63 @@ TransientBufferHandle RenderTaskBuilder::create(std::string name,
     info_.bufferDependencies.push_back(RenderTaskInfo::BufferDependency{
         .kind = TaskDependencyKindBits::CreateWrite,
         .handle = handle,
+        .usage = usage,
         .access = writeAccess,
     });
     return handle;
 }
 
-TextureInfo RenderTaskBuilder::read(TransientTextureHandle handle, Sync::AccessType readAccess)
+TextureInfo RenderTaskBuilder::read(TransientTextureHandle handle,
+                                    Gpu::TextureUsageFlags usage,
+                                    Sync::AccessType readAccess)
 {
     info_.textureDependencies.push_back(RenderTaskInfo::TextureDependency{
-        .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
+        .kind = TaskDependencyKindBits::Read,
+        .handle = handle,
+        .usage = usage,
+        .access = readAccess});
     return framegraph_.resources().info(handle.texture());
 }
 
-BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle, Sync::AccessType readAccess)
+BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle,
+                                   Gpu::BufferUsageFlags usage,
+                                   Sync::AccessType readAccess)
 {
     info_.bufferDependencies.push_back(RenderTaskInfo::BufferDependency{
-        .kind = TaskDependencyKindBits::Read, .handle = handle, .access = readAccess});
+        .kind = TaskDependencyKindBits::Read,
+        .handle = handle,
+        .usage = usage,
+        .access = readAccess});
     return framegraph_.resources().info(handle.buffer());
 }
 
 std::pair<TransientTextureHandle, TextureInfo>
-RenderTaskBuilder::write(TransientTextureHandle handle, Sync::AccessType writeAccess)
+RenderTaskBuilder::write(TransientTextureHandle handle,
+                         Gpu::TextureUsageFlags usage,
+                         Sync::AccessType writeAccess)
 {
     // increase the version of the texture handle to record the modification
     auto outputHandle = handle + 1;
     info_.textureDependencies.push_back({
         .kind = TaskDependencyKindBits::Write,
         .handle = outputHandle,
+        .usage = usage,
         .access = writeAccess,
     });
 
     return {outputHandle, framegraph_.resources().info(outputHandle.texture())};
 }
 
-std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::write(TransientBufferHandle handle,
-                                                                      Sync::AccessType writeAccess)
+std::pair<TransientBufferHandle, BufferInfo>
+RenderTaskBuilder::write(TransientBufferHandle handle,
+                         Gpu::BufferUsageFlags usage,
+                         Sync::AccessType writeAccess)
 {
     auto outputHandle = handle + 1;
     info_.bufferDependencies.push_back({
         .kind = TaskDependencyKindBits::Write,
         .handle = outputHandle,
+        .usage = usage,
         .access = writeAccess,
     });
 
@@ -98,11 +116,14 @@ std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::write(TransientB
 }
 
 std::pair<TransientTextureHandle, TextureInfo>
-RenderTaskBuilder::readWrite(TransientTextureHandle handle, Sync::AccessType readWriteAccess)
+RenderTaskBuilder::readWrite(TransientTextureHandle handle,
+                             Gpu::TextureUsageFlags usage,
+                             Sync::AccessType readWriteAccess)
 {
     info_.textureDependencies.push_back({
         .kind = TaskDependencyKindBits::Read,
         .handle = handle,
+        .usage = usage,
         .access = readWriteAccess,
     });
 
@@ -112,6 +133,7 @@ RenderTaskBuilder::readWrite(TransientTextureHandle handle, Sync::AccessType rea
     info_.textureDependencies.push_back({
         .kind = TaskDependencyKindBits::ReadWrite,
         .handle = outputHandle,
+        .usage = usage,
         .access = readWriteAccess,
     });
 
@@ -119,11 +141,14 @@ RenderTaskBuilder::readWrite(TransientTextureHandle handle, Sync::AccessType rea
 }
 
 std::pair<TransientBufferHandle, BufferInfo>
-RenderTaskBuilder::readWrite(TransientBufferHandle handle, Sync::AccessType readWriteAccess)
+RenderTaskBuilder::readWrite(TransientBufferHandle handle,
+                             Gpu::BufferUsageFlags usage,
+                             Sync::AccessType readWriteAccess)
 {
     info_.bufferDependencies.push_back({
         .kind = TaskDependencyKindBits::Read,
         .handle = handle,
+        .usage = usage,
         .access = readWriteAccess,
     });
 
@@ -132,6 +157,7 @@ RenderTaskBuilder::readWrite(TransientBufferHandle handle, Sync::AccessType read
     info_.bufferDependencies.push_back({
         .kind = TaskDependencyKindBits::ReadWrite,
         .handle = outputHandle,
+        .usage = usage,
         .access = readWriteAccess,
     });
 

@@ -67,9 +67,13 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     KDGpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
     auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
+        builder.write(colorTarget,
+                      Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                      Cory::Sync::AccessType::ColorAttachmentWrite);
     auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
+        builder.write(depthTarget,
+                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                      Cory::Sync::AccessType::DepthStencilAttachmentWrite);
 
     auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
         .name = "PASS_Cubes",

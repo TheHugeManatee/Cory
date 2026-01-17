@@ -11,9 +11,12 @@ RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
                                                       TransientTextureHandle sourceImage,
                                                       TransientTextureHandle targetImage)
 {
-    auto colorInfo = builder.read(sourceImage, Sync::AccessType::TransferRead);
+    auto colorInfo = builder.read(
+        sourceImage, Gpu::TextureUsageFlagBits::TransferSrcBit, Sync::AccessType::TransferRead);
     auto [outputWriteHandle, swapchainInfo] =
-        builder.write(targetImage, Sync::AccessType::TransferWrite);
+        builder.write(targetImage,
+                      Gpu::TextureUsageFlagBits::TransferDstBit,
+                      Sync::AccessType::TransferWrite);
 
     RenderInput renderApi = co_await builder.finishDeclaration(outputWriteHandle);
 

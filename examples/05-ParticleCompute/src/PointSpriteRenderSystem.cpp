@@ -58,7 +58,10 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
                               uint32_t instanceCount)
 {
     auto [writtenSortKeys, sortKeysInfo] =
-        builder.write(sortKeys, Cory::Sync::AccessType::ComputeShaderWrite);
+        builder.write(sortKeys,
+                      Gpu::BufferUsageFlagBits::StorageBufferBit |
+                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                      Cory::Sync::AccessType::ComputeShaderWrite);
     (void)sortKeysInfo;
     auto predicatePass = builder.declareComputePass(Cory::ComputePassDeclaration{
         .name = "PASS_PointSpriteSortPreprocess",
@@ -168,9 +171,13 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
     auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget, Sync::AccessType::ColorAttachmentWrite);
+        builder.write(colorTarget,
+                      Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                      Sync::AccessType::ColorAttachmentWrite);
     auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget, Sync::AccessType::DepthStencilAttachmentWrite);
+        builder.write(depthTarget,
+                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                      Sync::AccessType::DepthStencilAttachmentWrite);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     CO_CORE_ASSERT(instanceCount > 0, "Invalid instance count");
@@ -237,8 +244,9 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         instanceCount);
 
     sortOutput = sorter_.sort(builder, predicateTask.output(), instanceCount);
-    auto sortedIndicesInfo =
-        builder.read(sortOutput.indices, Sync::AccessType::VertexShaderReadOther);
+    auto sortedIndicesInfo = builder.read(sortOutput.indices,
+                                          Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                          Sync::AccessType::VertexShaderReadOther);
 
     /// ^^^^     DECLARATION      ^^^^
     RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{

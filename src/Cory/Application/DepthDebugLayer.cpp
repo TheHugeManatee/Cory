@@ -128,9 +128,12 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                                                                     LayerPassOutputs previousLayer)
 {
     auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentReadWrite);
+        builder.readWrite(previousLayer.color,
+                          Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                          Sync::AccessType::ColorAttachmentReadWrite);
     (void)colorInfo;
     builder.read(previousLayer.depth,
+                 Gpu::TextureUsageFlagBits::SampledBit,
                  Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     auto depthDebugPass = builder.declareRenderPass(RenderPassDeclaration{

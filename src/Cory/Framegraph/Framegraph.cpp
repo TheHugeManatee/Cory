@@ -55,6 +55,327 @@ struct FramegraphPrivate {
     bool hasRecordedFrame{};
 };
 
+
+namespace {
+struct ResolveLookups {
+    std::unordered_map<TransientTextureHandle, RenderTaskHandle> textureToTask;
+    std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskTextureInputs;
+    std::unordered_map<TransientTextureHandle, TextureInfo> textures;
+    std::unordered_map<TransientBufferHandle, RenderTaskHandle> bufferToTask;
+    std::unordered_multimap<RenderTaskHandle, TransientBufferHandle> taskBufferInputs;
+    std::unordered_map<TransientBufferHandle, BufferInfo> buffers;
+};
+
+struct RequiredSets {
+    std::vector<FramegraphTextureHandle> requiredResources;
+    std::vector<FramegraphBufferHandle> requiredBuffers;
+    std::unordered_set<FramegraphTextureHandle> requiredResourceSet;
+    std::unordered_set<FramegraphBufferHandle> requiredBufferSet;
+    std::unordered_set<RenderTaskHandle> requiredTasks;
+    std::unordered_set<TransientTextureHandle> resolvedTextures;
+    std::unordered_set<TransientBufferHandle> resolvedBuffers;
+};
+
+struct TaskOrder {
+    std::vector<RenderTaskHandle> tasks;
+    std::unordered_map<RenderTaskHandle, std::unordered_set<RenderTaskHandle>> adjacency;
+    std::unordered_map<RenderTaskHandle, size_t> indegree;
+};
+
+// Build lookup tables for writers, pure-read inputs, and resource info.
+ResolveLookups buildResolveLookups(const FramegraphPrivate &data)
+{
+    ResolveLookups lookups;
+    for (const auto &[taskHandle, taskInfo] : data.renderTasks.items()) {
+        for (const RenderTaskInfo::TextureDependency &dependency : taskInfo.textureDependencies) {
+            const auto kind = dependency.kind;
+            if (kind.is_set(TaskDependencyKindBits::Read) &&
+                !kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.taskTextureInputs.insert({taskHandle, dependency.handle});
+            }
+            if (kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.textureToTask[dependency.handle] = taskHandle;
+            }
+            lookups.textures[dependency.handle] = data.resources.info(dependency.handle);
+        }
+        for (const RenderTaskInfo::BufferDependency &dependency : taskInfo.bufferDependencies) {
+            const auto kind = dependency.kind;
+            if (kind.is_set(TaskDependencyKindBits::Read) &&
+                !kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.taskBufferInputs.insert({taskHandle, dependency.handle});
+            }
+            if (kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.bufferToTask[dependency.handle] = taskHandle;
+            }
+            lookups.buffers[dependency.handle] = data.resources.info(dependency.handle);
+        }
+    }
+    return lookups;
+}
+
+// Traverse dependencies from requested outputs to collect required tasks/resources.
+bool collectRequired(const FramegraphPrivate &data,
+                     const ResolveLookups &lookups,
+                     const std::vector<TransientTextureHandle> &requestedResources,
+                     RequiredSets &required)
+{
+    auto appendCreatedResources = [&](const RenderTaskInfo &taskInfo) {
+        for (const RenderTaskInfo::TextureDependency &created :
+             taskInfo.textureDependencies | ranges::views::filter([](const auto &outputDesc) {
+                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+             })) {
+            if (required.requiredResourceSet.insert(created.handle).second) {
+                required.requiredResources.push_back(created.handle);
+            }
+        }
+        for (const RenderTaskInfo::BufferDependency &created :
+             taskInfo.bufferDependencies | ranges::views::filter([](const auto &outputDesc) {
+                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
+             })) {
+            if (required.requiredBufferSet.insert(created.handle).second) {
+                required.requiredBuffers.push_back(created.handle);
+            }
+        }
+    };
+
+    auto recordTextureHandle = [&](TransientTextureHandle handle) {
+        if (!required.resolvedTextures.insert(handle).second) return false;
+        if (required.requiredResourceSet.insert(handle).second) {
+            required.requiredResources.push_back(handle);
+        }
+        return true;
+    };
+
+    auto recordBufferHandle = [&](TransientBufferHandle handle) {
+        if (!required.resolvedBuffers.insert(handle).second) return false;
+        if (required.requiredBufferSet.insert(handle).second) {
+            required.requiredBuffers.push_back(handle);
+        }
+        return true;
+    };
+
+    std::deque<TransientTextureHandle> nextTexturesToResolve{requestedResources.cbegin(),
+                                                             requestedResources.cend()};
+    std::deque<TransientBufferHandle> nextBuffersToResolve;
+    while (!nextTexturesToResolve.empty() || !nextBuffersToResolve.empty()) {
+        while (!nextTexturesToResolve.empty()) {
+            auto nextResource = nextTexturesToResolve.front();
+            nextTexturesToResolve.pop_front();
+            if (!recordTextureHandle(nextResource)) continue;
+
+            auto writingTaskIt = lookups.textureToTask.find(nextResource);
+            if (writingTaskIt == lookups.textureToTask.end()) {
+                if (ranges::contains(data.externalInputs, nextResource)) {
+                    continue;
+                }
+
+                    const ResolveLookups lookups = buildResolveLookups(*data_);
+
+                    RequiredSets required;
+                    if (!collectRequired(*data_, lookups, requestedResources, required)) {
+                        return {};
+                    }
+            auto nextBuffer = nextBuffersToResolve.front();
+            nextBuffersToResolve.pop_front();
+            if (!recordBufferHandle(nextBuffer)) continue;
+
+            auto writingTaskIt = lookups.bufferToTask.find(nextBuffer);
+            if (writingTaskIt == lookups.bufferToTask.end()) {
+                CO_CORE_ERROR(
+                    "Could not resolve frame dependency graph: buffer '{} v{}' ({}) is not "
+                    "created by any render task",
+                    lookups.buffers.at(nextBuffer).name,
+                    nextBuffer.version(),
+                    nextBuffer.buffer());
+                return false;
+            }
+
+            const RenderTaskHandle writingTask = writingTaskIt->second;
+            CO_CORE_TRACE("Resolving buffer '{} v{}': created/written by render task '{}'",
+                          lookups.buffers.at(nextBuffer).name,
+                          nextBuffer.version(),
+                          data.renderTasks[writingTask].name);
+            if (required.requiredTasks.insert(writingTask).second) {
+                appendCreatedResources(data.renderTasks[writingTask]);
+            }
+
+            auto bufInputs = lookups.taskBufferInputs.equal_range(writingTask);
+            ranges::transform(bufInputs.first,
+                              bufInputs.second,
+                              std::back_inserter(nextBuffersToResolve),
+                              [&](const auto &it) {
+                                  CO_CORE_TRACE("Requesting input buffer for {}: '{} v{}'",
+                                                data.renderTasks[writingTask].name,
+                                                lookups.buffers.at(it.second).name,
+                                                it.second.version());
+                                  return it.second;
+                              });
+        }
+    }
+
+    return true;
+}
+
+// Aggregate resource usage flags for the required tasks.
+void aggregateUsage(FramegraphPrivate &data, const RequiredSets &required)
+{
+    std::unordered_map<FramegraphTextureHandle, Gpu::TextureUsageFlags> textureUsage;
+    std::unordered_map<FramegraphBufferHandle, Gpu::BufferUsageFlags> bufferUsage;
+
+    for (const auto &task : required.requiredTasks) {
+        const auto &taskInfo = data.renderTasks[task];
+        for (const auto &dependency : taskInfo.textureDependencies) {
+            textureUsage[dependency.handle.texture()] |= dependency.usage;
+        }
+        for (const auto &dependency : taskInfo.bufferDependencies) {
+            bufferUsage[dependency.handle.buffer()] |= dependency.usage;
+        }
+    }
+
+    for (const auto &[handle, usage] : textureUsage) {
+        data.resources.extendUsage(handle, usage);
+    }
+    for (const auto &[handle, usage] : bufferUsage) {
+        data.resources.extendUsage(handle, usage);
+    }
+}
+
+// Build the task DAG and run Kahn's topological sort.
+TaskOrder buildTaskOrder(const FramegraphPrivate &data,
+                         const ResolveLookups &lookups,
+                         const RequiredSets &required)
+{
+    TaskOrder order;
+    for (const auto &task : required.requiredTasks) {
+        order.indegree.emplace(task, 0u);
+    }
+
+    auto addEdge = [&](RenderTaskHandle from, RenderTaskHandle to) {
+        if (from == to) return;
+        if (!required.requiredTasks.contains(from) || !required.requiredTasks.contains(to)) return;
+        if (order.adjacency[from].insert(to).second) {
+            order.indegree[to] += 1;
+        }
+    };
+
+    for (const auto &task : required.requiredTasks) {
+        auto texInputs = lookups.taskTextureInputs.equal_range(task);
+        for (auto it = texInputs.first; it != texInputs.second; ++it) {
+            if (auto writer = lookups.textureToTask.find(it->second);
+                writer != lookups.textureToTask.end()) {
+                addEdge(writer->second, task);
+            }
+        }
+
+        auto bufInputs = lookups.taskBufferInputs.equal_range(task);
+        for (auto it = bufInputs.first; it != bufInputs.second; ++it) {
+            if (auto writer = lookups.bufferToTask.find(it->second);
+                writer != lookups.bufferToTask.end()) {
+                addEdge(writer->second, task);
+            }
+        }
+    }
+
+    std::vector<RenderTaskHandle> ready;
+    ready.reserve(required.requiredTasks.size());
+    for (const auto &[task, degree] : order.indegree) {
+        if (degree == 0) {
+            ready.push_back(task);
+        }
+    }
+    auto sortReady = [&]() {
+        std::sort(ready.begin(), ready.end(), [&](RenderTaskHandle a, RenderTaskHandle b) {
+            return data.renderTasks[a].name < data.renderTasks[b].name;
+        });
+    };
+    sortReady();
+
+    order.tasks.reserve(required.requiredTasks.size());
+    while (!ready.empty()) {
+        auto next = ready.front();
+        ready.erase(ready.begin());
+        order.tasks.push_back(next);
+        auto it = order.adjacency.find(next);
+        if (it == order.adjacency.end()) {
+            continue;
+        }
+        for (const auto &dest : it->second) {
+            auto &deg = order.indegree[dest];
+            if (deg > 0) {
+                deg -= 1;
+            }
+            if (deg == 0) {
+                ready.push_back(dest);
+            }
+        }
+        sortReady();
+    }
+
+    return order;
+}
+
+// Log cycle details and throw on unresolved tasks.
+[[noreturn]] void logCycleAndThrow(const FramegraphPrivate &data,
+                                   const ResolveLookups &lookups,
+                                   const RequiredSets &required,
+                                   const TaskOrder &order)
+{
+    CO_CORE_ERROR("Could not resolve frame dependency graph: cyclic task dependency detected");
+
+    std::unordered_set<RenderTaskHandle> unresolvedTasks;
+    unresolvedTasks.reserve(required.requiredTasks.size());
+    for (const auto &task : required.requiredTasks) {
+        unresolvedTasks.insert(task);
+    }
+    for (const auto &task : order.tasks) {
+        unresolvedTasks.erase(task);
+    }
+
+    std::unordered_map<RenderTaskHandle, std::vector<RenderTaskHandle>> reverseAdjacency;
+    reverseAdjacency.reserve(order.adjacency.size());
+    for (const auto &[from, targets] : order.adjacency) {
+        for (const auto &to : targets) {
+            reverseAdjacency[to].push_back(from);
+        }
+    }
+
+    for (const auto &task : unresolvedTasks) {
+        CO_CORE_ERROR("Unresolved task '{}' (indegree {})",
+                      data.renderTasks[task].name,
+                      order.indegree.at(task));
+        for (const auto &pred : reverseAdjacency[task]) {
+            CO_CORE_ERROR("  blocked by '{}'", data.renderTasks[pred].name);
+        }
+
+        auto texInputs = lookups.taskTextureInputs.equal_range(task);
+        for (auto it = texInputs.first; it != texInputs.second; ++it) {
+            const auto handle = it->second;
+            if (auto writer = lookups.textureToTask.find(handle);
+                writer != lookups.textureToTask.end()) {
+                CO_CORE_ERROR("  texture input '{}' v{} written by '{}'",
+                              lookups.textures.at(handle).name,
+                              handle.version(),
+                              data.renderTasks[writer->second].name);
+            }
+        }
+
+        auto bufInputs = lookups.taskBufferInputs.equal_range(task);
+        for (auto it = bufInputs.first; it != bufInputs.second; ++it) {
+            const auto handle = it->second;
+            if (auto writer = lookups.bufferToTask.find(handle);
+                writer != lookups.bufferToTask.end()) {
+                CO_CORE_ERROR("  buffer input '{}' v{} written by '{}'",
+                              lookups.buffers.at(handle).name,
+                              handle.version(),
+                              data.renderTasks[writer->second].name);
+            }
+        }
+    }
+
+    throw std::runtime_error("Cyclic task dependency detected in framegraph");
+}
+} // namespace
+
 RenderTaskBuilder Framegraph::declareTask(std::string_view name)
 {
     //
@@ -237,55 +558,12 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, Render
     CO_CORE_ASSERT(rpInfo.coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
                    "points! A render task should only wait on the builder's finishDeclaration() "
-                   "exactly once!");
+                    const ResolveLookups lookups = buildResolveLookups(*data_);
 
-    return transitions;
-}
-
-Framegraph::FrameContextHandles Framegraph::importFrameContext(const FrameContext &frameCtx)
-{
-    auto size = glm::u32vec3{frameCtx.extent, 1};
-    FrameContextHandles handles;
-
-    handles.colorImage = declareInput(
-        {
-            .name = "TEX_SwapCh_Color",
-            .size = size,
-            .format = frameCtx.colorFormat,
-            .sampleCount = frameCtx.sampleCount,
-        },
-        Sync::AccessType::None,
-        *frameCtx.colorImage,
-        *frameCtx.colorImageView);
-
-    handles.depthImage = declareInput(
-        {
-            .name = "TEX_SwapCh_Depth",
-            .size = size,
-            .format = frameCtx.depthFormat,
-            .sampleCount = frameCtx.sampleCount,
-        },
-        Cory::Sync::AccessType::None,
-        *frameCtx.depthImage,
-        *frameCtx.depthImageView);
-
-    handles.swapchainImage = declareInput(
-        {
-            .name = "TEX_SwapCh_Present",
-            .size = size,
-            .format = frameCtx.colorFormat,
-            .sampleCount = frameCtx.sampleCount,
-        },
-        Cory::Sync::AccessType::None,
-        *frameCtx.swapchainImage,
-        *frameCtx.swapchainImageView);
-
-    return handles;
-}
-
-TransientTextureHandle Framegraph::declareInput(TextureInfo info,
-                                                Sync::AccessType lastWriteAccess,
-                                                const Texture &image,
+                    RequiredSets required;
+                    if (!collectRequired(*data_, lookups, requestedResources, required)) {
+                        return {};
+                    }
                                                 const TextureView &imageView)
 {
     auto handle =
@@ -354,338 +632,29 @@ const std::vector<TransientTextureHandle> &Framegraph::outputs() const
 
 ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &requestedResources)
 {
-    // first, reorder the information into a more convenient graph representation
-    // essentially, in- and out-edges
-    std::unordered_map<TransientTextureHandle, RenderTaskHandle> textureToTask;
-    std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskTextureInputs;
-    std::unordered_map<TransientTextureHandle, TextureInfo> textures;
-    std::unordered_map<TransientBufferHandle, RenderTaskHandle> bufferToTask;
-    std::unordered_multimap<RenderTaskHandle, TransientBufferHandle> taskBufferInputs;
-    std::unordered_map<TransientBufferHandle, BufferInfo> buffers;
-    std::unordered_set<TransientTextureHandle> resolvedTextures;
-    std::unordered_set<TransientBufferHandle> resolvedBuffers;
-    for (const auto &[taskHandle, taskInfo] : data_->renderTasks.items()) {
-        for (const RenderTaskInfo::TextureDependency &dependency : taskInfo.textureDependencies) {
-            const auto kind = dependency.kind;
-            // only counts as input if it is a 'pure' read dependency, not read/write
-            if (kind.is_set(TaskDependencyKindBits::Read) &&
-                !kind.is_set(TaskDependencyKindBits::Write)) {
-                taskTextureInputs.insert({taskHandle, dependency.handle});
-            }
-            if (kind.is_set(TaskDependencyKindBits::Write)) {
-                textureToTask[dependency.handle] = taskHandle;
-            }
-            textures[dependency.handle] = data_->resources->info(dependency.handle);
-        }
-        for (const RenderTaskInfo::BufferDependency &dependency : taskInfo.bufferDependencies) {
-            const auto kind = dependency.kind;
-            if (kind.is_set(TaskDependencyKindBits::Read) &&
-                !kind.is_set(TaskDependencyKindBits::Write)) {
-                taskBufferInputs.insert({taskHandle, dependency.handle});
-            }
-            if (kind.is_set(TaskDependencyKindBits::Write)) {
-                bufferToTask[dependency.handle] = taskHandle;
-            }
-            buffers[dependency.handle] = data_->resources->info(dependency.handle);
-        }
+    const ResolveLookups lookups = buildResolveLookups(*data_);
+
+    RequiredSets required;
+    if (!collectRequired(*data_, lookups, requestedResources, required)) {
+        return {};
     }
 
-    std::vector<FramegraphTextureHandle>
-        requiredResources; // collects all actually required texture resources
-    std::vector<FramegraphBufferHandle>
-        requiredBuffers; // collects all actually required buffer resources
-    std::unordered_set<FramegraphTextureHandle> requiredResourceSet;
-    std::unordered_set<FramegraphBufferHandle> requiredBufferSet;
-    std::unordered_set<RenderTaskHandle> requiredTasks;
+    aggregateUsage(*data_, required);
 
-    auto appendCreatedResources = [&](const RenderTaskInfo &taskInfo) {
-        for (const RenderTaskInfo::TextureDependency &created :
-             taskInfo.textureDependencies | ranges::views::filter([](const auto &outputDesc) {
-                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-             })) {
-            if (requiredResourceSet.insert(created.handle).second) {
-                requiredResources.push_back(created.handle);
-            }
-        }
-        for (const RenderTaskInfo::BufferDependency &created :
-             taskInfo.bufferDependencies | ranges::views::filter([](const auto &outputDesc) {
-                 return outputDesc.kind.is_set(TaskDependencyKindBits::Create);
-             })) {
-            if (requiredBufferSet.insert(created.handle).second) {
-                requiredBuffers.push_back(created.handle);
-            }
-        }
-    };
-
-    auto recordTextureHandle = [&](TransientTextureHandle handle) {
-        if (!resolvedTextures.insert(handle).second) return false;
-        if (requiredResourceSet.insert(handle).second) {
-            requiredResources.push_back(handle);
-        }
-        return true;
-    };
-
-    auto recordBufferHandle = [&](TransientBufferHandle handle) {
-        if (!resolvedBuffers.insert(handle).second) return false;
-        if (requiredBufferSet.insert(handle).second) {
-            requiredBuffers.push_back(handle);
-        }
-        return true;
-    };
-
-    // flood-fill the graph starting at the resources requested from the outside
-    std::deque<TransientTextureHandle> nextTexturesToResolve{requestedResources.cbegin(),
-                                                             requestedResources.cend()};
-    std::deque<TransientBufferHandle> nextBuffersToResolve;
-    while (!nextTexturesToResolve.empty() || !nextBuffersToResolve.empty()) {
-        while (!nextTexturesToResolve.empty()) {
-            auto nextResource = nextTexturesToResolve.front();
-            nextTexturesToResolve.pop_front();
-            if (!recordTextureHandle(nextResource)) continue;
-
-            auto writingTaskIt = textureToTask.find(nextResource);
-            if (writingTaskIt == textureToTask.end()) {
-                if (ranges::contains(data_->externalInputs, nextResource)) {
-                    continue;
-                }
-
-                CO_CORE_ERROR(
-                    "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not "
-                    "created by any render task",
-                    textures[nextResource].name,
-                    nextResource.version(),
-                    nextResource.texture());
-                return {};
-            }
-
-            const RenderTaskHandle writingTask = writingTaskIt->second;
-            CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render task '{}'",
-                          textures[nextResource].name,
-                          nextResource.version(),
-                          data_->renderTasks[writingTask].name);
-            if (requiredTasks.insert(writingTask).second) {
-                appendCreatedResources(data_->renderTasks[writingTask]);
-            }
-
-            auto texInputs = taskTextureInputs.equal_range(writingTask);
-            ranges::transform(texInputs.first,
-                              texInputs.second,
-                              std::back_inserter(nextTexturesToResolve),
-                              [&](const auto &it) {
-                                  CO_CORE_TRACE("Requesting input texture for {}: '{} v{}'",
-                                                data_->renderTasks[writingTask].name,
-                                                textures[it.second].name,
-                                                it.second.version());
-                                  return it.second;
-                              });
-
-            auto bufInputs = taskBufferInputs.equal_range(writingTask);
-            ranges::transform(bufInputs.first,
-                              bufInputs.second,
-                              std::back_inserter(nextBuffersToResolve),
-                              [&](const auto &it) {
-                                  CO_CORE_TRACE("Requesting input buffer for {}: '{} v{}'",
-                                                data_->renderTasks[writingTask].name,
-                                                buffers[it.second].name,
-                                                it.second.version());
-                                  return it.second;
-                              });
-        }
-
-        while (!nextBuffersToResolve.empty()) {
-            auto nextBuffer = nextBuffersToResolve.front();
-            nextBuffersToResolve.pop_front();
-            if (!recordBufferHandle(nextBuffer)) continue;
-
-            auto writingTaskIt = bufferToTask.find(nextBuffer);
-            if (writingTaskIt == bufferToTask.end()) {
-                CO_CORE_ERROR(
-                    "Could not resolve frame dependency graph: buffer '{} v{}' ({}) is not "
-                    "created by any render task",
-                    buffers[nextBuffer].name,
-                    nextBuffer.version(),
-                    nextBuffer.buffer());
-                return {};
-            }
-
-            const RenderTaskHandle writingTask = writingTaskIt->second;
-            CO_CORE_TRACE("Resolving buffer '{} v{}': created/written by render task '{}'",
-                          buffers[nextBuffer].name,
-                          nextBuffer.version(),
-                          data_->renderTasks[writingTask].name);
-            if (requiredTasks.insert(writingTask).second) {
-                appendCreatedResources(data_->renderTasks[writingTask]);
-            }
-
-            auto bufInputs = taskBufferInputs.equal_range(writingTask);
-            ranges::transform(bufInputs.first,
-                              bufInputs.second,
-                              std::back_inserter(nextBuffersToResolve),
-                              [&](const auto &it) {
-                                  CO_CORE_TRACE("Requesting input buffer for {}: '{} v{}'",
-                                                data_->renderTasks[writingTask].name,
-                                                buffers[it.second].name,
-                                                it.second.version());
-                                  return it.second;
-                              });
-        }
-    }
-
-    std::unordered_map<FramegraphTextureHandle, Gpu::TextureUsageFlags> textureUsage;
-    std::unordered_map<FramegraphBufferHandle, Gpu::BufferUsageFlags> bufferUsage;
-
-    auto mergeTextureUsage = [&](const RenderTaskInfo::TextureDependency &dependency) {
-        textureUsage[dependency.handle.texture()] |= dependency.usage;
-    };
-    auto mergeBufferUsage = [&](const RenderTaskInfo::BufferDependency &dependency) {
-        bufferUsage[dependency.handle.buffer()] |= dependency.usage;
-    };
-
-    for (const auto &task : requiredTasks) {
-        const auto &taskInfo = data_->renderTasks[task];
-        for (const auto &dependency : taskInfo.textureDependencies) {
-            mergeTextureUsage(dependency);
-        }
-        for (const auto &dependency : taskInfo.bufferDependencies) {
-            mergeBufferUsage(dependency);
-        }
-    }
-
-    for (const auto &[handle, usage] : textureUsage) {
-        data_->resources.extendUsage(handle, usage);
-    }
-    for (const auto &[handle, usage] : bufferUsage) {
-        data_->resources.extendUsage(handle, usage);
-    }
-
-    std::unordered_map<RenderTaskHandle, std::unordered_set<RenderTaskHandle>> adjacency;
-    std::unordered_map<RenderTaskHandle, size_t> indegree;
-    for (const auto &task : requiredTasks) {
-        indegree.emplace(task, 0u);
-    }
-
-    auto addEdge = [&](RenderTaskHandle from, RenderTaskHandle to) {
-        if (from == to) return;
-        if (!requiredTasks.contains(from) || !requiredTasks.contains(to)) return;
-        if (adjacency[from].insert(to).second) {
-            indegree[to] += 1;
-        }
-    };
-
-    for (const auto &task : requiredTasks) {
-        auto texInputs = taskTextureInputs.equal_range(task);
-        for (auto it = texInputs.first; it != texInputs.second; ++it) {
-            if (auto writer = textureToTask.find(it->second); writer != textureToTask.end()) {
-                addEdge(writer->second, task);
-            }
-        }
-
-        auto bufInputs = taskBufferInputs.equal_range(task);
-        for (auto it = bufInputs.first; it != bufInputs.second; ++it) {
-            if (auto writer = bufferToTask.find(it->second); writer != bufferToTask.end()) {
-                addEdge(writer->second, task);
-            }
-        }
-    }
-
-    std::vector<RenderTaskHandle> ready;
-    ready.reserve(requiredTasks.size());
-    for (const auto &[task, degree] : indegree) {
-        if (degree == 0) {
-            ready.push_back(task);
-        }
-    }
-    auto sortReady = [&]() {
-        std::sort(ready.begin(), ready.end(), [&](RenderTaskHandle a, RenderTaskHandle b) {
-            return data_->renderTasks[a].name < data_->renderTasks[b].name;
-        });
-    };
-    sortReady();
-
-    std::vector<RenderTaskHandle> tasks;
-    tasks.reserve(requiredTasks.size());
-    while (!ready.empty()) {
-        auto next = ready.front();
-        ready.erase(ready.begin());
-        tasks.push_back(next);
-        auto it = adjacency.find(next);
-        if (it == adjacency.end()) {
-            continue;
-        }
-        for (const auto &dest : it->second) {
-            auto &deg = indegree[dest];
-            if (deg > 0) {
-                deg -= 1;
-            }
-            if (deg == 0) {
-                ready.push_back(dest);
-            }
-        }
-        sortReady();
-    }
-
-    if (tasks.size() != requiredTasks.size()) {
-        CO_CORE_ERROR("Could not resolve frame dependency graph: cyclic task dependency detected");
-
-        std::unordered_set<RenderTaskHandle> unresolvedTasks;
-        unresolvedTasks.reserve(requiredTasks.size());
-        for (const auto &task : requiredTasks) {
-            unresolvedTasks.insert(task);
-        }
-        for (const auto &task : tasks) {
-            unresolvedTasks.erase(task);
-        }
-
-        std::unordered_map<RenderTaskHandle, std::vector<RenderTaskHandle>> reverseAdjacency;
-        reverseAdjacency.reserve(adjacency.size());
-        for (const auto &[from, targets] : adjacency) {
-            for (const auto &to : targets) {
-                reverseAdjacency[to].push_back(from);
-            }
-        }
-
-        for (const auto &task : unresolvedTasks) {
-            CO_CORE_ERROR("Unresolved task '{}' (indegree {})",
-                          data_->renderTasks[task].name,
-                          indegree[task]);
-            for (const auto &pred : reverseAdjacency[task]) {
-                CO_CORE_ERROR("  blocked by '{}'", data_->renderTasks[pred].name);
-            }
-
-            auto texInputs = taskTextureInputs.equal_range(task);
-            for (auto it = texInputs.first; it != texInputs.second; ++it) {
-                const auto handle = it->second;
-                if (auto writer = textureToTask.find(handle); writer != textureToTask.end()) {
-                    CO_CORE_ERROR("  texture input '{}' v{} written by '{}'",
-                                  textures[handle].name,
-                                  handle.version(),
-                                  data_->renderTasks[writer->second].name);
-                }
-            }
-
-            auto bufInputs = taskBufferInputs.equal_range(task);
-            for (auto it = bufInputs.first; it != bufInputs.second; ++it) {
-                const auto handle = it->second;
-                if (auto writer = bufferToTask.find(handle); writer != bufferToTask.end()) {
-                    CO_CORE_ERROR("  buffer input '{}' v{} written by '{}'",
-                                  buffers[handle].name,
-                                  handle.version(),
-                                  data_->renderTasks[writer->second].name);
-                }
-            }
-        }
-
-        throw std::runtime_error("Cyclic task dependency detected in framegraph");
+    TaskOrder order = buildTaskOrder(*data_, lookups, required);
+    if (order.tasks.size() != required.requiredTasks.size()) {
+        logCycleAndThrow(*data_, lookups, required, order);
     }
 
     CO_CORE_TRACE("Render task order after resolve:");
-    for (size_t i = 0; i < tasks.size(); ++i) {
-        CO_CORE_TRACE("  [{}] {}", tasks.size() - i - 1, data_->renderTasks[tasks[i]].name);
+    for (size_t i = 0; i < order.tasks.size(); ++i) {
+        CO_CORE_TRACE(
+            "  [{}] {}", order.tasks.size() - i - 1, data_->renderTasks[order.tasks[i]].name);
     }
 
-    return {.tasks = std::move(tasks),
-            .resources = std::move(requiredResources),
-            .buffers = std::move(requiredBuffers),
+    return {.tasks = std::move(order.tasks),
+            .resources = std::move(required.requiredResources),
+            .buffers = std::move(required.requiredBuffers),
             .transitions = {},
             .bufferTransitions = {}};
 }

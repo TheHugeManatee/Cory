@@ -4,6 +4,8 @@
         "conan": {}
     },
     "include": [
+        "build\\debug\\CMakePresets.json",
+        "build\\release\\CMakePresets.json"
     ],
     "configurePresets": [
         {
@@ -35,5 +37,9 @@
             "name": "codex",
             "configurePreset": "codex"
         }
+=======
+        "build\\debug\\CMakePresets.json",
+        "build\\release\\CMakePresets.json"
+>>>>>>> 6ebd8cd1 (Fix framegraph resolve handle bookkeeping)
     ]
 }

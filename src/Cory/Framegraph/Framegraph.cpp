@@ -19,101 +19,6 @@
 
 #include <KDGpu/texture.h>
 #include <KDGpu/texture_view.h>
-#include <KDGpu/vulkan/vulkan_resource_manager.h>
-
-#include <algorithm>
-#include <deque>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-
-namespace Cory {
-
-struct FramegraphPrivate {
-    FramegraphPrivate(Context &ctx_param,
-                      FramegraphResourceManager &resources_param,
-                      uint32_t instanceIndex)
-        : ctx{&ctx_param}
-        , resources{&resources_param}
-        , shaderBindingContext{
-              ctx->device(), resources_param, ctx->descriptors(), instanceIndex, 200 * 1024 * 1024}
-    {
-    }
-
-    Context *ctx;
-    FramegraphResourceManager *resources;
-    ShaderBindingContext shaderBindingContext;
-    std::vector<TransientTextureHandle> externalInputs;
-    std::vector<TransientTextureHandle> outputs;
-
-    SlotMap<RenderTaskInfo> renderTasks;
-    CommandRecorder *commandListInProgress{};
-    FrameContext *currentFrameCtx{};
-
-    std::unordered_map<TransientTextureHandle, Sync::AccessType> outputFinalAccesses;
-    uint64_t lastFrameNumber{};
-    bool hasRecordedFrame{};
-};
-
-
-namespace {
-struct ResolveLookups {
-    std::unordered_map<TransientTextureHandle, RenderTaskHandle> textureToTask;
-    std::unordered_multimap<RenderTaskHandle, TransientTextureHandle> taskTextureInputs;
-    std::unordered_map<TransientTextureHandle, TextureInfo> textures;
-    std::unordered_map<TransientBufferHandle, RenderTaskHandle> bufferToTask;
-    std::unordered_multimap<RenderTaskHandle, TransientBufferHandle> taskBufferInputs;
-    std::unordered_map<TransientBufferHandle, BufferInfo> buffers;
-};
-
-struct RequiredSets {
-    std::vector<FramegraphTextureHandle> requiredResources;
-    std::vector<FramegraphBufferHandle> requiredBuffers;
-    std::unordered_set<FramegraphTextureHandle> requiredResourceSet;
-    std::unordered_set<FramegraphBufferHandle> requiredBufferSet;
-    std::unordered_set<RenderTaskHandle> requiredTasks;
-    std::unordered_set<TransientTextureHandle> resolvedTextures;
-    std::unordered_set<TransientBufferHandle> resolvedBuffers;
-};
-
-struct TaskOrder {
-    std::vector<RenderTaskHandle> tasks;
-    std::unordered_map<RenderTaskHandle, std::unordered_set<RenderTaskHandle>> adjacency;
-    std::unordered_map<RenderTaskHandle, size_t> indegree;
-};
-
-// Build lookup tables for writers, pure-read inputs, and resource info.
-ResolveLookups buildResolveLookups(const FramegraphPrivate &data)
-{
-    ResolveLookups lookups;
-    for (const auto &[taskHandle, taskInfo] : data.renderTasks.items()) {
-        for (const RenderTaskInfo::TextureDependency &dependency : taskInfo.textureDependencies) {
-            const auto kind = dependency.kind;
-            if (kind.is_set(TaskDependencyKindBits::Read) &&
-                !kind.is_set(TaskDependencyKindBits::Write)) {
-                lookups.taskTextureInputs.insert({taskHandle, dependency.handle});
-            }
-            if (kind.is_set(TaskDependencyKindBits::Write)) {
-                lookups.textureToTask[dependency.handle] = taskHandle;
-            }
-            lookups.textures[dependency.handle] = data.resources.info(dependency.handle);
-        }
-        for (const RenderTaskInfo::BufferDependency &dependency : taskInfo.bufferDependencies) {
-            const auto kind = dependency.kind;
-            if (kind.is_set(TaskDependencyKindBits::Read) &&
-                !kind.is_set(TaskDependencyKindBits::Write)) {
-                lookups.taskBufferInputs.insert({taskHandle, dependency.handle});
-            }
-            if (kind.is_set(TaskDependencyKindBits::Write)) {
-                lookups.bufferToTask[dependency.handle] = taskHandle;
-            }
-            lookups.buffers[dependency.handle] = data.resources.info(dependency.handle);
-        }
-    }
-    return lookups;
-}
-
-// Traverse dependencies from requested outputs to collect required tasks/resources.
 bool collectRequired(const FramegraphPrivate &data,
                      const ResolveLookups &lookups,
                      const std::vector<TransientTextureHandle> &requestedResources,
@@ -161,20 +66,20 @@ bool collectRequired(const FramegraphPrivate &data,
         while (!nextTexturesToResolve.empty()) {
             auto nextResource = nextTexturesToResolve.front();
             nextTexturesToResolve.pop_front();
-            if (!recordTextureHandle(nextResource)) continue;
+ 
+            ranges::transform(bufInputs.first,
+                              bufInputs.second,
+                              std::back_inserter(nextBuffersToResolve),
+                              [&](const auto &it) {
+                                  CO_CORE_TRACE("Requesting input buffer for {}: '{} v{}'",
+                                                data.renderTasks[writingTask].name,
+                                                lookups.buffers.at(it.second).name,
+                                                it.second.version());
+                                  return it.second;
+                              });
+        }
 
-            auto writingTaskIt = lookups.textureToTask.find(nextResource);
-            if (writingTaskIt == lookups.textureToTask.end()) {
-                if (ranges::contains(data.externalInputs, nextResource)) {
-                    continue;
-                }
-
-                    const ResolveLookups lookups = buildResolveLookups(*data_);
-
-                    RequiredSets required;
-                    if (!collectRequired(*data_, lookups, requestedResources, required)) {
-                        return {};
-                    }
+        while (!nextBuffersToResolve.empty()) {
             auto nextBuffer = nextBuffersToResolve.front();
             nextBuffersToResolve.pop_front();
             if (!recordBufferHandle(nextBuffer)) continue;
@@ -190,7 +95,7 @@ bool collectRequired(const FramegraphPrivate &data,
                 return false;
             }
 
-            const RenderTaskHandle writingTask = writingTaskIt->second;
+            const InternalTaskHandle writingTask = writingTaskIt->second;
             CO_CORE_TRACE("Resolving buffer '{} v{}': created/written by render task '{}'",
                           lookups.buffers.at(nextBuffer).name,
                           nextBuffer.version(),
@@ -250,7 +155,7 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
         order.indegree.emplace(task, 0u);
     }
 
-    auto addEdge = [&](RenderTaskHandle from, RenderTaskHandle to) {
+    auto addEdge = [&](InternalTaskHandle from, InternalTaskHandle to) {
         if (from == to) return;
         if (!required.requiredTasks.contains(from) || !required.requiredTasks.contains(to)) return;
         if (order.adjacency[from].insert(to).second) {
@@ -276,7 +181,7 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
         }
     }
 
-    std::vector<RenderTaskHandle> ready;
+    std::vector<InternalTaskHandle> ready;
     ready.reserve(required.requiredTasks.size());
     for (const auto &[task, degree] : order.indegree) {
         if (degree == 0) {
@@ -284,7 +189,7 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
         }
     }
     auto sortReady = [&]() {
-        std::sort(ready.begin(), ready.end(), [&](RenderTaskHandle a, RenderTaskHandle b) {
+        std::sort(ready.begin(), ready.end(), [&](InternalTaskHandle a, InternalTaskHandle b) {
             return data.renderTasks[a].name < data.renderTasks[b].name;
         });
     };
@@ -322,7 +227,7 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
 {
     CO_CORE_ERROR("Could not resolve frame dependency graph: cyclic task dependency detected");
 
-    std::unordered_set<RenderTaskHandle> unresolvedTasks;
+    std::unordered_set<InternalTaskHandle> unresolvedTasks;
     unresolvedTasks.reserve(required.requiredTasks.size());
     for (const auto &task : required.requiredTasks) {
         unresolvedTasks.insert(task);
@@ -331,7 +236,7 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
         unresolvedTasks.erase(task);
     }
 
-    std::unordered_map<RenderTaskHandle, std::vector<RenderTaskHandle>> reverseAdjacency;
+    std::unordered_map<InternalTaskHandle, std::vector<InternalTaskHandle>> reverseAdjacency;
     reverseAdjacency.reserve(order.adjacency.size());
     for (const auto &[from, targets] : order.adjacency) {
         for (const auto &to : targets) {
@@ -558,12 +463,55 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, Render
     CO_CORE_ASSERT(rpInfo.coroHandle.done(),
                    "Render task coroutine seems to have more unnecessary coroutine synchronization "
                    "points! A render task should only wait on the builder's finishDeclaration() "
-                    const ResolveLookups lookups = buildResolveLookups(*data_);
+                   "exactly once!");
 
-                    RequiredSets required;
-                    if (!collectRequired(*data_, lookups, requestedResources, required)) {
-                        return {};
-                    }
+    return transitions;
+}
+
+Framegraph::FrameContextHandles Framegraph::importFrameContext(const FrameContext &frameCtx)
+{
+    auto size = glm::u32vec3{frameCtx.extent, 1};
+    FrameContextHandles handles;
+
+    handles.colorImage = declareInput(
+        {
+            .name = "TEX_SwapCh_Color",
+            .size = size,
+            .format = frameCtx.colorFormat,
+            .sampleCount = frameCtx.sampleCount,
+        },
+        Sync::AccessType::None,
+        *frameCtx.colorImage,
+        *frameCtx.colorImageView);
+
+    handles.depthImage = declareInput(
+        {
+            .name = "TEX_SwapCh_Depth",
+            .size = size,
+            .format = frameCtx.depthFormat,
+            .sampleCount = frameCtx.sampleCount,
+        },
+        Cory::Sync::AccessType::None,
+        *frameCtx.depthImage,
+        *frameCtx.depthImageView);
+
+    handles.swapchainImage = declareInput(
+        {
+            .name = "TEX_SwapCh_Present",
+            .size = size,
+            .format = frameCtx.colorFormat,
+            .sampleCount = frameCtx.sampleCount,
+        },
+        Cory::Sync::AccessType::None,
+        *frameCtx.swapchainImage,
+        *frameCtx.swapchainImageView);
+
+    return handles;
+}
+
+TransientTextureHandle Framegraph::declareInput(TextureInfo info,
+                                                Sync::AccessType lastWriteAccess,
+                                                const Texture &image,
                                                 const TextureView &imageView)
 {
     auto handle =
@@ -652,7 +600,13 @@ ExecutionInfo Framegraph::resolve(const std::vector<TransientTextureHandle> &req
             "  [{}] {}", order.tasks.size() - i - 1, data_->renderTasks[order.tasks[i]].name);
     }
 
-    return {.tasks = std::move(order.tasks),
+    std::vector<RenderTaskHandle> tasks;
+    tasks.reserve(order.tasks.size());
+    for (const auto &task : order.tasks) {
+        tasks.push_back(RenderTaskHandle{task});
+    }
+
+    return {.tasks = std::move(tasks),
             .resources = std::move(required.requiredResources),
             .buffers = std::move(required.requiredBuffers),
             .transitions = {},

@@ -40,11 +40,6 @@ struct CubeMesh {
     uint32_t indexCount;
 };
 
-struct InstanceBuffer {
-    Gpu::Buffer buffer;
-    Gpu::DeviceSize capacity{0};
-};
-
 class CubeRenderSystem
     : public Cory::BasicSystem<CubeRenderSystem, AnimationComponent, Cory::Components::Transform> {
   public:
@@ -69,10 +64,7 @@ class CubeRenderSystem
                    Cory::TransientTextureHandle depthTarget);
 
   private:
-    InstanceBuffer &instanceBufferForFrame(uint32_t frameIndex, uint32_t instanceCount);
-
     std::vector<InstanceData> renderState_;
-    std::vector<InstanceBuffer> instanceBuffers_;
     Cory::Components::CameraComponent camera_;
 
     Cory::Context *ctx_{nullptr};

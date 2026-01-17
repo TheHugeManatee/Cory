@@ -85,7 +85,7 @@ class TransientRenderPass : NoCopy {
     Gpu::SampleCountFlagBits determineSampleCount() const;
     Gpu::Rect2D determineRenderArea() const;
 
-    bool wasEnded_ = false;
+    bool wasEnded_{false};
     Context *ctx_;
     FramegraphResourceManager *textures_;
 

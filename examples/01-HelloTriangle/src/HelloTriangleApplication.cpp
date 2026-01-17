@@ -12,8 +12,10 @@
 #include <Cory/Cory.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 
 #include <KDGpu/buffer_options.h>
+#include <KDGpu/vulkan/vulkan_graphics_api.h>
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
@@ -110,11 +112,12 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "HelloTriangle", msaaSamples);
 
     createGeometry();
-    pipeline_ = std::make_unique<TrianglePipeline>(ctx(),
-                                                   *window_,
-                                                   *mesh_,
-                                                   std::filesystem::path{"simple_shader.vert.slang"},
-                                                   std::filesystem::path{"simple_shader.frag.slang"});
+    pipeline_ =
+        std::make_unique<TrianglePipeline>(ctx(),
+                                           *window_,
+                                           *mesh_,
+                                           std::filesystem::path{"simple_shader.vert.slang"},
+                                           std::filesystem::path{"simple_shader.frag.slang"});
 
     auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
         createFramebuffers();
@@ -126,7 +129,7 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = window_->dimensions()};
     // ImGui layer does not currently support non-dynamic rendering anymore..
-    //imguiLayer_ =
+    // imguiLayer_ =
     //    &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 }
 
@@ -159,13 +162,15 @@ void HelloTriangleApplication::run()
         });
 
         // ImGui layer does not currently support non-dynamic rendering anymore..
-        //ImGui::ShowDemoWindow();
-        //drawImguiControls();
+        // ImGui::ShowDemoWindow();
+        // drawImguiControls();
 
         recordCommands(frameCtx);
 
         // break if number of frames to render are reached
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) { break; }
+        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+            break;
+        }
     }
     // wait until last frame is finished rendering
     ctx().device().waitUntilIdle();
@@ -318,7 +323,10 @@ double HelloTriangleApplication::now() const
         .count();
 }
 
-double HelloTriangleApplication::getElapsedTimeSeconds() const { return now() - startupTime_; }
+double HelloTriangleApplication::getElapsedTimeSeconds() const
+{
+    return now() - startupTime_;
+}
 
 void HelloTriangleApplication::drawImguiControls()
 {

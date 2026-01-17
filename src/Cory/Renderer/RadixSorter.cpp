@@ -6,7 +6,6 @@
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
-#include <Cory/Renderer/DescriptorSets.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
 #include <KDGpu/vulkan/vulkan_buffer.h>

@@ -36,7 +36,7 @@ class TransientComputePass {
     [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;
 
   private:
-    bool wasEnded_;
+    bool wasEnded_{false};
     Context *ctx_;
     FramegraphResourceManager *textures_;
 
@@ -44,7 +44,7 @@ class TransientComputePass {
 
     Gpu::ComputePipelineHandle pipeline_;
     Gpu::PipelineLayoutHandle pipelineLayout_;
-    const RenderInput *currentRenderApi_;
+    const RenderInput *currentRenderApi_{};
 };
 
 } // namespace Cory

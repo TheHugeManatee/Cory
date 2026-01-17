@@ -28,6 +28,11 @@ class Log {
         return ScopedLogLevel{*s_appLogger, level};
     }
 
+    struct MemorySize {
+        size_t bytes;
+    };
+    [[nodiscard]] static MemorySize asMemorySize(size_t bytes) { return MemorySize{bytes}; }
+
   private:
     class ScopedLogLevel {
       public:
@@ -89,3 +94,22 @@ class Log {
 #else
 #define CO_CORE_DEBUG_ASSERT(condition, message, ...)
 #endif
+
+template <> struct fmt::formatter<Cory::Log::MemorySize> : fmt::formatter<std::string_view> {
+    template <typename FormatContext>
+    auto format(const Cory::Log::MemorySize &size, FormatContext &ctx) const
+    {
+        constexpr size_t KB = 1024;
+        constexpr size_t MB = 1024 * KB;
+        constexpr size_t GB = 1024 * MB;
+
+        if (size.bytes >= GB)
+            return fmt::format_to(ctx.out(), "{:.2f} GB", static_cast<double>(size.bytes) / GB);
+        if (size.bytes >= MB)
+            return fmt::format_to(ctx.out(), "{:.2f} MB", static_cast<double>(size.bytes) / MB);
+        if (size.bytes >= KB)
+            return fmt::format_to(ctx.out(), "{:.2f} KB", static_cast<double>(size.bytes) / KB);
+
+        return fmt::format_to(ctx.out(), "{} B", size.bytes);
+    }
+};

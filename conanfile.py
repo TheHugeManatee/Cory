@@ -2,7 +2,7 @@ from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain
 from conan.tools.cmake import CMakeDeps
 from conan.tools.cmake import cmake_layout
-
+from conan.tools.env import VirtualBuildEnv, VirtualRunEnv
 
 class CoryProjectConan(ConanFile):
     name = "Cory"
@@ -26,6 +26,11 @@ class CoryProjectConan(ConanFile):
         self.requires("spdlog/1.16.0")
         self.requires("efsw/1.4.1")
 
+    def configure(self):
+        # Need to set this env to create powershell scripts on Windows
+        if self.settings.os == "Windows":
+            self.conf.define("tools.env.virtualenv:powershell", True)
+
     def generate(self):
         tc = CMakeToolchain(self, generator="Ninja")
         tc.variables["BUILD_SHARED_LIBS"] = False
@@ -34,3 +39,7 @@ class CoryProjectConan(ConanFile):
 
         deps = CMakeDeps(self)
         deps.generate()
+
+        # PowerShell-friendly environment scripts
+        VirtualBuildEnv(self).generate()
+        VirtualRunEnv(self).generate()

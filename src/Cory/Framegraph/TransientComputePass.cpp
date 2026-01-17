@@ -27,7 +27,7 @@ TransientComputePass::TransientComputePass(Context &ctx,
 
 TransientComputePass::~TransientComputePass()
 {
-    CO_CORE_ASSERT(currentRenderApi_ != nullptr && wasEnded_,
+    CO_CORE_ASSERT(currentRenderApi_ == nullptr || wasEnded_,
                    "TransientComputePass '{}' was not end()ed before destruction!",
                    pass_.name);
 }

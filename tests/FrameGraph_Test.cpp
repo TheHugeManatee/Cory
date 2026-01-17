@@ -91,6 +91,8 @@ PSOutput main(VSOutput input) {
             },
     });
 
+    outputs.depthTexture =
+        depthPass.depthOutput().has_value() ? *depthPass.depthOutput() : outputs.depthTexture;
     RenderInput render = co_await builder.finishDeclaration(outputs);
     CO_CORE_ASSERT(render.cmd != nullptr, "Uh-oh");
     auto recorder = depthPass.begin(render);

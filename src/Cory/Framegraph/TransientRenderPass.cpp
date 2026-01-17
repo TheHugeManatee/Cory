@@ -63,11 +63,17 @@ Gpu::CompareOperation toCompareOp(DepthTest test)
 
 TransientRenderPass::TransientRenderPass(Context &ctx,
                                          FramegraphResourceManager &textures,
-                                         RenderPassDeclaration pass)
+                                         RenderPassDeclaration pass,
+                                         std::vector<TransientTextureHandle> colorOutputs,
+                                         std::optional<TransientTextureHandle> depthOutput,
+                                         std::optional<TransientTextureHandle> stencilOutput)
     : ctx_{&ctx}
     , textures_{&textures}
     , pass_{std::move(pass)}
     , dynamicStates_{pass_.dynamicStates}
+    , colorOutputs_{std::move(colorOutputs)}
+    , depthOutput_{std::move(depthOutput)}
+    , stencilOutput_{std::move(stencilOutput)}
 {
 }
 

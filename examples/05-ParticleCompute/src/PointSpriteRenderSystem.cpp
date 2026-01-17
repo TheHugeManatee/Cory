@@ -201,7 +201,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                                   Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                               Sync::AccessType::ComputeShaderWrite);
 
-    auto declaredPass = builder.declareRenderPassWithOutputs(RenderPassDeclaration{
+    auto spritePass = builder.declareRenderPass(RenderPassDeclaration{
         .name = "PASS_PointSprites",
         .options = PassOptionFlagBits::DisableMeshInput,
         .shaders = {vertexShader_, fragmentShader_},
@@ -225,9 +225,8 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                           .depthTest = DepthTest::Less,
                           .depthWrite = DepthWrite::Disabled},
     });
-    auto spritePass = std::move(declaredPass.pass);
-    const auto colorOut = declaredPass.colorOutputs.front();
-    const auto depthOut = declaredPass.depthOutput.value();
+    const auto colorOut = spritePass.colorOutputs().front();
+    const auto depthOut = spritePass.depthOutput().value();
 
     auto predicateTask = pointSpriteSortPreprocessTask(
         builder.subtask("PointSpriteSortPreprocess"),

@@ -127,7 +127,7 @@ void DepthDebugLayer::onUpdate(const LogicUpdateContext &updateCtx)
 RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBuilder builder,
                                                                     LayerPassOutputs previousLayer)
 {
-    auto declaredPass = builder.declareRenderPassWithOutputs(RenderPassDeclaration{
+    auto depthDebugPass = builder.declareRenderPass(RenderPassDeclaration{
         .name = "PASS_DepthDebug",
         .options = PassOptionFlagBits::DisableMeshInput,
         .shaders = {state_->fullscreenTriShader, state_->depthDebugShader},
@@ -142,8 +142,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                           .depthTest = DepthTest::Disabled,
                           .depthWrite = DepthWrite::Disabled},
     });
-    const auto colorOut = declaredPass.colorOutputs.front();
-    auto depthDebugPass = std::move(declaredPass.pass);
+    const auto colorOut = depthDebugPass.colorOutputs().front();
 
     builder.read(previousLayer.depth,
                  Gpu::TextureUsageFlagBits::SampledBit,

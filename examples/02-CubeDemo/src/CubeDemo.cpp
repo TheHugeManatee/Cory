@@ -290,7 +290,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
 
     const auto &colorInfo = builder.textureInfo(colorTarget);
 
-    auto declaredPass = builder.declareRenderPassWithOutputs(Cory::RenderPassDeclaration{
+    auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
         .name = "PASS_Cubes",
         .shaders = {vertexShader_, fragmentShader_},
         .attachments = {{
@@ -312,9 +312,8 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         .vertexOptions = vertexOptions(),
         .dynamicStates = {.cullMode = Cory::CullMode::None},
     });
-    auto cubePass = std::move(declaredPass.pass);
-    const auto colorOut = declaredPass.colorOutputs.front();
-    const auto depthOut = declaredPass.depthOutput.value();
+    const auto colorOut = cubePass.colorOutputs().front();
+    const auto depthOut = cubePass.depthOutput().value();
 
     /// ^^^^     DECLARATION      ^^^^
     Cory::RenderInput renderApi =

@@ -190,17 +190,8 @@ RenderTaskBuilder::readWrite(TransientBufferHandle handle,
 
 TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration passDeclaration)
 {
-    return TransientRenderPass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
-}
-
-RenderTaskBuilder::DeclaredRenderPass
-RenderTaskBuilder::declareRenderPassWithOutputs(RenderPassDeclaration passDeclaration)
-{
-    DeclaredRenderPass declared{
-        .pass = TransientRenderPass{ctx_, framegraph_.resources(), RenderPassDeclaration{}},
-    };
-
-    declared.colorOutputs.reserve(passDeclaration.attachments.size());
+    std::vector<TransientTextureHandle> colorOutputs;
+    colorOutputs.reserve(passDeclaration.attachments.size());
     for (auto &attachment : passDeclaration.attachments) {
         const auto existing =
             findWriteDependency(info_.textureDependencies, attachment.target.texture());
@@ -223,9 +214,10 @@ RenderTaskBuilder::declareRenderPassWithOutputs(RenderPassDeclaration passDeclar
                     .first;
         }
         attachment.target = outputHandle;
-        declared.colorOutputs.push_back(outputHandle);
+        colorOutputs.push_back(outputHandle);
     }
 
+    std::optional<TransientTextureHandle> depthOutput;
     if (passDeclaration.depthAttachment.has_value()) {
         auto &depthAttachment = passDeclaration.depthAttachment.value();
         const auto existing =
@@ -249,9 +241,10 @@ RenderTaskBuilder::declareRenderPassWithOutputs(RenderPassDeclaration passDeclar
                     .first;
         }
         depthAttachment.target = outputHandle;
-        declared.depthOutput = outputHandle;
+        depthOutput = outputHandle;
     }
 
+    std::optional<TransientTextureHandle> stencilOutput;
     if (passDeclaration.stencilAttachment.has_value()) {
         auto &stencilAttachment = passDeclaration.stencilAttachment.value();
         const auto existing =
@@ -275,11 +268,15 @@ RenderTaskBuilder::declareRenderPassWithOutputs(RenderPassDeclaration passDeclar
                     .first;
         }
         stencilAttachment.target = outputHandle;
-        declared.stencilOutput = outputHandle;
+        stencilOutput = outputHandle;
     }
 
-    declared.pass = TransientRenderPass{ctx_, framegraph_.resources(), std::move(passDeclaration)};
-    return declared;
+    return TransientRenderPass{ctx_,
+                               framegraph_.resources(),
+                               std::move(passDeclaration),
+                               std::move(colorOutputs),
+                               std::move(depthOutput),
+                               std::move(stencilOutput)};
 }
 
 TransientComputePass RenderTaskBuilder::declareComputePass(ComputePassDeclaration passDeclaration)
@@ -298,8 +295,4 @@ const TextureInfo &RenderTaskBuilder::textureInfo(TransientTextureHandle handle)
     return framegraph_.resources().info(handle.texture());
 }
 
-const BufferInfo &RenderTaskBuilder::bufferInfo(TransientBufferHandle handle) const
-{
-    return framegraph_.resources().info(handle.buffer());
-}
 } // namespace Cory

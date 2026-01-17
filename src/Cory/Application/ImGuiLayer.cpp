@@ -113,7 +113,7 @@ void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
 RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder builder,
                                                                LayerPassOutputs previousLayer)
 {
-    auto declaredPass = builder.declareRenderPassWithOutputs(
+    auto imguiPass = builder.declareRenderPass(
         RenderPassDeclaration{.name = "PASS_ImGui",
                               .options = PassOptionFlagBits::SkipPipelineBind,
                               .attachments = {{
@@ -131,9 +131,8 @@ RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder
                                   .store = Gpu::AttachmentStoreOperation::Store,
                                   .clearDepthStencil = {},
                               }});
-    auto imguiPass = std::move(declaredPass.pass);
-    const auto colorOut = declaredPass.colorOutputs.front();
-    const auto depthOut = declaredPass.depthOutput.value();
+    const auto colorOut = imguiPass.colorOutputs().front();
+    const auto depthOut = imguiPass.depthOutput().value();
 
     RenderInput renderApi =
         co_await builder.finishDeclaration(LayerPassOutputs{.color = colorOut, .depth = depthOut});

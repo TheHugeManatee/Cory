@@ -60,6 +60,8 @@ MappedCoherentDeviceBuffer::MappedCoherentDeviceBuffer(
         CO_CORE_ERROR("MappedCoherentDeviceBuffer: size must be non-zero.");
         return;
     }
+    CO_CORE_ASSERT(info.usage != 0,
+                   "MappedCoherentDeviceBuffer: usage must be non-zero (provide buffer usage).");
 
     auto &resourceManager = *device.graphicsApi()->resourceManager();
     auto *vulkanDevice = resourceManager.getDevice(device.handle());
@@ -98,6 +100,9 @@ MappedCoherentDeviceBuffer::MappedCoherentDeviceBuffer(
                       "for allocation of size {}.",
                       vk::to_string(vk::MemoryPropertyFlags{requiredFlags}),
                       Log::asMemorySize(info.size));
+        CO_CORE_ASSERT(false,
+                       "MappedCoherentDeviceBuffer: Required memory flags not supported on this "
+                       "system (expecting ReBAR-capable hardware).");
         reset();
         return;
     }

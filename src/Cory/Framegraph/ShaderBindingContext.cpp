@@ -38,6 +38,8 @@ ShaderBindingContext::ShaderBindingContext(Gpu::Device &device,
     , descriptorSets_(&descriptorSets)
     , instanceIndex_(instanceIndex)
 {
+    CO_CORE_ASSERT(perDrawDataBuffer_ != nullptr && perDrawDataBuffer_->isValid(),
+                   "ShaderBindingContext: per-draw data buffer creation failed.");
 }
 
 ShaderBindingContext::~ShaderBindingContext() {}

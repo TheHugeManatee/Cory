@@ -37,7 +37,7 @@ TEST_CASE("MappedCoherentDeviceBuffer basic allocation", "[Cory/Renderer]")
                                               Cory::MappedCoherentDeviceBufferCreateInfo{
                                                   .label = "Test Buffer",
                                                   .size = 2ull * 1024 * 1024 * 1024, /* 2 GiB */
-                                                  //.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                                  .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                               });
 
     REQUIRE(b.isValid());

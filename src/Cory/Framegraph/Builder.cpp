@@ -67,9 +67,7 @@ TransientBufferHandle RenderTaskBuilder::create(std::string name,
                                                 Sync::AccessType writeAccess,
                                                 Gpu::MemoryUsage memoryUsage)
 {
-    const BufferInfo info{.name = std::move(name),
-                          .size = size,
-                          .memoryUsage = memoryUsage};
+    const BufferInfo info{.name = std::move(name), .size = size, .memoryUsage = memoryUsage};
 
     auto handle = TransientBufferHandle{framegraph_.resources().declareBuffer(info)};
 
@@ -86,11 +84,11 @@ TextureInfo RenderTaskBuilder::read(TransientTextureHandle handle,
                                     Gpu::TextureUsageFlags usage,
                                     Sync::AccessType readAccess)
 {
-    info_.textureDependencies.push_back(RenderTaskInfo::TextureDependency{
-        .kind = TaskDependencyKindBits::Read,
-        .handle = handle,
-        .usage = usage,
-        .access = readAccess});
+    info_.textureDependencies.push_back(
+        RenderTaskInfo::TextureDependency{.kind = TaskDependencyKindBits::Read,
+                                          .handle = handle,
+                                          .usage = usage,
+                                          .access = readAccess});
     return framegraph_.resources().info(handle.texture());
 }
 
@@ -98,18 +96,16 @@ BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle,
                                    Gpu::BufferUsageFlags usage,
                                    Sync::AccessType readAccess)
 {
-    info_.bufferDependencies.push_back(RenderTaskInfo::BufferDependency{
-        .kind = TaskDependencyKindBits::Read,
-        .handle = handle,
-        .usage = usage,
-        .access = readAccess});
+    info_.bufferDependencies.push_back(
+        RenderTaskInfo::BufferDependency{.kind = TaskDependencyKindBits::Read,
+                                         .handle = handle,
+                                         .usage = usage,
+                                         .access = readAccess});
     return framegraph_.resources().info(handle.buffer());
 }
 
-std::pair<TransientTextureHandle, TextureInfo>
-RenderTaskBuilder::write(TransientTextureHandle handle,
-                         Gpu::TextureUsageFlags usage,
-                         Sync::AccessType writeAccess)
+std::pair<TransientTextureHandle, TextureInfo> RenderTaskBuilder::write(
+    TransientTextureHandle handle, Gpu::TextureUsageFlags usage, Sync::AccessType writeAccess)
 {
     // increase the version of the texture handle to record the modification
     auto outputHandle = handle + 1;
@@ -123,10 +119,9 @@ RenderTaskBuilder::write(TransientTextureHandle handle,
     return {outputHandle, framegraph_.resources().info(outputHandle.texture())};
 }
 
-std::pair<TransientBufferHandle, BufferInfo>
-RenderTaskBuilder::write(TransientBufferHandle handle,
-                         Gpu::BufferUsageFlags usage,
-                         Sync::AccessType writeAccess)
+std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::write(TransientBufferHandle handle,
+                                                                      Gpu::BufferUsageFlags usage,
+                                                                      Sync::AccessType writeAccess)
 {
     auto outputHandle = handle + 1;
     info_.bufferDependencies.push_back({
@@ -139,10 +134,8 @@ RenderTaskBuilder::write(TransientBufferHandle handle,
     return {outputHandle, framegraph_.resources().info(outputHandle.buffer())};
 }
 
-std::pair<TransientTextureHandle, TextureInfo>
-RenderTaskBuilder::readWrite(TransientTextureHandle handle,
-                             Gpu::TextureUsageFlags usage,
-                             Sync::AccessType readWriteAccess)
+std::pair<TransientTextureHandle, TextureInfo> RenderTaskBuilder::readWrite(
+    TransientTextureHandle handle, Gpu::TextureUsageFlags usage, Sync::AccessType readWriteAccess)
 {
     info_.textureDependencies.push_back({
         .kind = TaskDependencyKindBits::Read,
@@ -164,10 +157,8 @@ RenderTaskBuilder::readWrite(TransientTextureHandle handle,
     return {outputHandle, framegraph_.resources().info(handle.texture())};
 }
 
-std::pair<TransientBufferHandle, BufferInfo>
-RenderTaskBuilder::readWrite(TransientBufferHandle handle,
-                             Gpu::BufferUsageFlags usage,
-                             Sync::AccessType readWriteAccess)
+std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::readWrite(
+    TransientBufferHandle handle, Gpu::BufferUsageFlags usage, Sync::AccessType readWriteAccess)
 {
     info_.bufferDependencies.push_back({
         .kind = TaskDependencyKindBits::Read,
@@ -200,18 +191,16 @@ TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration p
             outputHandle = *existing;
         }
         else if (shouldReadAttachment(attachment.load)) {
-            outputHandle =
-                readWrite(attachment.target,
-                          Gpu::TextureUsageFlagBits::ColorAttachmentBit,
-                          Sync::AccessType::ColorAttachmentReadWrite)
-                    .first;
+            outputHandle = readWrite(attachment.target,
+                                     Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                                     Sync::AccessType::ColorAttachmentReadWrite)
+                               .first;
         }
         else {
-            outputHandle =
-                write(attachment.target,
-                      Gpu::TextureUsageFlagBits::ColorAttachmentBit,
-                      Sync::AccessType::ColorAttachmentWrite)
-                    .first;
+            outputHandle = write(attachment.target,
+                                 Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                                 Sync::AccessType::ColorAttachmentWrite)
+                               .first;
         }
         attachment.target = outputHandle;
         colorOutputs.push_back(outputHandle);
@@ -227,18 +216,16 @@ TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration p
             outputHandle = *existing;
         }
         else if (shouldReadAttachment(depthAttachment.load)) {
-            outputHandle =
-                readWrite(depthAttachment.target,
-                          Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
-                          Sync::AccessType::DepthStencilAttachmentReadWrite)
-                    .first;
+            outputHandle = readWrite(depthAttachment.target,
+                                     Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                                     Sync::AccessType::DepthStencilAttachmentReadWrite)
+                               .first;
         }
         else {
-            outputHandle =
-                write(depthAttachment.target,
-                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
-                      Sync::AccessType::DepthStencilAttachmentWrite)
-                    .first;
+            outputHandle = write(depthAttachment.target,
+                                 Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                                 Sync::AccessType::DepthStencilAttachmentWrite)
+                               .first;
         }
         depthAttachment.target = outputHandle;
         depthOutput = outputHandle;
@@ -254,18 +241,16 @@ TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration p
             outputHandle = *existing;
         }
         else if (shouldReadAttachment(stencilAttachment.load)) {
-            outputHandle =
-                readWrite(stencilAttachment.target,
-                          Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
-                          Sync::AccessType::DepthStencilAttachmentReadWrite)
-                    .first;
+            outputHandle = readWrite(stencilAttachment.target,
+                                     Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                                     Sync::AccessType::DepthStencilAttachmentReadWrite)
+                               .first;
         }
         else {
-            outputHandle =
-                write(stencilAttachment.target,
-                      Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
-                      Sync::AccessType::DepthStencilAttachmentWrite)
-                    .first;
+            outputHandle = write(stencilAttachment.target,
+                                 Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+                                 Sync::AccessType::DepthStencilAttachmentWrite)
+                               .first;
         }
         stencilAttachment.target = outputHandle;
         stencilOutput = outputHandle;

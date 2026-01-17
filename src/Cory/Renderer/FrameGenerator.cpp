@@ -8,7 +8,9 @@ namespace Cory {
 FrameGenerator::iterator::iterator(GenIter iter,
                                    GenSentinel end,
                                    std::function<void(FrameContext &)> *presenter)
-    : iter_(std::move(iter)), end_(end), presenter_(presenter)
+    : iter_(std::move(iter))
+    , end_(end)
+    , presenter_(presenter)
 {
     pending_ = iter_ != end_;
 }
@@ -54,7 +56,8 @@ void FrameGenerator::iterator::presentIfPending()
 }
 
 FrameGenerator::FrameGenerator(Generator generator, std::function<void(FrameContext &)> presenter)
-    : generator_(std::move(generator)), presenter_(std::move(presenter))
+    : generator_(std::move(generator))
+    , presenter_(std::move(presenter))
 {
 }
 

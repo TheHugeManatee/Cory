@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Cory/Base/SlotMap.hpp>
-#include <Cory/Renderer/Common.hpp>
 #include <Cory/Base/ValOptional.hpp>
+#include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
 #include <filesystem>
@@ -35,8 +35,7 @@ class ShaderManager : NoCopy {
                  std::source_location loc = std::source_location::current());
     /// Create a shader from a fully configured ShaderSource.
     [[nodiscard]] ShaderHandle
-    createShader(ShaderSource source,
-                 std::source_location loc = std::source_location::current());
+    createShader(ShaderSource source, std::source_location loc = std::source_location::current());
     /// @see ShaderSource::ShaderSource(std::string, ShaderType, std::filesystem::path)
     [[nodiscard]] ShaderHandle
     createShader(std::string source,

@@ -20,9 +20,7 @@ class FrameGenerator {
         using GenSentinel = decltype(std::declval<Generator &>().end());
 
         iterator() = default;
-        iterator(GenIter iter,
-                 GenSentinel end,
-                 std::function<void(FrameContext &)> *presenter);
+        iterator(GenIter iter, GenSentinel end, std::function<void(FrameContext &)> *presenter);
         iterator(const iterator &) = delete;
         iterator &operator=(const iterator &) = delete;
         iterator(iterator &&) = default;

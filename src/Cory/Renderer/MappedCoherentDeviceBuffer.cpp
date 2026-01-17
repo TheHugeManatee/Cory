@@ -35,7 +35,7 @@ uint32_t findMemoryType(VkPhysicalDevice physicalDevice,
     return UINT32_MAX;
 }
 
-void setDebugName(KDGpu::VulkanDevice *device,
+void setDebugName(Gpu::VulkanDevice *device,
                   VkObjectType type,
                   uint64_t handle,
                   std::string_view name)

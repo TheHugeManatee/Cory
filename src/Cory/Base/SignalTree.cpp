@@ -210,8 +210,7 @@ bool SignalTree::unsafeQueryIsSet(SignalIdx signal) const
 {
     CO_CORE_DEBUG_ASSERT(signal.has_value(),
                          "SignalTree::unsafeQueryIsSet requires a valid signal index");
-    CO_CORE_DEBUG_ASSERT(*signal < maxSignals_,
-                         "SignalTree::unsafeQueryIsSet index out of range");
+    CO_CORE_DEBUG_ASSERT(*signal < maxSignals_, "SignalTree::unsafeQueryIsSet index out of range");
     auto leafNodeBlockIndex = *signal / LeafNodeBlock::NUM_BITS;
     auto leafNodeBit = *signal % LeafNodeBlock::NUM_BITS;
 

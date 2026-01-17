@@ -13,10 +13,8 @@ RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
 {
     auto colorInfo = builder.read(
         sourceImage, Gpu::TextureUsageFlagBits::TransferSrcBit, Sync::AccessType::TransferRead);
-    auto [outputWriteHandle, swapchainInfo] =
-        builder.write(targetImage,
-                      Gpu::TextureUsageFlagBits::TransferDstBit,
-                      Sync::AccessType::TransferWrite);
+    auto [outputWriteHandle, swapchainInfo] = builder.write(
+        targetImage, Gpu::TextureUsageFlagBits::TransferDstBit, Sync::AccessType::TransferWrite);
 
     RenderInput renderApi = co_await builder.finishDeclaration(outputWriteHandle);
 
@@ -27,7 +25,7 @@ RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
     auto swapchainImage = renderApi.resources->image(outputWriteHandle);
 
     // Depending on the MSAA state of the window image, either resolve or blit to the swapchain
-    if (colorInfo.sampleCount != KDGpu::SampleCountFlagBits::Samples1Bit) {
+    if (colorInfo.sampleCount != Gpu::SampleCountFlagBits::Samples1Bit) {
         renderApi.cmd->resolveTexture(Gpu::TextureResolveOptions{
             .srcTexture = windowImage,
             .srcLayout = Gpu::TextureLayout::TransferSrcOptimal,
@@ -54,7 +52,7 @@ RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
                  .dstOffset = {0, 0, 0},
                  .dstExtent = extent,
              }},
-             .scalingFilter = KDGpu::FilterMode::Linear});
+             .scalingFilter = Gpu::FilterMode::Linear});
     }
 }
 } // namespace Cory::StandardRenderTasks

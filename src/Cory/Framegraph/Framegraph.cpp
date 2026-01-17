@@ -19,6 +19,98 @@
 
 #include <KDGpu/texture.h>
 #include <KDGpu/texture_view.h>
+#include <KDGpu/vulkan/vulkan_resource_manager.h>
+
+#include <algorithm>
+#include <deque>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+
+namespace Cory {
+
+struct FramegraphPrivate {
+    FramegraphPrivate(Context &ctx_param, uint32_t instanceIndex)
+        : ctx{&ctx_param}
+        , resources{ctx_param}
+        , shaderBindingContext{
+              ctx->device(), resources, ctx->descriptors(), instanceIndex, 200 * 1024 * 1024}
+    {
+    }
+
+    Context *ctx;
+    FramegraphResourceManager resources;
+    ShaderBindingContext shaderBindingContext;
+    std::vector<TransientTextureHandle> externalInputs;
+    std::vector<TransientTextureHandle> outputs;
+
+    SlotMap<RenderTaskInfo> renderTasks;
+    CommandRecorder *commandListInProgress{};
+    FrameContext *currentFrameCtx{};
+
+    std::unordered_map<TransientTextureHandle, Sync::AccessType> outputFinalAccesses;
+};
+
+namespace {
+using InternalTaskHandle = SlotMapHandle;
+
+struct ResolveLookups {
+    std::unordered_map<TransientTextureHandle, InternalTaskHandle> textureToTask;
+    std::unordered_multimap<InternalTaskHandle, TransientTextureHandle> taskTextureInputs;
+    std::unordered_map<TransientTextureHandle, TextureInfo> textures;
+    std::unordered_map<TransientBufferHandle, InternalTaskHandle> bufferToTask;
+    std::unordered_multimap<InternalTaskHandle, TransientBufferHandle> taskBufferInputs;
+    std::unordered_map<TransientBufferHandle, BufferInfo> buffers;
+};
+
+struct RequiredSets {
+    std::vector<FramegraphTextureHandle> requiredResources;
+    std::vector<FramegraphBufferHandle> requiredBuffers;
+    std::unordered_set<FramegraphTextureHandle> requiredResourceSet;
+    std::unordered_set<FramegraphBufferHandle> requiredBufferSet;
+    std::unordered_set<InternalTaskHandle> requiredTasks;
+    std::unordered_set<TransientTextureHandle> resolvedTextures;
+    std::unordered_set<TransientBufferHandle> resolvedBuffers;
+};
+
+struct TaskOrder {
+    std::vector<InternalTaskHandle> tasks;
+    std::unordered_map<InternalTaskHandle, std::unordered_set<InternalTaskHandle>> adjacency;
+    std::unordered_map<InternalTaskHandle, size_t> indegree;
+};
+
+// Build lookup tables for writers, pure-read inputs, and resource info.
+ResolveLookups buildResolveLookups(const FramegraphPrivate &data)
+{
+    ResolveLookups lookups;
+    for (const auto &[taskHandle, taskInfo] : data.renderTasks.items()) {
+        for (const RenderTaskInfo::TextureDependency &dependency : taskInfo.textureDependencies) {
+            const auto kind = dependency.kind;
+            if (kind.is_set(TaskDependencyKindBits::Read) &&
+                !kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.taskTextureInputs.insert({taskHandle, dependency.handle});
+            }
+            if (kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.textureToTask[dependency.handle] = taskHandle;
+            }
+            lookups.textures[dependency.handle] = data.resources.info(dependency.handle);
+        }
+        for (const RenderTaskInfo::BufferDependency &dependency : taskInfo.bufferDependencies) {
+            const auto kind = dependency.kind;
+            if (kind.is_set(TaskDependencyKindBits::Read) &&
+                !kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.taskBufferInputs.insert({taskHandle, dependency.handle});
+            }
+            if (kind.is_set(TaskDependencyKindBits::Write)) {
+                lookups.bufferToTask[dependency.handle] = taskHandle;
+            }
+            lookups.buffers[dependency.handle] = data.resources.info(dependency.handle);
+        }
+    }
+    return lookups;
+}
+
+// Traverse dependencies from requested outputs to collect required tasks/resources.
 bool collectRequired(const FramegraphPrivate &data,
                      const ResolveLookups &lookups,
                      const std::vector<TransientTextureHandle> &requestedResources,
@@ -66,7 +158,45 @@ bool collectRequired(const FramegraphPrivate &data,
         while (!nextTexturesToResolve.empty()) {
             auto nextResource = nextTexturesToResolve.front();
             nextTexturesToResolve.pop_front();
- 
+            if (!recordTextureHandle(nextResource)) continue;
+
+            auto writingTaskIt = lookups.textureToTask.find(nextResource);
+            if (writingTaskIt == lookups.textureToTask.end()) {
+                if (ranges::contains(data.externalInputs, nextResource)) {
+                    continue;
+                }
+
+                CO_CORE_ERROR(
+                    "Could not resolve frame dependency graph: resource '{} v{}' ({}) is not "
+                    "created by any render task",
+                    lookups.textures.at(nextResource).name,
+                    nextResource.version(),
+                    nextResource.texture());
+                return false;
+            }
+
+            const InternalTaskHandle writingTask = writingTaskIt->second;
+            CO_CORE_TRACE("Resolving resource '{} v{}': created/written by render task '{}'",
+                          lookups.textures.at(nextResource).name,
+                          nextResource.version(),
+                          data.renderTasks[writingTask].name);
+            if (required.requiredTasks.insert(writingTask).second) {
+                appendCreatedResources(data.renderTasks[writingTask]);
+            }
+
+            auto texInputs = lookups.taskTextureInputs.equal_range(writingTask);
+            ranges::transform(texInputs.first,
+                              texInputs.second,
+                              std::back_inserter(nextTexturesToResolve),
+                              [&](const auto &it) {
+                                  CO_CORE_TRACE("Requesting input texture for {}: '{} v{}'",
+                                                data.renderTasks[writingTask].name,
+                                                lookups.textures.at(it.second).name,
+                                                it.second.version());
+                                  return it.second;
+                              });
+
+            auto bufInputs = lookups.taskBufferInputs.equal_range(writingTask);
             ranges::transform(bufInputs.first,
                               bufInputs.second,
                               std::back_inserter(nextBuffersToResolve),
@@ -287,10 +417,8 @@ RenderTaskBuilder Framegraph::declareTask(std::string_view name)
     return RenderTaskBuilder{*data_->ctx, *this, name};
 }
 
-Framegraph::Framegraph(Context &ctx,
-                       FramegraphResourceManager &resources,
-                       uint32_t instanceIndex)
-    : data_{std::make_unique<FramegraphPrivate>(ctx, resources, instanceIndex)}
+Framegraph::Framegraph(Context &ctx, uint32_t instanceIndex)
+    : data_{std::make_unique<FramegraphPrivate>(ctx, instanceIndex)}
 {
 }
 
@@ -299,14 +427,7 @@ Framegraph::~Framegraph()
     // if data_ is empty, object is moved-from
     if (data_) {
         try {
-            data_->shaderBindingContext.reset();
-            for (RenderTaskInfo &info : data_->renderTasks) { // NOLINT (false positive)
-                info.coroHandle.destroy();
-            }
-            data_->renderTasks.clear();
-            data_->externalInputs.clear();
-            data_->outputs.clear();
-            data_->outputFinalAccesses.clear();
+            resetForNextFrame();
         }
         catch (const std::exception &e) {
             CO_APP_ERROR("Uncaught exception in destructor: {}", e.what());
@@ -325,12 +446,12 @@ void Framegraph::finalizeOutputs(ExecutionInfo executionInfo)
         auto it = data_->outputFinalAccesses.find(output);
         if (it == data_->outputFinalAccesses.end()) continue;
         Sync::AccessType requestedAccess = it->second;
-        auto currentState = data_->resources->state(output);
+        auto currentState = data_->resources.state(output);
         Sync::AccessType lastAccess = currentState.lastAccess;
         // Only add a barrier if the access actually changes
         if (lastAccess != requestedAccess) {
-            auto barrier = data_->resources->synchronizeTexture(
-                output, requestedAccess, ImageContents::Retain);
+            auto barrier =
+                data_->resources.synchronizeTexture(output, requestedAccess, ImageContents::Retain);
             outputBarriers.push_back(barrier);
             // Record the transition in the execution info
             executionInfo.transitions.push_back(
@@ -353,9 +474,6 @@ void Framegraph::finalizeOutputs(ExecutionInfo executionInfo)
 ExecutionInfo Framegraph::record(FrameContext &frameCtx)
 {
     const Cory::ScopeTimer s1{"Framegraph/Execute"};
-    data_->resources->setCurrentFrameNumber(frameCtx.frameNumber);
-    data_->lastFrameNumber = frameCtx.frameNumber;
-    data_->hasRecordedFrame = true;
     auto executionInfo = compile();
 
     const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
@@ -379,16 +497,12 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
     return executionInfo;
 }
 
-void Framegraph::resetForNextFrame(uint64_t frameNumber)
+void Framegraph::resetForNextFrame()
 {
     data_->shaderBindingContext.reset();
-    if (data_->hasRecordedFrame) {
-        data_->resources->clearFrame(data_->lastFrameNumber);
-    }
-    data_->resources->setCurrentFrameNumber(frameNumber);
+    data_->resources.clear();
     data_->externalInputs.clear();
     data_->outputs.clear();
-    data_->outputFinalAccesses.clear();
 
     for (RenderTaskInfo &info : data_->renderTasks) { // NOLINT (false positive)
         info.coroHandle.destroy();
@@ -409,7 +523,7 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, Render
                 .kind = resourceInfo.kind,
                 .task = handle,
                 .resource = resourceInfo.handle,
-                .stateBefore = data_->resources->state(resourceInfo.handle).lastAccess,
+                .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
                 .stateAfter = resourceInfo.access});
 
             // only discard if it is not a read/write dependency
@@ -417,7 +531,7 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, Render
                                           ? ImageContents::Retain
                                           : ImageContents::Discard;
 
-            return data_->resources->synchronizeTexture(
+            return data_->resources.synchronizeTexture(
                 resourceInfo.handle, resourceInfo.access, contentsMode);
         };
 
@@ -426,10 +540,10 @@ Framegraph::PassTransitions Framegraph::executePass(CommandRecorder &cmd, Render
                 .kind = resourceInfo.kind,
                 .task = handle,
                 .resource = resourceInfo.handle,
-                .stateBefore = data_->resources->state(resourceInfo.handle).lastAccess,
+                .stateBefore = data_->resources.state(resourceInfo.handle).lastAccess,
                 .stateAfter = resourceInfo.access});
 
-            return data_->resources->synchronizeBuffer(resourceInfo.handle, resourceInfo.access);
+            return data_->resources.synchronizeBuffer(resourceInfo.handle, resourceInfo.access);
         };
 
         // fill the barriers from the inputs and outputs
@@ -515,7 +629,7 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
                                                 const TextureView &imageView)
 {
     auto handle =
-        data_->resources->registerExternal(std::move(info), lastWriteAccess, image, imageView);
+        data_->resources.registerExternal(std::move(info), lastWriteAccess, image, imageView);
 
     TransientTextureHandle thandle{handle};
 
@@ -528,7 +642,7 @@ std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureH
 {
     data_->outputs.push_back(handle);
     data_->outputFinalAccesses[handle] = finalAccess;
-    return {data_->resources->info(handle), data_->resources->state(handle)};
+    return {data_->resources.info(handle), data_->resources.state(handle)};
 }
 
 ExecutionInfo Framegraph::compile()
@@ -536,8 +650,8 @@ ExecutionInfo Framegraph::compile()
     const Cory::ScopeTimer s{"Framegraph/Execute/Compile"};
 
     auto execInfo = resolve(data_->outputs);
-    data_->resources->allocate(execInfo.resources);
-    data_->resources->allocate(execInfo.buffers);
+    data_->resources.allocate(execInfo.resources);
+    data_->resources.allocate(execInfo.buffers);
 
     return std::move(execInfo);
 }
@@ -563,11 +677,11 @@ void Framegraph::enqueueRenderPass(RenderTaskHandle passHandle,
 
 FramegraphResourceManager &Framegraph::resources()
 {
-    return *data_->resources;
+    return data_->resources;
 }
 const FramegraphResourceManager &Framegraph::resources() const
 {
-    return *data_->resources;
+    return data_->resources;
 }
 const std::vector<TransientTextureHandle> &Framegraph::externalInputs() const
 {
@@ -619,7 +733,7 @@ RenderInput Framegraph::renderInput(RenderTaskHandle taskHandle)
     return {
         .ctx = data_->ctx,
         .frameCtx = data_->currentFrameCtx,
-        .resources = data_->resources,
+        .resources = &data_->resources,
         .bindingContext = &data_->shaderBindingContext,
         .cmd = data_->commandListInProgress,
     };

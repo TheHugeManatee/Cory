@@ -58,12 +58,13 @@ struct RenderPassDeclaration {
 /// Transient render stores the information to set up and execute a render pass
 class TransientRenderPass : NoCopy {
   public:
-    explicit TransientRenderPass(Context &ctx,
-                                 FramegraphResourceManager &textures,
-                                 RenderPassDeclaration pass,
-                                 std::vector<TransientTextureHandle> colorOutputs = {},
-                                 std::optional<TransientTextureHandle> depthOutput = std::nullopt,
-                                 std::optional<TransientTextureHandle> stencilOutput = std::nullopt);
+    explicit TransientRenderPass(
+        Context &ctx,
+        FramegraphResourceManager &textures,
+        RenderPassDeclaration pass,
+        std::vector<TransientTextureHandle> colorOutputs = {},
+        std::optional<TransientTextureHandle> depthOutput = std::nullopt,
+        std::optional<TransientTextureHandle> stencilOutput = std::nullopt);
     ~TransientRenderPass();
 
     TransientRenderPass(TransientRenderPass &&) = default;
@@ -112,7 +113,7 @@ class TransientRenderPass : NoCopy {
     std::optional<TransientTextureHandle> stencilOutput_;
 
     Gpu::PipelineLayoutHandle pipelineLayout_;
-    const RenderInput* currentRenderApi_{};
+    const RenderInput *currentRenderApi_{};
 };
 
 } // namespace Cory

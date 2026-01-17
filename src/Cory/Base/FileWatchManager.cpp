@@ -341,7 +341,10 @@ FileWatchEventType FileWatchManager::NextEventAwaitable::await_resume()
     return *cachedEvent;
 }
 
-void FileWatchManager::detach(FileWatchHandle handle) { detachConsumer(handle); }
+void FileWatchManager::detach(FileWatchHandle handle)
+{
+    detachConsumer(handle);
+}
 
 void FileWatchManager::detachConsumer(FileWatchHandle handle)
 {
@@ -368,8 +371,7 @@ void FileWatchManager::ensureConsumer(FileWatchHandle handle)
     }
 }
 
-std::optional<FileWatchEventType>
-FileWatchManager::tryConsumeQueuedEvent(FileWatchHandle handle)
+std::optional<FileWatchEventType> FileWatchManager::tryConsumeQueuedEvent(FileWatchHandle handle)
 {
     if (!handle) return std::nullopt;
     if (!data_->watches.isValid(handle)) return std::nullopt;

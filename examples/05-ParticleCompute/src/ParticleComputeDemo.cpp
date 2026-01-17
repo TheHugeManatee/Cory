@@ -30,7 +30,6 @@
 #include <gsl/gsl>
 #include <gsl/narrow>
 
-
 #include <algorithm>
 
 ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const char *> args)

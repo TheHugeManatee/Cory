@@ -127,8 +127,7 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
                             .sharingMode = Gpu::SharingMode::Exclusive,
                             .queueTypeIndices = {},
                             .initialLayout = Gpu::TextureLayout::Undefined,
-                            .externalMemoryHandleType =
-                                KDGpu::ExternalMemoryHandleTypeFlagBits::None,
+                            .externalMemoryHandleType = Gpu::ExternalMemoryHandleTypeFlagBits::None,
                             .drmFormatModifiers = {},
                             .createFlags = {}});
 
@@ -159,7 +158,7 @@ void FramegraphResourceManager::allocate(const std::vector<FramegraphTextureHand
 }
 
 void FramegraphResourceManager::extendUsage(FramegraphTextureHandle handle,
-                                         Gpu::TextureUsageFlags usage)
+                                            Gpu::TextureUsageFlags usage)
 {
     data_->textureResources_[handle].info.usage |= usage;
 }
@@ -281,7 +280,7 @@ void FramegraphResourceManager::allocate(const std::vector<FramegraphBufferHandl
 }
 
 void FramegraphResourceManager::extendUsage(FramegraphBufferHandle handle,
-                                         Gpu::BufferUsageFlags usage)
+                                            Gpu::BufferUsageFlags usage)
 {
     data_->bufferResources_[handle].info.usage |= usage;
 }

@@ -287,7 +287,7 @@ Gpu::SampleCountFlagBits TransientRenderPass::determineSampleCount() const
     }
     // sample count of one is returned if there is no attachment at all!
     return pass_.depthAttachment.transform(sampleCount)
-        .value_or(KDGpu::SampleCountFlagBits::Samples1Bit);
+        .value_or(Gpu::SampleCountFlagBits::Samples1Bit);
 }
 
 Gpu::Rect2D TransientRenderPass::determineRenderArea() const

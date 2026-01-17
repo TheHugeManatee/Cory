@@ -32,9 +32,18 @@ TrianglePipeline::TrianglePipeline(Cory::Context &context,
 }
 
 TrianglePipeline::~TrianglePipeline() {}
-KDGpu::RenderPass &TrianglePipeline::mainRenderPass() { return data_->mainRenderPass; }
-KDGpu::GraphicsPipeline &TrianglePipeline::pipeline() { return data_->pipeline; }
-KDGpu::PipelineLayout &TrianglePipeline::layout() { return data_->layout; }
+KDGpu::RenderPass &TrianglePipeline::mainRenderPass()
+{
+    return data_->mainRenderPass;
+}
+KDGpu::GraphicsPipeline &TrianglePipeline::pipeline()
+{
+    return data_->pipeline;
+}
+KDGpu::PipelineLayout &TrianglePipeline::layout()
+{
+    return data_->layout;
+}
 
 void TrianglePipeline::createGraphicsPipeline(Gpu::Format colorFormat,
                                               Gpu::Format depthFormat,

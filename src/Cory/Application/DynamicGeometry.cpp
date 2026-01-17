@@ -97,28 +97,28 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
                                            std::span<const uint32_t> indexData)
 {
     auto &device = ctx.device();
-    KDGpu::UploadStagingBuffer vertex_staging_buffer;
-    KDGpu::UploadStagingBuffer index_staging_buffer;
+    Gpu::UploadStagingBuffer vertex_staging_buffer;
+    Gpu::UploadStagingBuffer index_staging_buffer;
     Mesh mesh{
         .vertexCount = gsl::narrow_cast<uint32_t>(vertexData.size()),
         .indexCount = gsl::narrow_cast<uint32_t>(indexData.size()),
     };
 
     {
-        const KDGpu::DeviceSize dataByteSize = vertexData.size() * sizeof(Mesh::Vertex);
-        const KDGpu::BufferOptions bufferOptions = {
-            .label = "Vertex Buffer",
-            .size = dataByteSize,
-            .usage = KDGpu::BufferUsageFlagBits::VertexBufferBit |
-                     KDGpu::BufferUsageFlagBits::TransferDstBit,
-            .memoryUsage = KDGpu::MemoryUsage::GpuOnly};
+        const Gpu::DeviceSize dataByteSize = vertexData.size() * sizeof(Mesh::Vertex);
+        const Gpu::BufferOptions bufferOptions = {.label = "Vertex Buffer",
+                                                  .size = dataByteSize,
+                                                  .usage =
+                                                      Gpu::BufferUsageFlagBits::VertexBufferBit |
+                                                      Gpu::BufferUsageFlagBits::TransferDstBit,
+                                                  .memoryUsage = Gpu::MemoryUsage::GpuOnly};
 
         mesh.vertexBuffer = device.createBuffer(bufferOptions);
 
-        const KDGpu::BufferUploadOptions uploadOptions = {
+        const Gpu::BufferUploadOptions uploadOptions = {
             .destinationBuffer = mesh.vertexBuffer,
-            .dstStages = KDGpu::PipelineStageFlagBit::VertexAttributeInputBit,
-            .dstMask = KDGpu::AccessFlagBit::VertexAttributeReadBit,
+            .dstStages = Gpu::PipelineStageFlagBit::VertexAttributeInputBit,
+            .dstMask = Gpu::AccessFlagBit::VertexAttributeReadBit,
             .data = vertexData.data(),
             .byteSize = dataByteSize};
 
@@ -126,18 +126,18 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
     }
     // Create a buffer to hold the geometry index data
     {
-        const KDGpu::DeviceSize dataByteSize = indexData.size() * sizeof(uint32_t);
-        const KDGpu::BufferOptions bufferOptions = {.label = "Index Buffer",
-                                                    .size = dataByteSize,
-                                                    .usage =
-                                                        KDGpu::BufferUsageFlagBits::IndexBufferBit |
-                                                        KDGpu::BufferUsageFlagBits::TransferDstBit,
-                                                    .memoryUsage = KDGpu::MemoryUsage::GpuOnly};
+        const Gpu::DeviceSize dataByteSize = indexData.size() * sizeof(uint32_t);
+        const Gpu::BufferOptions bufferOptions = {.label = "Index Buffer",
+                                                  .size = dataByteSize,
+                                                  .usage =
+                                                      Gpu::BufferUsageFlagBits::IndexBufferBit |
+                                                      Gpu::BufferUsageFlagBits::TransferDstBit,
+                                                  .memoryUsage = Gpu::MemoryUsage::GpuOnly};
         mesh.indexBuffer = device.createBuffer(bufferOptions);
-        const KDGpu::BufferUploadOptions uploadOptions = {
+        const Gpu::BufferUploadOptions uploadOptions = {
             .destinationBuffer = mesh.indexBuffer,
-            .dstStages = KDGpu::PipelineStageFlagBit::IndexInputBit,
-            .dstMask = KDGpu::AccessFlagBit::IndexReadBit,
+            .dstStages = Gpu::PipelineStageFlagBit::IndexInputBit,
+            .dstMask = Gpu::AccessFlagBit::IndexReadBit,
             .data = indexData.data(),
             .byteSize = dataByteSize};
         index_staging_buffer = ctx.graphicsQueue().uploadBufferData(uploadOptions);

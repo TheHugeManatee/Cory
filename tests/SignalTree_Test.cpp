@@ -4,6 +4,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <algorithm>
+#include <atomic>
 #include <barrier>
 #include <latch>
 #include <random>
@@ -109,6 +111,48 @@ TEST_CASE("SignalTree", "[Cory/SignalTree]")
         for (gsl::index i = 0; i < num_signals; ++i) {
             REQUIRE(signalsSet[i] == i);
         }
+    }
+    SECTION("Deterministic set/select accounting")
+    {
+        constexpr uint64_t kSignals = 64;
+        Cory::SignalTree signals(kSignals);
+        std::vector<bool> state(kSignals, false);
+
+        std::mt19937 rng(12345);
+        std::uniform_int_distribution<int> opDist(0, 1);
+        std::uniform_int_distribution<int> idxDist(0, static_cast<int>(kSignals - 1));
+
+        for (int i = 0; i < 10000; ++i) {
+            if (opDist(rng) == 0) {
+                const auto idx = static_cast<uint64_t>(idxDist(rng));
+                const bool didSet = signals.set(idx);
+                if (didSet) {
+                    REQUIRE(!state[idx]);
+                    state[idx] = true;
+                }
+                else {
+                    REQUIRE(state[idx]);
+                }
+            }
+            else {
+                auto selected = signals.select(rng());
+                if (selected.has_value()) {
+                    REQUIRE(state[*selected]);
+                    state[*selected] = false;
+                }
+            }
+
+            const auto expected = static_cast<uint64_t>(
+                std::count(state.begin(), state.end(), true));
+            REQUIRE(signals.count() == expected);
+        }
+
+        for (auto selected = signals.select(); selected.has_value();
+             selected = signals.select()) {
+            REQUIRE(state[*selected]);
+            state[*selected] = false;
+        }
+        REQUIRE(signals.count() == 0);
     }
 }
 
@@ -244,6 +288,7 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
 
         // one latch per iteration, to synchronize all producers finishing their loop
         std::barrier iteration_barrier(cfg.NUM_PRODUCERS + cfg.NUM_CONSUMERS);
+        std::barrier consumers_drained(cfg.NUM_CONSUMERS);
         std::barrier consumers_done(cfg.NUM_PRODUCERS + cfg.NUM_CONSUMERS);
         std::atomic<size_t> producersActive{0};
 
@@ -300,6 +345,8 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
 
                     // producers have stopped setting signals, so we can drain the rest
                     drain_signals();
+
+                    consumers_drained.arrive_and_wait();
 
                     // all producers should now be done for this iteration, so we can do some
                     // single-threaded validity checks
@@ -391,4 +438,102 @@ TEST_CASE("SignalTree MT Stress/Fuzz", "[Cory/SignalTree]")
     //                         .NUM_CONSUMERS = 16,
     //                         .NUM_ITERATIONS = 100});
     // }
+}
+
+TEST_CASE("SignalTree MT drain fully signaled", "[Cory/SignalTree]")
+{
+    constexpr uint64_t kSignals = 256;
+    Cory::SignalTree signals(kSignals, Cory::SignalTree::CreateMode::FullySignaled);
+
+    std::vector<std::atomic<uint32_t>> counts(kSignals);
+    for (auto &count : counts) {
+        count.store(0);
+    }
+    std::atomic<uint64_t> totalSelected{0};
+
+    constexpr int kConsumers = 8;
+    std::vector<std::thread> consumers;
+    consumers.reserve(kConsumers);
+    for (int i = 0; i < kConsumers; ++i) {
+        consumers.emplace_back([&]() {
+            for (;;) {
+                auto selected = signals.select();
+                if (!selected.has_value()) {
+                    break;
+                }
+                counts[*selected].fetch_add(1);
+                totalSelected.fetch_add(1);
+            }
+        });
+    }
+
+    for (auto &consumer : consumers) {
+        consumer.join();
+    }
+
+    REQUIRE(totalSelected.load() == kSignals);
+    for (uint64_t i = 0; i < kSignals; ++i) {
+        REQUIRE(counts[i].load() == 1);
+    }
+    REQUIRE(signals.count() == 0);
+}
+
+TEST_CASE("SignalTree MT same-signal contention", "[Cory/SignalTree]")
+{
+    constexpr uint64_t kSignals = 8;
+    constexpr uint64_t kSignalIndex = 3;
+    constexpr int kProducers = 8;
+    constexpr int kConsumers = 4;
+    constexpr int kIterations = 1000;
+    constexpr uint64_t kTotalSets = static_cast<uint64_t>(kProducers) * kIterations;
+
+    Cory::SignalTree signals(kSignals);
+    std::barrier startBarrier(kProducers + kConsumers);
+    std::atomic<uint64_t> sets{0};
+    std::atomic<uint64_t> selects{0};
+
+    auto producer = [&]() {
+        startBarrier.arrive_and_wait();
+        for (int i = 0; i < kIterations; ++i) {
+            while (!signals.set(kSignalIndex)) {
+                std::this_thread::yield();
+            }
+            sets.fetch_add(1);
+        }
+    };
+
+    auto consumer = [&]() {
+        startBarrier.arrive_and_wait();
+        while (selects.load() < kTotalSets) {
+            auto selected = signals.select();
+            if (!selected.has_value()) {
+                std::this_thread::yield();
+                continue;
+            }
+            REQUIRE(selected.value() == kSignalIndex);
+            selects.fetch_add(1);
+        }
+    };
+
+    std::vector<std::thread> producers;
+    std::vector<std::thread> consumers;
+    producers.reserve(kProducers);
+    consumers.reserve(kConsumers);
+    for (int i = 0; i < kProducers; ++i) {
+        producers.emplace_back(producer);
+    }
+    for (int i = 0; i < kConsumers; ++i) {
+        consumers.emplace_back(consumer);
+    }
+
+    for (auto &producerThread : producers) {
+        producerThread.join();
+    }
+    for (auto &consumerThread : consumers) {
+        consumerThread.join();
+    }
+
+    REQUIRE(sets.load() == kTotalSets);
+    REQUIRE(selects.load() == kTotalSets);
+    REQUIRE(signals.count() == 0);
 }

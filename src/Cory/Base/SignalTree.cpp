@@ -141,6 +141,8 @@ SignalTree::~SignalTree() noexcept = default;
 
 bool SignalTree::set(SignalIdx index) noexcept
 {
+    CO_CORE_DEBUG_ASSERT(index.has_value(), "SignalTree::set requires a valid signal index");
+    CO_CORE_DEBUG_ASSERT(*index < maxSignals_, "SignalTree::set index out of range");
     // Set operations must go bottom-up from the leaf node to the root
     if (bool wasSet = updateLeafSignal(index, true); wasSet) {
         // signal was already set - we don't need to update the tree
@@ -208,6 +210,10 @@ void SignalTree::validateInternal() const
 
 bool SignalTree::unsafeQueryIsSet(SignalIdx signal) const
 {
+    CO_CORE_DEBUG_ASSERT(signal.has_value(),
+                         "SignalTree::unsafeQueryIsSet requires a valid signal index");
+    CO_CORE_DEBUG_ASSERT(*signal < maxSignals_,
+                         "SignalTree::unsafeQueryIsSet index out of range");
     auto leafNodeBlockIndex = *signal / LeafNodeBlock::NUM_BITS;
     auto leafNodeBit = *signal % LeafNodeBlock::NUM_BITS;
 
@@ -289,6 +295,9 @@ SignalTree::NodeIdx SignalTree::selectLeafNode(NodeIdx firstIdx, NodeIdx secondI
 
 bool SignalTree::updateLeafSignal(SignalIdx signal, bool set)
 {
+    CO_CORE_DEBUG_ASSERT(signal.has_value(),
+                         "SignalTree::updateLeafSignal requires a valid signal index");
+    CO_CORE_DEBUG_ASSERT(*signal < maxSignals_, "SignalTree::updateLeafSignal index out of range");
     auto leafNodeBlockIndex = *signal / LeafNodeBlock::NUM_BITS;
     auto leafNodeBit = *signal % LeafNodeBlock::NUM_BITS;
 

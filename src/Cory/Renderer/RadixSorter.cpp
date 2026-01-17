@@ -79,11 +79,11 @@ RenderTaskDeclaration<TransientBufferHandle> radixInitIndicesTask(
 
     RenderInput renderApi = co_await builder.finishDeclaration(writtenIndices);
 
-    auto [bufferHandle, buffer] = renderApi.resources->bufferResource(writtenIndices);
-    (void)bufferHandle;
-    auto *mapped = static_cast<uint32_t *>(buffer->map());
+    auto view = renderApi.resources->bufferView(writtenIndices);
+    CO_CORE_ASSERT(view.hostVisible && view.cpu != nullptr,
+                   "Radix indices buffer is not host-visible");
+    auto *mapped = reinterpret_cast<uint32_t *>(view.cpu);
     std::iota(mapped, mapped + instanceCount, 0u);
-    buffer->unmap();
 }
 
 RenderTaskDeclaration<TransientBufferHandle>

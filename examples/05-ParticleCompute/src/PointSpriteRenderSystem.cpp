@@ -92,8 +92,7 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
     instanceBuffer.buffer.unmap();
 
     globals->instances = instanceBuffer.buffer.bufferDeviceAddress();
-    globals->sortKeys =
-        renderApi.resources->bufferResource(writtenSortKeys).vulkanBuffer->bufferDeviceAddress();
+    globals->sortKeys = renderApi.resources->bufferView(writtenSortKeys).deviceAddress;
     CO_CORE_ASSERT(globals->sortKeys != 0 && globals->instances != 0, "Invalid BDAs");
 
     auto pass = predicatePass.begin(renderApi);

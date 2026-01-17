@@ -82,25 +82,31 @@ TEST_CASE("Framegraph resource manager tracks textures and buffers",
 
         resources.allocate(std::vector<FramegraphBufferHandle>{bufferHandle});
         CHECK(resources.state(bufferHandle).status == BufferMemoryStatus::Allocated);
-        CHECK(resources.buffer(bufferHandle).isValid());
+        const auto bufferView = resources.bufferView(bufferHandle);
+        CHECK(bufferView.deviceAddress != 0);
+        CHECK(bufferView.size == bufferInfo.size);
 
         Gpu::Buffer externalBuffer = device.createBuffer(Gpu::BufferOptions{
             .label = "BUF_External",
             .size = 128u,
-            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
             .memoryUsage = Gpu::MemoryUsage::GpuOnly,
         });
 
         auto externalBufferHandle = resources.registerExternal(
             BufferInfo{.name = "BUF_External",
                        .size = 128u,
-                       .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
+                       .usage = Gpu::BufferUsageFlagBits::StorageBufferBit |
+                                Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
                        .memoryUsage = Gpu::MemoryUsage::GpuOnly},
             Sync::AccessType::None,
             externalBuffer);
 
         CHECK(resources.state(externalBufferHandle).status == BufferMemoryStatus::External);
-        CHECK(resources.buffer(externalBufferHandle) == externalBuffer.handle());
+        const auto externalView = resources.bufferView(externalBufferHandle);
+        CHECK(externalView.deviceAddress != 0);
+        CHECK(externalView.size == 128u);
     }
     // Cleanup
     resources.clearAll();

@@ -197,11 +197,12 @@ CubeDemoApplication::~CubeDemoApplication()
 
 void CubeDemoApplication::run()
 {
+    Cory::FramegraphResourceManager framegraphResources{ctx()};
     // one framegraph for each frame in flight
     std::vector<Cory::Framegraph> framegraphs;
     uint32_t idx = 0;
     std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
-        return Cory::Framegraph(ctx(), idx++);
+        return Cory::Framegraph(ctx(), framegraphResources, idx++);
     });
 
     auto time = getElapsedTimeSeconds();
@@ -233,7 +234,7 @@ void CubeDemoApplication::run()
         // retire old resources from the last time this framegraph was
         // used - our frame synchronization ensures that the resources
         // are no longer in use
-        fg.resetForNextFrame();
+        fg.resetForNextFrame(frameCtx.frameNumber);
 
         defineRenderPasses(fg, frameCtx);
 

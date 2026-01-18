@@ -12,6 +12,8 @@
 
 #include <gsl/narrow>
 
+#include <vector>
+
 namespace Cory {
 
 struct TextureResource {
@@ -19,18 +21,21 @@ struct TextureResource {
     TextureState state;
     Gpu::TextureHandle image;
     Gpu::TextureViewHandle view;
+    uint64_t lastUsedFrameNumber{0};
 };
 
 struct BufferResource {
     BufferInfo info;
     BufferState state;
     Gpu::BufferHandle buffer;
+    uint64_t lastUsedFrameNumber{0};
 };
 
 struct FramegraphResourceManagerPrivate {
     Context *ctx_{};
     SlotMap<TextureResource> textureResources_;
     SlotMap<BufferResource> bufferResources_;
+    uint64_t currentFrameNumber{};
 };
 
 FramegraphResourceManager::FramegraphResourceManager(Context &ctx)
@@ -39,11 +44,24 @@ FramegraphResourceManager::FramegraphResourceManager(Context &ctx)
     data_->ctx_ = &ctx;
 }
 
-FramegraphResourceManager::~FramegraphResourceManager() = default;
+FramegraphResourceManager::~FramegraphResourceManager()
+{
+    clearAll();
+}
 FramegraphResourceManager::FramegraphResourceManager(FramegraphResourceManager &&) noexcept =
     default;
 FramegraphResourceManager &
 FramegraphResourceManager::operator=(FramegraphResourceManager &&) noexcept = default;
+
+void FramegraphResourceManager::setCurrentFrameNumber(uint64_t frameNumber)
+{
+    data_->currentFrameNumber = frameNumber;
+}
+
+uint64_t FramegraphResourceManager::currentFrameNumber() const
+{
+    return data_->currentFrameNumber;
+}
 
 FramegraphTextureHandle FramegraphResourceManager::declareTexture(TextureInfo info)
 {
@@ -57,7 +75,8 @@ FramegraphTextureHandle FramegraphResourceManager::declareTexture(TextureInfo in
         info,
         TextureState{.lastAccess = Sync::AccessType::None, .status = TextureMemoryStatus::Virtual},
         Gpu::Texture{},
-        Gpu::TextureView{}});
+        Gpu::TextureView{},
+        data_->currentFrameNumber});
     return handle;
 }
 
@@ -72,7 +91,8 @@ FramegraphResourceManager::registerExternal(TextureInfo info,
                         .state = TextureState{.lastAccess = lastWriteAccess,
                                               .status = TextureMemoryStatus::External},
                         .image = resource,
-                        .view = resourceView});
+                        .view = resourceView,
+                        .lastUsedFrameNumber = data_->currentFrameNumber});
 
     return handle;
 }
@@ -149,7 +169,8 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
 {
     const auto &info = data_->textureResources_[handle].info;
     auto aspectMask = flagsForFormat(info.format);
-    auto &state = data_->textureResources_[handle].state;
+    auto &resource = data_->textureResources_[handle];
+    auto &state = resource.state;
 
     auto *texture = data_->ctx_->resources().getTexture(image(handle));
     CO_CORE_DEBUG_ASSERT(texture != nullptr, "Texture resource is null");
@@ -179,6 +200,7 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
                   access);
 
     state.lastAccess = access;
+    resource.lastUsedFrameNumber = data_->currentFrameNumber;
     return barrier;
 }
 
@@ -210,7 +232,8 @@ FramegraphBufferHandle FramegraphResourceManager::declareBuffer(BufferInfo info)
         BufferResource{.info = std::move(info),
                        .state = BufferState{.lastAccess = Sync::AccessType::None,
                                             .status = BufferMemoryStatus::Virtual},
-                       .buffer = Gpu::Buffer{}});
+                       .buffer = Gpu::Buffer{},
+                       .lastUsedFrameNumber = data_->currentFrameNumber});
     return handle;
 }
 
@@ -221,7 +244,8 @@ FramegraphBufferHandle FramegraphResourceManager::registerExternal(BufferInfo in
     auto handle = data_->bufferResources_.emplace(BufferResource{
         .info = std::move(info),
         .state = BufferState{.lastAccess = lastWriteAccess, .status = BufferMemoryStatus::External},
-        .buffer = resource});
+        .buffer = resource,
+        .lastUsedFrameNumber = data_->currentFrameNumber});
     return handle;
 }
 
@@ -258,7 +282,8 @@ void FramegraphResourceManager::allocate(const std::vector<FramegraphBufferHandl
 Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBufferHandle handle,
                                                                  Sync::AccessType access)
 {
-    auto &state = data_->bufferResources_[handle].state;
+    auto &resource = data_->bufferResources_[handle];
+    auto &state = resource.state;
     auto *bufferResource = data_->ctx_->resources().getBuffer(buffer(handle));
     CO_CORE_DEBUG_ASSERT(bufferResource != nullptr, "Buffer resource is null");
 
@@ -276,6 +301,7 @@ Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBuffe
                   access);
 
     state.lastAccess = access;
+    resource.lastUsedFrameNumber = data_->currentFrameNumber;
     return barrier;
 }
 
@@ -312,22 +338,72 @@ BufferState FramegraphResourceManager::state(FramegraphBufferHandle handle) cons
     return data_->bufferResources_[handle].state;
 }
 
-void FramegraphResourceManager::clear()
+void FramegraphResourceManager::clearFrame(uint64_t frameNumber)
 {
-    for (auto &res : data_->textureResources_) {
-        if (res.state.status == TextureMemoryStatus::Allocated) {
-            data_->ctx_->resources().deleteTexture(res.image);
-            data_->ctx_->resources().deleteTextureView(res.view);
-        }
+    if (!data_) {
+        return;
     }
-    data_->textureResources_.clear();
+    std::vector<FramegraphTextureHandle> textureHandlesToRelease;
+    for (const auto &handle : data_->textureResources_.handles()) {
+        const auto &resource = data_->textureResources_[handle];
+        if (resource.lastUsedFrameNumber != frameNumber) {
+            continue;
+        }
+        if (resource.state.status == TextureMemoryStatus::Allocated) {
+            data_->ctx_->resources().deleteTexture(resource.image);
+            data_->ctx_->resources().deleteTextureView(resource.view);
+        }
+        textureHandlesToRelease.push_back(handle);
+    }
+    for (const auto &handle : textureHandlesToRelease) {
+        data_->textureResources_.release(handle);
+    }
 
-    for (auto &res : data_->bufferResources_) {
-        if (res.state.status == BufferMemoryStatus::Allocated) {
-            data_->ctx_->resources().deleteBuffer(res.buffer);
+    std::vector<FramegraphBufferHandle> bufferHandlesToRelease;
+    for (const auto &handle : data_->bufferResources_.handles()) {
+        const auto &resource = data_->bufferResources_[handle];
+        if (resource.lastUsedFrameNumber != frameNumber) {
+            continue;
         }
+        if (resource.state.status == BufferMemoryStatus::Allocated) {
+            data_->ctx_->resources().deleteBuffer(resource.buffer);
+        }
+        bufferHandlesToRelease.push_back(handle);
     }
-    data_->bufferResources_.clear();
+    for (const auto &handle : bufferHandlesToRelease) {
+        data_->bufferResources_.release(handle);
+    }
+}
+
+void FramegraphResourceManager::clearAll()
+{
+    if (!data_) {
+        return;
+    }
+    std::vector<FramegraphTextureHandle> textureHandlesToRelease;
+    for (const auto &handle : data_->textureResources_.handles()) {
+        const auto &resource = data_->textureResources_[handle];
+        if (resource.state.status == TextureMemoryStatus::Allocated) {
+            data_->ctx_->resources().deleteTexture(resource.image);
+            data_->ctx_->resources().deleteTextureView(resource.view);
+        }
+        textureHandlesToRelease.push_back(handle);
+    }
+    for (const auto &handle : textureHandlesToRelease) {
+        data_->textureResources_.release(handle);
+    }
+
+    std::vector<FramegraphBufferHandle> bufferHandlesToRelease;
+    for (const auto &handle : data_->bufferResources_.handles()) {
+        const auto &resource = data_->bufferResources_[handle];
+        if (resource.state.status == BufferMemoryStatus::Allocated) {
+            data_->ctx_->resources().deleteBuffer(resource.buffer);
+        }
+        bufferHandlesToRelease.push_back(handle);
+    }
+    for (const auto &handle : bufferHandlesToRelease) {
+        data_->bufferResources_.release(handle);
+    }
 }
 
 } // namespace Cory

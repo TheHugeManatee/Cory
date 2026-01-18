@@ -23,7 +23,9 @@ struct Mesh {
 class TrianglePipeline : Cory::NoCopy {
   public:
     TrianglePipeline(Cory::Context &context,
-                     const Cory::Window &window,
+                     Gpu::Format colorFormat,
+                     Gpu::Format depthFormat,
+                     Gpu::SampleCountFlagBits sampleCount,
                      const Mesh &mesh,
                      std::filesystem::path vertFile,
                      std::filesystem::path fragFile);
@@ -35,7 +37,9 @@ class TrianglePipeline : Cory::NoCopy {
     KDGpu::PipelineLayout &layout();
 
   private:
-    void createGraphicsPipeline(const Cory::Window &window,
+    void createGraphicsPipeline(Gpu::Format colorFormat,
+                                Gpu::Format depthFormat,
+                                Gpu::SampleCountFlagBits sampleCount,
                                 const Mesh &mesh,
                                 std::filesystem::path vertFile,
                                 std::filesystem::path fragFile);

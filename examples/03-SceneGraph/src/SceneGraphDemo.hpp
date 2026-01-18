@@ -11,6 +11,10 @@
 #include <memory>
 #include <span>
 
+namespace Cory {
+class HeadlessFrameSource;
+}
+
 class SceneGraphDemoApplication : public Cory::Application {
   public:
     SceneGraphDemoApplication(std::span<const char *> args);
@@ -27,6 +31,8 @@ class SceneGraphDemoApplication : public Cory::Application {
   private:
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
+    std::unique_ptr<Cory::HeadlessFrameSource> headlessFrames_;
+    bool headless_{false};
 
     bool dumpNextFramegraph_{false};
 

@@ -17,6 +17,7 @@
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
@@ -120,6 +121,7 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     CLI::App app{"CubeDemo"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
+    app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.parse(argc, argv);
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
@@ -138,27 +140,41 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     // CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 8);
+    if (headless_) {
+        ctx().setupHeadlessDevice();
+        headlessFrames_ = std::make_unique<Cory::HeadlessFrameSource>(
+            ctx(),
+            Cory::HeadlessFrameSourceCreateInfo{
+                .label = "CubeDemo-Headless",
+                .size = Cory::glmu::u32vec2::from(WINDOW_SIZE),
+                .samples = Gpu::SampleCountFlagBits::Samples8Bit,
+            });
+    }
+    else {
+        window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "CubeDemo", 8);
+    }
 
     createGeometry();
     createShaders();
 
-    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
-        // createFramebuffers();
-        layers().processEvent(e);
-    };
-    window_->onSwapchainResized.connect(recreateSizedResources);
-    recreateSizedResources({window_->dimensions()});
+    if (!headless_) {
+        auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
+            // createFramebuffers();
+            layers().processEvent(e);
+        };
+        window_->onSwapchainResized.connect(recreateSizedResources);
+        recreateSizedResources({window_->dimensions()});
 
-    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
-                                          .viewportDimensions = window_->dimensions()};
-    layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
-    layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+        Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
+                                              .viewportDimensions = window_->dimensions()};
+        layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
+        layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
 
-    camera_.setMode(Cory::CameraManipulator::Mode::Trackball);
-    camera_.setWindowSize(window_->dimensions());
-    camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
-    setupCameraCallbacks();
+        camera_.setMode(Cory::CameraManipulator::Mode::Trackball);
+        camera_.setWindowSize(window_->dimensions());
+        camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
+        setupCameraCallbacks();
+    }
 }
 
 void CubeDemoApplication::createShaders()
@@ -190,22 +206,28 @@ void CubeDemoApplication::run()
 
     auto time = getElapsedTimeSeconds();
 
-    for (auto &frameCtx : window_->frames()) {
+    auto runFrame = [&](Cory::FrameContext &frameCtx) {
         // Process KDGui events
-        processEvents(0);
-        glfwPollEvents();
+        if (!headless_) {
+            processEvents(0);
+            glfwPollEvents();
+        }
 
         // Update time
         auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
         auto delta = time - previousFrameTime;
 
-        // Update layers
-        layers().update(Cory::LogicUpdateContext{
-            .simulationTime = time,
-            .deltaTime = delta,
-        });
+        if (!headless_) {
+            // Update layers
+            layers().update(Cory::LogicUpdateContext{
+                .simulationTime = time,
+                .deltaTime = delta,
+            });
+        }
 
-        drawImguiControls();
+        if (!headless_) {
+            drawImguiControls();
+        }
 
         Cory::Framegraph &fg = framegraphs[frameCtx.inFlightIndex];
         // retire old resources from the last time this framegraph was
@@ -222,9 +244,22 @@ void CubeDemoApplication::run()
             dumpNextFramegraph_ = false;
         }
 
-        // break if number of frames to render are reached
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
+    };
+
+    if (headless_) {
+        for (auto &frameCtx : headlessFrames_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
+        }
+    }
+    else {
+        for (auto &frameCtx : window_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
         }
     }
 

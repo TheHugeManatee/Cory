@@ -13,6 +13,7 @@
 
 namespace Cory {
 class ImGuiLayer;
+class HeadlessFrameSource;
 class Window;
 struct FrameContext;
 } // namespace Cory
@@ -68,9 +69,11 @@ class DynamicPipelineApplication : public Cory::Application {
 
     uint64_t framesToRender_{0};
     bool disableValidation_{false};
+    bool headless_{false};
     double startupTime_{0.0};
 
     std::unique_ptr<Cory::Window> window_;
+    std::unique_ptr<Cory::HeadlessFrameSource> headlessFrames_;
     Cory::ImGuiLayer *imguiLayer_{nullptr};
     Cory::Mesh mesh_;
 

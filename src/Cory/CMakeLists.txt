@@ -113,6 +113,8 @@ set(CORY_SOURCES
         Renderer/FrameGenerator.hpp
         Renderer/FrameContext.hpp
         Renderer/FrameResourceLifetimeHelper.hpp
+        Renderer/HeadlessFrameSource.cpp
+        Renderer/HeadlessFrameSource.hpp
         Renderer/Gpu.cpp
         Renderer/Gpu.hpp
         Renderer/GpuBumpAllocator.cpp

@@ -12,6 +12,7 @@
 #include <Cory/Cory.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 
 #include <KDGpu/buffer_options.h>
@@ -90,6 +91,7 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     CLI::App app{"HelloTriangle"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
+    app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.parse(argc, argv);
 
     Cory::ResourceLocator::addSearchPath(TRIANGLE_RESOURCE_DIR);
@@ -109,28 +111,50 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     CO_APP_INFO("MSAA sample count: {}", msaaSamples);
 
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "HelloTriangle", msaaSamples);
+    if (headless_) {
+        ctx().setupHeadlessDevice();
+        headlessFrames_ = std::make_unique<Cory::HeadlessFrameSource>(
+            ctx(),
+            Cory::HeadlessFrameSourceCreateInfo{
+                .label = "HelloTriangle-Headless",
+                .size = Cory::glmu::u32vec2::from(WINDOW_SIZE),
+                .samples = static_cast<Gpu::SampleCountFlagBits>(msaaSamples),
+            });
+    }
+    else {
+        window_ = std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "HelloTriangle", msaaSamples);
+    }
 
     createGeometry();
+    const Gpu::Format colorFormat =
+        headless_ ? headlessFrames_->colorFormat() : window_->colorFormat();
+    const Gpu::Format depthFormat =
+        headless_ ? headlessFrames_->depthFormat() : window_->depthFormat();
+    const Gpu::SampleCountFlagBits sampleCount =
+        headless_ ? headlessFrames_->sampleCount() : window_->samples();
     pipeline_ =
         std::make_unique<TrianglePipeline>(ctx(),
-                                           *window_,
+                                           colorFormat,
+                                           depthFormat,
+                                           sampleCount,
                                            *mesh_,
                                            std::filesystem::path{"simple_shader.vert.slang"},
                                            std::filesystem::path{"simple_shader.frag.slang"});
 
-    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
-        createFramebuffers();
-        layers().processEvent(e);
-    };
-    window_->onSwapchainResized.connect(recreateSizedResources);
-    recreateSizedResources({window_->dimensions()});
+    if (!headless_) {
+        auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
+            createFramebuffers();
+            layers().processEvent(e);
+        };
+        window_->onSwapchainResized.connect(recreateSizedResources);
+        recreateSizedResources({window_->dimensions()});
 
-    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
-                                          .viewportDimensions = window_->dimensions()};
-    // ImGui layer does not currently support non-dynamic rendering anymore..
-    // imguiLayer_ =
-    //    &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+        Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
+                                              .viewportDimensions = window_->dimensions()};
+        // ImGui layer does not currently support non-dynamic rendering anymore..
+        // imguiLayer_ =
+        //    &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+    }
 }
 
 HelloTriangleApplication::~HelloTriangleApplication()
@@ -146,10 +170,11 @@ void HelloTriangleApplication::run()
 
     auto time = getElapsedTimeSeconds();
 
-    for (auto &frameCtx : window_->frames()) {
-
+    auto runFrame = [&](Cory::FrameContext &frameCtx) {
         // Process KDGui events
-        processEvents(0);
+        if (!headless_) {
+            processEvents(0);
+        }
 
         // Update time
         auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
@@ -166,10 +191,22 @@ void HelloTriangleApplication::run()
         // drawImguiControls();
 
         recordCommands(frameCtx);
+    };
 
-        // break if number of frames to render are reached
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
+    if (headless_) {
+        for (auto &frameCtx : headlessFrames_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
+        }
+    }
+    else {
+        for (auto &frameCtx : window_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
         }
     }
     // wait until last frame is finished rendering

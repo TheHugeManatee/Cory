@@ -6,12 +6,14 @@
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/FileWatchManager.hpp>
 #include <Cory/Base/FmtUtils.hpp>
+#include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
@@ -73,6 +75,7 @@ DynamicPipelineApplication::DynamicPipelineApplication(int argc, char **argv)
     CLI::App app{"DynamicPipeline"};
     app.add_option("-f,--frames", framesToRender_, "Limit the number of rendered frames");
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
+    app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.parse(argc, argv);
 
     Cory::ResourceLocator::addSearchPath(DYNAMIC_PIPELINE_RESOURCE_DIR);
@@ -83,24 +86,38 @@ DynamicPipelineApplication::DynamicPipelineApplication(int argc, char **argv)
     });
 
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1280, 720};
-    window_ = std::make_unique<Cory::Window>(
-        ctx(), WINDOW_SIZE, "04 - Dynamic Pipeline", /*sample count*/ 1);
+    if (headless_) {
+        ctx().setupHeadlessDevice();
+        headlessFrames_ = std::make_unique<Cory::HeadlessFrameSource>(
+            ctx(),
+            Cory::HeadlessFrameSourceCreateInfo{
+                .label = "DynamicPipeline-Headless",
+                .size = Cory::glmu::u32vec2::from(WINDOW_SIZE),
+                .samples = Gpu::SampleCountFlagBits::Samples1Bit,
+            });
+    }
+    else {
+        window_ = std::make_unique<Cory::Window>(
+            ctx(), WINDOW_SIZE, "04 - Dynamic Pipeline", /*sample count*/ 1);
+    }
 
     resetAttachmentLayouts();
     shaderAutoReloadTask_ = loadShaders();
     createGeometry();
 
-    auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
-        resetAttachmentLayouts();
-        layers().processEvent(e);
-    };
-    window_->onSwapchainResized.connect(recreateSizedResources);
-    recreateSizedResources({window_->dimensions()});
+    if (!headless_) {
+        auto recreateSizedResources = [&](Cory::SwapchainResizedEvent e) {
+            resetAttachmentLayouts();
+            layers().processEvent(e);
+        };
+        window_->onSwapchainResized.connect(recreateSizedResources);
+        recreateSizedResources({window_->dimensions()});
 
-    Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
-                                          .viewportDimensions = window_->dimensions()};
-    imguiLayer_ =
-        &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+        Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
+                                              .viewportDimensions = window_->dimensions()};
+        imguiLayer_ =
+            &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+    }
 }
 
 DynamicPipelineApplication::~DynamicPipelineApplication()
@@ -116,8 +133,10 @@ void DynamicPipelineApplication::run()
     auto finalSync = gsl::finally([this]() { ctx().device().waitUntilIdle(); });
     double currentTime = getElapsedTimeSeconds();
 
-    for (auto &frameCtx : window_->frames()) {
-        processEvents();
+    auto runFrame = [&](Cory::FrameContext &frameCtx) {
+        if (!headless_) {
+            processEvents();
+        }
         // Process any file changes - triggers e.g. shader reloads
         ctx().fileWatchManager().processPendingEvents();
 
@@ -126,12 +145,16 @@ void DynamicPipelineApplication::run()
         double previousTime = std::exchange(currentTime, getElapsedTimeSeconds());
         const double delta = currentTime - previousTime;
 
-        layers().update(Cory::LogicUpdateContext{
-            .simulationTime = currentTime,
-            .deltaTime = delta,
-        });
+        if (!headless_) {
+            layers().update(Cory::LogicUpdateContext{
+                .simulationTime = currentTime,
+                .deltaTime = delta,
+            });
+        }
 
-        drawUi(frameCtx);
+        if (!headless_) {
+            drawUi(frameCtx);
+        }
 
         if (requestCompile_) {
             compileFragmentShaderSource(fragmentShaderEditorSource_, frameCtx.frameNumber);
@@ -139,9 +162,22 @@ void DynamicPipelineApplication::run()
         }
 
         recordCommands(frameCtx);
+    };
 
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
+    if (headless_) {
+        for (auto &frameCtx : headlessFrames_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
+        }
+    }
+    else {
+        for (auto &frameCtx : window_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
         }
     }
 }
@@ -238,7 +274,8 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
             .view = *frameCtx.swapchainImageView,
             .clearValue = {r, g, b, 1.0f},
             .initialLayout = Gpu::TextureLayout::ColorAttachmentOptimal,
-            .finalLayout = Gpu::TextureLayout::PresentSrc,
+            .finalLayout = headless_ ? Gpu::TextureLayout::ColorAttachmentOptimal
+                                     : Gpu::TextureLayout::PresentSrc,
         }},
         .depthStencilAttachment =
             {
@@ -528,13 +565,14 @@ bool DynamicPipelineApplication::compileFragmentShaderSource(std::string_view so
 
 void DynamicPipelineApplication::resetAttachmentLayouts()
 {
-    if (!window_) {
+    if (!window_ && !headlessFrames_) {
         swapchainLayouts_.clear();
         depthLayouts_.clear();
         return;
     }
 
-    const size_t imageCount = window_->swapchain().size();
+    const size_t imageCount =
+        window_ ? window_->swapchain().size() : headlessFrames_->size();
     swapchainLayouts_.assign(imageCount, Gpu::TextureLayout::Undefined);
     depthLayouts_.assign(imageCount, Gpu::TextureLayout::Undefined);
 }
@@ -577,6 +615,9 @@ void DynamicPipelineApplication::transitionColorAttachmentForRender(Cory::FrameC
 
 void DynamicPipelineApplication::transitionColorAttachmentForPresent(Cory::FrameContext &frameCtx)
 {
+    if (headless_) {
+        return;
+    }
     if (swapchainLayouts_.empty()) {
         return;
     }

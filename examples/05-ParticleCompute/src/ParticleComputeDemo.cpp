@@ -7,6 +7,7 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
+#include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Time.hpp>
@@ -17,6 +18,7 @@
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
@@ -36,6 +38,7 @@ ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const c
     bool disableValidation{false};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation, "Disable validation layers");
+    app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.allow_config_extras(true);
     app.parse(gsl::narrow<int>(args.size()), args.data());
 
@@ -50,17 +53,33 @@ ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const c
     // Use Cory API for MSAA sample count
     const int msaaSamples = 2; // Or use window_->samples() after window creation if needed
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
-    window_ =
-        std::make_unique<Cory::Window>(ctx(), WINDOW_SIZE, "Particle Compute Demo", msaaSamples);
+    if (headless_) {
+        ctx().setupHeadlessDevice();
+        headlessFrames_ = std::make_unique<Cory::HeadlessFrameSource>(
+            ctx(),
+            Cory::HeadlessFrameSourceCreateInfo{
+                .label = "ParticleCompute-Headless",
+                .size = Cory::glmu::u32vec2::from(WINDOW_SIZE),
+                .samples = static_cast<Gpu::SampleCountFlagBits>(msaaSamples),
+            });
+    }
+    else {
+        window_ = std::make_unique<Cory::Window>(
+            ctx(), WINDOW_SIZE, "Particle Compute Demo", msaaSamples);
+    }
 
     setupScene();
     setupSystems();
 
+    const auto viewportDimensions =
+        headless_ ? headlessFrames_->extent() : window_->dimensions();
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
-                                          .viewportDimensions = window_->dimensions()};
+                                          .viewportDimensions = viewportDimensions};
     cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);
-    layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
-    layers().connectToWindow(*window_);
+    if (!headless_) {
+        layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+        layers().connectToWindow(*window_);
+    }
 }
 
 void ParticleComputeDemoApplication::setupScene()
@@ -148,21 +167,27 @@ void ParticleComputeDemoApplication::run()
     });
 
     auto time = Cory::AppClock::now();
-    for (auto &frameCtx : window_->frames()) {
-        processEvents(0);
-        glfwPollEvents();
+    auto runFrame = [&](Cory::FrameContext &frameCtx) {
+        if (!headless_) {
+            processEvents(0);
+            glfwPollEvents();
+        }
 
         // Update time
         auto previousFrameTime = std::exchange(time, Cory::AppClock::now());
         auto delta = time - previousFrameTime;
 
-        // Update layers
-        layers().update(Cory::LogicUpdateContext{
-            .simulationTime = std::chrono::duration(time.time_since_epoch()).count(),
-            .deltaTime = delta.count(),
-        });
+        if (!headless_) {
+            // Update layers
+            layers().update(Cory::LogicUpdateContext{
+                .simulationTime = std::chrono::duration(time.time_since_epoch()).count(),
+                .deltaTime = delta.count(),
+            });
+        }
 
-        drawImguiControls();
+        if (!headless_) {
+            drawImguiControls();
+        }
         // tick the components
         auto tickInfo = clock_.tick();
         systems_.tick(sceneGraph_, tickInfo);
@@ -182,9 +207,22 @@ void ParticleComputeDemoApplication::run()
             dumpNextFramegraph_ = false;
         }
 
-        // break if number of frames to render are reached
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
+    };
+
+    if (headless_) {
+        for (auto &frameCtx : headlessFrames_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
+        }
+    }
+    else {
+        for (auto &frameCtx : window_->frames()) {
+            runFrame(frameCtx);
+            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+                break;
+            }
         }
     }
 

@@ -2,7 +2,6 @@
 
 #include "CubeDemo.hpp"
 
-#include <cstdlib>
 #include <stdexcept>
 
 #include <gsl/gsl>

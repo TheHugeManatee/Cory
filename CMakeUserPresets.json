@@ -3,7 +3,9 @@
     "vendor": {
         "conan": {}
     },
-    "include": [],
+    "include": [
+        "../../../../home/j/cory-work/codex/CMakePresets.json"
+    ],
     "configurePresets": [
         {
             "name": "codex",

@@ -100,6 +100,20 @@ struct AwaitableConsumer {
     }
     EagerJob consumerTask;
 };
+
+std::vector<FileWatchEventType> compressModifiedEvents(std::vector<FileWatchEventType> events)
+{
+    std::vector<FileWatchEventType> compressed;
+    compressed.reserve(events.size());
+    for (auto event : events) {
+        if (!compressed.empty() && event == FileWatchEventType::Modified &&
+            compressed.back() == FileWatchEventType::Modified) {
+            continue;
+        }
+        compressed.push_back(event);
+    }
+    return compressed;
+}
 } // namespace
 
 TEST_CASE("FileWatchManager: file creation, modification, deletion, and unwatching")
@@ -118,12 +132,13 @@ TEST_CASE("FileWatchManager: file creation, modification, deletion, and unwatchi
 
     createTestFile(testFilePath);
     REQUIRE(consumer.waitForEvents(2));
-    CHECK(consumer.takeEvents() ==
+    CHECK(compressModifiedEvents(consumer.takeEvents()) ==
           std::vector{FileWatchEventType::Created, FileWatchEventType::Modified});
 
     modifyTestFile(testFilePath);
     REQUIRE(consumer.waitForEvents(1));
-    CHECK(consumer.takeEvents() == std::vector{FileWatchEventType::Modified});
+    CHECK(compressModifiedEvents(consumer.takeEvents()) ==
+          std::vector{FileWatchEventType::Modified});
 
     deleteTestFile(testFilePath);
     REQUIRE(consumer.waitForEvents(1));

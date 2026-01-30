@@ -15,6 +15,8 @@
 #include <KDGpuKDGui/view.h>
 #include <KDGui/gui_application.h>
 
+#include <stdexcept>
+
 #if defined(_WIN32)
 #include <vulkan/vulkan_win32.h>
 #elif defined(__linux__)
@@ -147,6 +149,15 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     // Enumerate the adapters (physical devices) and select one to use. Here we look for
     // a discrete GPU. In a real app, we could fallback to an integrated one.
     Adapter *selectedAdapter = data_->instance.selectAdapter(deviceType);
+    if (!selectedAdapter && deviceType == AdapterDeviceType::Default) {
+        selectedAdapter = data_->instance.selectAdapter(AdapterDeviceType::Cpu);
+    }
+    if (!selectedAdapter && deviceType == AdapterDeviceType::Default) {
+        selectedAdapter = data_->instance.selectAdapter(AdapterDeviceType::VirtualGpu);
+    }
+    if (!selectedAdapter && deviceType == AdapterDeviceType::Default) {
+        selectedAdapter = data_->instance.selectAdapter(AdapterDeviceType::Other);
+    }
     if (!selectedAdapter) {
         CO_CORE_FATAL("Unable to find a suitable Adapter. Aborting...");
         return {};
@@ -155,53 +166,53 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     auto queueTypes = selectedAdapter->queueTypes();
     const bool hasGraphicsAndCompute = queueTypes[0].supportsFeature(
         QueueFlags(QueueFlagBits::GraphicsBit) | QueueFlags(QueueFlagBits::ComputeBit));
-    CO_CORE_INFO("Queue family 0 graphics and compute support: {}", hasGraphicsAndCompute);
+    CO_CORE_TRACE("Queue family 0 graphics and compute support: {}", hasGraphicsAndCompute);
 
     // We are now able to query the adapter for swapchain properties and presentation support
     // with the window surface
     const auto swapchainProperties = selectedAdapter->swapchainProperties(surface);
-    CO_CORE_INFO("Supported swapchain present modes ({}):",
+    CO_CORE_TRACE("Supported swapchain present modes ({}):",
                  swapchainProperties.presentModes.size());
     for (const auto &mode : swapchainProperties.presentModes) {
-        CO_CORE_INFO("||  - {}", presentModeToString(mode));
+        CO_CORE_TRACE("||  - {}", presentModeToString(mode));
     }
 
     const bool supportsPresentation =
         selectedAdapter->supportsPresentation(surface, 0); // Query about the 1st queue type
-    CO_CORE_INFO("Queue family 0 supports presentation: {}", supportsPresentation);
+    CO_CORE_TRACE("Queue family 0 supports presentation: {}", supportsPresentation);
 
     const auto adapterExtensions = selectedAdapter->extensions();
-    CO_CORE_INFO("Supported adapter extensions ({}):", adapterExtensions.size());
+    CO_CORE_TRACE("Supported adapter extensions ({}):", adapterExtensions.size());
     for ([[maybe_unused]] const auto &extension : adapterExtensions) {
-        CO_CORE_INFO("||  - {} Version {}", extension.name, extension.version);
+        CO_CORE_TRACE("||  - {} Version {}", extension.name, extension.version);
     }
 
     if (!supportsPresentation || !hasGraphicsAndCompute) {
         CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
         return {};
     }
-    CO_CORE_INFO("Feature support: ");
+    CO_CORE_TRACE("Feature support: ");
     const bool supportsMultiView = selectedAdapter->features().multiView;
-    CO_CORE_INFO("|| - multiview: {}", supportsMultiView);
+    CO_CORE_TRACE("|| - multiview: {}", supportsMultiView);
 
     const bool supportsUBOIndexing =
         selectedAdapter->features().shaderUniformBufferArrayNonUniformIndexing &&
         selectedAdapter->features().bindGroupBindingUniformBufferUpdateAfterBind;
-    CO_CORE_INFO("|| - Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
+    CO_CORE_TRACE("|| - Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
 
     const bool supportsAccelerationStructures = selectedAdapter->features().accelerationStructures;
-    CO_CORE_INFO("|| - acceleration structures: {}", supportsAccelerationStructures);
+    CO_CORE_TRACE("|| - acceleration structures: {}", supportsAccelerationStructures);
 
     const bool supportsRayTracing = selectedAdapter->features().rayTracingPipeline;
-    CO_CORE_INFO("|| - raytracing: {}", supportsRayTracing);
+    CO_CORE_TRACE("|| - raytracing: {}", supportsRayTracing);
 
     const bool supportsMeshShader = selectedAdapter->features().meshShader;
     const bool supportsTaskShader = selectedAdapter->features().taskShader;
-    CO_CORE_INFO("|| - meshShader: {}", supportsMeshShader);
-    CO_CORE_INFO("|| - taskShader: {}", supportsTaskShader);
+    CO_CORE_TRACE("|| - meshShader: {}", supportsMeshShader);
+    CO_CORE_TRACE("|| - taskShader: {}", supportsTaskShader);
 
     const bool supportsHostToImageCopy = selectedAdapter->features().hostImageCopy;
-    CO_CORE_INFO("|| - host to image copy: {}", supportsHostToImageCopy);
+    CO_CORE_TRACE("|| - host to image copy: {}", supportsHostToImageCopy);
 
     // Now we can create a device from the selected adapter that we can then use to interact
     // with the GPU.
@@ -265,7 +276,10 @@ void Context::setupDeviceFromSurface(const Gpu::Surface &surface)
     auto defaultDevice = createDefaultDevice(surface);
     data_->adapter = defaultDevice.adapter;
     device = std::move(defaultDevice.device);
-    CO_CORE_ASSERT(!device.queues().empty(), "Device has no queues!");
+    if (!data_->adapter || device.queues().empty()) {
+        CO_CORE_ERROR("Device has no queues!");
+        throw std::runtime_error("Device has no queues!");
+    }
     data_->queue = data_->device.queues()[0];
 
     data_->isHeadless = false;

@@ -11,6 +11,7 @@
 #include "ImguiRenderer.hpp"
 
 #include <Cory/Base/GlmUtils.hpp>
+#include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
 #include <KDGpuExample/kdgpuexample.h>
@@ -25,8 +26,10 @@
 #include <KDUtils/color.h>
 
 #include <cmrc/cmrc.hpp>
+#include <fmt/format.h>
 #include <gsl/narrow>
 #include <imgui.h>
+#include <stdexcept>
 
 #include <vector>
 
@@ -172,16 +175,22 @@ void ImGuiRenderer::initialize(float scaleFactor,
     (void)depthFormat;
     m_samples = samples;
 
-    const auto vertShaderCode =
-        Shader::CompileToSpv(
-            ShaderSource{vertexShaderSource, ShaderStageFlagBits::VertexBit, "imgui.vert"})
-            .value()
-            .spirv;
-    const auto fragShaderCode =
-        Shader::CompileToSpv(
-            ShaderSource{fragmentShaderSource, ShaderStageFlagBits::FragmentBit, "imgui.frag"})
-            .value()
-            .spirv;
+    auto vertResult = Shader::CompileToSpv(
+        ShaderSource{vertexShaderSource, ShaderStageFlagBits::VertexBit, "imgui.vert"});
+    if (!vertResult.has_value()) {
+        CO_CORE_ERROR("Failed to compile ImGui vertex shader: {}", vertResult.error());
+        throw std::runtime_error(
+            fmt::format("Failed to compile ImGui vertex shader: {}", vertResult.error()));
+    }
+    const auto vertShaderCode = std::move(vertResult).value().spirv;
+    auto fragResult = Shader::CompileToSpv(
+        ShaderSource{fragmentShaderSource, ShaderStageFlagBits::FragmentBit, "imgui.frag"});
+    if (!fragResult.has_value()) {
+        CO_CORE_ERROR("Failed to compile ImGui fragment shader: {}", fragResult.error());
+        throw std::runtime_error(
+            fmt::format("Failed to compile ImGui fragment shader: {}", fragResult.error()));
+    }
+    const auto fragShaderCode = std::move(fragResult).value().spirv;
 
     m_bindGroupLayout = m_device->createBindGroupLayout(BindGroupLayoutOptions{
         .bindings =

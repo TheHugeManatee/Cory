@@ -290,7 +290,7 @@ SlangCompiler::compileShader(const ShaderSource &source, std::string_view entryP
     SlangResult programResult = request->getProgram(program.writeRef());
     if (!SLANG_FAILED(programResult) && program) {
         const std::string dump = SlangCompilerTools::dumpProgramLayout(program);
-        CO_CORE_DEBUG("=== {}:0 ===\n{}", source.filePath().string(), dump);
+        CO_CORE_TRACE("=== {}:0 ===\n{}", source.filePath().string(), dump);
         if (auto layout = program->getLayout()) {
             if (auto globals = layout->getGlobalParamsTypeLayout()) {
                 const uint32_t fieldCount = globals->getFieldCount();

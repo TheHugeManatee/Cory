@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cbt"
+version = "0.1.0"
+description = "Cory build tool"
+requires-python = ">=3.9"
+dependencies = ["click>=8.1"]
+
+[project.scripts]
+cbt = "cbt.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cbt*"]

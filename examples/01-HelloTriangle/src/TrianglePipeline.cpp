@@ -8,6 +8,9 @@
 
 #include <KDGpu/graphics_pipeline_options.h>
 
+#include <fmt/format.h>
+#include <stdexcept>
+
 struct TrianglePipeline::PrivateData {
     Cory::Context *ctx;
     KDGpu::GraphicsPipeline pipeline;
@@ -43,16 +46,24 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
 
     const auto vertexShaderSource =
         Cory::ShaderSource{vertexFile, Gpu::ShaderStageFlagBits::VertexBit};
-    auto vertexShader =
-        device.createShaderModule(
-            Cory::Shader::CompileToSpv(vertexShaderSource, false).value().spirv);
+    auto vertexResult = Cory::Shader::CompileToSpv(vertexShaderSource, false);
+    if (!vertexResult.has_value()) {
+        CO_CORE_ERROR("Failed to compile vertex shader {}: {}", vertexFile.string(), vertexResult.error());
+        throw std::runtime_error(
+            fmt::format("Failed to compile vertex shader {}: {}", vertexFile.string(), vertexResult.error()));
+    }
+    auto vertexShader = device.createShaderModule(std::move(vertexResult).value().spirv);
 
     const auto fragmentFile = Cory::ResourceLocator::Locate(fragFile);
     const auto fragmentShaderSource =
         Cory::ShaderSource{fragmentFile, Gpu::ShaderStageFlagBits::FragmentBit};
-    auto fragmentShader =
-        device.createShaderModule(
-            Cory::Shader::CompileToSpv(fragmentShaderSource, false).value().spirv);
+    auto fragmentResult = Cory::Shader::CompileToSpv(fragmentShaderSource, false);
+    if (!fragmentResult.has_value()) {
+        CO_CORE_ERROR("Failed to compile fragment shader {}: {}", fragmentFile.string(), fragmentResult.error());
+        throw std::runtime_error(
+            fmt::format("Failed to compile fragment shader {}: {}", fragmentFile.string(), fragmentResult.error()));
+    }
+    auto fragmentShader = device.createShaderModule(std::move(fragmentResult).value().spirv);
 
     // Create a pipeline layout (array of bind group layouts)
     const KDGpu::PipelineLayoutOptions pipelineLayoutOptions = {

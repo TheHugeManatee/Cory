@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "setup" ]]; then
+    if [[ -z "${2:-}" ]]; then
+        echo "cbt setup: missing build folder" >&2
+        echo "usage: cbt setup <build_folder>" >&2
+        exit 2
+    fi
+
+    build_root="$2"
+    venv_dir="${build_root}/.venv"
+
+    mkdir -p "$build_root"
+    if [[ ! -d "$venv_dir" ]]; then
+        python3 -m venv "$venv_dir"
+    fi
+
+    # shellcheck disable=SC1090
+    source "${venv_dir}/bin/activate"
+    python -m pip install -e tools/cbt
+    python -m pip install "conan>=2.0" cmake ninja click
+    conan install . --output-folder=${build_root} -s build_type=Debug --build=missing
+    exit 0
+fi
+
+if [[ -z "${VIRTUAL_ENV:-}" ]]; then
+    echo "cbt: no venv activated. Activate venv (usually in the build folder)" >&2
+fi
+
+exec python3 -m cbt "$@"

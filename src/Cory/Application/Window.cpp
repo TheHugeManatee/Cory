@@ -126,12 +126,14 @@ FrameContext Window::acquireFrameContext()
     while (true) {
         auto nextImageResult = data_->swapchain->nextImage();
         auto dims = dimensions();
-        if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
+        if (!nextImageResult.has_value()) {
             auto error = nextImageResult.error();
             if (error == SwapchainError::Unknown) {
                 throw std::runtime_error(fmt::format(
                     "Failed to acquire next swapchain image for window '{}': {}", title(), error));
             }
+        }
+        if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
 
             // wait until the surface dimensions are non-zero - this might happen
             // while the app is minimized or the window has been resized to zero height

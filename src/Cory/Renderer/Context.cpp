@@ -15,7 +15,11 @@
 #include <KDGpuKDGui/view.h>
 #include <KDGui/gui_application.h>
 
+#if defined(_WIN32)
 #include <vulkan/vulkan_win32.h>
+#elif defined(__linux__)
+#include <vulkan/vulkan_xcb.h>
+#endif
 
 namespace Cory {
 
@@ -61,9 +65,13 @@ Context::Context(ContextCreationInfo creationInfo)
         .layers = {},
         .extensions = {
             VK_KHR_SURFACE_EXTENSION_NAME,
-            VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
             VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
         }};
+#if defined(_WIN32)
+    instanceOptions.extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(__linux__)
+    instanceOptions.extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+#endif
     if (creationInfo.validation == ValidationLayers::Enabled) {
         instanceOptions.layers.push_back("VK_LAYER_KHRONOS_validation");
         instanceOptions.extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);

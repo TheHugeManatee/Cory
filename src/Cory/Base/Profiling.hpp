@@ -8,6 +8,7 @@
 #include <numeric>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Cory {
 
@@ -33,7 +34,8 @@ template <int64_t RECORD_HISTORY_SIZE> class ProfilerRecord {
 
         auto endIter =
             m_currentIdx > m_data.size() ? m_data.cend() : m_data.cbegin() + m_currentIdx;
-        auto stats = std::accumulate(++m_data.cbegin(),
+        const auto beginIter = m_data.cbegin();
+        auto stats = std::accumulate(std::next(beginIter),
                                      endIter,
                                      Stats{m_data[0], m_data[0], m_data[0]},
                                      [](auto acc, const auto &value) {

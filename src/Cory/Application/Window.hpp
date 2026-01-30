@@ -21,6 +21,7 @@ struct GLFWwindow;
 namespace Cory {
 
 class Context;
+struct WindowPrivate;
 
 class Window : NoCopy, NoMove {
   public:

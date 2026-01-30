@@ -9,7 +9,7 @@
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
-#include <KDgpu/buffer.h>
+#include <KDGpu/buffer.h>
 
 #include <cstdint>
 #include <type_traits>

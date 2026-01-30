@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <stdexcept>
+#include <vector>
 
 namespace Cory {
 

@@ -170,7 +170,7 @@ FrameContext Window::acquireFrameContext()
         CO_CORE_TRACE("Acquired swapchain image {} for frame {}",
                       frameCtx.swapchainImageIndex,
                       frameCtx.frameNumber);
-        return frameCtx;
+        return std::move(frameCtx);
     }
 }
 

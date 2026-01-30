@@ -13,6 +13,8 @@
 
 namespace Cory {
 
+struct SwapchainPrivate;
+
 struct SwapchainCreateInfo {
     std::string label;
     glm::u32vec2 size;

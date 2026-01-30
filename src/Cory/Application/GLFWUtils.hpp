@@ -3,7 +3,7 @@
 #include <GLFW/glfw3.h>
 
 namespace Cory::GLFWUtils {
-inline [[nodiscard]] MouseButton getMouseButtonState(GLFWwindow *window)
+[[nodiscard]] inline MouseButton getMouseButtonState(GLFWwindow *window)
 {
     const MouseButton mouseButton =
         (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) ? Cory::MouseButton::Left
@@ -13,7 +13,7 @@ inline [[nodiscard]] MouseButton getMouseButtonState(GLFWwindow *window)
     return mouseButton;
 }
 
-inline [[nodiscard]] ModifierFlags getModifierState(GLFWwindow *window)
+[[nodiscard]] inline ModifierFlags getModifierState(GLFWwindow *window)
 {
     ModifierFlags modifiers;
     if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {

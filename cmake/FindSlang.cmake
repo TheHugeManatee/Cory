@@ -32,6 +32,27 @@ if (Slang_ROOT)
     list(APPEND _SLANG_HINTS "${Slang_ROOT}")
 endif ()
 
+if (DEFINED ENV{VULKAN_SDK})
+    list(APPEND _SLANG_HINTS "$ENV{VULKAN_SDK}")
+endif ()
+
+# Common Vulkan SDK install locations on Linux.
+if (UNIX AND NOT APPLE)
+    list(APPEND _SLANG_HINTS
+            "/opt/vulkan"
+            "/opt/VulkanSDK"
+            "/usr/local/vulkan"
+            "$ENV{HOME}/VulkanSDK"
+    )
+
+    foreach(_base_dir IN LISTS _SLANG_HINTS)
+        if (EXISTS "${_base_dir}")
+            file(GLOB _sdk_dirs LIST_DIRECTORIES TRUE "${_base_dir}/*")
+            list(APPEND _SLANG_HINTS ${_sdk_dirs})
+        endif ()
+    endforeach ()
+endif ()
+
 # ------------------------------------------------------------
 # Find slangc executable
 # ------------------------------------------------------------
@@ -97,20 +118,34 @@ endif ()
 # ------------------------------------------------------------
 # Find headers
 # ------------------------------------------------------------
-find_path(Slang_INCLUDE_DIR
-        NAMES slang.h
-        HINTS ${_SLANG_HINTS}
-        PATH_SUFFIXES
-        include
-        Include
-        slang/include
-        slang/Include
-        slang
-        Include/slang
-        include/slang
+if (_SLANG_HINTS)
+    find_path(Slang_INCLUDE_DIR
+            NAMES slang.h
+            HINTS ${_SLANG_HINTS}
+            PATH_SUFFIXES
+            include
+            Include
+            slang/include
+            slang/Include
+            slang
+            Include/slang
+            include/slang
 
-        NO_DEFAULT_PATH
-)
+            NO_DEFAULT_PATH
+    )
+else ()
+    find_path(Slang_INCLUDE_DIR
+            NAMES slang.h
+            PATH_SUFFIXES
+            include
+            Include
+            slang/include
+            slang/Include
+            slang
+            Include/slang
+            include/slang
+    )
+endif ()
 
 if (NOT Slang_INCLUDE_DIR)
     message(STATUS "Could NOT find Slang_INCLUDE_DIR. Searched in: ${_SLANG_HINTS} with suffixes include, Include, slang/include, slang/Include, slang, Include/slang, include/slang.")
@@ -129,16 +164,28 @@ elseif (CMAKE_CONFIGURATION_TYPES)
     endif ()
 endif ()
 
-find_library(Slang_LIBRARY
-        NAMES slang${_SLANG_DEBUG_POSTFIX} slang
-        HINTS ${_SLANG_HINTS}
-        PATH_SUFFIXES
-        lib
-        Lib
-        lib64
-        Bin
-        bin
-)
+if (_SLANG_HINTS)
+    find_library(Slang_LIBRARY
+            NAMES slang${_SLANG_DEBUG_POSTFIX} slang
+            HINTS ${_SLANG_HINTS}
+            PATH_SUFFIXES
+            lib
+            Lib
+            lib64
+            Bin
+            bin
+    )
+else ()
+    find_library(Slang_LIBRARY
+            NAMES slang${_SLANG_DEBUG_POSTFIX} slang
+            PATH_SUFFIXES
+            lib
+            Lib
+            lib64
+            Bin
+            bin
+    )
+endif ()
 
 # ------------------------------------------------------------
 # Runtime deployment libraries (with debug postfix support)

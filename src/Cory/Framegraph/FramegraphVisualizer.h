@@ -8,6 +8,8 @@
 
 namespace Cory {
 
+struct Index;
+
 class FramegraphVisualizer {
   public:
     FramegraphVisualizer(const Framegraph &graph)

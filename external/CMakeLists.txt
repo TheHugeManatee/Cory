@@ -14,14 +14,20 @@ set(KDGPU_OPENXR_SUPPORT OFF)
 set(KDGPU_BUILD_TESTS OFF)
 set(VMA_STATIC_VULKAN_FUNCTIONS ON)
 
-FetchContent_Declare(
-        KDGpu
-        #GIT_REPOSITORY https://github.com/KDAB/KDGpu.git
-        #GIT_TAG v0.8.0
-        SOURCE_DIR "C:/dev/KDGpu"
-        #GIT_REPOSITORY https://github.com/TheHugeManatee/KDGpu.git
-        #GIT_TAG a19e7d28e2d282fdc6711b3c9d1d44f8f2bf3038
-)
+set(KDGPU_SOURCE_DIR "" CACHE PATH "Path to a local KDGpu checkout")
+
+if (KDGPU_SOURCE_DIR)
+    FetchContent_Declare(
+            KDGpu
+            SOURCE_DIR "${KDGPU_SOURCE_DIR}"
+    )
+else ()
+    FetchContent_Declare(
+            KDGpu
+            GIT_REPOSITORY https://github.com/TheHugeManatee/KDGpu.git
+            GIT_TAG main
+    )
+endif ()
 FetchContent_MakeAvailable(KDGpu)
 
 #include(${KDGpu_SOURCE_DIR}/cmake/CMakeRC.cmake)

@@ -11,10 +11,13 @@
 #include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Base/Time.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
+#include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
@@ -26,9 +29,7 @@
 #include <gsl/gsl>
 #include <gsl/narrow>
 
-#include <Cory/Base/Time.hpp>
-#include <Cory/RenderTasks/StandardRenderTasks.hpp>
-#include <Cory/Renderer/FrameContext.hpp>
+
 #include <algorithm>
 
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)

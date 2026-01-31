@@ -230,14 +230,6 @@ generate_export_header(${TARGET_NAME} EXPORT_FILE_NAME "${TARGET_HEADER_SUBDIR}$
 # group this lib into the 'libs' group for some IDEs
 #set_target_properties (${TARGET_NAME} PROPERTIES FOLDER libs)
 
-# Set the include directories of this library
-target_include_directories(${TARGET_NAME} PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-        PRIVATE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/Cory>
-)
-
 add_library(Cory::Cory ALIAS Cory)
 
 ###### INSTALLATION

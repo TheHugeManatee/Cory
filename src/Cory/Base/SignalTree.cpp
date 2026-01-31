@@ -10,10 +10,6 @@
 
 namespace Cory {
 
-// test/debug assertions
-// #define CO_SIGNALTREE_ASSERT(cond, msg) CO_CORE_ASSERT(cond, msg)
-#define CO_SIGNALTREE_ASSERT(cond, msg)
-
 // Wrapper aroundd atomic for internal node to satisfy putting std::atomic in vector
 struct SignalTree::InternalNode {
     std::atomic<uint64_t> count_{0};
@@ -121,7 +117,8 @@ SignalTree::SignalTree(std::uint64_t signals, CreateMode createMode)
     // start filling lowest level internal nodes, which have a max count of 2
     // then work up level by level, doubling the max count each time
     uint64_t counter_max = 2;
-    gsl::index next_node = internalNodes_.size() - 1;
+    const auto internalSize = static_cast<NodeIdx>(internalNodes_.size());
+    NodeIdx next_node = internalSize - 1;
 
     for (uint64_t nodes_per_level = signals / 2;; nodes_per_level /= 2) {
         for (uint64_t i = 0; i < nodes_per_level; ++i) {
@@ -198,7 +195,8 @@ uint64_t SignalTree::count() const noexcept
 
 void SignalTree::validateInternal() const
 {
-    for (auto i = 0; i < internalNodes_.size(); ++i) {
+    const auto internalSize = static_cast<NodeIdx>(internalNodes_.size());
+    for (NodeIdx i = 0; i < internalSize; ++i) {
         if (internalNodes_[i].count() != childSum(i)) {
             throw std::runtime_error{fmt::format("Internal validation failed: Node {} does not "
                                                  "satisfy child sum property! Tree: \n{}",
@@ -314,17 +312,19 @@ std::string SignalTree::debugPrint() const
 
     ss << "digraph G {\n";
 
-    for (auto i = 0; i < internalNodes_.size(); ++i) {
+    const auto internalSize = static_cast<NodeIdx>(internalNodes_.size());
+    const auto signalCount = static_cast<NodeIdx>(maxSignals_);
+    for (NodeIdx i = 0; i < internalSize; ++i) {
         ss << fmt::format("{} [label=\"[{}]\"];\n", i, internalNodes_[i].count());
     }
-    for (auto i = 0; i < maxSignals_; ++i) {
+    for (NodeIdx i = 0; i < signalCount; ++i) {
         const auto leaf_node_idx = i + internalNodes_.size();
         const bool isSet = unsafeQueryIsSet(i);
 
         ss << fmt::format("{} [label=\"{}: {}\"];\n", leaf_node_idx, i, isSet ? "🔔" : "🔕");
     }
 
-    for (auto i = 0; i < internalNodes_.size(); ++i) {
+    for (NodeIdx i = 0; i < internalSize; ++i) {
         auto left = 2 * i + 1;
         auto right = 2 * i + 2;
 

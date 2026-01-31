@@ -27,18 +27,21 @@ struct Mesh {
             {
                 // position
                 .location = 0,
+                .binding = 0,
                 .format = Gpu::Format::R32G32B32_SFLOAT,
                 .offset = offsetof(Mesh::Vertex, pos),
             },
             {
                 // normal
                 .location = 1,
+                .binding = 0,
                 .format = Gpu::Format::R32G32B32_SFLOAT,
                 .offset = offsetof(Mesh::Vertex, normal),
             },
             {
                 // color
                 .location = 2,
+                .binding = 0,
                 .format = Gpu::Format::R32G32B32A32_SFLOAT,
                 .offset = offsetof(Mesh::Vertex, col),
             },

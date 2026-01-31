@@ -44,6 +44,7 @@ void setDebugName(KDGpu::VulkanDevice *device,
 
     const VkDebugUtilsObjectNameInfoEXT nameInfo = {
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .pNext = nullptr,
         .objectType = type,
         .objectHandle = handle,
         .pObjectName = name.data(),
@@ -109,6 +110,7 @@ MappedCoherentDeviceBuffer::MappedCoherentDeviceBuffer(
 
     const VkMemoryAllocateFlagsInfo allocateFlags = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+        .pNext = nullptr,
         .flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT,
     };
 
@@ -150,6 +152,7 @@ MappedCoherentDeviceBuffer::MappedCoherentDeviceBuffer(
 
     const VkBufferDeviceAddressInfo addressInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .pNext = nullptr,
         .buffer = buffer_,
     };
     deviceAddress_ = vkGetBufferDeviceAddress(device_, &addressInfo);

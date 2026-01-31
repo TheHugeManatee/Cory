@@ -13,7 +13,7 @@ namespace Cory {
 class Application : NoCopy, NoMove, public KDGui::GuiApplication {
   public:
     Application();
-    virtual ~Application();
+    ~Application() override;
 
     virtual void run() = 0;
 

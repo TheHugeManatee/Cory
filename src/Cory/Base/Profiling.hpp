@@ -62,8 +62,11 @@ template <int64_t RECORD_HISTORY_SIZE> class ProfilerRecord {
         std::vector<int64_t> hist{std::next(m_data.cbegin(), static_cast<ptrdiff_t>(breakPoint)),
                                   m_data.cend()};
 
-        if (breakPoint > 0)
-            std::copy(m_data.cbegin(), m_data.cbegin() + breakPoint, std::back_inserter(hist));
+        if (breakPoint > 0) {
+            const auto breakIter =
+                std::next(m_data.cbegin(), static_cast<ptrdiff_t>(breakPoint));
+            std::copy(m_data.cbegin(), breakIter, std::back_inserter(hist));
+        }
 
         return hist;
     }
@@ -101,7 +104,7 @@ class LapTimer {
 
     bool lap();
 
-    Record::Stats stats() const { return m_lapTimes.stats(); };
+    Record::Stats stats() const { return m_lapTimes.stats(); }
     auto hist() const { return m_lapTimes.history(); }
 
   private:

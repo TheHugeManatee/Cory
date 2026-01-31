@@ -60,7 +60,7 @@ class CameraManipulator {
     void motion(glm::i32vec2 const &position, Action action = Action::None);
     void orbit(glm::vec2 const &delta, bool invert = false);
     void pan(glm::vec2 const &delta);
-    double projectOntoTBSphere(const glm::vec2 &p);
+    float projectOntoTBSphere(const glm::vec2 &p);
     void trackball(glm::i32vec2 const &position);
     void update();
 

@@ -54,7 +54,6 @@ set(TARGET_NAME ThirdPartyLibs)
 add_library(${TARGET_NAME} STATIC
         src/stb_image.cpp
         src/tiny_obj_loader.cpp
-        src/vk_mem_alloc.cpp
         src/imGuIZMOquat.cpp
 )
 

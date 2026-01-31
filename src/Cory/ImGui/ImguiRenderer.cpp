@@ -125,8 +125,9 @@ struct VertexImGui {
     }
 };
 
-std::vector<uint32_t> readShaderFileFromCmrc(cmrc::embedded_filesystem &fs,
-                                             const std::string &filename)
+[[maybe_unused]] static std::vector<uint32_t> readShaderFileFromCmrc(
+    cmrc::embedded_filesystem &fs,
+    const std::string &filename)
 {
     auto file = fs.open(filename);
     const std::size_t byteSize = file.size();
@@ -193,13 +194,15 @@ void ImGuiRenderer::initialize(float scaleFactor,
     const auto fragShaderCode = std::move(fragResult).value().spirv;
 
     m_bindGroupLayout = m_device->createBindGroupLayout(BindGroupLayoutOptions{
+        .label = "ImGui BindGroupLayout",
         .bindings =
-            {
-                {.binding = 0,
-                 .count = 1,
-                 .resourceType = ResourceBindingType::CombinedImageSampler,
-                 .shaderStages = ShaderStageFlagBits::FragmentBit},
-            },
+            {{
+                .binding = 0,
+                .count = 1,
+                .resourceType = ResourceBindingType::CombinedImageSampler,
+                .shaderStages = ShaderStageFlagBits::FragmentBit,
+                .immutableSamplers = {},
+            }},
     });
 
     const std::vector<PushConstantRange> pushConstantRanges{
@@ -211,7 +214,9 @@ void ImGuiRenderer::initialize(float scaleFactor,
     };
 
     m_pipelineLayout = m_device->createPipelineLayout(PipelineLayoutOptions{
-        .bindGroupLayouts = {m_bindGroupLayout}, .pushConstantRanges = pushConstantRanges});
+        .label = "ImGui PipelineLayout",
+        .bindGroupLayouts = {m_bindGroupLayout},
+        .pushConstantRanges = pushConstantRanges});
 
     m_vertexShaderObject = m_device->createShaderObject(ShaderObjectOptions{
         .label = "ImGui Vertex Shader",
@@ -242,8 +247,10 @@ void ImGuiRenderer::initialize(float scaleFactor,
     m_vertexLayouts = {VertexImGui::vertexBufferLayout()};
     m_vertexAttributes = VertexImGui::vertexAttributes();
 
-    const auto samplerOptions =
-        SamplerOptions{.magFilter = FilterMode::Linear, .minFilter = FilterMode::Linear};
+    const auto samplerOptions = SamplerOptions{
+        .label = "ImGui Sampler",
+        .magFilter = FilterMode::Linear,
+        .minFilter = FilterMode::Linear};
     m_sampler = m_device->createSampler(samplerOptions);
 
     updateScale(scaleFactor);
@@ -283,8 +290,10 @@ bool ImGuiRenderer::updateGeometryBuffers(FrameContext &frameCtx)
     if (!imDrawData) return false;
 
     // Note: Alignment is done inside buffer creation
-    const size_t vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
-    const size_t indexBufferSize = imDrawData->TotalIdxCount * sizeof(ImDrawIdx);
+    const size_t vertexBufferSize =
+        static_cast<size_t>(imDrawData->TotalVtxCount) * sizeof(ImDrawVert);
+    const size_t indexBufferSize =
+        static_cast<size_t>(imDrawData->TotalIdxCount) * sizeof(ImDrawIdx);
 
     // Update buffers only if vertex or index count has been changed compared to current buffer size
     if ((vertexBufferSize == 0) || (indexBufferSize == 0)) return false;
@@ -303,7 +312,7 @@ bool ImGuiRenderer::updateGeometryBuffers(FrameContext &frameCtx)
             .usage = BufferUsageFlagBits::VertexBufferBit,
             .memoryUsage = MemoryUsage::CpuToGpu,
         });
-        m_mesh->vertexCount = imDrawData->TotalVtxCount;
+        m_mesh->vertexCount = static_cast<uint32_t>(imDrawData->TotalVtxCount);
     }
 
     // Index buffer
@@ -315,7 +324,7 @@ bool ImGuiRenderer::updateGeometryBuffers(FrameContext &frameCtx)
             .usage = BufferUsageFlagBits::IndexBufferBit,
             .memoryUsage = MemoryUsage::CpuToGpu,
         });
-        m_mesh->indexCount = imDrawData->TotalIdxCount;
+        m_mesh->indexCount = static_cast<uint32_t>(imDrawData->TotalIdxCount);
     }
 
     // Upload data
@@ -324,8 +333,12 @@ bool ImGuiRenderer::updateGeometryBuffers(FrameContext &frameCtx)
 
     for (int n = 0; n < imDrawData->CmdListsCount; n++) {
         const ImDrawList *cmd_list = imDrawData->CmdLists[n];
-        memcpy(vtxDst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
-        memcpy(idxDst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+        memcpy(vtxDst,
+               cmd_list->VtxBuffer.Data,
+               static_cast<size_t>(cmd_list->VtxBuffer.Size) * sizeof(ImDrawVert));
+        memcpy(idxDst,
+               cmd_list->IdxBuffer.Data,
+               static_cast<size_t>(cmd_list->IdxBuffer.Size) * sizeof(ImDrawIdx));
         vtxDst += cmd_list->VtxBuffer.Size;
         idxDst += cmd_list->IdxBuffer.Size;
     }
@@ -480,9 +493,11 @@ void ImGuiRenderer::initializeFontData(const float scaleFactor)
     io.Fonts->AddFontFromMemoryTTF(
         ttfData, gsl::narrow<int>(ttfFile.size()), fontPixelSize, &fontConfig);
     io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
-    DeviceSize uploadSize = texWidth * texHeight * 4 * sizeof(char);
+    DeviceSize uploadSize = static_cast<DeviceSize>(texWidth) *
+                            static_cast<DeviceSize>(texHeight) * 4 * sizeof(char);
 
     const auto textureOptions = TextureOptions{
+        .label = "ImGui Font Texture",
         .type = TextureType::TextureType2D,
         .format = Format::R8G8B8A8_UNORM,
         .extent = {.width = static_cast<uint32_t>(texWidth),
@@ -521,8 +536,10 @@ void ImGuiRenderer::initializeFontData(const float scaleFactor)
     }
     else {
         // Create a bind group for the font texture
-        const BindGroupOptions bindGroupOptions = {.layout = m_bindGroupLayout,
-                                                   .resources = {
+        const BindGroupOptions bindGroupOptions = {
+            .label = "ImGui Font BindGroup",
+            .layout = m_bindGroupLayout,
+            .resources = {
                                                        {
                                                            .binding = 0,
                                                            .resource =

@@ -92,10 +92,12 @@ class Log {
 #define CO_APP_INFO(...) ::Cory::Log::GetAppLogger()->info(__VA_ARGS__)
 
 #define CO_CORE_ASSERT(condition, message, ...)                                                    \
-    if (!(condition)) {                                                                            \
-        const auto formattedMessage = fmt::format(message __VA_OPT__(, ) __VA_ARGS__);             \
-        Cory::AssertionFailed(#condition, formattedMessage);                                       \
-    }
+    do {                                                                                           \
+        if (!(condition)) {                                                                        \
+            const auto formattedMessage = fmt::format(message __VA_OPT__(, ) __VA_ARGS__);         \
+            Cory::AssertionFailed(#condition, formattedMessage);                                   \
+        }                                                                                          \
+    } while (false)
 
 #ifdef _DEBUG
 #define CO_CORE_DEBUG_ASSERT(condition, message, ...)                                              \

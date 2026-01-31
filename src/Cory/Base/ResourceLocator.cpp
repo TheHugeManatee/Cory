@@ -6,6 +6,8 @@
 
 namespace Cory {
 
+ResourceNotFound::~ResourceNotFound() = default;
+
 void ResourceLocator::addSearchPath(std::filesystem::path path)
 {
     CO_CORE_INFO("ResourceLocator: Adding search path: {}", path.string());

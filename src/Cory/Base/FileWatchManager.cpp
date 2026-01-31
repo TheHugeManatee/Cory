@@ -132,16 +132,18 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
     Locked<FileWatchThreadData> fileWatchThreadData;
 };
 
-std::unique_ptr<FileWatchManager> FileWatchManager::s_instance;
+FileWatchManager *FileWatchManager::s_instance = nullptr;
 
 void FileWatchManager::Init()
 {
-    s_instance = std::make_unique<FileWatchManager>();
+    CO_CORE_DEBUG_ASSERT(s_instance == nullptr, "FileWatchManager is already initialized.");
+    s_instance = new FileWatchManager();
 }
 
 void FileWatchManager::Shutdown()
 {
-    s_instance.reset();
+    delete s_instance;
+    s_instance = nullptr;
 }
 
 FileWatchManager &FileWatchManager::instance()
@@ -296,12 +298,12 @@ FileWatchManager::NextEventAwaitable FileWatchManager::nextEvent(FileWatchHandle
     return NextEventAwaitable{*this, handle};
 }
 
-FileWatchManager::NextEventAwaitable::NextEventAwaitable(FileWatchManager &manager,
-                                                         FileWatchHandle handle)
-    : manager(&manager)
-    , handle(handle)
+FileWatchManager::NextEventAwaitable::NextEventAwaitable(FileWatchManager &managerRef,
+                                                         FileWatchHandle handleToWatch)
+    : manager(&managerRef)
+    , handle(handleToWatch)
 {
-    manager.ensureConsumer(handle);
+    manager->ensureConsumer(handleToWatch);
 }
 
 FileWatchManager::NextEventAwaitable::~NextEventAwaitable()

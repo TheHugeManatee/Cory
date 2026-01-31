@@ -39,7 +39,8 @@ struct Index {
     std::vector<DependencyInfo> createDependencies;
 };
 
-void FramegraphVisualizer::build(Index &index, const ExecutionInfo &executionInfo) const
+void FramegraphVisualizer::build([[maybe_unused]] Index &index,
+                                 [[maybe_unused]] const ExecutionInfo &executionInfo) const
 {
     // auto findTransitionInfo =
     //     [&](TransientTextureHandle resource,

@@ -17,7 +17,7 @@ class EagerJob : NoCopy {
         cppcoro::suspend_never initial_suspend() noexcept { return {}; }
         cppcoro::suspend_always final_suspend() noexcept { return {}; }
         void return_void() noexcept {}
-        void unhandled_exception()
+        [[noreturn]] void unhandled_exception()
         {
             CO_CORE_ERROR("Unhandled exception in EagerJob coroutine");
             std::terminate();

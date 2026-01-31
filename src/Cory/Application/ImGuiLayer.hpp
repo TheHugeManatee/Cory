@@ -16,7 +16,7 @@ namespace Cory {
 
 class Context;
 class Window;
-class FrameContext;
+struct FrameContext;
 
 class ImGuiLayer : public ApplicationLayer {
   public:

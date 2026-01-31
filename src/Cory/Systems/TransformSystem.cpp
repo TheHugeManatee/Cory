@@ -33,7 +33,7 @@ void TransformSystem::beforeUpdate(SceneGraph &sg)
     sg.sortByDepth<Transform>();
 }
 
-void TransformSystem::update(SceneGraph &sg, TickInfo tickInfo, Entity entity, Transform &transform)
+void TransformSystem::update(SceneGraph &sg, [[maybe_unused]] TickInfo tickInfo, Entity entity, Transform &transform)
 {
     glm::mat4 parent{1.0f};
 
@@ -50,5 +50,5 @@ void TransformSystem::update(SceneGraph &sg, TickInfo tickInfo, Entity entity, T
     //                 parent[3]);
 }
 
-void TransformSystem::afterUpdate(SceneGraph &sg) {}
+void TransformSystem::afterUpdate([[maybe_unused]] SceneGraph &sg) {}
 } // namespace Cory

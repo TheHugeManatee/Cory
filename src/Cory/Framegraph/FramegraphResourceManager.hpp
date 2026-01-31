@@ -3,6 +3,8 @@
 #include <Cory/Base/SlotMap.hpp>
 #include <Cory/Framegraph/Common.hpp>
 
+#include <cstdint>
+
 namespace Cory {
 
 struct FramegraphBufferView {

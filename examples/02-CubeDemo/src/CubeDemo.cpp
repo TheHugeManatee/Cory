@@ -244,7 +244,6 @@ void CubeDemoApplication::run()
             CO_APP_INFO(fg.dump(execInfo));
             dumpNextFramegraph_ = false;
         }
-
     };
 
     auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
@@ -288,10 +287,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Gpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
-    auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
-    auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
+    const auto &colorInfo = builder.textureInfo(colorTarget);
 
     auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
         .name = "PASS_Cubes",
@@ -315,12 +311,12 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
         .vertexOptions = vertexOptions(),
         .dynamicStates = {.cullMode = Cory::CullMode::None},
     });
+    const auto colorOut = cubePass.colorOutputs().front();
+    const auto depthOut = cubePass.depthOutput().value();
 
     /// ^^^^     DECLARATION      ^^^^
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
-        .colorOut = writtenColorHandle,
-        .depthOut = writtenDepthHandle,
-    });
+    Cory::RenderInput renderApi =
+        co_await builder.finishDeclaration(PassOutputs{.colorOut = colorOut, .depthOut = depthOut});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     auto t = gsl::narrow_cast<float>(getElapsedTimeSeconds());

@@ -76,8 +76,8 @@ class Context : NoCopy {
     DescriptorSets &descriptors();
     const DescriptorSets &descriptors() const;
 
-    FileWatchManager& fileWatchManager();
-    const FileWatchManager& fileWatchManager() const;
+    FileWatchManager &fileWatchManager();
+    const FileWatchManager &fileWatchManager() const;
 
   private:
     Gpu::AdapterAndDevice

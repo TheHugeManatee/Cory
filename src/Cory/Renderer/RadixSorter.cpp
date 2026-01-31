@@ -70,16 +70,20 @@ radixSetupTask(RenderTaskBuilder builder, Gpu::DeviceSize required, Gpu::DeviceS
 RenderTaskDeclaration<TransientBufferHandle> radixInitIndicesTask(
     RenderTaskBuilder builder, TransientBufferHandle indicesHandle, uint32_t instanceCount)
 {
-    auto [writtenIndices, info] = builder.write(indicesHandle, Sync::AccessType::HostWrite);
+    auto [writtenIndices, info] =
+        builder.write(indicesHandle,
+                      Gpu::BufferUsageFlagBits::StorageBufferBit |
+                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                      Sync::AccessType::HostWrite);
     (void)info;
 
     RenderInput renderApi = co_await builder.finishDeclaration(writtenIndices);
 
-    auto [bufferHandle, buffer] = renderApi.resources->bufferResource(writtenIndices);
-    (void)bufferHandle;
-    auto *mapped = static_cast<uint32_t *>(buffer->map());
+    auto view = renderApi.resources->bufferView(writtenIndices);
+    CO_CORE_ASSERT(view.hostVisible && view.cpu != nullptr,
+                   "Radix indices buffer is not host-visible");
+    auto *mapped = reinterpret_cast<uint32_t *>(view.cpu);
     std::iota(mapped, mapped + instanceCount, 0u);
-    buffer->unmap();
 }
 
 RenderTaskDeclaration<TransientBufferHandle>
@@ -92,11 +96,20 @@ radixHistogramTask(RenderTaskBuilder builder,
                    uint32_t bitOffset,
                    ShaderHandle histogramShader)
 {
-    builder.read(keysHandle, Sync::AccessType::ComputeShaderReadOther);
+    builder.read(keysHandle,
+                 Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                 Sync::AccessType::ComputeShaderReadOther);
     // Ensure each radix step depends on the previous scatter's outputs.
-    builder.read(indicesHandle, Sync::AccessType::ComputeShaderReadOther);
+    builder.read(indicesHandle,
+                 Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                 Sync::AccessType::ComputeShaderReadOther);
     auto [writtenHistograms, info] =
-        builder.write(histogramsHandle, Sync::AccessType::ComputeShaderWrite);
+        builder.write(histogramsHandle,
+                      Gpu::BufferUsageFlagBits::StorageBufferBit |
+                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                      Sync::AccessType::ComputeShaderWrite);
     (void)info;
 
     auto pass = builder.declareComputePass(ComputePassDeclaration{
@@ -131,7 +144,10 @@ RenderTaskDeclaration<TransientBufferHandle> radixScanTask(RenderTaskBuilder bui
                                                            ShaderHandle scanShader)
 {
     auto [writtenHistograms, info] =
-        builder.readWrite(histogramsHandle, Sync::AccessType::ComputeShaderWrite);
+        builder.readWrite(histogramsHandle,
+                          Gpu::BufferUsageFlagBits::StorageBufferBit |
+                              Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                          Sync::AccessType::ComputeShaderWrite);
     (void)info;
 
     auto pass = builder.declareComputePass(ComputePassDeclaration{
@@ -166,12 +182,28 @@ RenderTaskDeclaration<ScatterOutput> radixScatterTask(RenderTaskBuilder builder,
                                                       uint32_t bitOffset,
                                                       ShaderHandle scatterShader)
 {
-    builder.read(keysIn, Sync::AccessType::ComputeShaderReadOther);
-    builder.read(indicesIn, Sync::AccessType::ComputeShaderReadOther);
-    builder.read(histogramsHandle, Sync::AccessType::ComputeShaderReadOther);
-    auto [writtenKeys, keysInfo] = builder.write(keysOut, Sync::AccessType::ComputeShaderWrite);
+    builder.read(keysIn,
+                 Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                 Sync::AccessType::ComputeShaderReadOther);
+    builder.read(indicesIn,
+                 Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                 Sync::AccessType::ComputeShaderReadOther);
+    builder.read(histogramsHandle,
+                 Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                 Sync::AccessType::ComputeShaderReadOther);
+    auto [writtenKeys, keysInfo] =
+        builder.write(keysOut,
+                      Gpu::BufferUsageFlagBits::StorageBufferBit |
+                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                      Sync::AccessType::ComputeShaderWrite);
     auto [writtenIndices, indicesInfo] =
-        builder.write(indicesOut, Sync::AccessType::ComputeShaderWrite);
+        builder.write(indicesOut,
+                      Gpu::BufferUsageFlagBits::StorageBufferBit |
+                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                      Sync::AccessType::ComputeShaderWrite);
     (void)keysInfo;
     (void)indicesInfo;
 

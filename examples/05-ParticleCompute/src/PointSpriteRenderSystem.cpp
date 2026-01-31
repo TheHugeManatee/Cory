@@ -58,7 +58,10 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
                               uint32_t instanceCount)
 {
     auto [writtenSortKeys, sortKeysInfo] =
-        builder.write(sortKeys, Cory::Sync::AccessType::ComputeShaderWrite);
+        builder.write(sortKeys,
+                      Gpu::BufferUsageFlagBits::StorageBufferBit |
+                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+                      Cory::Sync::AccessType::ComputeShaderWrite);
     (void)sortKeysInfo;
     auto predicatePass = builder.declareComputePass(Cory::ComputePassDeclaration{
         .name = "PASS_PointSpriteSortPreprocess",
@@ -89,8 +92,7 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
     instanceBuffer.buffer.unmap();
 
     globals->instances = instanceBuffer.buffer.bufferDeviceAddress();
-    globals->sortKeys =
-        renderApi.resources->bufferResource(writtenSortKeys).vulkanBuffer->bufferDeviceAddress();
+    globals->sortKeys = renderApi.resources->bufferView(writtenSortKeys).deviceAddress;
     CO_CORE_ASSERT(globals->sortKeys != 0 && globals->instances != 0, "Invalid BDAs");
 
     auto pass = predicatePass.begin(renderApi);
@@ -167,10 +169,7 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     Gpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
-    auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget, Sync::AccessType::ColorAttachmentWrite);
-    auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget, Sync::AccessType::DepthStencilAttachmentWrite);
+    const auto &colorInfo = builder.textureInfo(colorTarget);
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     CO_CORE_ASSERT(instanceCount > 0, "Invalid instance count");
@@ -225,6 +224,8 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
                           .depthTest = DepthTest::Less,
                           .depthWrite = DepthWrite::Disabled},
     });
+    const auto colorOut = spritePass.colorOutputs().front();
+    const auto depthOut = spritePass.depthOutput().value();
 
     auto predicateTask = pointSpriteSortPreprocessTask(
         builder.subtask("PointSpriteSortPreprocess"),
@@ -237,14 +238,13 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         instanceCount);
 
     sortOutput = sorter_.sort(builder, predicateTask.output(), instanceCount);
-    auto sortedIndicesInfo =
-        builder.read(sortOutput.indices, Sync::AccessType::VertexShaderReadOther);
+    auto sortedIndicesInfo = builder.read(sortOutput.indices,
+                                          Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                          Sync::AccessType::VertexShaderReadOther);
 
     /// ^^^^     DECLARATION      ^^^^
-    RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
-        .colorOut = writtenColorHandle,
-        .depthOut = writtenDepthHandle,
-    });
+    RenderInput renderApi =
+        co_await builder.finishDeclaration(PassOutputs{.colorOut = colorOut, .depthOut = depthOut});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);

@@ -9,16 +9,14 @@ template <typename Signature> class Function;
 
 // Check if a callable is invocable with given arguments
 template <typename F, typename... Args>
-concept ConstCallableWith =
-    requires(const F &f, Args&&... args) {
+concept ConstCallableWith = requires(const F &f, Args &&...args) {
     { f(std::forward<Args>(args)...) };
-    };
+};
 
 /**
  * @brief Minimal std::function replacement to avoid #include <functional>
  */
-template <typename R, typename... Args> class Function<R(Args...)>
-{
+template <typename R, typename... Args> class Function<R(Args...)> {
     struct CallableBase {
         virtual R invoke(Args... args) const = 0;
         virtual ~CallableBase() = default;

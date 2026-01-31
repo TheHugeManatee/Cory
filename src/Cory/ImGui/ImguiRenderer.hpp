@@ -18,8 +18,8 @@
 #include <KDGpu/gpu_core.h>
 #include <KDGpu/graphics_pipeline_options.h>
 #include <KDGpu/pipeline_layout.h>
-#include <KDGpu/shader_object.h>
 #include <KDGpu/sampler.h>
+#include <KDGpu/shader_object.h>
 #include <KDGpu/texture.h>
 #include <KDGpu/texture_view.h>
 

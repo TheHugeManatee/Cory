@@ -41,9 +41,7 @@ class Framegraph : NoCopy {
   public:
     // Create a new framegraph with the given context, using the given instance index for resource
     // allocation
-    explicit Framegraph(Context &ctx,
-                        FramegraphResourceManager &resources,
-                        uint32_t instanceIndex);
+    explicit Framegraph(Context &ctx, FramegraphResourceManager &resources, uint32_t instanceIndex);
     ~Framegraph();
 
     Framegraph(Framegraph &&) noexcept;
@@ -118,11 +116,14 @@ class Framegraph : NoCopy {
     RenderInput renderInput(RenderTaskHandle taskHandle);
 
     /**
-     * @brief resolve which render tasks need to be executed for requested resources
+     * @brief Resolve the execution plan for requested output resources.
      *
-     * Returns the tasks that need to be executed in the given order, and all resources that
-     * are required to execute said resources.
-     * Updates the internal information about which render pass is required.
+     * This performs three steps:
+     * 1) Builds a dependency view of tasks/resources (writers and pure-read inputs).
+     * 2) Traverses dependencies from requested outputs to find required tasks/resources.
+     * 3) Topologically sorts required tasks and aggregates resource usage flags.
+     *
+     * Returns the tasks in execution order plus the resources/buffers they require.
      */
     [[nodiscard]] ExecutionInfo
     resolve(const std::vector<TransientTextureHandle> &requestedResources);

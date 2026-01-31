@@ -3,6 +3,7 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
 
 #include <KDGpu/buffer_options.h>
@@ -10,11 +11,27 @@
 #include <KDGpu/utils/formatters.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <gsl/narrow>
-
 #include <vector>
 
 namespace Cory {
+namespace {
+Gpu::DeviceSize alignUp(Gpu::DeviceSize value, Gpu::DeviceSize alignment)
+{
+    if (alignment == 0) return value;
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+Gpu::DeviceSize bufferAlignment(Context &ctx)
+{
+    const auto &limits = ctx.physicalDevice().limits;
+    const auto minUniform = static_cast<Gpu::DeviceSize>(limits.minUniformBufferOffsetAlignment);
+    const auto minStorage = static_cast<Gpu::DeviceSize>(limits.minStorageBufferOffsetAlignment);
+    return std::max<Gpu::DeviceSize>({static_cast<Gpu::DeviceSize>(16u), minUniform, minStorage});
+}
+} // namespace
 
 struct TextureResource {
     TextureInfo info;
@@ -27,7 +44,14 @@ struct TextureResource {
 struct BufferResource {
     BufferInfo info;
     BufferState state;
-    Gpu::BufferHandle buffer;
+    enum class Arena {
+        External,
+        HostMapped,
+        DeviceOnly,
+    };
+    Arena arena{Arena::DeviceOnly};
+    Gpu::BufferHandle externalBuffer;
+    Gpu::DeviceSize offset{0};
     uint64_t lastUsedFrameNumber{0};
 };
 
@@ -35,6 +59,12 @@ struct FramegraphResourceManagerPrivate {
     Context *ctx_{};
     SlotMap<TextureResource> textureResources_;
     SlotMap<BufferResource> bufferResources_;
+    Gpu::BufferHandle deviceBuffer;
+    Gpu::DeviceSize deviceBufferSize{0};
+    Gpu::BufferUsageFlags deviceBufferUsage{};
+    std::unique_ptr<MappedCoherentDeviceBuffer> hostBuffer;
+    Gpu::DeviceSize hostBufferSize{0};
+    Gpu::BufferUsageFlags hostBufferUsage{};
     uint64_t currentFrameNumber{};
 };
 
@@ -71,12 +101,13 @@ FramegraphTextureHandle FramegraphResourceManager::declareTexture(TextureInfo in
                   info.format,
                   info.sampleCount);
 
-    auto handle = data_->textureResources_.emplace(TextureResource{
-        info,
-        TextureState{.lastAccess = Sync::AccessType::None, .status = TextureMemoryStatus::Virtual},
-        Gpu::Texture{},
-        Gpu::TextureView{},
-        data_->currentFrameNumber});
+    auto handle = data_->textureResources_.emplace(
+        TextureResource{.info = info,
+                        .state = TextureState{.lastAccess = Sync::AccessType::None,
+                                              .status = TextureMemoryStatus::Virtual},
+                        .image = Gpu::Texture{},
+                        .view = Gpu::TextureView{},
+                        .lastUsedFrameNumber = data_->currentFrameNumber});
     return handle;
 }
 
@@ -110,12 +141,7 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
         .depth = gsl::narrow<uint32_t>(res.info.size.z),
     };
 
-    // TODO: we should eventually infer the usage from the graph, not hardcode it here
-    Gpu::TextureUsageFlags usage = res.info.usage;
-    usage |= isDepthFormat(res.info.format) ? Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit
-                                            : Gpu::TextureUsageFlagBits::ColorAttachmentBit;
-    usage |= Gpu::TextureUsageFlagBits::SampledBit;
-    usage |= Gpu::TextureUsageFlagBits::InputAttachmentBit;
+    const auto usage = res.info.usage;
 
     // Create the texture (image)
     res.image = resources.createTexture(
@@ -132,8 +158,7 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
                             .sharingMode = Gpu::SharingMode::Exclusive,
                             .queueTypeIndices = {},
                             .initialLayout = Gpu::TextureLayout::Undefined,
-                            .externalMemoryHandleType =
-                                KDGpu::ExternalMemoryHandleTypeFlagBits::None,
+                            .externalMemoryHandleType = Gpu::ExternalMemoryHandleTypeFlagBits::None,
                             .drmFormatModifiers = {},
                             .createFlags = {}});
 
@@ -163,13 +188,19 @@ void FramegraphResourceManager::allocate(const std::vector<FramegraphTextureHand
     }
 }
 
+void FramegraphResourceManager::extendUsage(FramegraphTextureHandle handle,
+                                            Gpu::TextureUsageFlags usage)
+{
+    data_->textureResources_[handle].info.usage |= usage;
+}
+
 Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextureHandle handle,
                                                                  Sync::AccessType access,
                                                                  ImageContents contentsMode)
 {
-    const auto &info = data_->textureResources_[handle].info;
-    auto aspectMask = flagsForFormat(info.format);
     auto &resource = data_->textureResources_[handle];
+    const auto &info = resource.info;
+    auto aspectMask = flagsForFormat(info.format);
     auto &state = resource.state;
 
     auto *texture = data_->ctx_->resources().getTexture(image(handle));
@@ -228,11 +259,15 @@ FramegraphBufferHandle FramegraphResourceManager::declareBuffer(BufferInfo info)
 {
     CO_CORE_TRACE("Declaring buffer '{}' ({} bytes)", info.name, info.size);
 
+    const auto arena = info.memoryUsage == Gpu::MemoryUsage::CpuToGpu
+                           ? BufferResource::Arena::HostMapped
+                           : BufferResource::Arena::DeviceOnly;
     auto handle = data_->bufferResources_.emplace(
         BufferResource{.info = std::move(info),
                        .state = BufferState{.lastAccess = Sync::AccessType::None,
                                             .status = BufferMemoryStatus::Virtual},
-                       .buffer = Gpu::Buffer{},
+                       .arena = arena,
+                       .externalBuffer = Gpu::BufferHandle{},
                        .lastUsedFrameNumber = data_->currentFrameNumber});
     return handle;
 }
@@ -244,39 +279,107 @@ FramegraphBufferHandle FramegraphResourceManager::registerExternal(BufferInfo in
     auto handle = data_->bufferResources_.emplace(BufferResource{
         .info = std::move(info),
         .state = BufferState{.lastAccess = lastWriteAccess, .status = BufferMemoryStatus::External},
-        .buffer = resource,
+        .arena = BufferResource::Arena::External,
+        .externalBuffer = resource,
         .lastUsedFrameNumber = data_->currentFrameNumber});
     return handle;
 }
 
-void FramegraphResourceManager::allocate(FramegraphBufferHandle handle)
-{
-    BufferResource &res = data_->bufferResources_[handle];
-    Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
-    auto &resources = data_->ctx_->resources();
-    CO_CORE_TRACE("Allocating buffer '{}' ({} bytes)", res.info.name, res.info.size);
-
-    res.buffer =
-        resources.createBuffer(deviceHandle,
-                               Gpu::BufferOptions{.label = fmt::format("{} (BUF)", res.info.name),
-                                                  .size = res.info.size,
-                                                  .usage = res.info.usage,
-                                                  .memoryUsage = res.info.memoryUsage},
-                               nullptr);
-
-    res.state.status = BufferMemoryStatus::Allocated;
-}
-
 void FramegraphResourceManager::allocate(const std::vector<FramegraphBufferHandle> &handles)
 {
+    const auto alignment = bufferAlignment(*data_->ctx_);
+
+    Gpu::DeviceSize deviceOffset = 0;
+    Gpu::DeviceSize hostOffset = 0;
+    const auto previousDeviceBufferSize = data_->deviceBufferSize;
+    const auto previousHostBufferSize = data_->hostBufferSize;
+    const auto previousDeviceBufferUsage = data_->deviceBufferUsage;
+    const auto previousHostBufferUsage = data_->hostBufferUsage;
+    Gpu::BufferUsageFlags requiredDeviceUsage{};
+    Gpu::BufferUsageFlags requiredHostUsage{};
+
     for (const auto &handle : handles) {
         auto &res = data_->bufferResources_[handle];
         if (res.state.status != BufferMemoryStatus::Virtual) {
             continue;
         }
 
-        allocate(handle);
+        if (res.arena == BufferResource::Arena::HostMapped) {
+            hostOffset = alignUp(hostOffset, alignment);
+            res.offset = hostOffset;
+            hostOffset += res.info.size;
+            requiredHostUsage |= res.info.usage;
+            res.lastUsedFrameNumber = data_->currentFrameNumber;
+        }
+        else {
+            deviceOffset = alignUp(deviceOffset, alignment);
+            res.offset = deviceOffset;
+            deviceOffset += res.info.size;
+            requiredDeviceUsage |= res.info.usage;
+            res.lastUsedFrameNumber = data_->currentFrameNumber;
+        }
     }
+
+    const auto requiredDeviceSize = deviceOffset;
+    const auto deviceUsageWithAddress =
+        requiredDeviceUsage | Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit;
+    const bool needsDeviceBuffer =
+        requiredDeviceSize > 0 &&
+        (!data_->deviceBuffer.isValid() || previousDeviceBufferSize < requiredDeviceSize ||
+         (previousDeviceBufferUsage & deviceUsageWithAddress) != deviceUsageWithAddress);
+
+    if (needsDeviceBuffer) {
+        CO_CORE_TRACE("Allocating framegraph device buffer ({} bytes)", requiredDeviceSize);
+        if (data_->deviceBuffer.isValid()) {
+            data_->ctx_->resources().deleteBuffer(data_->deviceBuffer);
+        }
+        data_->deviceBuffer = data_->ctx_->resources().createBuffer(
+            data_->ctx_->device(),
+            Gpu::BufferOptions{.label = "Framegraph Device Buffer",
+                               .size = requiredDeviceSize,
+                               .usage = deviceUsageWithAddress,
+                               .memoryUsage = Gpu::MemoryUsage::GpuOnly},
+            nullptr);
+        data_->deviceBufferSize = requiredDeviceSize;
+        data_->deviceBufferUsage = deviceUsageWithAddress;
+    }
+    else if (requiredDeviceSize == 0) {
+        data_->deviceBufferSize = previousDeviceBufferSize;
+        data_->deviceBufferUsage = previousDeviceBufferUsage;
+    }
+
+    const bool needsHostBuffer =
+        hostOffset > 0 && (!data_->hostBuffer || previousHostBufferSize < hostOffset ||
+                           (previousHostBufferUsage & requiredHostUsage) != requiredHostUsage);
+    if (needsHostBuffer) {
+        CO_CORE_TRACE("Allocating framegraph host buffer ({} bytes)", hostOffset);
+        data_->hostBuffer = std::make_unique<MappedCoherentDeviceBuffer>(
+            data_->ctx_->device(),
+            MappedCoherentDeviceBufferCreateInfo{
+                .label = "Framegraph Host Buffer",
+                .size = hostOffset,
+                .usage = static_cast<VkBufferUsageFlags>(requiredHostUsage.toInt()),
+            });
+        data_->hostBufferSize = hostOffset;
+        data_->hostBufferUsage = requiredHostUsage;
+    }
+    else if (hostOffset == 0) {
+        data_->hostBufferSize = previousHostBufferSize;
+        data_->hostBufferUsage = previousHostBufferUsage;
+    }
+
+    for (const auto &handle : handles) {
+        auto &res = data_->bufferResources_[handle];
+        if (res.state.status == BufferMemoryStatus::Virtual) {
+            res.state.status = BufferMemoryStatus::Allocated;
+        }
+    }
+}
+
+void FramegraphResourceManager::extendUsage(FramegraphBufferHandle handle,
+                                            Gpu::BufferUsageFlags usage)
+{
+    data_->bufferResources_[handle].info.usage |= usage;
 }
 
 Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBufferHandle handle,
@@ -284,19 +387,34 @@ Sync::BufferBarrier FramegraphResourceManager::synchronizeBuffer(FramegraphBuffe
 {
     auto &resource = data_->bufferResources_[handle];
     auto &state = resource.state;
-    auto *bufferResource = data_->ctx_->resources().getBuffer(buffer(handle));
-    CO_CORE_DEBUG_ASSERT(bufferResource != nullptr, "Buffer resource is null");
+    const auto view = bufferView(handle);
+    VkBuffer bufferHandle = VK_NULL_HANDLE;
+    if (resource.arena == BufferResource::Arena::External) {
+        auto *bufferResource = data_->ctx_->resources().getBuffer(resource.externalBuffer);
+        CO_CORE_DEBUG_ASSERT(bufferResource != nullptr, "Buffer resource is null");
+        bufferHandle = bufferResource->buffer;
+    }
+    else if (resource.arena == BufferResource::Arena::HostMapped) {
+        CO_CORE_ASSERT(data_->hostBuffer != nullptr, "Host buffer was not allocated");
+        bufferHandle = data_->hostBuffer->buffer();
+    }
+    else {
+        CO_CORE_ASSERT(data_->deviceBuffer.isValid(), "Device buffer was not allocated");
+        auto *bufferResource = data_->ctx_->resources().getBuffer(data_->deviceBuffer);
+        CO_CORE_DEBUG_ASSERT(bufferResource != nullptr, "Device buffer resource is null");
+        bufferHandle = bufferResource->buffer;
+    }
 
     Sync::BufferBarrier barrier{.prevAccesses{state.lastAccess},
                                 .nextAccesses{access},
                                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                .buffer = bufferResource->buffer,
-                                .offset = 0,
-                                .size = data_->bufferResources_[handle].info.size};
+                                .buffer = bufferHandle,
+                                .offset = view.offset,
+                                .size = view.size};
 
     CO_CORE_TRACE("BARRIER buffer '{}' written as {}, read as {}",
-                  data_->bufferResources_[handle].info.name,
+                  resource.info.name,
                   state.lastAccess,
                   access);
 
@@ -310,27 +428,49 @@ const BufferInfo &FramegraphResourceManager::info(FramegraphBufferHandle handle)
     return data_->bufferResources_[handle].info;
 }
 
-Gpu::BufferHandle FramegraphResourceManager::buffer(FramegraphBufferHandle handle) const
+FramegraphBufferView FramegraphResourceManager::bufferView(FramegraphBufferHandle handle) const
 {
-    return data_->bufferResources_[handle].buffer;
-}
+    const auto &res = data_->bufferResources_[handle];
+    if (res.state.status == BufferMemoryStatus::Virtual) {
+        CO_CORE_ASSERT(false, "Buffer '{}' is not allocated", res.info.name);
+    }
 
-GpuBufferResource FramegraphResourceManager::bufferResource(FramegraphBufferHandle handle) const
-{
-    auto resourceHandle = data_->bufferResources_[handle].buffer;
-    auto resource = data_->ctx_->resources().getBuffer(resourceHandle);
-    CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
-    return {resourceHandle, resource};
+    if (res.arena == BufferResource::Arena::External) {
+        auto *resource = data_->ctx_->resources().getBuffer(res.externalBuffer);
+        CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
+        return FramegraphBufferView{.deviceAddress = resource->bufferDeviceAddress(),
+                                    .offset = 0,
+                                    .size = res.info.size,
+                                    .cpu = nullptr,
+                                    .hostVisible = false};
+    }
+
+    if (res.arena == BufferResource::Arena::HostMapped) {
+        CO_CORE_ASSERT(data_->hostBuffer != nullptr, "Host buffer was not allocated");
+        const auto baseAllocation = data_->hostBuffer->allocation();
+        return FramegraphBufferView{
+            .deviceAddress = baseAllocation.gpu + res.offset,
+            .offset = res.offset,
+            .size = res.info.size,
+            .cpu = baseAllocation.cpu + res.offset,
+            .hostVisible = true,
+        };
+    }
+
+    CO_CORE_ASSERT(data_->deviceBuffer.isValid(), "Device buffer was not allocated");
+    auto *resource = data_->ctx_->resources().getBuffer(data_->deviceBuffer);
+    CO_CORE_DEBUG_ASSERT(resource != nullptr, "Device buffer resource is null");
+    return FramegraphBufferView{.deviceAddress = resource->bufferDeviceAddress() + res.offset,
+                                .offset = res.offset,
+                                .size = res.info.size,
+                                .cpu = nullptr,
+                                .hostVisible = false};
 }
 BufferDeviceAddress FramegraphResourceManager::deviceAddress(FramegraphBufferHandle handle) const
 {
-    auto resourceHandle = data_->bufferResources_[handle].buffer;
-    auto resource = data_->ctx_->resources().getBuffer(resourceHandle);
-    CO_CORE_DEBUG_ASSERT(resource != nullptr, "Buffer resource is null");
-
-    auto address = resource->bufferDeviceAddress();
-    CO_CORE_ASSERT(address != 0, "Queried Buffer device address for buffer is zero");
-    return address;
+    const auto view = bufferView(handle);
+    CO_CORE_ASSERT(view.deviceAddress != 0, "Queried Buffer device address for buffer is zero");
+    return view.deviceAddress;
 }
 
 BufferState FramegraphResourceManager::state(FramegraphBufferHandle handle) const
@@ -365,9 +505,6 @@ void FramegraphResourceManager::clearFrame(uint64_t frameNumber)
         if (resource.lastUsedFrameNumber != frameNumber) {
             continue;
         }
-        if (resource.state.status == BufferMemoryStatus::Allocated) {
-            data_->ctx_->resources().deleteBuffer(resource.buffer);
-        }
         bufferHandlesToRelease.push_back(handle);
     }
     for (const auto &handle : bufferHandlesToRelease) {
@@ -380,30 +517,28 @@ void FramegraphResourceManager::clearAll()
     if (!data_) {
         return;
     }
-    std::vector<FramegraphTextureHandle> textureHandlesToRelease;
-    for (const auto &handle : data_->textureResources_.handles()) {
-        const auto &resource = data_->textureResources_[handle];
-        if (resource.state.status == TextureMemoryStatus::Allocated) {
-            data_->ctx_->resources().deleteTexture(resource.image);
-            data_->ctx_->resources().deleteTextureView(resource.view);
+    for (auto &res : data_->textureResources_) {
+        if (res.state.status == TextureMemoryStatus::Allocated) {
+            data_->ctx_->resources().deleteTexture(res.image);
+            data_->ctx_->resources().deleteTextureView(res.view);
         }
-        textureHandlesToRelease.push_back(handle);
     }
-    for (const auto &handle : textureHandlesToRelease) {
-        data_->textureResources_.release(handle);
-    }
+    data_->textureResources_.clear();
 
-    std::vector<FramegraphBufferHandle> bufferHandlesToRelease;
-    for (const auto &handle : data_->bufferResources_.handles()) {
-        const auto &resource = data_->bufferResources_[handle];
-        if (resource.state.status == BufferMemoryStatus::Allocated) {
-            data_->ctx_->resources().deleteBuffer(resource.buffer);
-        }
-        bufferHandlesToRelease.push_back(handle);
+    data_->bufferResources_.clear();
+
+    if (data_->deviceBuffer.isValid()) {
+        data_->ctx_->resources().deleteBuffer(data_->deviceBuffer);
+        data_->deviceBuffer = {};
     }
-    for (const auto &handle : bufferHandlesToRelease) {
-        data_->bufferResources_.release(handle);
-    }
+    data_->deviceBufferSize = 0;
+    data_->deviceBufferUsage = {};
+
+    data_->hostBuffer.reset();
+    data_->hostBufferSize = 0;
+    data_->hostBufferUsage = {};
+
+    data_->currentFrameNumber = 0;
 }
 
 } // namespace Cory

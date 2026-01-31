@@ -20,9 +20,8 @@ class SlangCompiler {
     /// @param entryPoint The entry point function name.
     /// @param optimize Whether to optimize the shader code.
     /// @return The compiled SPIR-V bytecode or an error message.
-    [[nodiscard]] CompilationResult compileShader(const ShaderSource &source,
-                                                  std::string_view entryPoint,
-                                                  bool optimize);
+    [[nodiscard]] CompilationResult
+    compileShader(const ShaderSource &source, std::string_view entryPoint, bool optimize);
 
   private:
     void initSession();

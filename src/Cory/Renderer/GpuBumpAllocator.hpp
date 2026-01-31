@@ -23,9 +23,8 @@ class GpuBumpAllocator {
 
     GpuAllocation<std::byte> alloc(size_t bytes, size_t align = 16);
 
-    template <typename T>
-    GpuAllocation<T> alloc(size_t count = 1)
-        //requires std::is_trivially_constructible_v<T>
+    template <typename T> GpuAllocation<T> alloc(size_t count = 1)
+    // requires std::is_trivially_constructible_v<T>
     {
         GpuAllocation<std::byte> mem = alloc(sizeof(T) * count, alignof(T));
         return GpuAllocation<T>{

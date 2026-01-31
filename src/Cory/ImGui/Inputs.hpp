@@ -1,6 +1,5 @@
 #pragma once
 
-#include <KDGpu/utils/flags.h>
 #include <fmt/format.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -9,6 +8,8 @@
 #include <imgui.h>
 #include <kdbindings/property.h>
 #include <magic_enum/magic_enum.hpp>
+
+#include <KDGpu/utils/flags.h>
 
 #include <concepts>
 #include <string>
@@ -232,7 +233,7 @@ bool CheckBoxFlags(std::string_view label, KDGpu::Flags<E> &flags)
                 flags |= flag;
             }
             else {
-                // kdgpu::Flags does not have a clearFlag, and doesn't implement the ~ operator :(
+                // Gpu::Flags does not have a clearFlag, and doesn't implement the ~ operator :(
                 flags &= E{~std::to_underlying(flag)};
             }
             wasChanged = true;

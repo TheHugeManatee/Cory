@@ -48,8 +48,9 @@ class FileWatchManager : NoCopy {
     /// Process all pending events - this will call any suspended coroutines waiting for events
     void processPendingEvents();
 
-    /// Await the next file watch event for the given handle. Only a single consumer is supported per handle.
-    /// If the watch is unwatched, the returned event will be FileWatchEventType::WatchEnded.
+    /// Await the next file watch event for the given handle. Only a single consumer is supported
+    /// per handle. If the watch is unwatched, the returned event will be
+    /// FileWatchEventType::WatchEnded.
     struct NextEventAwaitable;
     NextEventAwaitable nextEvent(FileWatchHandle handle);
 

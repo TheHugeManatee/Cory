@@ -66,11 +66,7 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     KDGpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     KDGpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
-    auto [writtenColorHandle, colorInfo] =
-        builder.write(colorTarget, Cory::Sync::AccessType::ColorAttachmentWrite);
-    auto [writtenDepthHandle, depthInfo] =
-        builder.write(depthTarget, Cory::Sync::AccessType::DepthStencilAttachmentWrite);
-
+    const auto &colorInfo = builder.textureInfo(colorTarget);
     auto cubePass = builder.declareRenderPass(Cory::RenderPassDeclaration{
         .name = "PASS_Cubes",
         .shaders = {vertexShader_, fragmentShader_},
@@ -90,12 +86,12 @@ CubeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
                 .clearDepthStencil = clearDepthStencil,
             },
     });
+    const auto colorOut = cubePass.colorOutputs().front();
+    const auto depthOut = cubePass.depthOutput().value();
 
     /// ^^^^     DECLARATION      ^^^^
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration(PassOutputs{
-        .colorOut = writtenColorHandle,
-        .depthOut = writtenDepthHandle,
-    });
+    Cory::RenderInput renderApi =
+        co_await builder.finishDeclaration(PassOutputs{.colorOut = colorOut, .depthOut = depthOut});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     auto passRecorder = cubePass.begin(renderApi);

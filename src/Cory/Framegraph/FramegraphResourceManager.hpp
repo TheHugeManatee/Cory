@@ -3,12 +3,16 @@
 #include <Cory/Base/SlotMap.hpp>
 #include <Cory/Framegraph/Common.hpp>
 
+#include <cstdint>
+
 namespace Cory {
 
-/// Buffe rhandle paired with pointer to the actual resource
-struct GpuBufferResource {
-    Gpu::BufferHandle handle;
-    Gpu::VulkanBuffer *vulkanBuffer;
+struct FramegraphBufferView {
+    BufferDeviceAddress deviceAddress;
+    Gpu::DeviceSize offset;
+    Gpu::DeviceSize size;
+    std::byte *cpu;
+    bool hostVisible;
 };
 
 /**
@@ -48,6 +52,7 @@ class FramegraphResourceManager : NoCopy {
                                              Gpu::TextureViewHandle resourceView);
 
     void allocate(const std::vector<FramegraphTextureHandle> &handles);
+    void extendUsage(FramegraphTextureHandle handle, Gpu::TextureUsageFlags usage);
 
     /**
      * @brief create a synchronization barrier object to sync subsequent reads
@@ -76,6 +81,7 @@ class FramegraphResourceManager : NoCopy {
     registerExternal(BufferInfo info, Sync::AccessType lastWriteAccess, Gpu::BufferHandle resource);
 
     void allocate(const std::vector<FramegraphBufferHandle> &handles);
+    void extendUsage(FramegraphBufferHandle handle, Gpu::BufferUsageFlags usage);
 
     /**
      * @brief create a synchronization barrier object to sync subsequent reads
@@ -87,9 +93,7 @@ class FramegraphResourceManager : NoCopy {
     Sync::BufferBarrier synchronizeBuffer(FramegraphBufferHandle handle, Sync::AccessType access);
 
     [[nodiscard]] const BufferInfo &info(FramegraphBufferHandle handle) const;
-    [[nodiscard]] Gpu::BufferHandle buffer(FramegraphBufferHandle handle) const;
-
-    [[nodiscard]] GpuBufferResource bufferResource(FramegraphBufferHandle handle) const;
+    [[nodiscard]] FramegraphBufferView bufferView(FramegraphBufferHandle handle) const;
     [[nodiscard]] BufferDeviceAddress deviceAddress(FramegraphBufferHandle handle) const;
     [[nodiscard]] BufferState state(FramegraphBufferHandle handle) const;
 
@@ -98,7 +102,6 @@ class FramegraphResourceManager : NoCopy {
 
   private:
     void allocate(FramegraphTextureHandle handle);
-    void allocate(FramegraphBufferHandle handle);
     std::unique_ptr<struct FramegraphResourceManagerPrivate> data_;
 };
 

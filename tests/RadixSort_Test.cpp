@@ -30,7 +30,8 @@ struct SortTaskOut {
 Cory::RenderTaskDeclaration<Cory::TransientBufferHandle>
 writePredicateTask(Cory::RenderTaskBuilder builder, Cory::TransientBufferHandle keys)
 {
-    auto [writtenKeys, info] = builder.write(keys, Cory::Sync::AccessType::HostWrite);
+    auto [writtenKeys, info] = builder.write(
+        keys, Gpu::BufferUsageFlagBits::StorageBufferBit, Cory::Sync::AccessType::HostWrite);
     (void)info;
     [[maybe_unused]] Cory::RenderInput render = co_await builder.finishDeclaration(writtenKeys);
 }
@@ -53,10 +54,13 @@ Cory::RenderTaskDeclaration<SortTaskOut> framegraphSortTask(Cory::RenderTaskBuil
 Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
 sortSinkTask(Cory::RenderTaskBuilder builder, Cory::TransientBufferHandle indices)
 {
-    builder.read(indices, Cory::Sync::AccessType::ComputeShaderReadOther);
+    builder.read(indices,
+                 Gpu::BufferUsageFlagBits::StorageBufferBit,
+                 Cory::Sync::AccessType::ComputeShaderReadOther);
     auto color = builder.create("TEX_RadixSortSink",
                                 {1, 1, 1},
                                 Cory::TextureFormat::R8G8B8A8_SRGB,
+                                Gpu::TextureUsageFlagBits::ColorAttachmentBit,
                                 Cory::Sync::AccessType::ColorAttachmentWrite);
     [[maybe_unused]] Cory::RenderInput render = co_await builder.finishDeclaration(color);
 }

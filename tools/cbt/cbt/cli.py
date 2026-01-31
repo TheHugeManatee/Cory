@@ -932,13 +932,29 @@ def analyze(
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--check", is_flag=True)
+@click.option("--branch", type=str, default=None, help="Diff files against this branch (e.g. develop)")
 @click.argument("paths", nargs=-1)
 @click.pass_obj
-def fmt(ctx: CliContext, profile: str | None, build_root: Path | None, check: bool, paths: tuple[str, ...]) -> None:
+def fmt(
+    ctx: CliContext,
+    profile: str | None,
+    build_root: Path | None,
+    check: bool,
+    branch: str | None,
+    paths: tuple[str, ...],
+) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     repo = repo_root()
-    files = _filter_source_files(_collect_files(paths, repo, True, ctx.quiet))
+    if paths:
+        files = [Path(p) for p in paths]
+    elif branch:
+        changed = [repo / p for p in git_mod.changed_files_against(repo, branch, ctx.quiet)]
+        files = [p for p in changed if p.exists()]
+    else:
+        files = _collect_files(paths, repo, True, ctx.quiet)
+
+    files = _filter_source_files(files)
     if not files:
         raise ConfigError("No files to format")
     format_mod.format_files(config["tools"]["clang_format"], files, check, ctx.quiet)

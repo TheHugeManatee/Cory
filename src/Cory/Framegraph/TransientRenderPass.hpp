@@ -58,9 +58,13 @@ struct RenderPassDeclaration {
 /// Transient render stores the information to set up and execute a render pass
 class TransientRenderPass : NoCopy {
   public:
-    explicit TransientRenderPass(Context &ctx,
-                                 FramegraphResourceManager &textures,
-                                 RenderPassDeclaration pass);
+    explicit TransientRenderPass(
+        Context &ctx,
+        FramegraphResourceManager &textures,
+        RenderPassDeclaration pass,
+        std::vector<TransientTextureHandle> colorOutputs = {},
+        std::optional<TransientTextureHandle> depthOutput = std::nullopt,
+        std::optional<TransientTextureHandle> stencilOutput = std::nullopt);
     ~TransientRenderPass();
 
     TransientRenderPass(TransientRenderPass &&) = default;
@@ -80,6 +84,18 @@ class TransientRenderPass : NoCopy {
 
     /// Obtain the pipeline layout handle. Creates the layout if necessary.
     [[nodiscard]] Gpu::PipelineLayoutHandle pipelineLayoutHandle() noexcept;
+    [[nodiscard]] const std::vector<TransientTextureHandle> &colorOutputs() const
+    {
+        return colorOutputs_;
+    }
+    [[nodiscard]] const std::optional<TransientTextureHandle> &depthOutput() const
+    {
+        return depthOutput_;
+    }
+    [[nodiscard]] const std::optional<TransientTextureHandle> &stencilOutput() const
+    {
+        return stencilOutput_;
+    }
 
   private:
     Gpu::SampleCountFlagBits determineSampleCount() const;
@@ -92,9 +108,12 @@ class TransientRenderPass : NoCopy {
     RenderPassDeclaration pass_;
 
     DynamicStates dynamicStates_;
+    std::vector<TransientTextureHandle> colorOutputs_;
+    std::optional<TransientTextureHandle> depthOutput_;
+    std::optional<TransientTextureHandle> stencilOutput_;
 
     Gpu::PipelineLayoutHandle pipelineLayout_;
-    const RenderInput* currentRenderApi_{};
+    const RenderInput *currentRenderApi_{};
 };
 
 } // namespace Cory

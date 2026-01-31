@@ -113,32 +113,29 @@ void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
 RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder builder,
                                                                LayerPassOutputs previousLayer)
 {
-    auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentReadWrite);
-    auto [writtenDepthHandle, depthInfo] =
-        builder.readWrite(previousLayer.depth, Sync::AccessType::DepthStencilAttachmentReadWrite);
-
     auto imguiPass = builder.declareRenderPass(
         RenderPassDeclaration{.name = "PASS_ImGui",
                               .options = PassOptionFlagBits::SkipPipelineBind,
                               .attachments = {{
                                   {
                                       // main color target
-                                      .target = writtenColorHandle,
+                                      .target = previousLayer.color,
                                       .load = Gpu::AttachmentLoadOperation::Load,
                                       .store = Gpu::AttachmentStoreOperation::Store,
                                       .clearColor = {},
                                   },
                               }},
                               .depthAttachment = DepthStencilAttachment{
-                                  .target = writtenDepthHandle,
+                                  .target = previousLayer.depth,
                                   .load = Gpu::AttachmentLoadOperation::Load,
                                   .store = Gpu::AttachmentStoreOperation::Store,
                                   .clearDepthStencil = {},
                               }});
+    const auto colorOut = imguiPass.colorOutputs().front();
+    const auto depthOut = imguiPass.depthOutput().value();
 
-    RenderInput renderApi = co_await builder.finishDeclaration(
-        LayerPassOutputs{.color = writtenColorHandle, .depth = writtenDepthHandle});
+    RenderInput renderApi =
+        co_await builder.finishDeclaration(LayerPassOutputs{.color = colorOut, .depth = depthOut});
 
     FrameContext &frameCtx = *renderApi.frameCtx;
 

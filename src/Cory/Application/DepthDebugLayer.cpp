@@ -53,10 +53,10 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
             res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
         .depthDebugShader{res.createShader(
             ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
-        .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
-            .label = "DepthDebugLayer sampler",
-            .magFilter = Gpu::FilterMode::Linear,
-            .minFilter = Gpu::FilterMode::Linear}),
+        .sampler =
+            ctx.device().createSampler(Gpu::SamplerOptions{.label = "DepthDebugLayer sampler",
+                                                           .magFilter = Gpu::FilterMode::Linear,
+                                                           .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
     });
 }
@@ -127,18 +127,12 @@ void DepthDebugLayer::onUpdate(const LogicUpdateContext &updateCtx)
 RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBuilder builder,
                                                                     LayerPassOutputs previousLayer)
 {
-    auto [writtenColorHandle, colorInfo] =
-        builder.readWrite(previousLayer.color, Sync::AccessType::ColorAttachmentReadWrite);
-    (void)colorInfo;
-    builder.read(previousLayer.depth,
-                 Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
-
     auto depthDebugPass = builder.declareRenderPass(RenderPassDeclaration{
         .name = "PASS_DepthDebug",
         .options = PassOptionFlagBits::DisableMeshInput,
         .shaders = {state_->fullscreenTriShader, state_->depthDebugShader},
         .attachments = {{
-            .target = writtenColorHandle,
+            .target = previousLayer.color,
             .load = Gpu::AttachmentLoadOperation::Load,
             .store = Gpu::AttachmentStoreOperation::Store,
             .clearColor = {},
@@ -148,10 +142,15 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
                           .depthTest = DepthTest::Disabled,
                           .depthWrite = DepthWrite::Disabled},
     });
+    const auto colorOut = depthDebugPass.colorOutputs().front();
+
+    builder.read(previousLayer.depth,
+                 Gpu::TextureUsageFlagBits::SampledBit,
+                 Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     /// ^^^^     DECLARATION      ^^^^
     RenderInput renderApi = co_await builder.finishDeclaration(
-        LayerPassOutputs{.color = writtenColorHandle, .depth = previousLayer.depth});
+        LayerPassOutputs{.color = colorOut, .depth = previousLayer.depth});
     /// vvvv  RENDERING COMMANDS  vvvv
 
     FramegraphResourceManager &resources = *renderApi.resources;
@@ -172,7 +171,6 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     renderApi.bindingContext->push(d.gpu);
     renderApi.bindingContext->flush();
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
-
 
     depthDebugPass.end(std::move(recorder));
 }

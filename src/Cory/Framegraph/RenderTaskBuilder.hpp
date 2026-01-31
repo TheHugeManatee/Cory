@@ -8,8 +8,10 @@
 
 #include <cppcoro/coroutine.hpp>
 
+#include <optional>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace Cory {
 /**
@@ -35,11 +37,13 @@ struct RenderTaskInfo {
     struct TextureDependency {
         TaskDependencyKind kind;
         TransientTextureHandle handle;
+        Gpu::TextureUsageFlags usage;
         Sync::AccessType access;
     };
     struct BufferDependency {
         TaskDependencyKind kind;
         TransientBufferHandle handle;
+        Gpu::BufferUsageFlags usage;
         Sync::AccessType access;
     };
     std::string name;
@@ -67,8 +71,11 @@ class RenderTaskBuilder : NoCopy {
     RenderTaskBuilder(RenderTaskBuilder &&) = default;
 
     /// declare that a render pass creates a certain texture
-    [[nodiscard]] TransientTextureHandle
-    create(std::string name, glm::u32vec3 size, Gpu::Format format, Sync::AccessType writeAccess);
+    [[nodiscard]] TransientTextureHandle create(std::string name,
+                                                glm::u32vec3 size,
+                                                Gpu::Format format,
+                                                Gpu::TextureUsageFlags usage,
+                                                Sync::AccessType writeAccess);
 
     /// declare that a render pass creates a certain buffer
     [[nodiscard]] TransientBufferHandle
@@ -79,32 +86,34 @@ class RenderTaskBuilder : NoCopy {
            Gpu::MemoryUsage memoryUsage = Gpu::MemoryUsage::GpuOnly);
 
     /// declares a dependency to the named resource
-    TextureInfo read(TransientTextureHandle h, Sync::AccessType readAccess);
+    TextureInfo
+    read(TransientTextureHandle h, Gpu::TextureUsageFlags usage, Sync::AccessType readAccess);
 
     /// declares a dependency to the named buffer resource
-    BufferInfo read(TransientBufferHandle h, Sync::AccessType readAccess);
+    BufferInfo
+    read(TransientBufferHandle h, Gpu::BufferUsageFlags usage, Sync::AccessType readAccess);
 
     /// declare that a render task writes to a certain texture
-    [[nodiscard]] std::pair<TransientTextureHandle, TextureInfo>
-    write(TransientTextureHandle handle, Sync::AccessType writeAccess);
+    [[nodiscard]] std::pair<TransientTextureHandle, TextureInfo> write(
+        TransientTextureHandle handle, Gpu::TextureUsageFlags usage, Sync::AccessType writeAccess);
 
     /// declare that a render task writes to a certain buffer
-    [[nodiscard]] std::pair<TransientBufferHandle, BufferInfo> write(TransientBufferHandle handle,
-                                                                     Sync::AccessType writeAccess);
+    [[nodiscard]] std::pair<TransientBufferHandle, BufferInfo>
+    write(TransientBufferHandle handle, Gpu::BufferUsageFlags usage, Sync::AccessType writeAccess);
 
     /// declare that a render task reads from and writes to a certain texture
     [[nodiscard]] std::pair<TransientTextureHandle, TextureInfo>
-    readWrite(TransientTextureHandle handle, Sync::AccessType readWriteAccess);
+    readWrite(TransientTextureHandle handle,
+              Gpu::TextureUsageFlags usage,
+              Sync::AccessType readWriteAccess);
 
     /// declare that a render task reads from and writes to a certain buffer
     [[nodiscard]] std::pair<TransientBufferHandle, BufferInfo>
-    readWrite(TransientBufferHandle handle, Sync::AccessType readWriteAccess);
+    readWrite(TransientBufferHandle handle,
+              Gpu::BufferUsageFlags usage,
+              Sync::AccessType readWriteAccess);
 
-    /**
-     * Declares a render pass and its attachments.
-     * @param passDeclaration   the declaration of the pass
-     * @return a builder class to set up the render pass. call finish() to obtain the pass object
-     */
+    /// Declares a render pass and registers implicit attachment dependencies.
     TransientRenderPass declareRenderPass(RenderPassDeclaration passDeclaration);
 
     TransientComputePass declareComputePass(ComputePassDeclaration passDeclaration);
@@ -130,6 +139,8 @@ class RenderTaskBuilder : NoCopy {
     /// naming prefix and can be used to compose larger render tasks and benefit from the
     /// synchronization.
     [[nodiscard]] RenderTaskBuilder subtask(std::string_view name) const;
+
+    [[nodiscard]] const TextureInfo &textureInfo(TransientTextureHandle handle) const;
 
   private:
     Context &ctx_;

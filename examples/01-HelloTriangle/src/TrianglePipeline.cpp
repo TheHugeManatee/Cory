@@ -32,9 +32,18 @@ TrianglePipeline::TrianglePipeline(Cory::Context &context,
 }
 
 TrianglePipeline::~TrianglePipeline() {}
-KDGpu::RenderPass &TrianglePipeline::mainRenderPass() { return data_->mainRenderPass; }
-KDGpu::GraphicsPipeline &TrianglePipeline::pipeline() { return data_->pipeline; }
-KDGpu::PipelineLayout &TrianglePipeline::layout() { return data_->layout; }
+KDGpu::RenderPass &TrianglePipeline::mainRenderPass()
+{
+    return data_->mainRenderPass;
+}
+KDGpu::GraphicsPipeline &TrianglePipeline::pipeline()
+{
+    return data_->pipeline;
+}
+KDGpu::PipelineLayout &TrianglePipeline::layout()
+{
+    return data_->layout;
+}
 
 void TrianglePipeline::createGraphicsPipeline(Gpu::Format colorFormat,
                                               Gpu::Format depthFormat,
@@ -52,9 +61,10 @@ void TrianglePipeline::createGraphicsPipeline(Gpu::Format colorFormat,
         Cory::ShaderSource{vertexFile, Gpu::ShaderStageFlagBits::VertexBit};
     auto vertexResult = Cory::Shader::CompileToSpv(vertexShaderSource, false);
     if (!vertexResult.has_value()) {
-        CO_CORE_ERROR("Failed to compile vertex shader {}: {}", vertexFile.string(), vertexResult.error());
-        throw std::runtime_error(
-            fmt::format("Failed to compile vertex shader {}: {}", vertexFile.string(), vertexResult.error()));
+        CO_CORE_ERROR(
+            "Failed to compile vertex shader {}: {}", vertexFile.string(), vertexResult.error());
+        throw std::runtime_error(fmt::format(
+            "Failed to compile vertex shader {}: {}", vertexFile.string(), vertexResult.error()));
     }
     auto vertexShader = device.createShaderModule(std::move(vertexResult).value().spirv);
 
@@ -63,9 +73,12 @@ void TrianglePipeline::createGraphicsPipeline(Gpu::Format colorFormat,
         Cory::ShaderSource{fragmentFile, Gpu::ShaderStageFlagBits::FragmentBit};
     auto fragmentResult = Cory::Shader::CompileToSpv(fragmentShaderSource, false);
     if (!fragmentResult.has_value()) {
-        CO_CORE_ERROR("Failed to compile fragment shader {}: {}", fragmentFile.string(), fragmentResult.error());
-        throw std::runtime_error(
-            fmt::format("Failed to compile fragment shader {}: {}", fragmentFile.string(), fragmentResult.error()));
+        CO_CORE_ERROR("Failed to compile fragment shader {}: {}",
+                      fragmentFile.string(),
+                      fragmentResult.error());
+        throw std::runtime_error(fmt::format("Failed to compile fragment shader {}: {}",
+                                             fragmentFile.string(),
+                                             fragmentResult.error()));
     }
     auto fragmentShader = device.createShaderModule(std::move(fragmentResult).value().spirv);
 

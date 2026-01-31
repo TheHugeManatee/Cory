@@ -35,7 +35,6 @@ TEST_CASE("Framegraph resource manager tracks textures and buffers",
         CHECK(resources.image(texHandle).isValid());
         CHECK(resources.imageView(texHandle).isValid());
 
-
         Texture externalTexture = device.createTexture(Gpu::TextureOptions{
             .label = "TEX_External (IMG)",
             .type = Gpu::TextureType::TextureType2D,
@@ -104,5 +103,5 @@ TEST_CASE("Framegraph resource manager tracks textures and buffers",
         CHECK(resources.buffer(externalBufferHandle) == externalBuffer.handle());
     }
     // Cleanup
-    resources.clear();
+    resources.clearAll();
 }

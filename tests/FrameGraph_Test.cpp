@@ -4,6 +4,7 @@
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
@@ -470,7 +471,8 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
 
-    Framegraph graph(t.ctx(), 0);
+    FramegraphResourceManager framegraphResources(t.ctx());
+    Framegraph graph(t.ctx(), framegraphResources, 0);
 
     auto &device = t.ctx().device();
 
@@ -532,7 +534,8 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph]")
 TEST_CASE("Framegraph allocates temp resources for scheduled tasks", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
-    Framegraph graph(t.ctx(), 0);
+    FramegraphResourceManager framegraphResources(t.ctx());
+    Framegraph graph(t.ctx(), framegraphResources, 0);
 
     auto pass = passes::tempResourcePass(graph.declareTask("PASS_TempResource"), {128, 128, 1});
     auto [outputInfo, outputState] =
@@ -611,7 +614,8 @@ RenderTaskDeclaration<MainSubtaskOut> mainPassWithSubpasses(RenderTaskBuilder bu
 TEST_CASE("Framegraph subtask definition", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
-    Framegraph graph(t.ctx(), 0);
+    FramegraphResourceManager framegraphResources(t.ctx());
+    Framegraph graph(t.ctx(), framegraphResources, 0);
 
     auto prevFrame = createGraphInput(t.ctx().device(), graph);
 
@@ -644,7 +648,8 @@ TEST_CASE("Framegraph subtask definition", "[Cory/Framegraph]")
 TEST_CASE("Framegraph resolve avoids repeated buffer visits", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
-    Framegraph graph(t.ctx(), 0);
+    FramegraphResourceManager framegraphResources(t.ctx());
+    Framegraph graph(t.ctx(), framegraphResources, 0);
 
     auto shared = passes::sharedBufferProducer(graph.declareTask("PASS_SharedBuffer"));
     auto consumerA = passes::bufferConsumer(graph.declareTask("PASS_ConsumerA"),
@@ -691,7 +696,8 @@ TEST_CASE("Framegraph resolve avoids repeated buffer visits", "[Cory/Framegraph]
 TEST_CASE("Framegraph resolves toy radix ordering", "[Cory/Framegraph]")
 {
     testing::VulkanTester t;
-    Framegraph graph(t.ctx(), 0);
+    FramegraphResourceManager framegraphResources(t.ctx());
+    Framegraph graph(t.ctx(), framegraphResources, 0);
 
     auto radixTask = passes::toyRadix(graph.declareTask("TASK_ToyRadix"));
     auto sinkTask = passes::toySink(graph.declareTask("TASK_ToySink"), radixTask.output().indices);

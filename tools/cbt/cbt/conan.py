@@ -1,12 +1,76 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
-from .util import run
-
+from .util import run, write_text, read_text
 
 def ensure_profile_detected(conan: str, quiet: bool) -> None:
-    run([conan, "profile", "detect", "--force"], quiet=quiet)
+    try:
+        # If the default profile exists this will succeed; don't run detect.
+        run([conan, "profile", "show", "default"], quiet=True)
+        return
+    except Exception:
+        # No default profile: auto-detect one and then ensure cppstd=20
+        run([conan, "profile", "detect", "--force"], quiet=quiet)
+        # Conan 2 removed `profile update` - edit the profile file directly.
+        try:
+            # `conan profile path default` prints the path to the profile file.
+            res = run([conan, "profile", "path", "default"], quiet=True)
+            profile_path_str = res.stdout.strip()
+            if not profile_path_str:
+                return
+            profile_path = Path(profile_path_str)
+            if not profile_path.exists():
+                return
+
+            content = read_text(profile_path)
+            lines = content.splitlines(keepends=True)
+
+            # Find [settings] section
+            settings_idx = None
+            for i, line in enumerate(lines):
+                if line.strip().lower() == "[settings]":
+                    settings_idx = i
+                    break
+
+            cppstd_pattern = re.compile(r'^\s*(?:settings\.)?compiler\.cppstd\s*=\s*', re.IGNORECASE)
+
+            if settings_idx is not None:
+                # find end of [settings] (next section) and look for existing cppstd
+                end_idx = len(lines)
+                for j in range(settings_idx + 1, len(lines)):
+                    if lines[j].strip().startswith("["):
+                        end_idx = j
+                        break
+
+                found = False
+                for k in range(settings_idx + 1, end_idx):
+                    if cppstd_pattern.match(lines[k]):
+                        # replace the line with the desired setting
+                        lines[k] = re.sub(r'^(.*=).*', r"compiler.cppstd=20\n", lines[k])
+                        found = True
+                        break
+
+                if not found:
+                    # insert after the [settings] header
+                    insert_at = settings_idx + 1
+                    # keep consistent newline style
+                    nl = "\n" if not lines[settings_idx].endswith("\n") else ""
+                    lines.insert(insert_at, "compiler.cppstd=20\n")
+            else:
+                # No [settings] section - append one
+                if lines and not lines[-1].endswith("\n"):
+                    lines[-1] = lines[-1] + "\n"
+                lines.append("[settings]\n")
+                lines.append("compiler.cppstd=20\n")
+
+            new_content = "".join(lines)
+            if new_content != content:
+                write_text(profile_path, new_content)
+        except Exception:
+            # On any failure here we don't want to crash the whole setup; it's best-effort.
+            return
 
 
 def install(

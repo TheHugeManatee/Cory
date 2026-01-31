@@ -182,12 +182,6 @@ target_include_directories(${TARGET_NAME}
         ${IMGUI_BACKEND_DIR}
 )
 
-target_include_directories(${TARGET_NAME}
-        SYSTEM PUBLIC
-        $<TARGET_PROPERTY:KDGpu::KDGpu,INTERFACE_INCLUDE_DIRECTORIES>
-        $<TARGET_PROPERTY:KDGpu::KDGpuUtils,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         ${VULKAN_LIBRARIES}
@@ -201,9 +195,9 @@ target_link_libraries(${TARGET_NAME}
         range-v3::range-v3
         cppcoro::cppcoro
         spdlog::spdlog
-        KDGpu::KDGpu
+        SYSTEM PUBLIC KDGpu::KDGpu
+        SYSTEM PUBLIC KDGpu::KDGpuUtils
         glfw
-        KDGpu::KDGpuUtils
         KDUtils::KDGui
         Slang::slang
         efsw::efsw

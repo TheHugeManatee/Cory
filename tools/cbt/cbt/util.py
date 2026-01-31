@@ -44,10 +44,10 @@ def is_windows() -> bool:
 
 
 def run(
-    cmd: Iterable[str],
-    cwd: Path | None = None,
-    env: dict[str, str] | None = None,
-    quiet: bool = False,
+        cmd: Iterable[str],
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+        quiet: bool = False,
 ) -> RunResult:
     if not quiet:
         sys.stdout.write(f"$ {shlex.join(cmd)}\n")
@@ -64,6 +64,15 @@ def run(
     stdout_lines: list[str] = []
     stderr_lines: list[str] = []
 
+    class _NoopSink:
+        def write(self, _):
+            pass
+        def flush(self):
+            pass
+
+    stdout_sink = sys.stdout if not quiet else _NoopSink()
+    stderr_sink = sys.stderr if not quiet else _NoopSink()
+
     def _drain(pipe, sink, storage: list[str]) -> None:
         assert pipe is not None
         for line in pipe:
@@ -73,8 +82,8 @@ def run(
         pipe.close()
 
     threads = [
-        Thread(target=_drain, args=(process.stdout, sys.stdout, stdout_lines), daemon=True),
-        Thread(target=_drain, args=(process.stderr, sys.stderr, stderr_lines), daemon=True),
+        Thread(target=_drain, args=(process.stdout, stdout_sink, stdout_lines), daemon=True),
+        Thread(target=_drain, args=(process.stderr, stderr_sink, stderr_lines), daemon=True),
     ]
     for t in threads:
         t.start()

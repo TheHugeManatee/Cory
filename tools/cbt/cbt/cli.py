@@ -6,6 +6,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import tempfile
+import subprocess
 
 import click
 
@@ -18,7 +20,7 @@ from . import format as format_mod
 from . import git as git_mod
 from . import run as run_mod
 from . import tidy as tidy_mod
-from .config import load_config, new_config, require_config, write_config
+from .config import new_config, require_config, write_config
 from .paths import (
     build_dir_for_profile,
     config_path,
@@ -41,6 +43,7 @@ from .util import (
     which,
     write_text,
 )
+from shutil import which as _shutil_which
 
 
 @dataclass
@@ -106,8 +109,7 @@ def _env_profile() -> str | None:
 
 
 def _resolve_profile(profile: str | None) -> str:
-    return profile or _env_profile() or "codex"
-
+    return profile or _env_profile() or "debug" if is_windows() else "codex"
 
 def _config_env(config: dict) -> dict[str, str]:
     env = dict(os.environ)
@@ -223,6 +225,168 @@ def _dir_size(path: Path) -> int:
     return total
 
 
+def _msvc_env_active(env: dict[str, str]) -> bool:
+    # Check whether 'cl' is available using the provided env's PATH
+    path = env.get("PATH")
+    return _shutil_which("cl", path=path) is not None
+
+
+def _find_vs_installation() -> str | None:
+    # Try vswhere in its typical location
+    program_files_x86 = os.environ.get("ProgramFiles(x86)") or os.environ.get("ProgramFiles")
+    if program_files_x86:
+        vswhere = Path(program_files_x86) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"
+        if vswhere.exists():
+            try:
+                res = run([str(vswhere), "-latest", "-products", "*", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath"], quiet=True)
+                inst = res.stdout.strip()
+                if inst:
+                    return inst
+            except Exception:
+                pass
+
+    # Fallback: look for common installation folders and pick the newest
+    if program_files_x86:
+        base = Path(program_files_x86) / "Microsoft Visual Studio"
+        if base.exists():
+            # versions like 2017, 2019, 2022
+            candidates = list(base.glob("*") )
+            candidates = [p for p in candidates if (p / "Common7").exists()]
+            if candidates:
+                # return the one with highest name (best-effort)
+                candidates.sort()
+                return str(candidates[-1])
+    return None
+
+
+def _activate_vs_env_into(env: dict[str, str], inst_path: str, arch: str = "x64", quiet: bool = True) -> dict[str, str]:
+    # Try VsDevCmd.bat (newer) then vcvarsall.bat
+    # Honor override environment variable CORY_VSDEV_BAT to point to an exact batch file
+    override = os.environ.get("CORY_VSDEV_BAT")
+    inst = Path(inst_path)
+    # Candidate locations; prefer vcvarsall.bat then VsDevCmd.bat; allow override
+    candidates: list[Path] = []
+    if override:
+        cand = Path(override)
+        if cand.exists():
+            if not quiet:
+                sys.stdout.write(f"Using CORY_VSDEV_BAT override: {cand}\n")
+            candidates = [cand]
+        else:
+            if not quiet:
+                sys.stdout.write(f"CORY_VSDEV_BAT override set but path not found: {override}\n")
+            candidates = []
+    else:
+        # Standard vcvarsall path
+        std_vcvars = inst / "VC" / "Auxiliary" / "Build" / "vcvarsall.bat"
+        std_vsdev = inst / "Common7" / "Tools" / "VsDevCmd.bat"
+        found_vcvars: list[Path] = []
+        found_vsdev: list[Path] = []
+        try:
+            for p in inst.rglob("vcvarsall.bat"):
+                found_vcvars.append(p)
+            for p in inst.rglob("VsDevCmd.bat"):
+                found_vsdev.append(p)
+        except Exception:
+            pass
+        # Prefer standard path if present
+        if std_vcvars.exists():
+            candidates.append(std_vcvars)
+        candidates.extend([p for p in found_vcvars if p != std_vcvars])
+        if std_vsdev.exists():
+            candidates.append(std_vsdev)
+        candidates.extend([p for p in found_vsdev if p != std_vsdev])
+
+    for bat in candidates:
+        if bat.exists():
+            if not quiet:
+                sys.stdout.write(f"Trying VS dev batch: {bat}\n")
+            # Create a temporary batch file that calls the dev batch and then emits the environment
+            # This avoids complex quoting issues when invoking cmd /c with embedded quotes.
+            tmp = None
+            try:
+                fd, tmp_path = tempfile.mkstemp(suffix=".bat", text=True)
+                tmp = Path(tmp_path)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(f"@echo off\n")
+                    # Use CALL to run the target batch and then print environment
+                    # vcvarsall.bat expects 'x64' etc.; VsDevCmd.bat prefers '-arch=x64'
+                    bat_name = bat.name.lower()
+                    if bat_name == 'vcvarsall.bat':
+                        f.write(f"call \"{str(bat)}\" {arch}\n")
+                    else:
+                        f.write(f"call \"{str(bat)}\" -arch={arch}\n")
+                    f.write("set\n")
+                # Run the temp batch and capture stdout
+                try:
+                    comspec = os.environ.get("COMSPEC", "cmd")
+                    # Use subprocess.run to avoid the run() quoting/printing behavior and capture stdout
+                    stdout = ""
+                    proc = subprocess.run([comspec, "/c", str(tmp)], capture_output=True, text=True, check=True)
+                    stdout = proc.stdout
+                    if not quiet:
+                        sys.stdout.write(f"VsDev batch ran successfully, captured {len(stdout.splitlines())} env lines\n")
+                finally:
+                    try:
+                        tmp.unlink()
+                    except Exception:
+                        pass
+
+                new_env = dict(env)
+                captured: dict[str, str] = {}
+                for line in stdout.splitlines():
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        captured[k] = v
+                        try:
+                            captured[k.upper()] = v
+                        except Exception:
+                            pass
+                # Merge PATH: prefer captured PATH first, but keep any original PATH entries so tools
+                # available in the invoking console (e.g. Git unix utils) remain accessible.
+                captured_path = captured.get('PATH') or captured.get('Path') or captured.get('path')
+                original_path = env.get('PATH') or env.get('Path') or env.get('path') or ''
+                if captured_path:
+                    if original_path:
+                        merged_path = f"{captured_path}{os.pathsep}{original_path}"
+                    else:
+                        merged_path = captured_path
+                    new_env['PATH'] = merged_path
+                # Import other captured variables into new_env (preserve original when absent)
+                for k, v in captured.items():
+                    if k.upper() == 'PATH':
+                        continue
+                    new_env[k] = v
+                    try:
+                        new_env[k.upper()] = v
+                    except Exception:
+                        pass
+                return new_env
+            except Exception:
+                # try next candidate
+                if tmp and tmp.exists():
+                    try:
+                        tmp.unlink()
+                    except Exception:
+                        pass
+                continue
+    raise MissingPrereq("Could not locate Visual Studio developer batch files (VsDevCmd.bat or vcvarsall.bat)")
+
+
+def _ensure_msvc_dev_env(env: dict[str, str], quiet: bool) -> dict[str, str]:
+    if not is_windows():
+        return env
+    if _msvc_env_active(env):
+        return env
+    # Try to locate an installation and activate its dev environment
+    inst = _find_vs_installation()
+    if not inst:
+        raise MissingPrereq("Visual Studio installation not found; please run 'x64 Native Tools Command Prompt' or install Visual Studio with C++ workload")
+    if not quiet:
+        sys.stdout.write(f"Found Visual Studio installation: {inst}\n")
+    return _activate_vs_env_into(env, inst, "x64", quiet)
+
+
 @click.group()
 @click.option("--quiet", is_flag=True, help="Suppress command echo.")
 @click.pass_context
@@ -313,6 +477,75 @@ def configure(
         vulkan_hints=vulkan_hints,
     )
     env = _config_env(config)
+    # Ensure MSVC dev environment is active on Windows when needed
+    env = _ensure_msvc_dev_env(env, ctx.quiet)
+    # Debug: when not quiet, print a short PATH sample and whether cl is present in that PATH
+    if not ctx.quiet and is_windows():
+        sample_path = env.get("PATH", "")
+        # print only the tail (last 3 entries) to avoid huge output
+        parts = sample_path.split(os.pathsep)
+        tail = os.pathsep.join(parts[-3:]) if len(parts) >= 3 else sample_path
+        sys.stdout.write(f"Detected PATH tail: {tail}\n")
+        detected = _find_executable_in_env_path(sample_path, "cl") or _shutil_which("cl", path=sample_path)
+        sys.stdout.write(f"cl found by detection: {detected}\n")
+    # If MSVC dev env activated, detect cl.exe in the captured PATH for diagnostics (do not set compilers)
+    if is_windows():
+        try:
+            cl_path = _shutil_which("cl", path=env.get("PATH", ""))
+        except Exception:
+            cl_path = None
+        if not cl_path:
+            # Fallback: look for cl.exe by scanning PATH entries directly
+            cl_path = _find_executable_in_env_path(env.get("PATH", ""), "cl")
+        if cl_path:
+            if not ctx.quiet:
+                sys.stdout.write(f"Using detected cl: {cl_path}\n")
+    # Strong diagnostic: print PATH and related VS env vars, and run 'where cl' via cmd with the captured env
+    if is_windows() and not ctx.quiet:
+        try:
+            path_full = env.get('PATH', '')
+            sys.stdout.write(f"Captured PATH length: {len(path_full)}\n")
+            parts = [p for p in path_full.split(os.pathsep) if p]
+            sys.stdout.write(f"Captured PATH entries (last 10): {parts[-10:]}\n")
+            for key in ('VSINSTALLDIR', 'VS150COMNTOOLS', 'VisualStudioVersion', 'VCToolsInstallDir'):
+                if key in env:
+                    sys.stdout.write(f"{key}={env.get(key)}\n")
+            comspec = os.environ.get('COMSPEC', 'cmd')
+            try:
+                proc = subprocess.run([comspec, '/c', 'where cl'], env=env, capture_output=True, text=True, check=False)
+                sys.stdout.write(f"where cl stdout:\n{proc.stdout}\n")
+                sys.stdout.write(f"where cl stderr:\n{proc.stderr}\n")
+            except Exception as ex:
+                sys.stdout.write(f"Failed to run where cl via subprocess: {ex}\n")
+            # Additional diagnostics: check git and sh visibility under the same env
+            try:
+                proc = subprocess.run([comspec, '/c', 'where git'], env=env, capture_output=True, text=True, check=False)
+                sys.stdout.write(f"where git stdout:\n{proc.stdout}\n")
+                sys.stdout.write(f"where git stderr:\n{proc.stderr}\n")
+            except Exception as ex:
+                sys.stdout.write(f"Failed to run where git via subprocess: {ex}\n")
+            try:
+                proc = subprocess.run([comspec, '/c', 'where sh'], env=env, capture_output=True, text=True, check=False)
+                sys.stdout.write(f"where sh stdout:\n{proc.stdout}\n")
+                sys.stdout.write(f"where sh stderr:\n{proc.stderr}\n")
+            except Exception as ex:
+                sys.stdout.write(f"Failed to run where sh via subprocess: {ex}\n")
+            # Try to run git --version and sh --version directly
+            try:
+                proc = subprocess.run(['git', '--version'], env=env, capture_output=True, text=True, check=False)
+                sys.stdout.write(f"git --version stdout:\n{proc.stdout}\n")
+                sys.stdout.write(f"git --version stderr:\n{proc.stderr}\n")
+            except Exception as ex:
+                sys.stdout.write(f"Failed to run 'git --version' via subprocess: {ex}\n")
+            try:
+                proc = subprocess.run(['sh', '--version'], env=env, capture_output=True, text=True, check=False)
+                sys.stdout.write(f"sh --version stdout:\n{proc.stdout}\n")
+                sys.stdout.write(f"sh --version stderr:\n{proc.stderr}\n")
+            except Exception as ex:
+                sys.stdout.write(f"Failed to run 'sh --version' via subprocess: {ex}\n")
+        except Exception as ex:
+            sys.stdout.write(f"Diagnostic failure: {ex}\n")
+
     cmake_mod.configure(
         tools["cmake"],
         build_dir,
@@ -336,6 +569,7 @@ def reconfigure(ctx: CliContext, profile: str | None, run_conan: bool, cmake_def
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, None)
     env = _config_env(config)
+    env = _ensure_msvc_dev_env(env, ctx.quiet)
     tools = config["tools"]
     if run_conan:
         conan_mod.install(
@@ -349,6 +583,24 @@ def reconfigure(ctx: CliContext, profile: str | None, run_conan: bool, cmake_def
         )
     defines = dict(config["cmake"]["defines"])
     defines.update(_parse_defines(cmake_define))
+    # If MSVC dev env activated, detect cl.exe in the captured PATH for diagnostics only
+    if is_windows():
+        try:
+            cl_path = _shutil_which("cl", path=env.get("PATH", ""))
+        except Exception:
+            cl_path = None
+        if not cl_path:
+            cl_path = _find_executable_in_env_path(env.get("PATH", ""), "cl")
+        if cl_path:
+            if not ctx.quiet:
+                sys.stdout.write(f"reconfigure: cl detected in captured PATH: {cl_path}\n")
+    # Diagnostic: confirm cl is visible when running subprocesses with the captured env
+    if is_windows() and not ctx.quiet:
+        try:
+            run(["where", "cl"], env=env, quiet=False)
+        except ToolError:
+            sys.stdout.write("Diagnostic: 'where cl' failed under captured env - cl not visible to subprocess.\n")
+
     cmake_mod.configure(
         tools["cmake"],
         build_dir,
@@ -379,6 +631,7 @@ def build(
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
+    env = _ensure_msvc_dev_env(env, ctx.quiet)
     cmake_mod.build(
         config["tools"]["cmake"],
         build_dir,
@@ -440,6 +693,7 @@ def list_targets(ctx: CliContext, profile: str | None, build_root: Path | None, 
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
+    env = _ensure_msvc_dev_env(env, ctx.quiet)
     result = run(
         [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
         env=env,
@@ -498,6 +752,7 @@ def run_test(
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _test_env(config)
+    env = _ensure_msvc_dev_env(env, ctx.quiet)
     target_help = run(
         [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
         env=env,
@@ -792,3 +1047,23 @@ def main() -> None:
     except click.UsageError as exc:
         sys.stderr.write(f"{exc}\n")
         raise SystemExit(1)
+
+def _find_executable_in_env_path(env_path: str, name: str) -> str | None:
+     """Search the PATH string from an env dict for an executable name. Returns full path or None."""
+     if not env_path:
+         return None
+     parts = env_path.split(os.pathsep)
+     # Try name and name.exe
+     candidates = [name, name + ".exe"]
+     for p in parts:
+         if not p:
+             continue
+         for cand in candidates:
+             try:
+                 path = Path(p) / cand
+                 if path.exists():
+                     return str(path)
+             except Exception:
+                 continue
+     return None
+

@@ -30,7 +30,7 @@ def run_tests(
     env: dict[str, str] | None,
     quiet: bool,
 ) -> None:
-    cmd = [ctest, "--test-dir", str(build_dir), "-R", regex, "--output-on-failure"]
+    cmd = [ctest, "--test-dir", str(build_dir), "-R", regex, "--output-on-failure", "-j"]
     if label:
         cmd += ["-L", label]
     if repeat:

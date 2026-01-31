@@ -40,7 +40,25 @@ def build(
     verbose: bool,
     env: dict[str, str] | None,
     quiet: bool,
+    native_tool: str | None = None,
 ) -> None:
+    # Prefer invoking the native build tool directly (e.g. ninja) when provided.
+    # Calling the native tool avoids CMake reconfigure step that `cmake --build`
+    # may trigger in some setups. Fall back to `cmake --build` when native_tool
+    # is not provided.
+    if native_tool:
+        # For ninja, use: ninja -C <build_dir> [target] [-jN]
+        cmd = [native_tool, "-C", str(build_dir)]
+        if target:
+            cmd.append(target)
+        if jobs:
+            cmd.append(f"-j{jobs}")
+        # ninja's verbose flag is -v
+        if verbose:
+            cmd.append("-v")
+        run(cmd, env=env, quiet=quiet)
+        return
+
     cmd = [cmake, "--build", str(build_dir), "--config", build_type]
     if target:
         cmd += ["--target", target]

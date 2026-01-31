@@ -17,6 +17,7 @@ endif ()
 # Make sure release builds still have debug info
 if (MSVC)
     add_compile_options("$<$<CONFIG:Release>:/Zi>")
+    add_compile_options("/Zc:preprocessor")
     add_link_options("$<$<CONFIG:Release>:/DEBUG>")
 else ()
     add_compile_options("$<$<CONFIG:Release>:-g>")

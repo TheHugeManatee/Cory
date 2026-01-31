@@ -17,6 +17,10 @@
 #include <type_traits>
 #include <vector>
 
+namespace Cory {
+class HeadlessFrameSource;
+}
+
 struct CubeUBO {
     glm::mat4 projection;
     glm::mat4 view;
@@ -74,8 +78,10 @@ class CubeDemoApplication : public Cory::Application {
 
   private:
     bool disableValidation_{false};
+    bool headless_{false};
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
     std::unique_ptr<Cory::Window> window_;
+    std::unique_ptr<Cory::HeadlessFrameSource> headlessFrames_;
 
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;

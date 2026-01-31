@@ -1,6 +1,5 @@
 #include "TrianglePipeline.hpp"
 
-#include <Cory/Application/Window.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -19,14 +18,17 @@ struct TrianglePipeline::PrivateData {
 };
 
 TrianglePipeline::TrianglePipeline(Cory::Context &context,
-                                   const Cory::Window &window,
+                                   Gpu::Format colorFormat,
+                                   Gpu::Format depthFormat,
+                                   Gpu::SampleCountFlagBits sampleCount,
                                    const Mesh &mesh,
                                    std::filesystem::path vertFile,
                                    std::filesystem::path fragFile)
     : data_{std::make_unique<PrivateData>()}
 {
     data_->ctx = &context;
-    createGraphicsPipeline(window, mesh, std::move(vertFile), std::move(fragFile));
+    createGraphicsPipeline(
+        colorFormat, depthFormat, sampleCount, mesh, std::move(vertFile), std::move(fragFile));
 }
 
 TrianglePipeline::~TrianglePipeline() {}
@@ -34,7 +36,9 @@ KDGpu::RenderPass &TrianglePipeline::mainRenderPass() { return data_->mainRender
 KDGpu::GraphicsPipeline &TrianglePipeline::pipeline() { return data_->pipeline; }
 KDGpu::PipelineLayout &TrianglePipeline::layout() { return data_->layout; }
 
-void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
+void TrianglePipeline::createGraphicsPipeline(Gpu::Format colorFormat,
+                                              Gpu::Format depthFormat,
+                                              Gpu::SampleCountFlagBits sampleCount,
                                               const Mesh &mesh,
                                               std::filesystem::path vertFile,
                                               std::filesystem::path fragFile)
@@ -105,10 +109,10 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
                                    .offset = sizeof(glm::vec3),
                                }},
             },
-        .renderTargets = {{.format = window.colorFormat()}},
+        .renderTargets = {{.format = colorFormat}},
         .depthStencil =
             {
-                .format = window.depthFormat(),
+                .format = depthFormat,
                 .depthWritesEnabled = true,
                 .depthCompareOperation = KDGpu::CompareOperation::Less,
             },
@@ -117,7 +121,7 @@ void TrianglePipeline::createGraphicsPipeline(const Cory::Window &window,
         },
         .multisample =
             {
-                .samples = window.samples(),
+                .samples = sampleCount,
                 .alphaToCoverageEnabled = false,
             },
     };

@@ -113,6 +113,8 @@ set(CORY_SOURCES
         Renderer/FrameGenerator.hpp
         Renderer/FrameContext.hpp
         Renderer/FrameResourceLifetimeHelper.hpp
+        Renderer/HeadlessFrameSource.cpp
+        Renderer/HeadlessFrameSource.hpp
         Renderer/Gpu.cpp
         Renderer/Gpu.hpp
         Renderer/GpuBumpAllocator.cpp
@@ -180,12 +182,6 @@ target_include_directories(${TARGET_NAME}
         ${IMGUI_BACKEND_DIR}
 )
 
-target_include_directories(${TARGET_NAME}
-        SYSTEM PUBLIC
-        $<TARGET_PROPERTY:KDGpu::KDGpu,INTERFACE_INCLUDE_DIRECTORIES>
-        $<TARGET_PROPERTY:KDGpu::KDGpuUtils,INTERFACE_INCLUDE_DIRECTORIES>
-)
-
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         ${VULKAN_LIBRARIES}
@@ -200,8 +196,8 @@ target_link_libraries(${TARGET_NAME}
         cppcoro::cppcoro
         spdlog::spdlog
         KDGpu::KDGpu
-        glfw
         KDGpu::KDGpuUtils
+        glfw
         KDUtils::KDGui
         Slang::slang
         efsw::efsw

@@ -31,7 +31,7 @@ target_link_libraries(${TARGET_NAME}
 
 if (CORY_BUILD_TESTS)
     enable_testing()
-add_test(NAME Smoketests.CubeDemo COMMAND ${TARGET_NAME} --frames=50)
+add_test(NAME Smoketests.CubeDemo COMMAND ${TARGET_NAME} --frames=50  --headless)
 endif ()
 
 # Install in the desired folder

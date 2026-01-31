@@ -25,7 +25,7 @@ target_link_libraries(${TARGET_NAME}
 
 if (CORY_BUILD_TESTS)
     enable_testing()
-add_test(NAME Smoketests.DynamicPipeline COMMAND ${TARGET_NAME} --frames=100)
+add_test(NAME Smoketests.DynamicPipeline COMMAND ${TARGET_NAME} --frames=100 --headless)
 endif ()
 
 install(TARGETS ${TARGET_NAME}

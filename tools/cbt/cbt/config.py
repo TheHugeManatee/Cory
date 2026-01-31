@@ -100,7 +100,7 @@ def _dumps_toml(config: dict) -> str:
             return "{ " + items + " }"
         return json.dumps(str(v))
 
-    for section in ("cbt", "paths", "conan", "cmake", "tools", "vulkan"):
+    for section in ("cbt", "paths", "conan", "cmake", "tools", "vulkan", "msvc"):
         if section in config:
             write_table(section, config[section])
     return "\n".join(lines).rstrip() + "\n"

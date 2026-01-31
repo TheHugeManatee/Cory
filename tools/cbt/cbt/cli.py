@@ -373,13 +373,42 @@ def _activate_vs_env_into(env: dict[str, str], inst_path: str, arch: str = "x64"
     raise MissingPrereq("Could not locate Visual Studio developer batch files (VsDevCmd.bat or vcvarsall.bat)")
 
 
-def _ensure_msvc_dev_env(env: dict[str, str], quiet: bool) -> dict[str, str]:
+def _ensure_msvc_dev_env(
+    env: dict[str, str],
+    quiet: bool,
+    cached_installation: str | None = None,
+    cached_env: dict[str, str] | None = None,
+) -> dict[str, str]:
     if not is_windows():
         return env
+    # If cl is already available in PATH, assume dev env active
     if _msvc_env_active(env):
         return env
-    # Try to locate an installation and activate its dev environment
-    inst = _find_vs_installation()
+    # If we have a cached environment dict from a prior configure, apply it instead
+    if cached_env:
+        new_env = dict(env)
+        # Merge PATH specially: prefer cached PATH entries first, then preserve existing
+        cached_path = cached_env.get("PATH") or cached_env.get("Path") or cached_env.get("path")
+        original_path = env.get("PATH") or env.get("Path") or env.get("path") or ""
+        if cached_path:
+            if original_path:
+                merged = f"{cached_path}{os.pathsep}{original_path}"
+            else:
+                merged = cached_path
+            new_env["PATH"] = merged
+        # Apply other cached variables (override)
+        for k, v in cached_env.items():
+            if k.upper() == "PATH":
+                continue
+            new_env[k] = v
+            try:
+                new_env[k.upper()] = v
+            except Exception:
+                pass
+        return new_env
+
+    # If a cached installation path was provided, use it; otherwise try to locate one.
+    inst = cached_installation or _find_vs_installation()
     if not inst:
         raise MissingPrereq("Visual Studio installation not found; please run 'x64 Native Tools Command Prompt' or install Visual Studio with C++ workload")
     if not quiet:
@@ -478,7 +507,39 @@ def configure(
     )
     env = _config_env(config)
     # Ensure MSVC dev environment is active on Windows when needed
-    env = _ensure_msvc_dev_env(env, ctx.quiet)
+    # Attempt to detect Visual Studio once and cache the installation path
+    # into the generated cbt config so future invocations can reuse it.
+    msvc_inst: str | None = None
+    if is_windows():
+        # Try a quick detection now; store into config so it gets written.
+        try:
+            msvc_inst = _find_vs_installation()
+        except Exception:
+            msvc_inst = None
+        if msvc_inst:
+            config.setdefault("msvc", {})["installation"] = msvc_inst
+    # If we detected an installation, activate the dev env now and capture the
+    # environment delta so future runs can reuse it without invoking the batch.
+    if is_windows() and msvc_inst:
+        try:
+            activated = _activate_vs_env_into(env, msvc_inst, "x64", ctx.quiet)
+            # Compute delta between original env and activated env
+            delta: dict[str, str] = {}
+            for k, v in activated.items():
+                orig = env.get(k)
+                if orig != v:
+                    delta[k] = v
+            # Persist installation path and env delta
+            msvc = config.setdefault("msvc", {})
+            msvc["installation"] = msvc_inst
+            msvc["env"] = delta
+            # Use the activated environment for the rest of configure
+            env = activated
+        except Exception:
+            # Fallback to attempting to ensure env (which will raise a helpful error)
+            env = _ensure_msvc_dev_env(env, ctx.quiet, cached_installation=msvc_inst)
+    else:
+        env = _ensure_msvc_dev_env(env, ctx.quiet, cached_installation=msvc_inst)
     # Debug: when not quiet, print a short PATH sample and whether cl is present in that PATH
     if not ctx.quiet and is_windows():
         sample_path = env.get("PATH", "")
@@ -569,7 +630,12 @@ def reconfigure(ctx: CliContext, profile: str | None, run_conan: bool, cmake_def
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, None)
     env = _config_env(config)
-    env = _ensure_msvc_dev_env(env, ctx.quiet)
+    env = _ensure_msvc_dev_env(
+        env,
+        ctx.quiet,
+        cached_installation=config.get("msvc", {}).get("installation"),
+        cached_env=config.get("msvc", {}).get("env"),
+    )
     tools = config["tools"]
     if run_conan:
         conan_mod.install(
@@ -631,7 +697,12 @@ def build(
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
-    env = _ensure_msvc_dev_env(env, ctx.quiet)
+    env = _ensure_msvc_dev_env(
+        env,
+        ctx.quiet,
+        cached_installation=config.get("msvc", {}).get("installation"),
+        cached_env=config.get("msvc", {}).get("env"),
+    )
     cmake_mod.build(
         config["tools"]["cmake"],
         build_dir,
@@ -641,6 +712,7 @@ def build(
         verbose,
         env,
         ctx.quiet,
+        native_tool=config.get("tools", {}).get("ninja"),
     )
 
 
@@ -664,6 +736,12 @@ def run_target(
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
+    env = _ensure_msvc_dev_env(
+        env,
+        ctx.quiet,
+        cached_installation=config.get("msvc", {}).get("installation"),
+        cached_env=config.get("msvc", {}).get("env"),
+    )
     if not no_build:
         # fail fast so we never run stale output if the build fails.
         cmake_mod.build(
@@ -675,6 +753,7 @@ def run_target(
             False,
             env,
             ctx.quiet,
+            native_tool=config.get("tools", {}).get("ninja"),
         )
     exe = build_dir / "bin" / (target + (".exe" if is_windows() else ""))
     if not exe.exists():
@@ -693,7 +772,12 @@ def list_targets(ctx: CliContext, profile: str | None, build_root: Path | None, 
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
-    env = _ensure_msvc_dev_env(env, ctx.quiet)
+    env = _ensure_msvc_dev_env(
+        env,
+        ctx.quiet,
+        cached_installation=config.get("msvc", {}).get("installation"),
+        cached_env=config.get("msvc", {}).get("env"),
+    )
     result = run(
         [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
         env=env,
@@ -752,11 +836,16 @@ def run_test(
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _test_env(config)
-    env = _ensure_msvc_dev_env(env, ctx.quiet)
+    env = _ensure_msvc_dev_env(
+        env,
+        ctx.quiet,
+        cached_installation=config.get("msvc", {}).get("installation"),
+        cached_env=config.get("msvc", {}).get("env"),
+    )
     target_help = run(
         [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
         env=env,
-        quiet=ctx.quiet,
+        quiet=True,
     )
     available = set(_targets_from_help(target_help.stdout))
     for target in ["tests", "Cory_Tests"]:
@@ -770,6 +859,7 @@ def run_test(
                 False,
                 env,
                 ctx.quiet,
+                native_tool=config.get("tools", {}).get("ninja"),
             )
             break
     else:
@@ -782,6 +872,7 @@ def run_test(
             False,
             env,
             ctx.quiet,
+            native_tool=config.get("tools", {}).get("ninja"),
         )
     ctest_mod.run_tests(
         config["tools"]["ctest"],

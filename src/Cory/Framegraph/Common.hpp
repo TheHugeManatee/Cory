@@ -91,7 +91,9 @@ class TransientTextureHandle {
     }
     TransientTextureHandle(FramegraphTextureHandle texture)
         : texture_{texture}
-        , version_{0} {}
+        , version_{0}
+    {
+    }
 
     TransientTextureHandle operator+(uint32_t inc)
     {
@@ -110,7 +112,9 @@ class TransientTextureHandle {
   private:
     TransientTextureHandle(FramegraphTextureHandle texture, uint32_t version)
         : texture_{texture}
-        , version_{version} {}
+        , version_{version}
+    {
+    }
     FramegraphTextureHandle texture_{};
     uint32_t version_{0xFFFFFFFF};
 };
@@ -124,7 +128,9 @@ class TransientBufferHandle {
     }
     TransientBufferHandle(FramegraphBufferHandle buffer)
         : buffer_{buffer}
-        , version_{0} {}
+        , version_{0}
+    {
+    }
 
     TransientBufferHandle operator+(uint32_t inc)
     {
@@ -143,7 +149,9 @@ class TransientBufferHandle {
   private:
     TransientBufferHandle(FramegraphBufferHandle buffer, uint32_t version)
         : buffer_{buffer}
-        , version_{version} {}
+        , version_{version}
+    {
+    }
     FramegraphBufferHandle buffer_{};
     uint32_t version_{0xFFFFFFFF};
 };

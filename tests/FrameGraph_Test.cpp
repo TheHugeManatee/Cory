@@ -108,10 +108,10 @@ RenderTaskDeclaration<DepthDebugOut> depthDebug(Framegraph &graph,
 {
     RenderTaskBuilder builder = graph.declareTask("TASK_DepthDebug");
 
-    auto depthInfo = builder.read(
-        depthInput,
-        Gpu::TextureUsageFlagBits::SampledBit,
-        Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto depthInfo =
+        builder.read(depthInput,
+                     Gpu::TextureUsageFlagBits::SampledBit,
+                     Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     auto depthVis = builder.create("TEX_depthDebugVis",
                                    depthInfo.size,
@@ -133,10 +133,10 @@ RenderTaskDeclaration<NormalDebugOut> normalDebug(Framegraph &graph,
 {
     RenderTaskBuilder builder = graph.declareTask("TASK_NormalDebug");
 
-    auto normalInfo = builder.read(
-        normalInput,
-        Gpu::TextureUsageFlagBits::SampledBit,
-        Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto normalInfo =
+        builder.read(normalInput,
+                     Gpu::TextureUsageFlagBits::SampledBit,
+                     Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     auto normalVis = builder.create("TEX_normalDebugVis",
                                     normalInfo.size,
@@ -160,10 +160,10 @@ RenderTaskDeclaration<DebugOut> debugGeneral(Framegraph &graph,
     RenderTaskBuilder builder = graph.declareTask("TASK_GeneralDebug");
 
     auto &textureToDebug = debugTextures[debugViewIndex];
-    auto dbgInfo = builder.read(
-        textureToDebug,
-        Gpu::TextureUsageFlagBits::SampledBit,
-        Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto dbgInfo =
+        builder.read(textureToDebug,
+                     Gpu::TextureUsageFlagBits::SampledBit,
+                     Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     auto depthVis = builder.create("TEX_debugVis",
                                    dbgInfo.size,
@@ -189,10 +189,8 @@ RenderTaskDeclaration<MainOut> mainPass(RenderTaskBuilder builder,
     auto depthInfo = builder.read(depthInput,
                                   Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
                                   Sync::AccessType::DepthStencilAttachmentRead);
-    auto bufferRW =
-        builder.readWrite(bufferInput,
-                          Gpu::BufferUsageFlagBits::StorageBufferBit,
-                          Sync::AccessType::AnyShaderWrite);
+    auto bufferRW = builder.readWrite(
+        bufferInput, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::AnyShaderWrite);
 
     auto colorOut =
         colorInput
@@ -234,14 +232,14 @@ RenderTaskDeclaration<PostProcessOut> postProcess(RenderTaskBuilder builder,
                                                   TransientTextureHandle currentColorInput,
                                                   TransientTextureHandle previousColorInput)
 {
-    auto curColorInfo = builder.read(
-        currentColorInput,
-        Gpu::TextureUsageFlagBits::SampledBit,
-        Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
-    auto prevColorInfo = builder.read(
-        previousColorInput,
-        Gpu::TextureUsageFlagBits::SampledBit,
-        Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto curColorInfo =
+        builder.read(currentColorInput,
+                     Gpu::TextureUsageFlagBits::SampledBit,
+                     Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
+    auto prevColorInfo =
+        builder.read(previousColorInput,
+                     Gpu::TextureUsageFlagBits::SampledBit,
+                     Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
 
     auto color = builder.create("TEX_postprocess",
                                 curColorInfo.size,
@@ -284,8 +282,8 @@ struct ToyScatterOut {
 RenderTaskDeclaration<TransientBufferHandle> toyInit(RenderTaskBuilder builder,
                                                      TransientBufferHandle indices)
 {
-    auto [writtenIndices, info] =
-        builder.write(indices, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::HostWrite);
+    auto [writtenIndices, info] = builder.write(
+        indices, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::HostWrite);
     (void)info;
     [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenIndices);
 }
@@ -293,8 +291,8 @@ RenderTaskDeclaration<TransientBufferHandle> toyInit(RenderTaskBuilder builder,
 RenderTaskDeclaration<TransientBufferHandle> toyPreprocess(RenderTaskBuilder builder,
                                                            TransientBufferHandle keys)
 {
-    auto [writtenKeys, info] =
-        builder.write(keys, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::ComputeShaderWrite);
+    auto [writtenKeys, info] = builder.write(
+        keys, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::ComputeShaderWrite);
     (void)info;
     [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenKeys);
 }
@@ -304,12 +302,14 @@ RenderTaskDeclaration<TransientBufferHandle> toyHistogram(RenderTaskBuilder buil
                                                           TransientBufferHandle indices,
                                                           TransientBufferHandle histograms)
 {
-    builder.read(keys, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::ComputeShaderReadOther);
-    builder.read(indices, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::ComputeShaderReadOther);
-    auto [writtenHistograms, info] =
-        builder.write(histograms,
-                      Gpu::BufferUsageFlagBits::StorageBufferBit,
-                      Sync::AccessType::ComputeShaderWrite);
+    builder.read(
+        keys, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::ComputeShaderReadOther);
+    builder.read(indices,
+                 Gpu::BufferUsageFlagBits::StorageBufferBit,
+                 Sync::AccessType::ComputeShaderReadOther);
+    auto [writtenHistograms, info] = builder.write(histograms,
+                                                   Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                                   Sync::AccessType::ComputeShaderWrite);
     (void)info;
     [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenHistograms);
 }
@@ -317,10 +317,9 @@ RenderTaskDeclaration<TransientBufferHandle> toyHistogram(RenderTaskBuilder buil
 RenderTaskDeclaration<TransientBufferHandle> toyScan(RenderTaskBuilder builder,
                                                      TransientBufferHandle histograms)
 {
-    auto [writtenHistograms, info] =
-        builder.readWrite(histograms,
-                          Gpu::BufferUsageFlagBits::StorageBufferBit,
-                          Sync::AccessType::ComputeShaderWrite);
+    auto [writtenHistograms, info] = builder.readWrite(histograms,
+                                                       Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                                       Sync::AccessType::ComputeShaderWrite);
     (void)info;
     [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(writtenHistograms);
 }
@@ -341,14 +340,11 @@ RenderTaskDeclaration<ToyScatterOut> toyScatter(RenderTaskBuilder builder,
     builder.read(histograms,
                  Gpu::BufferUsageFlagBits::StorageBufferBit,
                  Sync::AccessType::ComputeShaderReadOther);
-    auto [writtenKeys, keysInfo] =
-        builder.write(keysOut,
-                      Gpu::BufferUsageFlagBits::StorageBufferBit,
-                      Sync::AccessType::ComputeShaderWrite);
-    auto [writtenIndices, indicesInfo] =
-        builder.write(indicesOut,
-                      Gpu::BufferUsageFlagBits::StorageBufferBit,
-                      Sync::AccessType::ComputeShaderWrite);
+    auto [writtenKeys, keysInfo] = builder.write(
+        keysOut, Gpu::BufferUsageFlagBits::StorageBufferBit, Sync::AccessType::ComputeShaderWrite);
+    auto [writtenIndices, indicesInfo] = builder.write(indicesOut,
+                                                       Gpu::BufferUsageFlagBits::StorageBufferBit,
+                                                       Sync::AccessType::ComputeShaderWrite);
     (void)keysInfo;
     (void)indicesInfo;
 
@@ -483,12 +479,11 @@ RenderTaskDeclaration<CombineOut> combineConsumers(RenderTaskBuilder builder,
     builder.read(inputB,
                  Gpu::TextureUsageFlagBits::SampledBit,
                  Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer);
-    auto color = builder.create(
-        "TEX_Combine",
-        size,
-        TextureFormat::R8G8B8A8_SRGB,
-        Gpu::TextureUsageFlagBits::ColorAttachmentBit,
-        Sync::AccessType::ColorAttachmentWrite);
+    auto color = builder.create("TEX_Combine",
+                                size,
+                                TextureFormat::R8G8B8A8_SRGB,
+                                Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                                Sync::AccessType::ColorAttachmentWrite);
     [[maybe_unused]] RenderInput render = co_await builder.finishDeclaration(CombineOut{color});
 }
 } // namespace passes
@@ -666,13 +661,13 @@ RenderTaskDeclaration<MainSubtaskOut> mainPassWithSubpasses(RenderTaskBuilder bu
     }(builder.subtask("Texture"), sub1.output());
 
     auto subOut = sub2.output();
-    auto blendIn =
-        builder.read(subOut, Gpu::TextureUsageFlagBits::SampledBit, Sync::AccessType::FragmentShaderReadOther);
-    auto colorOutput =
-        builder.readWrite(colorInput,
-                          Gpu::TextureUsageFlagBits::ColorAttachmentBit,
-                          Sync::AccessType::ColorAttachmentReadWrite)
-            .first;
+    auto blendIn = builder.read(
+        subOut, Gpu::TextureUsageFlagBits::SampledBit, Sync::AccessType::FragmentShaderReadOther);
+    auto colorOutput = builder
+                           .readWrite(colorInput,
+                                      Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+                                      Sync::AccessType::ColorAttachmentReadWrite)
+                           .first;
 
     [[maybe_unused]] RenderInput render =
         co_await builder.finishDeclaration(MainSubtaskOut{colorOutput});

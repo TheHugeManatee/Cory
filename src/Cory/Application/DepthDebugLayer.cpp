@@ -53,10 +53,10 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
             res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
         .depthDebugShader{res.createShader(
             ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
-        .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
-            .label = "DepthDebugLayer sampler",
-            .magFilter = Gpu::FilterMode::Linear,
-            .minFilter = Gpu::FilterMode::Linear}),
+        .sampler =
+            ctx.device().createSampler(Gpu::SamplerOptions{.label = "DepthDebugLayer sampler",
+                                                           .magFilter = Gpu::FilterMode::Linear,
+                                                           .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
     });
 }

@@ -30,7 +30,6 @@
 #include <gsl/gsl>
 #include <gsl/narrow>
 
-
 #include <algorithm>
 
 SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> args)
@@ -241,7 +240,6 @@ void SceneGraphDemoApplication::run()
             CO_APP_INFO(fg.dump(execInfo));
             dumpNextFramegraph_ = false;
         }
-
     };
 
     auto frames = headless_ ? headlessFrames_->frames() : window_->frames();

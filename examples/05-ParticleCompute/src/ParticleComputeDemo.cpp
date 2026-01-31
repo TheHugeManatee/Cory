@@ -207,7 +207,6 @@ void ParticleComputeDemoApplication::run()
             CO_APP_INFO(fg.dump(execInfo));
             dumpNextFramegraph_ = false;
         }
-
     };
 
     auto frames = headless_ ? headlessFrames_->frames() : window_->frames();

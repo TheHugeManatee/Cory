@@ -41,9 +41,7 @@ class Framegraph : NoCopy {
   public:
     // Create a new framegraph with the given context, using the given instance index for resource
     // allocation
-    explicit Framegraph(Context &ctx,
-                        FramegraphResourceManager &resources,
-                        uint32_t instanceIndex);
+    explicit Framegraph(Context &ctx, FramegraphResourceManager &resources, uint32_t instanceIndex);
     ~Framegraph();
 
     Framegraph(Framegraph &&) noexcept;

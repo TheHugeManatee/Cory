@@ -30,8 +30,8 @@ struct SortTaskOut {
 Cory::RenderTaskDeclaration<Cory::TransientBufferHandle>
 writePredicateTask(Cory::RenderTaskBuilder builder, Cory::TransientBufferHandle keys)
 {
-    auto [writtenKeys, info] =
-        builder.write(keys, Gpu::BufferUsageFlagBits::StorageBufferBit, Cory::Sync::AccessType::HostWrite);
+    auto [writtenKeys, info] = builder.write(
+        keys, Gpu::BufferUsageFlagBits::StorageBufferBit, Cory::Sync::AccessType::HostWrite);
     (void)info;
     [[maybe_unused]] Cory::RenderInput render = co_await builder.finishDeclaration(writtenKeys);
 }

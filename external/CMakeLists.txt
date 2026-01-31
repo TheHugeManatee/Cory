@@ -16,6 +16,23 @@ set(VMA_STATIC_VULKAN_FUNCTIONS ON)
 
 set(KDGPU_SOURCE_DIR "" CACHE PATH "Path to a local KDGpu checkout")
 
+# If the user has a checkout close to Cory, default to that instead of fetching.
+if (NOT KDGPU_SOURCE_DIR)
+    set(_kdgpu_search_paths
+            "$ENV{KDGPU_DIR}"
+            "${CMAKE_SOURCE_DIR}/../KDGpu"
+            "${CMAKE_SOURCE_DIR}/../kdgpu"
+            "${CMAKE_SOURCE_DIR}/../codex/_deps/kdgpu-src"
+    )
+    foreach (_kdgpu_path IN LISTS _kdgpu_search_paths)
+        if (_kdgpu_path AND EXISTS "${_kdgpu_path}/CMakeLists.txt")
+            set(KDGPU_SOURCE_DIR "${_kdgpu_path}" CACHE PATH "Path to a local KDGpu checkout" FORCE)
+            message(STATUS "Using local KDGpu checkout at ${KDGPU_SOURCE_DIR}")
+            break()
+        endif ()
+    endforeach ()
+endif ()
+
 if (KDGPU_SOURCE_DIR)
     FetchContent_Declare(
             KDGpu

@@ -219,7 +219,7 @@ def cli(ctx: click.Context, quiet: bool) -> None:
     ctx.obj = CliContext(quiet=quiet)
 
 
-@cli.command()
+@cli.command(short_help="Create configuration and run CMake")
 @click.option("--profile", default="codex")
 @click.option("--build-type", default="Debug")
 @click.option("--build-root", type=click.Path(path_type=Path))
@@ -315,7 +315,7 @@ def configure(
     _record_last(root, profile, build_dir)
 
 
-@cli.command()
+@cli.command(short_help="Re-run configuration (CMake/Conan) for a profile")
 @click.option("--profile")
 @click.option("--conan", "run_conan", is_flag=True)
 @click.option("--cmake-define", multiple=True)
@@ -348,7 +348,7 @@ def reconfigure(ctx: CliContext, profile: str | None, run_conan: bool, cmake_def
     )
 
 
-@cli.command()
+@cli.command(short_help="Build the project or a specific target")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--target")
@@ -377,7 +377,7 @@ def build(
     )
 
 
-@cli.command(name="run")
+@cli.command(name="run", short_help="Build (optional) and run a built target")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--working-dir", type=click.Path(path_type=Path))
@@ -418,7 +418,7 @@ def run_target(
     run_mod.run_target(exe, list(args), env, ctx.quiet)
 
 
-@cli.command(name="targets")
+@cli.command(name="targets", short_help="List available build targets")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--json", "as_json", is_flag=True)
@@ -439,7 +439,7 @@ def list_targets(ctx: CliContext, profile: str | None, build_root: Path | None, 
             sys.stdout.write(f"{t}\n")
 
 
-@cli.command(name="tests")
+@cli.command(name="tests", short_help="List available tests")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--json", "as_json", is_flag=True)
@@ -455,7 +455,7 @@ def list_tests(ctx: CliContext, profile: str | None, build_root: Path | None, as
             sys.stdout.write(f"{t}\n")
 
 
-@cli.command(name="test")
+@cli.command(name="test", short_help="Run tests (ctest) with filters/options")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--label")
@@ -528,7 +528,7 @@ def run_test(
     )
 
 
-@cli.command()
+@cli.command(short_help="Compile given source files quickly")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.argument("sources", nargs=-1, required=True)
@@ -538,7 +538,7 @@ def compile(ctx: CliContext, profile: str | None, build_root: Path | None, sourc
     compile_mod.compile_sources(build_dir, [Path(s) for s in sources], ctx.quiet)
 
 
-@cli.command()
+@cli.command(short_help="Run static analysis (clang-tidy) on sources")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--checks")
@@ -564,7 +564,7 @@ def analyze(
     )
 
 
-@cli.command()
+@cli.command(short_help="Format source files using clang-format")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--check", is_flag=True)
@@ -579,7 +579,7 @@ def fmt(ctx: CliContext, profile: str | None, build_root: Path | None, check: bo
     format_mod.format_files(config["tools"]["clang_format"], files, check, ctx.quiet)
 
 
-@cli.command()
+@cli.command(short_help="Run clang-tidy checks (lint) on files")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--checks")
@@ -610,7 +610,7 @@ def lint(
     )
 
 
-@cli.command()
+@cli.command(short_help="Remove a profile's build directory")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--yes", is_flag=True)
@@ -627,12 +627,12 @@ def clean(ctx: CliContext, profile: str | None, build_root: Path | None, yes: bo
         shutil.rmtree(build_dir)
 
 
-@cli.group()
+@cli.group(short_help="Manage cached build roots and related actions")
 def cache() -> None:
     pass
 
 
-@cache.command("show")
+@cache.command("show", short_help="Show build cache contents")
 @click.pass_obj
 def cache_show(ctx: CliContext) -> None:
     root = default_build_root()
@@ -647,7 +647,7 @@ def cache_show(ctx: CliContext) -> None:
             sys.stdout.write(f"{item}\n")
 
 
-@cache.command("prune")
+@cache.command("prune", short_help="Prune unused build cache entries")
 @click.option("--yes", is_flag=True)
 @click.pass_obj
 def cache_prune(ctx: CliContext, yes: bool) -> None:
@@ -663,7 +663,7 @@ def cache_prune(ctx: CliContext, yes: bool) -> None:
             shutil.rmtree(item)
 
 
-@cache.command("conan")
+@cache.command("conan", short_help="Clean Conan package cache")
 @click.option("--yes", is_flag=True)
 @click.pass_obj
 def cache_conan(ctx: CliContext, yes: bool) -> None:
@@ -675,7 +675,7 @@ def cache_conan(ctx: CliContext, yes: bool) -> None:
     run([conan, "cache", "clean", "--all"], quiet=ctx.quiet)
 
 
-@cli.command()
+@cli.command(short_help="Run environment and tool checks (doctor)")
 @click.option("--json", "as_json", is_flag=True)
 @click.pass_obj
 def doctor(ctx: CliContext, as_json: bool) -> None:
@@ -711,7 +711,7 @@ def doctor(ctx: CliContext, as_json: bool) -> None:
         raise MissingPrereq("Missing prerequisites detected")
 
 
-@cli.command()
+@cli.command(short_help="Show status information for a build/profile")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--json", "as_json", is_flag=True)
@@ -734,7 +734,7 @@ def status(ctx: CliContext, profile: str | None, build_root: Path | None, as_jso
             sys.stdout.write(f"{k}: {v}\n")
 
 
-@cli.command(name="which")
+@cli.command(name="which", short_help="Resolve the path to a tool")
 @click.argument("tool")
 @click.pass_obj
 def which_cmd(ctx: CliContext, tool: str) -> None:
@@ -749,7 +749,7 @@ def which_cmd(ctx: CliContext, tool: str) -> None:
     sys.stdout.write(f"{resolved}\n")
 
 
-@cli.command()
+@cli.command(short_help="Print environment variables for a profile")
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.pass_obj

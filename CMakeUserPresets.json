@@ -4,7 +4,8 @@
         "conan": {}
     },
     "include": [
-        "../../../../home/j/cory-work/codex/CMakePresets.json"
+        "../../../../home/j/cory-work/codex/CMakePresets.json",
+        "../../../../home/j/cory-work/Debug/CMakePresets.json"
     ],
     "configurePresets": [
         {

@@ -2,13 +2,15 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "setup" ]]; then
+    build_root="/home/$(whoami)/cory-work/"
     if [[ -z "${2:-}" ]]; then
-        echo "cbt setup: missing build folder" >&2
-        echo "usage: cbt setup <build_folder>" >&2
-        exit 2
+        echo "cbt setup: Using $build_root" >&2
+        #echo "usage: cbt setup <build_folder>" >&2
+        #exit 2
+    else
+        build_root="$2"
     fi
 
-    build_root="$2"
     venv_dir="${build_root}/.venv"
 
     mkdir -p "$build_root"
@@ -19,13 +21,26 @@ if [[ "${1:-}" == "setup" ]]; then
     # shellcheck disable=SC1090
     source "${venv_dir}/bin/activate"
     python -m pip install -e tools/cbt
-    python -m pip install "conan>=2.0" cmake ninja click
-    conan install . --output-folder=${build_root} -s build_type=Debug --build=missing
+    echo "cbt: virtual environment set up and in ${venv_dir}." >&2
+    echo "Activate with 'source ${venv_dir}/bin/activate' to begin using cbt, then query 'cbt --help' for available commands." >&2
+    exit 0
+fi
+
+if [[ "${1:-}" == "start" || "${1:-}" == "-h" ]]; then
+    build_root="/home/$(whoami)/cory-work/"
+
+    venv_dir="${build_root}/.venv"
+    
+    if [[ -z "${VIRTUAL_ENV:-}" ]]; then
+        echo "Activate with 'source ${venv_dir}/bin/activate' to begin using cbt, then query 'cbt --help' for available commands." >&2
+    else
+        echo "cbt: virtual environment already activated from ${VIRTUAL_ENV}. Cbt ready for use." >&2
+    fi
     exit 0
 fi
 
 if [[ -z "${VIRTUAL_ENV:-}" ]]; then
-    echo "cbt: no venv activated. Activate venv (usually in the build folder)" >&2
+    echo "cbt: no venv activated. Activate the virtual environment in the build folder first." >&2
 fi
 
 exec python3 -m cbt "$@"

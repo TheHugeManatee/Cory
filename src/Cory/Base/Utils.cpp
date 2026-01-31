@@ -29,8 +29,12 @@ std::vector<char> readFile(const std::filesystem::path &filename)
     if (!file.is_open()) {
         throw std::runtime_error(fmt::format("failed to open file {}", filename.string()));
     }
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<char> buffer(fileSize);
+    const auto position = file.tellg();
+    if (position < 0) {
+        throw std::runtime_error(fmt::format("failed to read file {}", filename.string()));
+    }
+    const std::streamsize fileSize = position;
+    std::vector<char> buffer(static_cast<std::size_t>(fileSize));
     file.seekg(0);
     file.read(buffer.data(), fileSize);
     file.close();

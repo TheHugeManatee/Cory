@@ -7,7 +7,7 @@ name = "cbt"
 version = "0.1.0"
 description = "Cory build tool"
 requires-python = ">=3.9"
-dependencies = ["click>=8.1"]
+dependencies = ["conan>=2.0", "cmake", "ninja", "click>=8.1"]
 
 [project.scripts]
 cbt = "cbt.cli:main"

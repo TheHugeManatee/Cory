@@ -2,6 +2,9 @@
 
 #include <csignal>
 #include <cstdint>
+#include <fstream>
+#include <string>
+#include <string_view>
 #if defined(_WIN32)
 #include <windows.h>
 #elif defined(__APPLE__)
@@ -9,9 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #elif defined(__linux__)
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <cctype>
 #endif
 
 namespace Cory {
@@ -53,18 +54,23 @@ void Breakpoint() noexcept
     }
     return false;
 #elif defined(__linux__)
-    FILE *f = std::fopen("/proc/self/status", "r");
-    if (!f) return false;
+    std::ifstream status("/proc/self/status");
+    if (!status) return false;
 
-    char buf[256];
-    while (std::fgets(buf, sizeof(buf), f)) {
-        if (std::strncmp(buf, "TracerPid:", 10) == 0) {
-            int v = std::atoi(buf + 10);
-            std::fclose(f);
-            return v != 0;
+    std::string line;
+    constexpr std::string_view tracer("TracerPid:");
+    while (std::getline(status, line)) {
+        if (line.rfind(tracer, 0) == 0) {
+            const auto value = line.substr(tracer.size());
+            auto idx = value.find_first_not_of(" \t");
+            if (idx != std::string::npos) {
+                const auto remainder = value.substr(idx);
+                const auto pid = std::stoi(remainder);
+                return pid != 0;
+            }
+            break;
         }
     }
-    std::fclose(f);
     return false;
 #else
     return false;

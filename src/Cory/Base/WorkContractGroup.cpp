@@ -2,6 +2,8 @@
 
 #include <Cory/Base/Log.hpp>
 
+#include <cstdlib>
+
 #define CO_WORKCONTRACT_ASSERT(cond, msg) CO_CORE_ASSERT(cond, msg)
 
 namespace Cory {
@@ -18,7 +20,6 @@ WorkContract::~WorkContract()
 void WorkContract::schedule()
 {
     CO_WORKCONTRACT_ASSERT(valid(), "Cannot schedule an invalid contract");
-    auto &contract = group_->contracts_[*id_];
     // TODO handle rescheduling propertly
     //    - if the contract is already scheduled, we should not schedule it again
     //    - if the contract is currently executing, we should not schedule it again
@@ -79,7 +80,7 @@ bool WorkContractGroup::executeNext(uint64_t biasBits)
 
 WorkContract WorkContractGroup::createContractInternal(ContractFunctor &&work)
 {
-    auto id = contractIdsAvailable_.select(rand());
+    auto id = contractIdsAvailable_.select(static_cast<uint64_t>(std::rand()));
 
     if (!id.has_value()) {
         // No more contract slots available! :(

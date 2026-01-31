@@ -4,11 +4,16 @@
 
 namespace Cory {
 
-std::map<std::string, Profiler::Record> Profiler::s_records;
-
 void Profiler::PushCounter(std::string &name, int64_t deltaNs)
 {
-    s_records[name].push(deltaNs);
+    GetRecords()[name].push(deltaNs);
+}
+
+std::map<std::string, Profiler::Record> &Profiler::GetRecords()
+{
+    static std::map<std::string, Profiler::Record> *records =
+        new std::map<std::string, Profiler::Record>{};
+    return *records;
 }
 
 ScopeTimer::ScopeTimer(std::string name)

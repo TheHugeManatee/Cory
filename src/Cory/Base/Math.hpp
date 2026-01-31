@@ -9,6 +9,7 @@
 
 #include <range/v3/range/concepts.hpp>
 
+#include <cmath>
 #include <numeric>
 
 namespace Cory {
@@ -125,7 +126,7 @@ inline glm::mat4 makeOrtho(float left, float right, float top, float bottom, flo
 inline glm::mat4 makePerspective(float fovy, float aspect, float near, float far)
 {
     assert(glm::abs(aspect - std::numeric_limits<float>::epsilon()) > 0.0f);
-    const float tanHalfFovy = tan(fovy / 2.f);
+    const float tanHalfFovy = glm::tan(fovy / 2.f);
     glm::mat4 ret{0.0f};
     ret[0][0] = 1.f / (aspect * tanHalfFovy);
     ret[1][1] = 1.f / (tanHalfFovy);
@@ -149,9 +150,14 @@ inline glm::vec3 sphericalToCartesian(glm::vec3 spherical)
 {
     auto [r, theta, phi] = spherical;
 
-    float x = r * sin(theta) * cos(phi);
-    float y = r * sin(theta) * sin(phi);
-    float z = r * cos(theta);
+    const float sinTheta = glm::sin(theta);
+    const float cosTheta = glm::cos(theta);
+    const float sinPhi = glm::sin(phi);
+    const float cosPhi = glm::cos(phi);
+
+    float x = r * sinTheta * cosPhi;
+    float y = r * sinTheta * sinPhi;
+    float z = r * cosTheta;
 
     return {x, y, z};
 }
@@ -162,13 +168,13 @@ inline glm::vec3 cartesianToSpherical(glm::vec3 cartesian)
     float y = cartesian.y;
     float z = cartesian.z;
 
-    float r = sqrt(x * x + y * y + z * z);
-    if (r == 0.0) {
+    const float r = glm::sqrt(x * x + y * y + z * z);
+    if (r == 0.0f) {
         return {0.0f, 0.0f, 0.0f};
     }
 
-    float theta = acos(z / r);                                 // inclination/elevation
-    float phi = (x == 0.0f && y == 0.0f) ? 0.0f : atan2(y, x); // azimuth
+    const float theta = glm::acos(z / r);                                // inclination/elevation
+    float phi = (x == 0.0f && y == 0.0f) ? 0.0f : std::atan2(y, x); // azimuth
 
     if (phi < 0.0f) {
         phi += 2.0f * glm::pi<float>();

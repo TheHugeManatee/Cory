@@ -5,6 +5,15 @@ set(PROJECT_TARGETS "coryTargets")
 
 project(${PROJECT_NAME} CXX)
 
+if (DEFINED ENV{VULKAN_SDK})
+    set(_vulkan_sdk_dir $ENV{VULKAN_SDK})
+    list(APPEND CMAKE_PREFIX_PATH
+            "${_vulkan_sdk_dir}/lib/cmake/vulkan"
+            "${_vulkan_sdk_dir}/lib/cmake"
+    )
+    list(APPEND CMAKE_SYSTEM_PREFIX_PATH "${_vulkan_sdk_dir}")
+endif ()
+
 # Make sure release builds still have debug info
 if (MSVC)
     add_compile_options("$<$<CONFIG:Release>:/Zi>")

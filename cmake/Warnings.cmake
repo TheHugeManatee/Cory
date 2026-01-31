@@ -53,7 +53,11 @@ function(target_set_warnings)
             if (WGCC)
                 list(APPEND WarningFlags "-Wall" "-Wextra" "-Wpedantic")
             elseif (WCLANG)
-                list(APPEND WarningFlags "-Wall" "-Weverything" "-Wpedantic")
+                list(APPEND WarningFlags "-Wall" "-Weverything" "-Wpedantic" 
+                    "-Wno-nullability-completeness" 
+                    "-Wno-nullability-extension"
+                    "-Wno-documentation-deprecated-sync"
+                )
             endif ()
 
             ## This list is from Jason Turner's (@lefticus) cmake-starter project

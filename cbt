@@ -18,26 +18,30 @@ if [[ "${1:-}" == "setup" ]]; then
         python3 -m venv "$venv_dir"
     fi
 
-    # shellcheck disable=SC1090
-    source "${venv_dir}/bin/activate"
     python -m pip install -e tools/cbt
     echo "cbt: virtual environment set up and in ${venv_dir}." >&2
     echo "Activate with 'source ${venv_dir}/bin/activate' to begin using cbt, then query 'cbt --help' for available commands." >&2
     exit 0
 fi
 
-if [[ "${1:-}" == "start" || "${1:-}" == "-h" ]]; then
-    build_root="/home/$(whoami)/cory-work/"
+build_root="/home/$(whoami)/cory-work/"
+venv_dir="${build_root}/.venv"
 
-    venv_dir="${build_root}/.venv"
+if [[ "${1:-}" == "start" || "${1:-}" == "-h" ]]; then
     
-    if [[ -z "${VIRTUAL_ENV:-}" ]]; then
-        echo "Activate with 'source ${venv_dir}/bin/activate' to begin using cbt, then query 'cbt --help' for available commands." >&2
-    else
-        echo "cbt: virtual environment already activated from ${VIRTUAL_ENV}. Cbt ready for use." >&2
-    fi
+    # shellcheck disable=SC1090
+    source "${venv_dir}/bin/activate"
+
+    echo -e "Cory build tool (cbt) working correctly. No further step required.\n" >&2
+
+    exec python3 -m cbt --help
+
     exit 0
 fi
+
+# shellcheck disable=SC1090
+source "${venv_dir}/bin/activate"
+source ~/VulkanSDK/1.4.335.0/setup-env.sh
 
 if [[ -z "${VIRTUAL_ENV:-}" ]]; then
     echo "cbt: no venv activated. Activate the virtual environment in the build folder first." >&2

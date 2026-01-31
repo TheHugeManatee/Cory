@@ -101,6 +101,14 @@ def _prepend_env_path(env: dict[str, str], key: str, value: str) -> None:
         env[key] = value
 
 
+def _env_profile() -> str | None:
+    return os.environ.get("CORY_BUILD_PROFILE")
+
+
+def _resolve_profile(profile: str | None) -> str:
+    return profile or _env_profile() or "codex"
+
+
 def _config_env(config: dict) -> dict[str, str]:
     env = dict(os.environ)
     vulkan = config.get("vulkan")
@@ -148,14 +156,17 @@ def _parse_defines(values: tuple[str, ...]) -> dict[str, str]:
 
 def _load_or_fail(profile: str | None, build_root: Path | None) -> tuple[dict, Path]:
     root = build_root or default_build_root()
+    env_profile = _env_profile()
     if profile:
         build_dir = build_dir_for_profile(profile, root)
+    elif env_profile:
+        build_dir = build_dir_for_profile(env_profile, root)
     else:
         last = last_build_dir_path(root)
         if last.exists():
             build_dir = Path(last.read_text(encoding="utf-8").strip())
         else:
-            raise ConfigError("No profile specified and no last build dir recorded")
+            build_dir = build_dir_for_profile("codex", root)
     config = require_config(build_dir)
     return config, build_dir
 
@@ -220,7 +231,7 @@ def cli(ctx: click.Context, quiet: bool) -> None:
 
 
 @cli.command(short_help="Create configuration and run CMake")
-@click.option("--profile", default="codex")
+@click.option("--profile")
 @click.option("--build-type", default="Debug")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--profile-host")
@@ -234,7 +245,7 @@ def cli(ctx: click.Context, quiet: bool) -> None:
 @click.pass_obj
 def configure(
     ctx: CliContext,
-    profile: str,
+    profile: str | None,
     build_type: str,
     build_root: Path | None,
     profile_host: str | None,
@@ -246,6 +257,7 @@ def configure(
     export_compile_commands: bool,
     force: bool,
 ) -> None:
+    profile = _resolve_profile(profile)
     root = build_root or default_build_root()
     build_dir = build_dir_for_profile(profile, root)
     cfg_path = config_path(build_dir)
@@ -321,6 +333,7 @@ def configure(
 @click.option("--cmake-define", multiple=True)
 @click.pass_obj
 def reconfigure(ctx: CliContext, profile: str | None, run_conan: bool, cmake_define: tuple[str, ...]) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, None)
     env = _config_env(config)
     tools = config["tools"]
@@ -363,6 +376,7 @@ def build(
     jobs: int | None,
     verbose: bool,
 ) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
     cmake_mod.build(
@@ -394,22 +408,21 @@ def run_target(
     target: str,
     args: tuple[str, ...],
 ) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
     if not no_build:
-        try:
-            cmake_mod.build(
-                config["tools"]["cmake"],
-                build_dir,
-                config["cbt"]["build_type"],
-                target,
-                None,
-                False,
-                env,
-                ctx.quiet,
-            )
-        except ToolError:
-            pass
+        # fail fast so we never run stale output if the build fails.
+        cmake_mod.build(
+            config["tools"]["cmake"],
+            build_dir,
+            config["cbt"]["build_type"],
+            target,
+            None,
+            False,
+            env,
+            ctx.quiet,
+        )
     exe = build_dir / "bin" / (target + (".exe" if is_windows() else ""))
     if not exe.exists():
         raise ConfigError(f"Executable not found: {exe}")
@@ -424,6 +437,7 @@ def run_target(
 @click.option("--json", "as_json", is_flag=True)
 @click.pass_obj
 def list_targets(ctx: CliContext, profile: str | None, build_root: Path | None, as_json: bool) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
     result = run(
@@ -445,6 +459,7 @@ def list_targets(ctx: CliContext, profile: str | None, build_root: Path | None, 
 @click.option("--json", "as_json", is_flag=True)
 @click.pass_obj
 def list_tests(ctx: CliContext, profile: str | None, build_root: Path | None, as_json: bool) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _config_env(config)
     tests = ctest_mod.list_tests(config["tools"]["ctest"], build_dir, env, ctx.quiet)
@@ -480,6 +495,7 @@ def run_test(
     timeout: int | None,
     regex: str,
 ) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     env = _test_env(config)
     target_help = run(
@@ -534,6 +550,7 @@ def run_test(
 @click.argument("sources", nargs=-1, required=True)
 @click.pass_obj
 def compile(ctx: CliContext, profile: str | None, build_root: Path | None, sources: tuple[str, ...]) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     compile_mod.compile_sources(build_dir, [Path(s) for s in sources], ctx.quiet)
 
@@ -553,6 +570,7 @@ def analyze(
     fix: bool,
     sources: tuple[str, ...],
 ) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     analyze_mod.analyze_files(
         config["tools"]["clang_tidy"],
@@ -571,7 +589,8 @@ def analyze(
 @click.argument("paths", nargs=-1)
 @click.pass_obj
 def fmt(ctx: CliContext, profile: str | None, build_root: Path | None, check: bool, paths: tuple[str, ...]) -> None:
-    config, _ = _load_or_fail(profile, build_root)
+    profile = _resolve_profile(profile)
+    config, build_dir = _load_or_fail(profile, build_root)
     repo = repo_root()
     files = _filter_source_files(_collect_files(paths, repo, True, ctx.quiet))
     if not files:
@@ -594,6 +613,7 @@ def lint(
     warnings_as_errors: str | None,
     paths: tuple[str, ...],
 ) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     repo = repo_root()
     files = _filter_source_files(_collect_files(paths, repo, True, ctx.quiet))
@@ -617,12 +637,11 @@ def lint(
 @click.option("--confirm")
 @click.pass_obj
 def clean(ctx: CliContext, profile: str | None, build_root: Path | None, yes: bool, confirm: str | None) -> None:
-    root = build_root or default_build_root()
-    if not profile:
-        raise ConfigError("Profile required for clean")
-    if not yes and confirm != profile:
+    profile = _resolve_profile(profile)
+    config, build_dir = _load_or_fail(profile, build_root)
+    resolved_profile = config.get("cbt", {}).get("profile")
+    if not yes and confirm != resolved_profile:
         raise ConfigError("Confirm with --yes or --confirm <profile>")
-    build_dir = build_dir_for_profile(profile, root)
     if build_dir.exists():
         shutil.rmtree(build_dir)
 
@@ -717,6 +736,7 @@ def doctor(ctx: CliContext, as_json: bool) -> None:
 @click.option("--json", "as_json", is_flag=True)
 @click.pass_obj
 def status(ctx: CliContext, profile: str | None, build_root: Path | None, as_json: bool) -> None:
+    profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
     info = {
         "repo_root": config["paths"]["source_dir"],
@@ -754,6 +774,7 @@ def which_cmd(ctx: CliContext, tool: str) -> None:
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.pass_obj
 def env(ctx: CliContext, profile: str | None, build_root: Path | None) -> None:
+    profile = _resolve_profile(profile)
     config, _ = _load_or_fail(profile, build_root)
     env = _config_env(config)
     for key in ("VULKAN_SDK",):

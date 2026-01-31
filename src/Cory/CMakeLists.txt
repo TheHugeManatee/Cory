@@ -180,6 +180,12 @@ target_include_directories(${TARGET_NAME}
         ${IMGUI_BACKEND_DIR}
 )
 
+target_include_directories(${TARGET_NAME}
+        SYSTEM PUBLIC
+        $<TARGET_PROPERTY:KDGpu::KDGpu,INTERFACE_INCLUDE_DIRECTORIES>
+        $<TARGET_PROPERTY:KDGpu::KDGpuUtils,INTERFACE_INCLUDE_DIRECTORIES>
+)
+
 target_link_libraries(${TARGET_NAME}
         PUBLIC
         ${VULKAN_LIBRARIES}

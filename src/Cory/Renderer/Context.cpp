@@ -172,7 +172,7 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     // with the window surface
     const auto swapchainProperties = selectedAdapter->swapchainProperties(surface);
     CO_CORE_TRACE("Supported swapchain present modes ({}):",
-                 swapchainProperties.presentModes.size());
+                  swapchainProperties.presentModes.size());
     for (const auto &mode : swapchainProperties.presentModes) {
         CO_CORE_TRACE("||  - {}", presentModeToString(mode));
     }

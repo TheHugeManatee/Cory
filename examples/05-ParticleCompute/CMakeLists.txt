@@ -16,7 +16,10 @@ add_executable(${TARGET_NAME}
 
 target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(PARTICLE_COMPUTE_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
+if (EXISTS "${PARTICLE_COMPUTE_INCLUDE_DIR}")
+    target_include_directories(${TARGET_NAME} PRIVATE ${PARTICLE_COMPUTE_INCLUDE_DIR})
+endif ()
 
 target_compile_definitions(${TARGET_NAME} PRIVATE "PARTICLECOMPUTEDEMO_RESOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\"")
 

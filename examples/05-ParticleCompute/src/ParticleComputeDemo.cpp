@@ -209,20 +209,11 @@ void ParticleComputeDemoApplication::run()
 
     };
 
-    if (headless_) {
-        for (auto &frameCtx : headlessFrames_->frames()) {
-            runFrame(frameCtx);
-            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-                break;
-            }
-        }
-    }
-    else {
-        for (auto &frameCtx : window_->frames()) {
-            runFrame(frameCtx);
-            if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-                break;
-            }
+    auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
+    for (auto &frameCtx : frames) {
+        runFrame(frameCtx);
+        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
+            break;
         }
     }
 

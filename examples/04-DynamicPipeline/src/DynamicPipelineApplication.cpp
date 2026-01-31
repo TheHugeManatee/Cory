@@ -417,6 +417,9 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
 void DynamicPipelineApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx,
                                                     KDGpu::RenderPassCommandRecorder *recorder)
 {
+    if (!imguiLayer_) {
+        return;
+    }
     imguiLayer_->recordFrameCommands(frameCtx, recorder);
 }
 

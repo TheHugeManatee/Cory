@@ -54,7 +54,9 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
         .depthDebugShader{res.createShader(
             ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
         .sampler = ctx.device().createSampler(Gpu::SamplerOptions{
-            .magFilter = Gpu::FilterMode::Linear, .minFilter = Gpu::FilterMode::Linear}),
+            .label = "DepthDebugLayer sampler",
+            .magFilter = Gpu::FilterMode::Linear,
+            .minFilter = Gpu::FilterMode::Linear}),
         .viewportDimensions = info.viewportDimensions,
     });
 }

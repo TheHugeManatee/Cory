@@ -33,6 +33,7 @@
 #include <Cory/Application/CameraManipulator.hpp>
 #include <Cory/Base/Log.hpp>
 
+#include <cmath>
 #include <glm/glm.hpp>
 #include <glm/gtx/rotate_vector.hpp>
 
@@ -44,11 +45,11 @@ const float trackballSize = 0.8f;
 //
 template <typename T> bool isZero(const T &_a)
 {
-    return fabs(_a) < std::numeric_limits<T>::epsilon();
+    return std::abs(_a) < std::numeric_limits<T>::epsilon();
 }
 template <typename T> bool isOne(const T &_a)
 {
-    return areEqual(_a, (T)1);
+    return areEqual(_a, static_cast<T>(1));
 }
 inline float sign(float s)
 {
@@ -112,7 +113,7 @@ CameraManipulator::Action CameraManipulator::mouseMove(glm::i32vec2 const &posit
     Action curAction = Action::None;
     switch (mouseButton) {
     case MouseButton::Left:
-        if (modifiers.is_set(ModifierFlagBits::Ctrl) && modifiers.is_set(ModifierFlagBits::Shift) ||
+        if ((modifiers.is_set(ModifierFlagBits::Ctrl) && modifiers.is_set(ModifierFlagBits::Shift)) ||
             modifiers.is_set(ModifierFlagBits::Alt)) {
             curAction = m_mode == Mode::Examine ? Action::LookAround : Action::Orbit;
         }
@@ -208,7 +209,7 @@ void CameraManipulator::dolly(glm::vec2 const &delta)
         dd = -delta[1];
     }
     else {
-        dd = fabs(delta[0]) > fabs(delta[1]) ? delta[0] : -delta[1];
+        dd = glm::abs(delta[0]) > glm::abs(delta[1]) ? delta[0] : -delta[1];
     }
 
     float factor = m_speed * dd / length;
@@ -317,7 +318,7 @@ void CameraManipulator::orbit(glm::vec2 const &delta, bool invert)
     // Apply the (X) rotation to the eye-center vector
     tmpVector = xRotation * glm::vec4(centerToEye.x, centerToEye.y, centerToEye.z, 0);
     glm::vec3 rotatedVector(tmpVector.x, tmpVector.y, tmpVector.z);
-    if (sign(rotatedVector.x) == sign(centerToEye.x)) {
+    if (rotatedVector.x * centerToEye.x >= 0.f) {
         centerToEye = rotatedVector;
     }
 
@@ -354,17 +355,17 @@ void CameraManipulator::pan(glm::vec2 const &delta)
     m_centerPosition += x + y;
 }
 
-double CameraManipulator::projectOntoTBSphere(const glm::vec2 &p)
+float CameraManipulator::projectOntoTBSphere(const glm::vec2 &p)
 {
-    double z;
-    double d = length(p);
-    if (d < trackballSize * 0.70710678118654752440) {
+    float z;
+    float d = glm::length(p);
+    if (d < trackballSize * 0.70710678118654752440f) {
         // inside sphere
-        z = sqrt(trackballSize * trackballSize - d * d);
+        z = std::sqrt(trackballSize * trackballSize - d * d);
     }
     else {
         // on hyperbola
-        double t = trackballSize / 1.41421356237309504880;
+        float t = trackballSize / 1.41421356237309504880f;
         z = t * t / d;
     }
 
@@ -400,7 +401,7 @@ void CameraManipulator::trackball(glm::i32vec2 const &position)
         t = -1.0f;
     }
 
-    float rad = 2.0f * asin(t);
+    float rad = 2.0f * glm::asin(t);
 
     {
         glm::vec4 rot_axis = m_matrix * glm::vec4(axis, 0);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include <numeric>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Cory {
 
@@ -31,9 +33,10 @@ template <int64_t RECORD_HISTORY_SIZE> class ProfilerRecord {
     {
         if (m_currentIdx == 0) return {0, 0, 0};
 
-        auto endIter =
-            m_currentIdx > m_data.size() ? m_data.cend() : m_data.cbegin() + m_currentIdx;
-        auto stats = std::accumulate(++m_data.cbegin(),
+        const auto count = std::min<std::size_t>(m_currentIdx, m_data.size());
+        auto endIter = std::next(m_data.cbegin(), static_cast<ptrdiff_t>(count));
+        const auto beginIter = m_data.cbegin();
+        auto stats = std::accumulate(std::next(beginIter),
                                      endIter,
                                      Stats{m_data[0], m_data[0], m_data[0]},
                                      [](auto acc, const auto &value) {
@@ -53,13 +56,17 @@ template <int64_t RECORD_HISTORY_SIZE> class ProfilerRecord {
         auto breakPoint = m_currentIdx % RECORD_HISTORY_SIZE;
 
         if (m_currentIdx <= RECORD_HISTORY_SIZE) {
-            return {m_data.cbegin(), m_data.cbegin() + m_currentIdx};
+            return {m_data.cbegin(), std::next(m_data.cbegin(), static_cast<ptrdiff_t>(m_currentIdx))};
         }
 
-        std::vector<int64_t> hist{m_data.cbegin() + breakPoint, m_data.cend()};
+        std::vector<int64_t> hist{std::next(m_data.cbegin(), static_cast<ptrdiff_t>(breakPoint)),
+                                  m_data.cend()};
 
-        if (breakPoint > 0)
-            std::copy(m_data.cbegin(), m_data.cbegin() + breakPoint, std::back_inserter(hist));
+        if (breakPoint > 0) {
+            const auto breakIter =
+                std::next(m_data.cbegin(), static_cast<ptrdiff_t>(breakPoint));
+            std::copy(m_data.cbegin(), breakIter, std::back_inserter(hist));
+        }
 
         return hist;
     }
@@ -73,10 +80,10 @@ class Profiler {
   public:
     using Record = ProfilerRecord<128>;
     static void PushCounter(std::string &name, int64_t deltaNs);
-    static std::map<std::string, Record> GetRecords() { return s_records; }
+    static std::map<std::string, Record> &GetRecords();
 
   private:
-    static std::map<std::string, Record> s_records;
+    // No data members; storage is held by GetRecords() static function.
 };
 
 class ScopeTimer {
@@ -97,7 +104,7 @@ class LapTimer {
 
     bool lap();
 
-    Record::Stats stats() const { return m_lapTimes.stats(); };
+    Record::Stats stats() const { return m_lapTimes.stats(); }
     auto hist() const { return m_lapTimes.history(); }
 
   private:

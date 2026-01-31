@@ -63,7 +63,7 @@ template <typename T, typename Friend> class PrivateTypedHandle {
     PrivateTypedHandle() = default;
     /// constructing with a NullHandle type constructs an invalid handle
     /* implicit */ PrivateTypedHandle(NullHandle_t)
-        : PrivateTypedHandle() {};
+        : PrivateTypedHandle() {}
     auto operator<=>(const PrivateTypedHandle &rhs) const = default;
 
     /**
@@ -89,9 +89,9 @@ template <typename T, typename Friend> class PrivateTypedHandle {
 };
 
 inline SlotMapHandle::SlotMapHandle()
-    : free_{1}
+    : index_{INVALID_INDEX}
+    , free_{1}
     , version_{0}
-    , index_{INVALID_INDEX}
 {
 }
 inline SlotMapHandle::SlotMapHandle(NullHandle_t)
@@ -99,9 +99,9 @@ inline SlotMapHandle::SlotMapHandle(NullHandle_t)
 {
 }
 inline SlotMapHandle::SlotMapHandle(uint32_t index, uint32_t version, bool free)
-    : free_{free ? 1u : 0u}
+    : index_{index}
+    , free_{free ? 1u : 0u}
     , version_{version}
-    , index_{index}
 {
 }
 inline SlotMapHandle SlotMapHandle::nextVersion(SlotMapHandle old)

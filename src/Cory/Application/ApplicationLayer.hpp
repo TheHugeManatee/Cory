@@ -32,15 +32,15 @@ class ApplicationLayer {
     virtual ~ApplicationLayer() = default;
 
     /// called when the layer is attached to the layer stack
-    virtual void onAttach(Context &ctx, LayerAttachInfo info) {}
+    virtual void onAttach([[maybe_unused]] Context &ctx, [[maybe_unused]] LayerAttachInfo info) {}
     /// called when the layer is detached from the layer stack
-    virtual void onDetach(Context &ctx) {}
+    virtual void onDetach([[maybe_unused]] Context &ctx) {}
 
     /// called on any UI event. enqueue any expensive actions and process in the update loop
-    virtual bool onEvent(Event event) { return false; }
+    virtual bool onEvent([[maybe_unused]] Event event) { return false; }
 
     /// called once per frame. use to update any state
-    virtual void onUpdate(const LogicUpdateContext &updateCtx) {}
+    virtual void onUpdate([[maybe_unused]] const LogicUpdateContext &updateCtx) {}
 
     /**
      * used to query whether the layer has a render task. if this returns true, the renderTask
@@ -48,8 +48,9 @@ class ApplicationLayer {
      */
     virtual bool hasRenderTask() const { return false; }
     /// if hasRenderTask() returns true, this method will be called to get the coroutine render task
-    virtual RenderTaskDeclaration<LayerPassOutputs> renderTask(Cory::RenderTaskBuilder builder,
-                                                               LayerPassOutputs previousLayer)
+    virtual RenderTaskDeclaration<LayerPassOutputs> renderTask(
+        [[maybe_unused]] Cory::RenderTaskBuilder builder,
+        [[maybe_unused]] LayerPassOutputs previousLayer)
     {
         co_return;
     }

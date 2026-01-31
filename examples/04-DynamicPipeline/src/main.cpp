@@ -1,6 +1,5 @@
 #include "DynamicPipelineApplication.hpp"
 
-#include <cstdlib>
 #include <stdexcept>
 
 #include <spdlog/spdlog.h>

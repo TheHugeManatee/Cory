@@ -13,7 +13,10 @@ add_executable(${TARGET_NAME}
         src/TrianglePipeline.hpp
 )
 
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(HELLO_TRIANGLE_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
+if (EXISTS "${HELLO_TRIANGLE_INCLUDE_DIR}")
+    target_include_directories(${TARGET_NAME} PRIVATE ${HELLO_TRIANGLE_INCLUDE_DIR})
+endif ()
 
 target_compile_definitions(${TARGET_NAME} PRIVATE "TRIANGLE_RESOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\"")
 
@@ -30,7 +33,7 @@ target_link_libraries(${TARGET_NAME}
 
 if (CORY_BUILD_TESTS)
     enable_testing()
-    add_test(NAME Smoketests.HelloTriangle COMMAND ${TARGET_NAME} --frames=100)
+add_test(NAME Smoketests.HelloTriangle COMMAND ${TARGET_NAME} --frames=100)
 endif ()
 
 # Install in the desired folder

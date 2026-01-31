@@ -4,7 +4,36 @@
         "conan": {}
     },
     "include": [
-        "build\\release\\CMakePresets.json",
-        "build\\debug\\CMakePresets.json"
+    ],
+    "configurePresets": [
+        {
+            "name": "codex",
+            "displayName": "Codex WSL",
+            "description": "Codex WSL configure using Ninja",
+            "generator": "Ninja",
+            "binaryDir": "/home/j/cory-work/build/codex",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            },
+            "toolchainFile": "/home/j/cory-work/build/codex/conan_toolchain.cmake",
+            "environment": {
+                
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "codex",
+            "configurePreset": "codex",
+            "jobs": 16
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "codex",
+            "configurePreset": "codex"
+        }
     ]
 }

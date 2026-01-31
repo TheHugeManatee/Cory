@@ -20,11 +20,23 @@ class SlangCompilerTools {
         int maxDepth{6};
     };
     static std::string dumpProgramLayout(slang::IComponentType *program,
-                                         int targetIndex = 0,
-                                         const DumpOptions &options = {});
+                                         int targetIndex,
+                                         const DumpOptions &options);
+    static std::string dumpProgramLayout(slang::IComponentType *program, int targetIndex = 0)
+    {
+        return dumpProgramLayout(program, targetIndex, DumpOptions{});
+    }
     static std::string dumpTypeLayout(slang::TypeLayoutReflection *typeLayout,
-                                      const DumpOptions &options = {});
-    static std::string dumpType(slang::TypeReflection *type, const DumpOptions &options = {});
+                                      const DumpOptions &options);
+    static std::string dumpTypeLayout(slang::TypeLayoutReflection *typeLayout)
+    {
+        return dumpTypeLayout(typeLayout, DumpOptions{});
+    }
+    static std::string dumpType(slang::TypeReflection *type, const DumpOptions &options);
+    static std::string dumpType(slang::TypeReflection *type)
+    {
+        return dumpType(type, DumpOptions{});
+    }
 };
 
 } // namespace Cory

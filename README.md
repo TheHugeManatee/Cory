@@ -133,19 +133,24 @@ with different platforms (compilers and/or drivers) - likely I'm already hitting
 that may make compiling/running the application difficult on other environments.
 I'm always interested in feedback on compatibility issues, but I can of course not promise to be able to fix anything.
 
-That being said, to build the app, after checking out, you should be set up the dependencies with
+That being said, to build and run the app, use the `cbt` tool from the repo root. It handles
+configuration, building, testing, running, and tool setup in a consistent way.
 
 ```bash
-conan install . --output-folder=build/debug -s build_type=Debug --build=missing
-conan install . --output-folder=build/release -s build_type=Release --build=missing
+# Configure once
+python3 -m cbt configure --profile codex --build-type Debug
+
+# Build
+python3 -m cbt build --profile codex
+
+# Run a target
+python3 -m cbt run --profile codex SceneGraphDemo -- --help
+
+# Run a single test (or regex)
+python3 -m cbt test --profile codex "Smoketests.HelloTriangle"
 ```
 
-and then build with cmake using the presets:
-```bash
-cmake --preset conan-release # or debug
-```
-
-Then get your IDE to use the generated CMakeUserPresets.json file
+Please avoid calling `cmake`, `ctest`, or running binaries directly unless explicitly requested.
 
 ### Cory?
 

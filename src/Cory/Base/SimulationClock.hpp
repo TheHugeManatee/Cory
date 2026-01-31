@@ -52,7 +52,7 @@ template <typename UpstreamClock> class BasicSimulationClock {
 
     void reset();
 
-    static void Init() { globalClock().reset(); };
+    static void Init() { globalClock().reset(); }
     // static interface for std::chrono compliant clock
     static BasicSimulationClock &globalClock()
     {
@@ -85,17 +85,17 @@ constexpr Cory::Seconds operator""_s(long double x)
 /// create a milliseconds literal
 constexpr Cory::Seconds operator""_ms(long double x)
 {
-    return Cory::Seconds(x / 1'000.0);
+    return Cory::Seconds(x / 1'000.0L);
 }
 /// create a microseconds literal
 constexpr Cory::Seconds operator""_us(long double x)
 {
-    return Cory::Seconds(x / 1'000'000.0);
+    return Cory::Seconds(x / 1'000'000.0L);
 }
 /// create a nanoseconds literal
 constexpr Cory::Seconds operator""_ns(long double x)
 {
-    return Cory::Seconds(x / 1'000'000'000.0);
+    return Cory::Seconds(x / 1'000'000'000.0L);
 }
 } // namespace literals
 } // namespace Cory

@@ -11,21 +11,31 @@ class Log {
     static void Init();
     static void Shutdown();
 
-    static std::shared_ptr<spdlog::logger> &GetCoreLogger() { return s_coreLogger; }
-    static std::shared_ptr<spdlog::logger> &GetAppLogger() { return s_appLogger; }
+    static std::shared_ptr<spdlog::logger> &GetCoreLogger()
+    {
+        static std::shared_ptr<spdlog::logger> *core =
+            new std::shared_ptr<spdlog::logger>{};
+        return *core;
+    }
+    static std::shared_ptr<spdlog::logger> &GetAppLogger()
+    {
+        static std::shared_ptr<spdlog::logger> *app =
+            new std::shared_ptr<spdlog::logger>{};
+        return *app;
+    }
 
-    static void SetCoreLevel(spdlog::level::level_enum level) { s_coreLogger->set_level(level); }
-    static void SetAppLevel(spdlog::level::level_enum level) { s_appLogger->set_level(level); }
-    static auto GetCoreLevel() { return s_coreLogger->level(); }
-    static auto GetAppLevel() { return s_appLogger->level(); }
+    static void SetCoreLevel(spdlog::level::level_enum level) { GetCoreLogger()->set_level(level); }
+    static void SetAppLevel(spdlog::level::level_enum level) { GetAppLogger()->set_level(level); }
+    static auto GetCoreLevel() { return GetCoreLogger()->level(); }
+    static auto GetAppLevel() { return GetAppLogger()->level(); }
 
     static auto SetCoreLevelScoped(spdlog::level::level_enum level)
     {
-        return ScopedLogLevel{*s_coreLogger, level};
+        return ScopedLogLevel{*GetCoreLogger(), level};
     }
     static auto SetAppLevelScoped(spdlog::level::level_enum level)
     {
-        return ScopedLogLevel{*s_appLogger, level};
+        return ScopedLogLevel{*GetAppLogger(), level};
     }
 
     struct MemorySize {
@@ -49,8 +59,7 @@ class Log {
         spdlog::level::level_enum prev_level_;
     };
 
-    static std::shared_ptr<spdlog::logger> s_coreLogger;
-    static std::shared_ptr<spdlog::logger> s_appLogger;
+    // Storage is handled by GetCoreLogger/GetAppLogger helpers.
 };
 
 /// Log assertion failure and abort in a controlled manner. Intended usage via CO_CORE_ASSERT.
@@ -83,10 +92,12 @@ class Log {
 #define CO_APP_INFO(...) ::Cory::Log::GetAppLogger()->info(__VA_ARGS__)
 
 #define CO_CORE_ASSERT(condition, message, ...)                                                    \
-    if (!(condition)) {                                                                            \
-        const auto formattedMessage = fmt::format(message, __VA_ARGS__);                           \
-        Cory::AssertionFailed(#condition, formattedMessage);                                       \
-    }
+    do {                                                                                           \
+        if (!(condition)) {                                                                        \
+            const auto formattedMessage = fmt::format(message __VA_OPT__(, ) __VA_ARGS__);         \
+            Cory::AssertionFailed(#condition, formattedMessage);                                   \
+        }                                                                                          \
+    } while (false)
 
 #ifdef _DEBUG
 #define CO_CORE_DEBUG_ASSERT(condition, message, ...)                                              \

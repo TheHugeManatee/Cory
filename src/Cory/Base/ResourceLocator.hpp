@@ -6,11 +6,13 @@
 
 #include <filesystem>
 #include <stdexcept>
+#include <vector>
 
 namespace Cory {
 
 struct ResourceNotFound : public std::runtime_error {
     using std::runtime_error::runtime_error;
+    ~ResourceNotFound() override;
 };
 
 enum class ResourceType {
@@ -36,7 +38,7 @@ class ResourceLocator {
                                         ResourceType type = ResourceType::Any);
 
   private:
-    static std::vector<std::filesystem::path> searchPaths_;
+    static std::vector<std::filesystem::path> &searchPaths();
 };
 
 } // namespace Cory

@@ -233,7 +233,10 @@ SwapchainPrivate::SwapchainPrivate(Context &ctx_,
 
     // For each swapchain texture, create a view and a sync object (semaphore)
     for (uint32_t i = 0; i < swapchainTextureCount; ++i) {
-        auto view = swapchainTextures[i].createView({.format = swapchainOptions.format});
+        auto view = swapchainTextures[i].createView(Gpu::TextureViewOptions{
+            .label = fmt::format("Swapchain view {}", i),
+            .format = swapchainOptions.format,
+        });
         swapchainViews.push_back(std::move(view));
         presentCompleteSemaphores.push_back(device.createGpuSemaphore(
             {.label = fmt::format("PRESENT-COMPLETE-{}-{}", swapchainName, i)}));

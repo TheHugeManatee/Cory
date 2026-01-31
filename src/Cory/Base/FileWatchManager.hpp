@@ -65,7 +65,7 @@ class FileWatchManager : NoCopy {
     void cancelSuspendedConsumer(FileWatchHandle handle, cppcoro::coroutine_handle<> coroutine);
     void detachConsumer(FileWatchHandle handle);
 
-    static std::unique_ptr<FileWatchManager> s_instance;
+    static FileWatchManager *s_instance;
 
     struct Private;
     std::unique_ptr<Private> data_;

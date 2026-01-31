@@ -18,7 +18,10 @@ add_executable(${TARGET_NAME}
 
 target_sources(${TARGET_NAME} PRIVATE ${HEADERS})
 
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(SCENE_GRAPH_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
+if (EXISTS "${SCENE_GRAPH_INCLUDE_DIR}")
+    target_include_directories(${TARGET_NAME} PRIVATE ${SCENE_GRAPH_INCLUDE_DIR})
+endif ()
 
 target_compile_definitions(${TARGET_NAME} PRIVATE "SCENEGRAPHDEMO_RESOURCE_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/shaders\"")
 
@@ -33,7 +36,7 @@ target_link_libraries(${TARGET_NAME}
 
 if (CORY_BUILD_TESTS)
     enable_testing()
-    add_test(NAME Smoketests.SceneGraph COMMAND ${TARGET_NAME} --frames=50)
+add_test(NAME Smoketests.SceneGraph COMMAND ${TARGET_NAME} --frames=50)
 endif ()
 
 # Install in the desired folder

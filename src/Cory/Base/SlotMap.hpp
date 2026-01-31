@@ -136,8 +136,8 @@ template <typename StoredType_> class SlotMap : NoCopy {
 
   private:
     struct Chunk {
-        SlotMapHandle id[CHUNK_SIZE];
-        alignas(StoredType) std::byte storage[CHUNK_SIZE][sizeof(StoredType)];
+        std::array<SlotMapHandle, CHUNK_SIZE> id;
+        alignas(StoredType) std::array<std::byte, CHUNK_SIZE * sizeof(StoredType)> storage;
     };
     struct StoredInner {
         SlotMapHandle &id;
@@ -162,11 +162,13 @@ template <typename StoredType_> class SlotMap : NoCopy {
   private:
     static StoredType *storagePtr(Chunk &chunk, uint32_t elementIndex)
     {
-        return std::launder(reinterpret_cast<StoredType *>(chunk.storage[elementIndex]));
+        auto *base = reinterpret_cast<StoredType *>(chunk.storage.data());
+        return std::launder(base + elementIndex);
     }
     static const StoredType *storagePtr(const Chunk &chunk, uint32_t elementIndex)
     {
-        return std::launder(reinterpret_cast<const StoredType *>(chunk.storage[elementIndex]));
+        auto *base = reinterpret_cast<const StoredType *>(chunk.storage.data());
+        return std::launder(base + elementIndex);
     }
 
     std::allocator<Chunk> alloc_;
@@ -272,10 +274,10 @@ SlotMapHandle SlotMap<StoredType_>::emplace(InitArgs... args)
     }
 
     // get the next free index
-    int free = freeList_.back();
+    const uint32_t freeIndex = freeList_.back();
     freeList_.pop_back();
 
-    auto object = objectAt(free);
+    auto object = objectAt(freeIndex);
     CO_CORE_ASSERT(!object.id.valid(), "We got a live object from the free list!");
 
     try {
@@ -307,7 +309,7 @@ template <typename StoredType_> void SlotMap<StoredType_>::clear()
     // call destructor on remaining objects if they are still alive
     for (auto &chunkPtr : chunkTable_) {
         auto &chunk = *chunkPtr;
-        for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
+        for (uint32_t i = 0; i < CHUNK_SIZE; ++i) {
             const auto objectId = chunk.id[i];
             // if it's alive, destroy it and put into free list
             if (objectId.valid()) {
@@ -433,7 +435,7 @@ cppcoro::generator<SlotMapHandle> SlotMap<StoredType_>::handles() const
 {
     for (const auto &chunkPtr : chunkTable_) {
         auto &chunk = *chunkPtr;
-        for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
+        for (uint32_t i = 0; i < CHUNK_SIZE; ++i) {
             auto handle = chunk.id[i];
             if (handle.valid()) {
                 co_yield handle;
@@ -447,7 +449,7 @@ cppcoro::generator<std::pair<SlotMapHandle, StoredType_ &>> SlotMap<StoredType_>
 {
     for (auto &chunkPtr : chunkTable_) {
         auto &chunk = *chunkPtr;
-        for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
+        for (uint32_t i = 0; i < CHUNK_SIZE; ++i) {
             if (chunk.id[i].valid()) {
                 co_yield std::make_pair(chunk.id[i],
                                         std::ref(*storagePtr(chunk, static_cast<uint32_t>(i))));
@@ -461,7 +463,7 @@ SlotMap<StoredType_>::items() const
 {
     for (auto &chunkPtr : chunkTable_) {
         auto &chunk = *chunkPtr;
-        for (gsl::index i = 0; i < CHUNK_SIZE; ++i) {
+        for (uint32_t i = 0; i < CHUNK_SIZE; ++i) {
             if (chunk.id[i].valid()) {
                 co_yield std::make_pair(chunk.id[i],
                                         std::ref(*storagePtr(chunk, static_cast<uint32_t>(i))));

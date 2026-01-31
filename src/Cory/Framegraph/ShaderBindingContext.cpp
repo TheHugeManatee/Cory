@@ -161,7 +161,7 @@ void ShaderBindingContext::unbind()
                      "forgot to flush() before drawing/dispatching!");
     }
     CO_CORE_ASSERT(!std::holds_alternative<std::monostate>(passRecorder_),
-                   "Trying to unbind but there was no previous matched call to bind()!")
+                   "Trying to unbind but there was no previous matched call to bind()!");
     passRecorder_ = std::monostate{};
 }
 

@@ -29,7 +29,7 @@ class GpuBumpAllocator {
     {
         GpuAllocation<std::byte> mem = alloc(sizeof(T) * count, alignof(T));
         return GpuAllocation<T>{
-            .cpu = (T *)mem.cpu,
+            .cpu = reinterpret_cast<T *>(mem.cpu),
             .gpu = mem.gpu,
             .size = mem.size / sizeof(T),
         };

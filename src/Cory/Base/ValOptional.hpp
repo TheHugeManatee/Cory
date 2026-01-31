@@ -1,8 +1,12 @@
 #pragma once
 
 #include <concepts>
+#include <functional>
 #include <limits>
+#include <optional>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 namespace Cory {
 

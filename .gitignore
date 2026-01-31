@@ -18,5 +18,7 @@ __pycache__/
 venv/
 cmake-build-*/
 AGENTS.md
+*.egg-info/
 
 KDGpu
+imgui.ini

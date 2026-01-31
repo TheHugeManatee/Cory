@@ -21,8 +21,8 @@ class ContractFunctor {
     template <typename F> struct CallableImpl : CallableBase {
         F f;
 
-        CallableImpl(F &&f)
-            : f(std::forward<F>(f))
+        CallableImpl(F &&function)
+            : f(std::forward<F>(function))
         {
         }
 

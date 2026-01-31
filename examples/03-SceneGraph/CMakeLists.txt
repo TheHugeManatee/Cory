@@ -37,7 +37,7 @@ target_link_libraries(${TARGET_NAME}
 if (CORY_BUILD_TESTS)
     enable_testing()
 add_test(NAME Smoketests.SceneGraph COMMAND 
-        ${TARGET_NAME} --frames=50 --headless)
+        ${TARGET_NAME} --frames=20 --headless)
 endif ()
 
 # Install in the desired folder

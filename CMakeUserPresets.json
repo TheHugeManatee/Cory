@@ -4,8 +4,6 @@
         "conan": {}
     },
     "include": [
-        "../../../../home/j/cory-work/codex/CMakePresets.json",
-        "../../../../home/j/cory-work/Debug/CMakePresets.json"
     ],
     "configurePresets": [
         {
@@ -17,13 +15,11 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++",
-                "Vulkan_INCLUDE_DIR": "/home/j/VulkanSDK/1.4.335.0/x86_64/include",
-                "Vulkan_LIBRARY": "/home/j/VulkanSDK/1.4.335.0/x86_64/lib/libvulkan.so"
+                "CMAKE_CXX_COMPILER": "clang++"
             },
             "toolchainFile": "/home/j/cory-work/build/codex/conan_toolchain.cmake",
             "environment": {
-                "VULKAN_SDK": "/home/j/VulkanSDK/1.4.335.0/x86_64"
+                
             }
         }
     ],

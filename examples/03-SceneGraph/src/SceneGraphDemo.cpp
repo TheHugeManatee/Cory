@@ -71,7 +71,7 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     setupSystems();
 
     const auto viewportDimensions =
-        headless_ ? headlessFrames_->extent() : window_->dimensions();
+        headless_ ? glm::i32vec2(headlessFrames_->extent()) : window_->dimensions();
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = viewportDimensions};
     cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);

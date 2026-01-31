@@ -195,8 +195,8 @@ target_link_libraries(${TARGET_NAME}
         range-v3::range-v3
         cppcoro::cppcoro
         spdlog::spdlog
-        SYSTEM PUBLIC KDGpu::KDGpu
-        SYSTEM PUBLIC KDGpu::KDGpuUtils
+        KDGpu::KDGpu
+        KDGpu::KDGpuUtils
         glfw
         KDUtils::KDGui
         Slang::slang

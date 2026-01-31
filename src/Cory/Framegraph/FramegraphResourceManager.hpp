@@ -34,6 +34,9 @@ class FramegraphResourceManager : NoCopy {
     explicit FramegraphResourceManager(FramegraphResourceManager &&) noexcept;
     FramegraphResourceManager &operator=(FramegraphResourceManager &&) noexcept;
 
+    void setCurrentFrameNumber(uint64_t frameNumber);
+    [[nodiscard]] uint64_t currentFrameNumber() const;
+
     // Declare a new texture - will only create the metadata, not allocate the actual resource
     FramegraphTextureHandle declareTexture(TextureInfo info);
 
@@ -90,7 +93,8 @@ class FramegraphResourceManager : NoCopy {
     [[nodiscard]] BufferDeviceAddress deviceAddress(FramegraphBufferHandle handle) const;
     [[nodiscard]] BufferState state(FramegraphBufferHandle handle) const;
 
-    void clear();
+    void clearFrame(uint64_t frameNumber);
+    void clearAll();
 
   private:
     void allocate(FramegraphTextureHandle handle);

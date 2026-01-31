@@ -3,6 +3,7 @@
 #include <../src/Cory/Renderer/RadixSorter.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Context.hpp>
@@ -65,7 +66,8 @@ TEST_CASE("Radix sorter can be scheduled via framegraph")
 {
     Cory::testing::VulkanTester t;
     auto &ctx = t.ctx();
-    FramegraphTestAdapter graph(ctx, 0);
+    Cory::FramegraphResourceManager graphResources(ctx);
+    FramegraphTestAdapter graph(ctx, graphResources, 0);
 
     const auto shaderDir = fs::path{__FILE__}.parent_path().parent_path() / "data/shaders";
     Cory::ResourceLocator::addSearchPath(shaderDir);

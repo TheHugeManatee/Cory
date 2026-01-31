@@ -41,7 +41,9 @@ class Framegraph : NoCopy {
   public:
     // Create a new framegraph with the given context, using the given instance index for resource
     // allocation
-    explicit Framegraph(Context &ctx, uint32_t instanceIndex);
+    explicit Framegraph(Context &ctx,
+                        FramegraphResourceManager &resources,
+                        uint32_t instanceIndex);
     ~Framegraph();
 
     Framegraph(Framegraph &&) noexcept;
@@ -60,7 +62,7 @@ class Framegraph : NoCopy {
      * should be called only when it can be ensured that all resources are no longer in use, e.g.
      * for example when the next frame with the same swapchain image has been rendered.
      */
-    void resetForNextFrame();
+    void resetForNextFrame(uint64_t frameNumber);
 
     /// declare a new render task
     RenderTaskBuilder declareTask(std::string_view name);

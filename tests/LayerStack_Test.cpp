@@ -3,6 +3,7 @@
 #include <Cory/Application/ApplicationLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 
 #include "TestUtils.hpp"
@@ -149,7 +150,8 @@ TEST_CASE("LayerStack", "[LayerStack]")
         }
         WHEN("Enqueueing the render tasks")
         {
-            Cory::Framegraph framegraph(tester.ctx(), 0);
+            Cory::FramegraphResourceManager framegraphResources(tester.ctx());
+            Cory::Framegraph framegraph(tester.ctx(), framegraphResources, 0);
 
             SECTION("No layers have a render task")
             {

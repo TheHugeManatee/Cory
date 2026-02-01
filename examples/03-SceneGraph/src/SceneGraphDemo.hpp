@@ -4,6 +4,7 @@
 #include <Cory/Application/Common.hpp>
 #include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
 #include <Cory/Systems/SystemCoordinator.hpp>
@@ -42,6 +43,7 @@ class SceneGraphDemoApplication : public Cory::Application {
     Cory::SystemCoordinator systems_;
     class CubeAnimationSystem *animationSystem_{nullptr};
     class CubeRenderSystem *renderSystem_{nullptr};
+    CoImGui::DeviceMemoryReportHistory memoryReportHistory_{};
     void setupSystems();
     void setupScene();
 };

@@ -37,12 +37,14 @@ if (KDGPU_SOURCE_DIR)
     FetchContent_Declare(
             KDGpu
             SOURCE_DIR "${KDGPU_SOURCE_DIR}"
+            PATCH_COMMAND patch -p1 -i ${CMAKE_CURRENT_LIST_DIR}/patches/kdgpu-device-memory-report.patch
     )
 else ()
     FetchContent_Declare(
             KDGpu
             GIT_REPOSITORY https://github.com/TheHugeManatee/KDGpu.git
             GIT_TAG main
+            PATCH_COMMAND patch -p1 -i ${CMAKE_CURRENT_LIST_DIR}/patches/kdgpu-device-memory-report.patch
     )
 endif ()
 FetchContent_MakeAvailable(KDGpu)

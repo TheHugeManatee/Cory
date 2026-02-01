@@ -3,6 +3,7 @@
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/Coro.hpp>
+#include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
@@ -95,6 +96,7 @@ class DynamicPipelineApplication : public Cory::Application {
     DynamicStateSettings settings_{};
     std::vector<Gpu::TextureLayout> swapchainLayouts_;
     std::vector<Gpu::TextureLayout> depthLayouts_;
+    CoImGui::DeviceMemoryReportHistory memoryReportHistory_{};
 
     void resetAttachmentLayouts();
     void transitionColorAttachmentForRender(Cory::FrameContext &frameCtx);

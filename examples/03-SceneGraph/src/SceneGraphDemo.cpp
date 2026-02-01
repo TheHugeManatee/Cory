@@ -319,4 +319,8 @@ void SceneGraphDemoApplication::drawImguiControls()
         CoImGui::drawProfilerRecords(records);
     }
     ImGui::End();
+
+    memoryReportHistory_.update(ctx().deviceMemoryReportStats(),
+                                clock_.lastTick().now.time_since_epoch().count());
+    memoryReportHistory_.drawWindow();
 }

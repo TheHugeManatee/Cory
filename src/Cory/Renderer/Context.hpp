@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace Cory {
 
@@ -26,6 +27,31 @@ enum class DeviceFeatures { RequiredOnly, All };
 struct ContextCreationInfo {
     ValidationLayers validation{ValidationLayers::Enabled};
     std::span<const char *> args;
+};
+
+struct DeviceMemoryReportHeapStats {
+    uint32_t heapIndex{0};
+    uint64_t currentBytes{0};
+    uint64_t totalAllocatedBytes{0};
+    uint64_t totalFreedBytes{0};
+    uint64_t allocationCount{0};
+    uint64_t freeCount{0};
+    uint64_t importCount{0};
+    uint64_t unimportCount{0};
+    uint64_t allocationFailedCount{0};
+};
+
+struct DeviceMemoryReportStats {
+    bool supported{false};
+    uint64_t currentBytes{0};
+    uint64_t totalAllocatedBytes{0};
+    uint64_t totalFreedBytes{0};
+    uint64_t allocationCount{0};
+    uint64_t freeCount{0};
+    uint64_t importCount{0};
+    uint64_t unimportCount{0};
+    uint64_t allocationFailedCount{0};
+    std::vector<DeviceMemoryReportHeapStats> heaps;
 };
 
 /**
@@ -78,6 +104,8 @@ class Context : NoCopy {
 
     FileWatchManager &fileWatchManager();
     const FileWatchManager &fileWatchManager() const;
+
+    [[nodiscard]] DeviceMemoryReportStats deviceMemoryReportStats() const;
 
   private:
     Gpu::AdapterAndDevice

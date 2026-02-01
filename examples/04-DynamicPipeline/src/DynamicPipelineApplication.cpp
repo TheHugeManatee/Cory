@@ -524,6 +524,9 @@ void DynamicPipelineApplication::drawUi(const Cory::FrameContext &frameCtx)
         }
     }
     ImGui::End();
+
+    memoryReportHistory_.update(ctx().deviceMemoryReportStats(), getElapsedTimeSeconds());
+    memoryReportHistory_.drawWindow();
 }
 
 bool DynamicPipelineApplication::compileFragmentShaderSource(std::string_view sourceText,

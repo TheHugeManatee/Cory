@@ -15,7 +15,11 @@
 #include <KDGpuKDGui/view.h>
 #include <KDGui/gui_application.h>
 
+#include <algorithm>
+#include <mutex>
 #include <stdexcept>
+
+#include <vulkan/vulkan.h>
 
 #if defined(_WIN32)
 #include <vulkan/vulkan_win32.h>
@@ -43,11 +47,21 @@ struct ContextPrivate {
     DescriptorSets descriptorSets;
     std::unique_ptr<PipelineCache> pipelineCache;
 
+    struct DeviceMemoryReportState {
+        bool enabled{false};
+        DeviceMemoryReportStats stats{};
+    };
+
+    std::mutex deviceMemoryReportMutex;
+    DeviceMemoryReportState deviceMemoryReport;
+
     inline static Function<void(const DebugMessageInfo &)> validationMessageCallback;
 
     static void receiveDebugUtilsMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                          VkDebugUtilsMessageTypeFlagsEXT messageTypes,
                                          const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData);
+    static void deviceMemoryReportCallback(const VkDeviceMemoryReportCallbackDataEXT *pCallbackData,
+                                           void *pUserData);
 };
 
 Context::Context(ContextCreationInfo creationInfo)
@@ -186,6 +200,12 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     for ([[maybe_unused]] const auto &extension : adapterExtensions) {
         CO_CORE_TRACE("||  - {} Version {}", extension.name, extension.version);
     }
+    const bool supportsDeviceMemoryReport = std::any_of(
+        adapterExtensions.begin(),
+        adapterExtensions.end(),
+        [](const auto &extension) {
+            return extension.name == std::string_view{VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME};
+        });
 
     if (!supportsPresentation || !hasGraphicsAndCompute) {
         CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
@@ -217,7 +237,7 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
     // Now we can create a device from the selected adapter that we can then use to interact
     // with the GPU.
 
-    auto device = selectedAdapter->createDevice(DeviceOptions{
+    DeviceOptions deviceOptions{
         .label = "Main Device",
         .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
         .layers = {},
@@ -230,7 +250,15 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
         .requestedFeatures =
             features == DeviceFeatures::All ? selectedAdapter->features() : getRequiredFeatures(),
         .adapterGroup = {},
-    });
+    };
+
+    if (supportsDeviceMemoryReport) {
+        deviceOptions.extensions.push_back(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME);
+        deviceOptions.deviceMemoryReportCallback = ContextPrivate::deviceMemoryReportCallback;
+        deviceOptions.deviceMemoryReportUserData = data_.get();
+    }
+
+    auto device = selectedAdapter->createDevice(deviceOptions);
 
     return {selectedAdapter, std::move(device)};
 }
@@ -287,6 +315,20 @@ void Context::setupDeviceFromSurface(const Gpu::Surface &surface)
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
 
+    {
+        const auto adapterExtensions = data_->adapter->extensions();
+        const bool supportsDeviceMemoryReport = std::any_of(
+            adapterExtensions.begin(),
+            adapterExtensions.end(),
+            [](const auto &extension) {
+                return extension.name ==
+                       std::string_view{VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME};
+            });
+        std::lock_guard lock{data_->deviceMemoryReportMutex};
+        data_->deviceMemoryReport.stats = {};
+        data_->deviceMemoryReport.enabled = supportsDeviceMemoryReport;
+    }
+
     setupDescriptors();
 }
 
@@ -327,8 +369,16 @@ void Context::setupHeadlessDevice()
         return;
     }
 
+    const auto adapterExtensions = selectedAdapter->extensions();
+    const bool supportsDeviceMemoryReport = std::any_of(
+        adapterExtensions.begin(),
+        adapterExtensions.end(),
+        [](const auto &extension) {
+            return extension.name == std::string_view{VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME};
+        });
+
     // Create device
-    auto device = selectedAdapter->createDevice(Gpu::DeviceOptions{
+    Gpu::DeviceOptions deviceOptions{
         .label = "Headless Device",
         .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
         .layers = {},
@@ -339,7 +389,15 @@ void Context::setupHeadlessDevice()
         .queues = {},
         .requestedFeatures = getRequiredFeatures(),
         .adapterGroup = {},
-    });
+    };
+
+    if (supportsDeviceMemoryReport) {
+        deviceOptions.extensions.push_back(VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME);
+        deviceOptions.deviceMemoryReportCallback = ContextPrivate::deviceMemoryReportCallback;
+        deviceOptions.deviceMemoryReportUserData = data_.get();
+    }
+
+    auto device = selectedAdapter->createDevice(deviceOptions);
 
     data_->adapter = selectedAdapter;
     data_->device = std::move(device);
@@ -350,6 +408,12 @@ void Context::setupHeadlessDevice()
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+
+    {
+        std::lock_guard lock{data_->deviceMemoryReportMutex};
+        data_->deviceMemoryReport.stats = {};
+        data_->deviceMemoryReport.enabled = supportsDeviceMemoryReport;
+    }
 
     setupDescriptors();
 }
@@ -427,6 +491,14 @@ const FileWatchManager &Context::fileWatchManager() const
     return data_->fileWatchManager;
 }
 
+DeviceMemoryReportStats Context::deviceMemoryReportStats() const
+{
+    std::lock_guard lock{data_->deviceMemoryReportMutex};
+    DeviceMemoryReportStats stats = data_->deviceMemoryReport.stats;
+    stats.supported = data_->deviceMemoryReport.enabled;
+    return stats;
+}
+
 void ContextPrivate::receiveDebugUtilsMessage(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -461,6 +533,71 @@ void ContextPrivate::receiveDebugUtilsMessage(
     case DebugMessageSeverity::Error:
         CO_CORE_ERROR("Vulkan Validation: {}", pCallbackData->pMessage);
         BreakpointIfDebugging();
+        break;
+    }
+}
+
+void ContextPrivate::deviceMemoryReportCallback(
+    const VkDeviceMemoryReportCallbackDataEXT *pCallbackData, void *pUserData)
+{
+    if (!pCallbackData || !pUserData) {
+        return;
+    }
+
+    auto *contextData = static_cast<ContextPrivate *>(pUserData);
+    std::lock_guard lock{contextData->deviceMemoryReportMutex};
+    auto &stats = contextData->deviceMemoryReport.stats;
+
+    const uint32_t heapIndex = pCallbackData->heapIndex;
+    if (stats.heaps.size() <= heapIndex) {
+        stats.heaps.resize(heapIndex + 1);
+        for (uint32_t index = 0; index < stats.heaps.size(); ++index) {
+            stats.heaps[index].heapIndex = index;
+        }
+    }
+    auto &heap = stats.heaps[heapIndex];
+    const uint64_t size = pCallbackData->size;
+
+    auto applyAllocation = [&](uint64_t bytes) {
+        heap.currentBytes += bytes;
+        heap.totalAllocatedBytes += bytes;
+        heap.allocationCount += 1;
+        stats.currentBytes += bytes;
+        stats.totalAllocatedBytes += bytes;
+        stats.allocationCount += 1;
+    };
+
+    auto applyFree = [&](uint64_t bytes) {
+        heap.currentBytes = heap.currentBytes >= bytes ? heap.currentBytes - bytes : 0;
+        heap.totalFreedBytes += bytes;
+        heap.freeCount += 1;
+        stats.currentBytes = stats.currentBytes >= bytes ? stats.currentBytes - bytes : 0;
+        stats.totalFreedBytes += bytes;
+        stats.freeCount += 1;
+    };
+
+    switch (pCallbackData->type) {
+    case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_ALLOCATE_EXT:
+        applyAllocation(size);
+        break;
+    case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_FREE_EXT:
+        applyFree(size);
+        break;
+    case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_IMPORT_EXT:
+        applyAllocation(size);
+        heap.importCount += 1;
+        stats.importCount += 1;
+        break;
+    case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_UNIMPORT_EXT:
+        applyFree(size);
+        heap.unimportCount += 1;
+        stats.unimportCount += 1;
+        break;
+    case VK_DEVICE_MEMORY_REPORT_EVENT_TYPE_ALLOCATION_FAILED_EXT:
+        heap.allocationFailedCount += 1;
+        stats.allocationFailedCount += 1;
+        break;
+    default:
         break;
     }
 }

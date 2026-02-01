@@ -6,6 +6,7 @@
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
+#include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Common.hpp>
 
 #include <glm/mat4x4.hpp>
@@ -94,4 +95,5 @@ class CubeDemoApplication : public Cory::Application {
     Cory::CameraManipulator camera_;
     std::vector<InstanceBuffer> instanceBuffers_;
     std::vector<InstanceData> instanceData_;
+    CoImGui::DeviceMemoryReportHistory memoryReportHistory_{};
 };

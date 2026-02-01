@@ -481,6 +481,9 @@ void CubeDemoApplication::drawImguiControls()
         CoImGui::drawProfilerRecords(records);
     }
     ImGui::End();
+
+    memoryReportHistory_.update(ctx().deviceMemoryReportStats(), getElapsedTimeSeconds());
+    memoryReportHistory_.drawWindow();
 }
 
 void CubeDemoApplication::setupCameraCallbacks()

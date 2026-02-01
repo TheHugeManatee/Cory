@@ -4,6 +4,7 @@
 #include <Cory/Application/Common.hpp>
 #include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/ImGui/Widgets.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
 #include <Cory/Systems/SystemCoordinator.hpp>
@@ -41,6 +42,7 @@ class ParticleComputeDemoApplication : public Cory::Application {
     Cory::SceneGraph sceneGraph_;
     Cory::SystemCoordinator systems_;
     class PointSpriteRenderSystem *renderSystem_{nullptr};
+    CoImGui::DeviceMemoryReportHistory memoryReportHistory_{};
     void setupSystems();
     void setupScene();
 };

@@ -1,0 +1,71 @@
+diff --git a/src/KDGpu/device_options.h b/src/KDGpu/device_options.h
+index 3d2d8dd..6e67a18 100644
+--- a/src/KDGpu/device_options.h
++++ b/src/KDGpu/device_options.h
+@@ -17,6 +17,8 @@
+ #include <string>
+ #include <vector>
+ 
++struct VkDeviceMemoryReportCallbackDataEXT;
++
+ namespace KDGpu {
+ 
+ struct QueueRequest {
+@@ -35,6 +37,9 @@ struct DeviceOptions {
+     std::vector<QueueRequest> queues;
+     AdapterFeatures requestedFeatures;
+     AdapterGroup adapterGroup;
++    using DeviceMemoryReportCallback = void (*)(const VkDeviceMemoryReportCallbackDataEXT *, void *);
++    DeviceMemoryReportCallback deviceMemoryReportCallback{nullptr};
++    void *deviceMemoryReportUserData{nullptr};
+ };
+ 
+ } // namespace KDGpu
+diff --git a/src/KDGpu/vulkan/vulkan_resource_manager.cpp b/src/KDGpu/vulkan/vulkan_resource_manager.cpp
+index 18f36df..6d8c4b0 100644
+--- a/src/KDGpu/vulkan/vulkan_resource_manager.cpp
++++ b/src/KDGpu/vulkan/vulkan_resource_manager.cpp
+@@ -390,6 +390,37 @@ Handle<Device_t> VulkanResourceManager::createDevice(const Handle<Adapter_t> &ad
+     }
+ #endif
+ 
++#if defined(VK_EXT_device_memory_report)
++    VkDeviceDeviceMemoryReportCreateInfoEXT deviceMemoryReportCreateInfo{};
++    VkPhysicalDeviceDeviceMemoryReportFeaturesEXT deviceMemoryReportFeatures{};
++    if (options.deviceMemoryReportCallback) {
++        if (!hasExtension(availableDeviceExtensions, VK_EXT_DEVICE_MEMORY_REPORT_EXTENSION_NAME)) {
++            SPDLOG_LOGGER_WARN(Logger::logger(),
++                               "Device memory report callback set, but VK_EXT_device_memory_report is not supported.");
++        } else {
++            VkPhysicalDeviceDeviceMemoryReportFeaturesEXT memoryReportSupport{};
++            memoryReportSupport.sType =
++                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_MEMORY_REPORT_FEATURES_EXT;
++
++            VkPhysicalDeviceFeatures2 memoryReportSupportFeatures{};
++            memoryReportSupportFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
++            memoryReportSupportFeatures.pNext = &memoryReportSupport;
++            vkGetPhysicalDeviceFeatures2(vulkanAdapter->physicalDevice, &memoryReportSupportFeatures);
++
++            if (memoryReportSupport.deviceMemoryReport) {
++                deviceMemoryReportFeatures.sType =
++                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEVICE_MEMORY_REPORT_FEATURES_EXT;
++                deviceMemoryReportFeatures.deviceMemoryReport = VK_TRUE;
++                addToChain(&deviceMemoryReportFeatures);
++
++                deviceMemoryReportCreateInfo.sType =
++                    VK_STRUCTURE_TYPE_DEVICE_DEVICE_MEMORY_REPORT_CREATE_INFO_EXT;
++                deviceMemoryReportCreateInfo.flags = 0;
++                deviceMemoryReportCreateInfo.pfnUserCallback = options.deviceMemoryReportCallback;
++                deviceMemoryReportCreateInfo.pUserData = options.deviceMemoryReportUserData;
++                addToChain(&deviceMemoryReportCreateInfo);
++            } else {
++                SPDLOG_LOGGER_WARN(Logger::logger(),
++                                   "Device memory report callback set, but deviceMemoryReport feature is not supported.");
++            }
++        }
++    }
++#endif
++
+     // Create a Device that targets several physical devices if a group was specified.
+     // We only add the device group info if we have more than one adapter.
+     VkDeviceGroupDeviceCreateInfo deviceGroupInfo = {};

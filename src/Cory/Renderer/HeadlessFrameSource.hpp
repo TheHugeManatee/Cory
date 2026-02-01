@@ -13,6 +13,8 @@
 
 namespace Cory {
 
+struct HeadlessFrameSourcePrivate;
+
 struct HeadlessFrameSourceCreateInfo {
     std::string label{"HeadlessFrameSource"};
     glm::u32vec2 size{1024, 768};

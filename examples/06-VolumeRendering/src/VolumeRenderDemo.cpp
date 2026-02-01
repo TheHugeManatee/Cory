@@ -231,8 +231,11 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
     auto mainPass = volumeRenderer_->cubeRenderTask(
         framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
 
+    auto mainRaycast = volumeRenderer_->cubeRaycastTask(
+        framegraph.declareTask("TASK_VolumeRaycast"), mainPass.output().colorOut, frameHandles.depthImage);
+
     auto layersOutput = layers().declareRenderTasks(
-        framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
+        framegraph, {.color = mainRaycast.output(), .depth = mainPass.output().depthOut});
 
     auto resolvedSwapchain =
         Cory::StandardRenderTasks::resolve(

@@ -1,7 +1,8 @@
 struct InstanceData
 {
-    float4x4 modelTransform;
-    float4x4 normalTransform;
+    float4x4 modelToWorld;
+    float4x4 worldToModel;
+    float4x4 normalToWorld;
     float4 color;
     float4 parameters;
 };
@@ -41,9 +42,9 @@ VSOutput main(VSInput input)
 {
     const InstanceData instance = globals->instances[input.instanceId];
     const float4 localPosition = float4(input.position, 1.0f);
-    const float4x4 normalMatrix = instance.normalTransform;
+    const float4x4 normalMatrix = instance.normalToWorld;
 
-    float4 viewPosition = mul(globals->view, mul(instance.modelTransform, localPosition));
+    float4 viewPosition = mul(globals->view, mul(instance.modelToWorld, localPosition));
 
     VSOutput output;
     output.position = mul(globals->projection, viewPosition);

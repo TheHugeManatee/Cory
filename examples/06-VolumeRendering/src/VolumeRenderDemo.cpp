@@ -196,7 +196,15 @@ void VolumeRenderDemoApplication::run()
         auto execInfo = fg.record(frameCtx);
 
         if (dumpNextFramegraph_) {
-            CO_APP_INFO(fg.dump(execInfo));
+            std::filesystem::path outputPath =
+                std::filesystem::current_path() /
+                fmt::format("VolumeRenderDemo_Frame_{:04}.html", frameCtx.frameNumber);
+            fg.dump(execInfo, outputPath);
+            auto file_link = "file://" + absolute(outputPath).string();
+            // replace backslashes with forward slashes so IDE's add auto-links for convenience
+            std::ranges::replace(file_link, '\\', '/');
+
+            CO_CORE_INFO("Dumped framegraph to\n{}", file_link);
             dumpNextFramegraph_ = false;
         }
     };

@@ -6,6 +6,7 @@
 
 #include <cppcoro/generator.hpp>
 
+#include <filesystem>
 #include <string_view>
 
 namespace Cory {
@@ -102,7 +103,7 @@ class Framegraph : NoCopy {
     [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
     renderTasks() const;
 
-    [[nodiscard]] std::string dump(const ExecutionInfo &info);
+    void dump(const ExecutionInfo &info, std::filesystem::path outputPath) const;
 
   protected:
     RenderTaskHandle finishTaskDeclaration(RenderTaskInfo &&info);

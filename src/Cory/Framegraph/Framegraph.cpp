@@ -668,10 +668,10 @@ ExecutionInfo Framegraph::compile()
     return std::move(execInfo);
 }
 
-std::string Framegraph::dump(const ExecutionInfo &executionInfo)
+void Framegraph::dump(const ExecutionInfo &executionInfo, std::filesystem::path outputPath) const
 {
     const FramegraphVisualizer visualizer(*this);
-    return visualizer.generateDotGraph(executionInfo);
+    visualizer.writeGraphHtml(executionInfo, outputPath);
 }
 
 RenderTaskHandle Framegraph::finishTaskDeclaration(RenderTaskInfo &&info)

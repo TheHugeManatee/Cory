@@ -11,10 +11,10 @@
 #include <memory>
 #include <span>
 
-class ParticleComputeDemoApplication : public Cory::Application {
+class VolumeRenderDemoApplication : public Cory::Application {
   public:
-    explicit ParticleComputeDemoApplication(std::span<const char *> args);
-    ~ParticleComputeDemoApplication() override;
+    explicit VolumeRenderDemoApplication(std::span<const char *> args);
+    ~VolumeRenderDemoApplication() override;
 
     void run() override;
 
@@ -36,7 +36,9 @@ class ParticleComputeDemoApplication : public Cory::Application {
     Cory::CameraLayer *cameraLayer_;
     Cory::SceneGraph sceneGraph_;
     Cory::SystemCoordinator systems_;
-    class PointSpriteRenderSystem *renderSystem_{nullptr};
+
+    class VolumeRenderSystem *volumeRenderer_{nullptr};
+
     void setupSystems();
     void setupScene();
 };

@@ -6,12 +6,6 @@
 
 class TrianglePipeline;
 
-namespace Cory {
-class Window;
-class Context;
-class HeadlessFrameSource;
-} // namespace Cory
-
 struct Mesh;
 
 class HelloTriangleApplication : public Cory::Application {

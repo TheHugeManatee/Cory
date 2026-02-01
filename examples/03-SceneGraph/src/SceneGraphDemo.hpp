@@ -11,10 +11,6 @@
 #include <memory>
 #include <span>
 
-namespace Cory {
-class HeadlessFrameSource;
-}
-
 class SceneGraphDemoApplication : public Cory::Application {
   public:
     SceneGraphDemoApplication(std::span<const char *> args);

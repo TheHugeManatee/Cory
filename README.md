@@ -49,6 +49,8 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] shader reflection using [SPIR-V Reflect](https://github.com/KhronosGroup/SPIRV-Reflect)
     - [ ] shader compilation cache
     - [ ] [shader specialization constants](https://blogs.igalia.com/itoral/2018/03/20/improving-shader-performance-with-vulkans-specialization-constants/)
+- Debug drawing utilities
+    - [ ] Simple, immediate-mode debug drawing system for lines, shapes, text etc.
 
 - [x] Basic coroutine-based framegraph **concept/API draft**
 - [x] ImGui integration

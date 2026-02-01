@@ -11,13 +11,6 @@
 #include <string_view>
 #include <vector>
 
-namespace Cory {
-class ImGuiLayer;
-class HeadlessFrameSource;
-class Window;
-struct FrameContext;
-} // namespace Cory
-
 namespace KDGpu {
 class RenderPassCommandRecorder;
 }

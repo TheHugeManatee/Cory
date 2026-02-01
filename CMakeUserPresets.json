@@ -4,8 +4,9 @@
         "conan": {}
     },
     "include": [
-        "build\\debug\\CMakePresets.json",
-        "build\\release\\CMakePresets.json"
+        "build/clion-debug/CMakePresets.json",
+        "build/clion-release/CMakePresets.json",
+        "build/vscode/CMakePresets.json"
     ],
     "configurePresets": [
         {
@@ -20,9 +21,7 @@
                 "CMAKE_CXX_COMPILER": "clang++"
             },
             "toolchainFile": "/home/j/cory-work/build/codex/conan_toolchain.cmake",
-            "environment": {
-                
-            }
+            "environment": {}
         }
     ],
     "buildPresets": [
@@ -37,9 +36,5 @@
             "name": "codex",
             "configurePreset": "codex"
         }
-=======
-        "build\\debug\\CMakePresets.json",
-        "build\\release\\CMakePresets.json"
->>>>>>> 6ebd8cd1 (Fix framegraph resolve handle bookkeeping)
     ]
 }

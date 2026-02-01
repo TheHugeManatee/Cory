@@ -82,7 +82,7 @@ def _venv_install(venv_dir: Path, packages: list[str], quiet: bool) -> None:
 
 
 def _tool_paths(venv_dir: Path) -> dict[str, str]:
-    return {
+    tools: dict[str, str] = {
         "cmake": str(_tool_from_venv(venv_dir, "cmake")),
         "ctest": str(_tool_from_venv(venv_dir, "ctest")),
         "conan": str(_tool_from_venv(venv_dir, "conan")),
@@ -92,6 +92,28 @@ def _tool_paths(venv_dir: Path) -> dict[str, str]:
         "clang_tidy": which("clang-tidy-22") or which("clang-tidy") or "clang-tidy",
         "clang_format": which("clang-format") or "clang-format",
     }
+
+    # On Windows, prefer clang-format/clang-tidy bundled with Visual Studio's LLVM tools
+    if is_windows():
+        try:
+            inst = _find_vs_installation()
+        except Exception:
+            inst = None
+        if inst:
+            llvm_bin = Path(inst) / "VC" / "Tools" / "Llvm" / "bin"
+            try:
+                if llvm_bin.exists():
+                    cf = llvm_bin / "clang-format.exe"
+                    ct = llvm_bin / "clang-tidy.exe"
+                    if cf.exists():
+                        tools["clang_format"] = str(cf)
+                    if ct.exists():
+                        tools["clang_tidy"] = str(ct)
+            except Exception:
+                # Non-fatal: fall back to PATH-based discovery
+                pass
+
+    return tools
 
 
 def _prepend_env_path(env: dict[str, str], key: str, value: str) -> None:
@@ -109,7 +131,7 @@ def _env_profile() -> str | None:
 
 
 def _resolve_profile(profile: str | None) -> str:
-    return profile or _env_profile() or "debug" if is_windows() else "codex"
+    return profile or _env_profile() or "codex"
 
 def _config_env(config: dict) -> dict[str, str]:
     env = dict(os.environ)
@@ -488,6 +510,7 @@ def configure(
         profile_build,
         build_type,
         ctx.quiet,
+        preset_name=profile,
     )
     toolchain_file = build_dir / "conan_toolchain.cmake"
     config = new_config(
@@ -646,6 +669,7 @@ def reconfigure(ctx: CliContext, profile: str | None, run_conan: bool, cmake_def
             config["conan"]["profile_build"],
             config["cbt"]["build_type"],
             ctx.quiet,
+            preset_name=profile,
         )
     defines = dict(config["cmake"]["defines"])
     defines.update(_parse_defines(cmake_define))

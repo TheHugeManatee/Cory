@@ -1,57 +1,53 @@
 # Cory Build Tool
 
-The Cory build tool (`cbt`) is a platform-agnostic script that can configure, build, test, and run the Cory project.
+The Cory build tool (`cbt`) is a small, in-tree CLI that wraps the project's CMake/Conan workflow and exposes a
+deterministic, agent-friendly surface for common developer tasks: configure, build, test, run, analyze, format and
+lint. The tool is intentionally conservative: prefer `cbt` over calling CMake, Conan, Ninja, or CTest directly so
+automation and agents have a single canonical entrypoint.
 
-It provides a wrapper around a CMake/Conan build system.
+This document is written as an agent "skill" — it explains context, when and how to use `cbt`, common flows, and
+the platform-relevant differences an agent should care about.
 
-## Why this exists (agent-first)
+## Purpose & Context (Agent skill)
 
-This tool is primarily for **AI agents** (and humans) as a simple entry point for common tasks on this codebase:
+`cbt` exists to make the Cory repository trivially automatable and reproducible. For agents, it provides:
 
-- Single-line commands for common workflows (configure/build/run/test/lint/format).
-- Minimal “tribal knowledge” required (no “remember to source X before running Y”).
-- Clear, deterministic output so an agent can recover quickly from failures.
+- A single, documented entrypoint for all build and test tasks.
+- Deterministic default paths and output (so automation can locate build artifacts and compile databases reliably).
+- Machine-friendly flags such as `--json`, `--dry-run`, and `--no-color` for programmatic consumption.
 
-## Usage
+When to use `cbt`:
 
-`cbt --help` - Show help
-`cbt <tool> --help` - Show help for a specific tool as below
-`cbt doctor` - Validate prerequisites and print actionable fixes
-`cbt status` - Print the active config and resolved paths/tools
-`cbt configure [options]` - Configure the build system
-`cbt reconfigure [options]` - Re-run CMake configure in an existing build dir
-`cbt build [options]` - Build the project
-`cbt run [options] <target>` - Run a built target
-`cbt targets [options]` - List CMake targets (best-effort)
-`cbt tests [options]` - List CTest tests
-`cbt test [options] <regex?>` - Build tests and run a single test (or regex)
-`cbt compile <source files> [options]` - Compile source files using the same settings as the project
-`cbt analyze <source files> [options]` - Run static analysis on source files using the same settings as the project
-`cbt fmt [paths...]` - Run clang-format on files/dirs (defaults to changed files)
-`cbt lint [paths...]` - Run clang-tidy on files (defaults to changed files)
-`cbt clean [options]` - Remove build artifacts (requires explicit confirmation)
-`cbt cache [options]` - Manage or clear dependency/build caches (safe subcommands only)
-`cbt which <tool>` - Print resolved tool path (cmake/conan/ninja/clang/clang-tidy/clang-format)
-`cbt env` - Print environment needed to reproduce a run
+- Always prefer `cbt` for configure/build/run/test/lint/format/doctor/status workflows.
+- Use `cbt doctor` before other operations to detect missing prerequisites and get exact fix commands.
+- Use `cbt configure` once per profile/build-dir, then use `cbt build`, `cbt test`, `cbt run`, etc. against the stored
+  configuration.
 
-### Global UX rules (to keep agents unconfused)
+## Quick Reference
 
-- No hidden requirements: if something is missing, fail with a short checklist and the exact command to fix it.
-- Print the underlying commands being run (Conan/CMake/CTest/clang-tidy/clang-format) unless `--quiet`.
-- Prefer “do the safe thing” defaults:
-  - `cbt run <target>` may build the target first, but should never delete anything.
-  - `cbt clean` must require `--yes` (or `--confirm <profile>`) to avoid accidental deletion.
-- Deterministic paths: default build locations never depend on the current working directory.
-- Make it easy to reproduce: on failure, print a “Reproduce manually:” block with the exact command line.
-- Friendly to automation:
-  - `--json` optional for machine-readable status/doctor output.
-  - `--dry-run` prints what would run without changing the system.
-  - `--no-color` for log collectors.
-- Predictable exit codes (automation-friendly):
-  - `0` success
-  - `2` missing prereq (doctor should pass before continuing)
-  - `3` config missing or invalid
-  - `4` underlying tool failed (cmake/conan/ctest/etc.)
+Run `cbt --help` or `cbt <command> --help` for detailed per-command options. The commands most used by agents are:
+
+- `doctor` — validate environment and print exact fix commands (run this first).
+- `configure` — create a build directory, venv, run Conan and CMake, and write the persistent config.
+- `build` — build the project (supports `--target` and `--jobs`).
+- `test` / `tests` — discover and run tests (supports regex selection; builds tests if necessary).
+- `run` — run an executable from the build dir (builds if missing unless `--no-build`).
+- `fmt` / `lint` — format and lint changed files by default; accept explicit paths.
+- `which` / `status` / `env` — inspect tool paths, current config, and runtime environment.
+
+Machine-friendly flags to prefer in automation:
+
+- `--json` — where supported, for parsing output.
+- `--dry-run` — print commands that would run without executing them.
+- `--no-color` — remove ANSI color codes for log collectors.
+
+### Global UX rules (agent guidance)
+
+- Always run `cbt doctor` as a preflight check. If `doctor` reports missing prerequisites, use the provided one-line fixes.
+- `cbt` prints the underlying commands it runs (unless `--quiet`); prefer `--dry-run` to capture those commands without side-effects.
+- `cbt run` is allowed to build a target if missing; it will never delete user data. Use `--no-build` to avoid implicit builds.
+- `cbt clean` requires an explicit confirmation flag to avoid accidental deletion; automation should never call it without explicit intent.
+- Exit codes are stable and should be used to classify failures: `2` = prerequisite missing, `3` = config missing/invalid, `4` = underlying tool failure.
 
 ### Implementation notes
 
@@ -64,20 +60,12 @@ This tool is primarily for **AI agents** (and humans) as a simple entry point fo
 
 ## Revised implementation sketch (Python + Click, minimal config)
 
-### Design goals (per constraints)
-- No environment variables required for normal use.
-- Source dir is fixed relative to the tool itself (repo root).
-- Build root defaults:
-  - Linux: `$HOME/cory-work`
-  - Windows: `<repo>/build`
-- Build dir:
-  - Linux: `<build_root>/<profile>`
-  - Windows: `<repo>/build/<profile>`
-- Generator: always Ninja.
-- Configuration is stored in the build dir. Subsequent commands reuse it.
-- Vulkan is discovered by CMake (FindVulkan). `cbt` does not probe SDK locations.
-- Conan home is not configurable.
-- Virtual env lives inside the build root (no separate venv path).
+### Design goals (short)
+
+- Minimal external assumptions: `cbt` prefers to create its own venv under the build root and install required Python tools there.
+- Deterministic paths: repo-root is resolved relative to the installed `cbt` package; build roots have platform-safe defaults.
+- Configuration is persisted in the build dir (`.cbt/config.toml`); other commands rely on that file and will refuse to proceed if it's missing.
+- `cbt` defers SDK discovery to CMake/CMake scripts (e.g. Vulkan is found via `find_package(Vulkan ...)`). Use `cbt configure --vulkan-sdk` only when needed.
 
 Additional agent-focused goals:
 - “Do what I mean” defaults for an agent:
@@ -88,7 +76,22 @@ Additional agent-focused goals:
 - Keep the number of “modes” small: prefer one canonical path per task.
 - Prefer robust detection over assumptions (e.g. find `clang-tidy-22` if present, fall back to `clang-tidy`).
 
-### Repository layout (suggested)
+### Build-root & venv (agent-visible differences)
+
+The key cross-platform differences agents should be aware of (high level, no implementation detail):
+
+- Default build-root:
+  - Linux: `~/cory-work/` (shared location outside the repo; good for fast native build directories under WSL/Linux).
+  - Windows: `<repo>/build` (inside the repository tree).
+- Virtual environment location:
+  - Linux: `<build_root>/.venv`
+  - Windows: `<repo>/build/.venv`
+  Agents should generally run `cbt setup` or `cbt configure` to ensure the venv exists; do not assume Python packages are globally available.
+- Developer toolchain differences to consider:
+  - Linux: CI/agents expect Clang (clang-22 preferred) and clang-tidy/clang-format variants.
+  - Windows: MSVC toolchain must be available when `cbt` invokes builds that require it; `cbt` can activate the MSVC developer environment when needed but agents should prefer running `cbt doctor` to surface missing MSVC components.
+
+These are practical concerns for invocation and environment — not implementation details of the `cbt` package.
 ```
 tools/cbt/
   cbt/__init__.py
@@ -105,78 +108,54 @@ tools/cbt/
   pyproject.toml
 ```
 
-### Source dir resolution (fixed)
-- `source_dir` is always resolved relative to the `cbt` package location:
-  - `tools/cbt/cbt/__init__.py` → repo root is `../../..`
-  - Keep this canonical: no CLI option to override.
+### Where agents should start: recommended workflow
 
-Example helper:
-```python
-from pathlib import Path
+1. `cbt doctor --json` — check environment and receive actionable one-line fixes.
+2. `cbt configure --profile <name> --build-type <Debug|Release>` — sets up venv, runs conan and cmake and writes `.cbt/config.toml`.
+3. `cbt build --jobs <N> [--target <target>]` — build artifacts.
+4. `cbt test '<regex>'` or `cbt run <target> -- <args>` — execute tests or targets (use `--no-build` to avoid implicit builds).
+5. `cbt fmt` and `cbt lint` — operate on changed files by default; pass explicit paths to override.
 
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[3]
+Notes for agents:
+
+- Persist or cache the build-dir path returned by `cbt configure` (it writes `.cbt/config.toml` into the build dir). Subsequent commands reuse the config.
+- Use `--dry-run` when constructing commands to be executed by other systems so you can extract exact invocation lines.
+- Prefer `--json` output where available to avoid brittle text parsing.
+
+### Reproducibility & safety
+
+- `cbt` prints a "Reproduce manually:" block with exact commands when failures occur — copy those commands to reproduce locally.
+- Avoid `cbt clean` in automation unless explicitly intended; it requires confirmations to prevent accidental deletion.
+- `cbt configure` is the only command that writes the config file; other commands will refuse to guess missing settings.
+
+### Examples — one-liners agents should memorize
+
+Configure and build (idempotent):
+
+```
+cbt doctor --json
+cbt configure --profile codex --build-type Debug
+cbt build --jobs 16
 ```
 
-### Build root resolution (platform defaults)
-- Linux: `$HOME/cory-work`
-- Windows: `<repo>/build`
-- CLI option `--build-root` allowed on `configure` only (and stored in config).
+Run a single test by regex (builds tests if required):
 
-Build directory convention:
-- Linux: `<build_root>/<profile>` (e.g. `~/cory-work/codex`)
-- Windows: `<repo>/build/<profile>` (e.g. `C:\repo\Cory\build\codex`)
-
-### Persistent config (build-dir local)
-Store a config file in `<build_dir>/.cbt/config.toml`:
-```toml
-[cbt]
-profile = "codex"
-build_type = "Debug"
-last_used_utc = "<iso8601>"
-
-[paths]
-source_dir = "/path/to/repo"
-build_dir = "/path/to/build_root/codex"
-build_root = "/path/to/build_root"
-venv_dir = "/path/to/build_root/.venv"
-
-[conan]
-profile_host = "codex-clang"
-profile_build = "default"
-build_missing = true
-
-[cmake]
-generator = "Ninja"
-toolchain_file = "/path/to/build_root/codex/conan_toolchain.cmake"
-export_compile_commands = true
-defines = { "CMAKE_EXPORT_COMPILE_COMMANDS" = "ON" }
-
-[tools]
-cmake = "/path/to/venv/bin/cmake"
-conan = "/path/to/venv/bin/conan"
-ninja = "/usr/bin/ninja"
-cc = "/usr/bin/clang"
-cxx = "/usr/bin/clang++"
-clang_tidy = "/usr/bin/clang-tidy"
-clang_format = "/usr/bin/clang-format"
-ctest = "/path/to/venv/bin/ctest"
-
-[vulkan]
-# Optional “escape hatch” if CMake can't find Vulkan/Slang without hints.
-sdk = "/home/user/VulkanSDK/<version>/x86_64"
-cmake_hints = { "Vulkan_INCLUDE_DIR" = "/home/user/VulkanSDK/<version>/x86_64/include",
-                "Vulkan_LIBRARY" = "/home/user/VulkanSDK/<version>/x86_64/lib/libvulkan.so" }
+```
+cbt test "unittests\\..*SlangCompiler.*"
 ```
 
-Rules:
-- Only `configure` writes this file.
-- All other commands require this file and refuse to guess build settings.
-- For agent ergonomics, commands may accept `--profile` and locate `<build_root>/<profile>/.cbt/config.toml` (or print a “run configure” error if missing).
+Format and lint changed files:
 
-Optional convenience:
-- Store “last used profile” in `<build_root>/.cbt/last_profile` so `cbt build` can work without arguments after the first successful configure.
-- Store “last used build dir” in `<build_root>/.cbt/last_build_dir` so `cbt status` can work without arguments.
+```
+cbt fmt
+cbt lint
+```
+
+Get the environment required to reproduce a run (useful for launching debuggers or external runners):
+
+```
+cbt env --profile codex
+```
 
 ### Conan + CMake usage (canonical)
 Conan:
@@ -208,31 +187,26 @@ How to handle non-standard SDK installs without `cbt` special-casing:
 - “System packages only” (Ubuntu `libvulkan-dev`, `glslang-tools`, etc.).
 - Or “Vulkan SDK present, but not discoverable” → show `cbt configure --vulkan-sdk ...`.
 
-### Virtual env handling
-- Venv is created in `<build_root>/.venv` (Linux) or `<repo>/build/.venv` (Windows) and shared across profiles.
-- `configure` ensures venv exists and installs `conan`, `cmake`, `ninja` (and optionally `click`, `toml`) if needed.
-- Commands use the venv’s python/conan without activation:
-  - `<venv>/bin/conan` or `<venv>\Scripts\conan.exe`
+### Platform differences (what matters to agents)
 
-### CLI structure (Click)
-Commands:
-- `cbt configure`
-- `cbt reconfigure`
-- `cbt build`
-- `cbt run <target>`
-- `cbt targets`
-- `cbt tests`
-- `cbt test`
-- `cbt compile <sources...>`
-- `cbt analyze <sources...>`
-- `cbt fmt [paths...]`
-- `cbt lint [paths...]`
-- `cbt clean`
-- `cbt cache`
-- `cbt doctor`
-- `cbt status`
-- `cbt which`
-- `cbt env`
+- Invocation scripts: the repo includes `cbt` (POSIX shell) and `cbt.ps1` (PowerShell) launchers. Use whatever matches the host environment.
+- Venv location differs by platform (see "Build-root & venv"), so absolute paths to the venv should come from `cbt status` / `.cbt/config.toml` rather than being guessed.
+- On Windows, MSVC availability and the developer command-prompt are relevant; `cbt doctor` will flag missing MSVC components.
+- On Linux (and WSL) prefer placing build roots on a native filesystem (`~/cory-work`) for performance; the documentation encourages this.
+
+Agents do not need to know internal implementation details — prefer these high-level invariants when scripting or making decisions.
+
+### Troubleshooting tips for agents
+
+- If `cbt doctor` reports missing `conan`/`cmake`/`ninja`, run `cbt setup` (or `cbt configure`) to create/install into the build-root venv.
+- If a target or test cannot be found, confirm the correct profile/build-dir with `cbt status` and that `cmake` configure completed successfully.
+- For Vulkan-related failures, prefer `cbt configure --vulkan-sdk <path>` or set `VULKAN_SDK` in the environment used for invocations; `cbt doctor` will explain which option to use.
+
+---
+
+This document augments the command reference by providing an explicit, agent-oriented workflow and the practical
+platform differences you need to script `cbt` reliably. For the implementation-level design and API sketches, keep
+the original sections below as a reference.
 
 #### `cbt configure` (one-time setup)
 Responsibilities:

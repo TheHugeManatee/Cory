@@ -140,6 +140,10 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
         .height = gsl::narrow<uint32_t>(res.info.size.y),
         .depth = gsl::narrow<uint32_t>(res.info.size.z),
     };
+    const auto textureType = res.info.textureType;
+    const auto viewType = textureType == Gpu::TextureType::TextureType3D
+                              ? Gpu::ViewType::ViewType3D
+                              : Gpu::ViewType::ViewType2D;
 
     const auto usage = res.info.usage;
 
@@ -147,7 +151,7 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
     res.image = resources.createTexture(
         deviceHandle,
         Gpu::TextureOptions{.label = fmt::format("{} (IMG)", res.info.name),
-                            .type = Gpu::TextureType::TextureType2D,
+                            .type = textureType,
                             .format = res.info.format,
                             .extent = extent,
                             .mipLevels = 1,
@@ -167,7 +171,7 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
         deviceHandle,
         res.image,
         Gpu::TextureViewOptions{.label = fmt::format("{} (VIEW)", res.info.name),
-                                .viewType = Gpu::ViewType::ViewType2D,
+                                .viewType = viewType,
                                 .format = res.info.format,
                                 .range = {},
                                 .yCbCrConversion = {}});

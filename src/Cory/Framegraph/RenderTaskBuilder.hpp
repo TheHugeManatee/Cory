@@ -71,11 +71,13 @@ class RenderTaskBuilder : NoCopy {
     RenderTaskBuilder(RenderTaskBuilder &&) = default;
 
     /// declare that a render pass creates a certain texture
-    [[nodiscard]] TransientTextureHandle create(std::string name,
-                                                glm::u32vec3 size,
-                                                Gpu::Format format,
-                                                Gpu::TextureUsageFlags usage,
-                                                Sync::AccessType writeAccess);
+    [[nodiscard]] TransientTextureHandle
+    create(std::string name,
+           glm::u32vec3 size,
+           Gpu::Format format,
+           Gpu::TextureUsageFlags usage,
+           Sync::AccessType writeAccess,
+           Gpu::TextureType textureType = Gpu::TextureType::TextureType2D);
 
     /// declare that a render pass creates a certain buffer
     [[nodiscard]] TransientBufferHandle

@@ -27,6 +27,14 @@ struct alignas(16) InstanceData {
 static_assert(std::is_trivially_copyable_v<InstanceData>);
 static_assert(sizeof(InstanceData) == 3 * sizeof(glm::mat4) + 2 * sizeof(glm::vec4));
 
+struct alignas(16) VolumeGenerationParams {
+    glm::vec3 volumeSpacing{1.0f};
+    float densityScale{1.0f};
+    glm::uvec3 volumeDimensions{64u, 64u, 64u};
+    float time{0.0f};
+};
+static_assert(std::is_trivially_copyable_v<VolumeGenerationParams>);
+
 /**
  * @brief VolumeRenderSystem - renders volume components as raymarched cubes
  *
@@ -58,7 +66,11 @@ class VolumeRenderSystem
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     cubeRaycastTask(Cory::RenderTaskBuilder builder,
                     Cory::TransientTextureHandle colorTarget,
-                    Cory::TransientTextureHandle depthTarget);
+                    Cory::TransientTextureHandle depthTarget,
+                    Cory::TransientTextureHandle volumeTarget);
+
+    Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
+    volumeGenerationTask(Cory::RenderTaskBuilder builder);
 
   private:
     std::vector<InstanceData> renderState_;
@@ -69,4 +81,9 @@ class VolumeRenderSystem
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     Cory::ShaderHandle raycastShader_;
+    Cory::ShaderHandle createVolumeShader_;
+    VolumeGenerationParams volumeParams_{.volumeSpacing = glm::vec3{1.0f},
+                                         .densityScale = 1.0f,
+                                         .volumeDimensions = glm::uvec3{64u, 64u, 64u},
+                                         .time = 0.0f};
 };

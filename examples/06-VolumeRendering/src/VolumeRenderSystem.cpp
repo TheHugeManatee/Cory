@@ -13,6 +13,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
 #include <cstddef>
@@ -46,6 +47,8 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
     fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
     raycastShader_ =
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("raycast_boxes.comp.slang"));
+    createVolumeShader_ =
+        ctx.shaders().createShader(Cory::ResourceLocator::Locate("create_volume.comp.slang"));
 }
 
 VolumeRenderSystem::~VolumeRenderSystem()
@@ -55,6 +58,7 @@ VolumeRenderSystem::~VolumeRenderSystem()
         shaders.release(vertexShader_);
         shaders.release(fragmentShader_);
         shaders.release(raycastShader_);
+        shaders.release(createVolumeShader_);
     }
 }
 
@@ -72,6 +76,8 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
                                 const VolumeComponent &volume,
                                 const Cory::Components::Transform &transform)
 {
+    volumeParams_.time = static_cast<float>(tick.now.time_since_epoch().count());
+
     renderState_.push_back({
         .modelToWorld = transform.modelToWorld * glm::scale(volume.size),
         .worldToModel = inverse(transform.modelToWorld * glm::scale(volume.size)),
@@ -160,10 +166,62 @@ VolumeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
 }
 
 Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
+VolumeRenderSystem::volumeGenerationTask(Cory::RenderTaskBuilder builder)
+{
+    auto volumeHandle = builder.create("TEX_VolumeData",
+                                       volumeParams_.volumeDimensions,
+                                       Gpu::Format::R32_SFLOAT,
+                                       Gpu::TextureUsageFlagBits::StorageBit |
+                                           Gpu::TextureUsageFlagBits::SampledBit,
+                                       Cory::Sync::AccessType::ComputeShaderWrite,
+                                       Gpu::TextureType::TextureType3D);
+
+    auto volumePass = builder.declareComputePass(Cory::ComputePassDeclaration{
+        .name = "PASS_VolumeGeneration",
+        .shader = createVolumeShader_,
+    });
+
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration(volumeHandle);
+
+    auto recorder = volumePass.begin(renderApi);
+    const auto &shader = renderApi.ctx->shaders()[createVolumeShader_];
+    if (!shader.valid()) {
+        CO_CORE_ERROR("Invalid volume generation shader in VolumeRenderSystem: {}", shader.error());
+        volumePass.end(std::move(recorder));
+        co_return;
+    }
+
+    recorder.bindShader(shader.shaderHandle());
+    renderApi.bindingContext->bindStorageImage3D(volumeHandle, Gpu::TextureLayout::General);
+
+    volumeParams_.time = float(renderApi.frameCtx->frameNumber) / 60.0f; // TODO where's my time at
+    auto params = renderApi.bindingContext->alloc<VolumeGenerationParams>();
+    *params.cpu = volumeParams_;
+    renderApi.bindingContext->push(params.gpu);
+    renderApi.bindingContext->flush();
+
+    const glm::uvec3 dims = volumeParams_.volumeDimensions;
+    constexpr uint32_t kGroupSizeX = 16u;
+    constexpr uint32_t kGroupSizeY = 16u;
+    const uint32_t groupsX = (dims.x + kGroupSizeX - 1u) / kGroupSizeX;
+    const uint32_t groupsY = (dims.y + kGroupSizeY - 1u) / kGroupSizeY;
+    const uint32_t groupsZ = dims.z;
+
+    recorder.dispatchCompute({groupsX, groupsY, groupsZ});
+    volumePass.end(std::move(recorder));
+    co_return;
+}
+
+Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
 VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle colorTarget,
-                                    Cory::TransientTextureHandle depthTarget)
+                                    Cory::TransientTextureHandle depthTarget,
+                                    Cory::TransientTextureHandle volumeTarget)
 {
+    builder.read(volumeTarget,
+                 Gpu::TextureUsageFlagBits::SampledBit,
+                 Cory::Sync::AccessType::ComputeShaderReadOther);
+
     auto [colorHandle, colorInfo] = builder.readWrite(
         colorTarget,
         Gpu::TextureUsageFlagBits::ColorAttachmentBit | Gpu::TextureUsageFlagBits::StorageBit,
@@ -185,7 +243,7 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     glm::mat4 invViewProjection = glm::inverse(viewProjection);
 
     auto raycastRecorder = raycastPass.begin(renderApi);
-    const auto& shader = renderApi.ctx->shaders()[raycastShader];
+    const auto &shader = renderApi.ctx->shaders()[raycastShader];
     if (!shader.valid()) {
         CO_CORE_ERROR("Invalid raycast shader in VolumeRenderSystem: {}", shader.error());
         raycastPass.end(std::move(raycastRecorder));

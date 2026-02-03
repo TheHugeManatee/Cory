@@ -36,6 +36,9 @@ Gpu::TextureAspectFlags flagsForFormat(TextureFormat format)
     case Format::D32_SFLOAT_S8_UINT:
     case Format::D16_UNORM_S8_UINT:
         return TextureAspectFlagBits::DepthBit | TextureAspectFlagBits::StencilBit;
+    case Format::R32_SFLOAT:
+    case Format::R16_SFLOAT:
+        return TextureAspectFlagBits::ColorBit;
     default:
         throw std::runtime_error(fmt::format("flagsForFormat: Unsupported format {}",
                                              vk::to_string(static_cast<vk::Format>(format))));

@@ -46,9 +46,14 @@ TransientTextureHandle RenderTaskBuilder::create(std::string name,
                                                  glm::u32vec3 size,
                                                  TextureFormat format,
                                                  Gpu::TextureUsageFlags usage,
-                                                 Sync::AccessType writeAccess)
+                                                 Sync::AccessType writeAccess,
+                                                 Gpu::TextureType textureType)
 {
-    const TextureInfo info{.name = std::move(name), .size = size, .format = format};
+    const TextureInfo info{.name = std::move(name),
+                           .size = size,
+                           .format = format,
+                           .usage = usage,
+                           .textureType = textureType};
 
     auto handle = TransientTextureHandle{framegraph_.resources().declareTexture(info)};
 

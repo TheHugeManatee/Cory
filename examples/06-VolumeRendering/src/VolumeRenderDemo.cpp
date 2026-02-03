@@ -231,8 +231,14 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
     auto mainPass = volumeRenderer_->cubeRenderTask(
         framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
 
-    auto mainRaycast = volumeRenderer_->cubeRaycastTask(
-        framegraph.declareTask("TASK_VolumeRaycast"), mainPass.output().colorOut, frameHandles.depthImage);
+    auto volumeGeneration =
+        volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
+
+    auto mainRaycast =
+        volumeRenderer_->cubeRaycastTask(framegraph.declareTask("TASK_VolumeRaycast"),
+                                         mainPass.output().colorOut,
+                                         frameHandles.depthImage,
+                                         volumeGeneration.output());
 
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainRaycast.output(), .depth = mainPass.output().depthOut});

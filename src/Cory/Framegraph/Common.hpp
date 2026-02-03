@@ -57,6 +57,7 @@ struct TextureInfo {
     Gpu::Format format;
     Gpu::TextureUsageFlags usage{};
     Gpu::SampleCountFlagBits sampleCount{Gpu::SampleCountFlagBits::Samples1Bit};
+    Gpu::TextureType textureType{Gpu::TextureType::TextureType2D};
 };
 
 struct TextureState {

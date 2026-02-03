@@ -50,6 +50,10 @@ class ShaderBindingContext : NoCopy, NoMove {
 
     [[nodiscard]] TextureHeapIndex bindStorageImage2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
     [[nodiscard]] TextureHeapIndex bindStorageImage2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage2DMS(TransientTextureHandle textureHandle,
+                                                        Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage2DMS(Gpu::TextureViewHandle view,
+                                                        Gpu::TextureLayout layout);
 
     [[nodiscard]] TextureHeapIndex bindStorageImage3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
     [[nodiscard]] TextureHeapIndex bindStorageImage3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
@@ -111,6 +115,7 @@ class ShaderBindingContext : NoCopy, NoMove {
     TextureHeapIndex nextTexture3DIndex_{0};
     TextureHeapIndex nextStorageImage2DIndex_{0};
     TextureHeapIndex nextStorageImage3DIndex_{0};
+    TextureHeapIndex nextStorageImage2DMSIndex_{0};
     SamplerHeapIndex nextSamplerIndex_{0};
 };
 } // namespace Cory

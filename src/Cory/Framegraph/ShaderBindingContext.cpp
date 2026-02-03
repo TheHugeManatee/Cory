@@ -99,6 +99,23 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage2D(Gpu::TextureViewHandle
     return bindTexture(ImageBindPoint::StorageImage2D, view, layout, {});
 }
 
+TextureHeapIndex ShaderBindingContext::bindStorageImage2DMS(TransientTextureHandle textureHandle,
+                                                           Gpu::TextureLayout layout)
+{
+    CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
+    return bindTexture(
+        ImageBindPoint::StorageImage2DMS, resources_->imageView(textureHandle), layout, {});
+}
+
+TextureHeapIndex ShaderBindingContext::bindStorageImage2DMS(Gpu::TextureViewHandle view,
+                                                           Gpu::TextureLayout layout)
+{
+    CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
+    isDirty_ = true;
+    return bindTexture(ImageBindPoint::StorageImage2DMS, view, layout, {});
+}
+
 TextureHeapIndex ShaderBindingContext::bindStorageImage3D(TransientTextureHandle textureHandle,
                                                           Gpu::TextureLayout layout)
 {
@@ -204,6 +221,8 @@ TextureHeapIndex &ShaderBindingContext::nextTextureIndex(ImageBindPoint bindPoin
         return nextStorageImage2DIndex_;
     case ImageBindPoint::StorageImage3D:
         return nextStorageImage3DIndex_;
+    case ImageBindPoint::StorageImage2DMS:
+        return nextStorageImage2DMSIndex_;
     case ImageBindPoint::Samplers:
         CO_CORE_ASSERT(false, "Sampler bindings should use bindSampler");
     }
@@ -229,6 +248,7 @@ void ShaderBindingContext::reset()
     nextTexture3DIndex_ = 0;
     nextStorageImage2DIndex_ = 0;
     nextStorageImage3DIndex_ = 0;
+    nextStorageImage2DMSIndex_ = 0;
     nextSamplerIndex_ = 0;
 }
 

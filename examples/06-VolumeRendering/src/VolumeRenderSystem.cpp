@@ -192,7 +192,12 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
         co_return;
     }
     raycastRecorder.bindShader(shader.shaderHandle());
-    renderApi.bindingContext->bindStorageImage2D(colorHandle, Gpu::TextureLayout::General);
+    if (colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit) {
+        renderApi.bindingContext->bindStorageImage2D(colorHandle, Gpu::TextureLayout::General);
+    }
+    else {
+        renderApi.bindingContext->bindStorageImage2DMS(colorHandle, Gpu::TextureLayout::General);
+    }
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();

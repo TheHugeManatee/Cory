@@ -16,16 +16,17 @@ enum class DescriptorSetType : uint32_t {
 
 struct ImageBindPoint {
     uint32_t value;
-    ImageBindPoint(uint32_t v)
-        : value(v)
-    {
-    }
+        ImageBindPoint(uint32_t v)
+            : value(v)
+        {
+        }
     constexpr operator uint32_t() const noexcept { return value; }
     enum Type : uint32_t {
         Texture2D = 0,
         Texture3D = 1,
         StorageImage2D = 2,
         StorageImage3D = 3,
+        StorageImage2DMS = 5,
         Samplers = 4,
     };
 };

@@ -83,6 +83,9 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
                     makeBinding(ImageBindPoint::StorageImage3D,
                                 gsl::narrow_cast<uint32_t>(MAX_IMAGES),
                                 Gpu::ResourceBindingType::StorageImage),
+                    makeBinding(ImageBindPoint::StorageImage2DMS,
+                                gsl::narrow_cast<uint32_t>(MAX_IMAGES),
+                                Gpu::ResourceBindingType::StorageImage),
                 },
             .flags = bindGroupLayoutFlags,
         });
@@ -100,7 +103,7 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
         .textureSamplerCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
         .textureCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
         .samplerCount = gsl::narrow<uint16_t>(MAX_SAMPLERS),
-        .imageCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
+        .imageCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT * 2), // 2D + 2DMS
         .inputAttachmentCount = 0,
         .accelerationStructureCount = 0,
         .maxBindGroupCount = gsl::narrow<uint16_t>(MAX_FRAMES_IN_FLIGHT *
@@ -152,7 +155,8 @@ DescriptorSets &DescriptorSets::write(ImageBindPoint bindPoint,
     auto &writes = data_->pendingWrites[DescriptorSetType::BindlessTextures][instanceIndex];
 
     const bool isStorageImage =
-        bindPoint == ImageBindPoint::StorageImage2D || bindPoint == ImageBindPoint::StorageImage3D;
+        bindPoint == ImageBindPoint::StorageImage2D || bindPoint == ImageBindPoint::StorageImage3D ||
+        bindPoint == ImageBindPoint::StorageImage2DMS;
     if (isStorageImage) {
         writes.emplace_back(Gpu::BindGroupEntry{
             .binding = bindPoint,

@@ -786,6 +786,71 @@ def run_target(
         os.chdir(working_dir)
     run_mod.run_target(exe, list(args), env, ctx.quiet)
 
+@cli.command(short_help="Compile a shader using slangc")
+@click.argument("shader", type=click.Path(path_type=Path))
+@click.option("--out", "out", "-o", type=click.Path(path_type=Path), default=None, help="Output .spv path; if omitted output is discarded")
+@click.option("--entry", default="main", help="Entry point name")
+@click.pass_obj
+def slang(ctx: CliContext, shader: Path, out: Path | None, entry: str) -> None:
+    """Compile a Slang shader file to SPIR-V using slangc.
+
+    The stage is inferred from the filename suffix (e.g. .comp.slang -> compute).
+    The include path <repo_root>/data/shaders is always added.
+    """
+    name = shader.name.lower()
+    stage: str | None = None
+    if name.endswith(".comp.slang"):
+        stage = "compute"
+    elif name.endswith(".vert.slang"):
+        stage = "vertex"
+    elif name.endswith(".frag.slang"):
+        stage = "fragment"
+    elif name.endswith(".geom.slang"):
+        stage = "geometry"
+    elif name.endswith(".tesc.slang"):
+        stage = "tesscontrol"
+    elif name.endswith(".tese.slang"):
+        stage = "tesseval"
+
+    if not stage:
+        raise ConfigError(f"Unknown shader stage for: {shader}")
+
+    include_dir = str(repo_root() / "data" / "shaders")
+    cmd = [
+        "slangc",
+        str(shader),
+        "-target",
+        "spirv",
+        "-entry",
+        entry,
+        "-stage",
+        stage,
+        "-I",
+        include_dir,
+    ]
+
+    # Run slangc capturing binary output and write to a .spv file to avoid
+    # text-decoding binary SPIR-V which can raise UnicodeDecodeError.
+    try:
+        proc = subprocess.run(cmd, cwd=repo_root(), capture_output=True, check=True)
+    except subprocess.CalledProcessError as e:
+        stderr_text = e.stderr.decode(errors="replace") if e.stderr else ""
+        sys.stderr.write(stderr_text)
+        raise ToolError("slangc failed") from e
+
+    out_bytes = proc.stdout or b""
+    if out:
+        out_path = Path(out)
+        ensure_dir(out_path.parent)
+        with open(out_path, "wb") as f:
+            f.write(out_bytes)
+        if not ctx.quiet:
+            sys.stdout.write(f"Wrote SPIR-V: {out_path}\n")
+    else:
+        # Output intentionally discarded; subprocess exit code was checked above.
+        if not ctx.quiet:
+            sys.stdout.write("slangc succeeded (output discarded)\n")
+
 
 @cli.command(name="targets", short_help="List available build targets")
 @click.option("--profile")

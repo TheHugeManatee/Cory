@@ -11,6 +11,7 @@
 #include <Cory/Systems/CommonComponents.hpp>
 
 #include <KDGpu/buffer.h>
+#include <KDGpu/sampler.h>
 
 #include <cstdint>
 #include <type_traits>
@@ -82,6 +83,7 @@ class VolumeRenderSystem
     Cory::ShaderHandle fragmentShader_;
     Cory::ShaderHandle raycastShader_;
     Cory::ShaderHandle createVolumeShader_;
+    Gpu::Sampler volumeSampler_;
     VolumeGenerationParams volumeParams_{.volumeSpacing = glm::vec3{1.0f},
                                          .densityScale = 1.0f,
                                          .volumeDimensions = glm::uvec3{64u, 64u, 64u},

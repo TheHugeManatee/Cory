@@ -134,7 +134,7 @@ void VolumeRenderDemoApplication::setupSystems()
     // Rotate all transforms slowly around the Y axis to introduce some motion
     systems_.emplace<Cory::CallbackSystem<Cory::Components::Transform>>(
         [](Cory::SceneGraph &, Cory::TickInfo tick, Cory::Entity, Cory::Components::Transform &t) {
-            t.rotation += glm::vec3{0.0f, 1.0f * tick.delta.count(), 0.0f};
+            t.rotation += glm::vec3{0.0f, 0.1f * tick.delta.count(), 0.0f};
         });
 
     // after the "logic" has updated, sync all the transforms of the scenegraph

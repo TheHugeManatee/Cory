@@ -16,17 +16,68 @@ struct RaycastGlobals
     float4 cameraPosition;
     uint2 imageSize;
     uint instanceCount;
+    uint volumeTextureIndex;
     uint padding0;
     Ptr<InstanceData, Access::Read> instances;
 };
 
 [[vk::push_constant]] RaycastGlobals *globals;
 
+[[vk::binding(1, 1)]] Sampler3D<float> gVolumeTextures[];
 [[vk::binding(5, 1)]] RWTexture2DMS<float4> gColor;
 
 static const float3 boxMin = float3(-0.5, -0.5, -0.5);
 static const float3 boxMax = float3(0.5, 0.5, 0.5);
-static const bool kUseCsgDemo = true;
+static const uint kMaxRaymarchSteps = 96u;
+static const float kTransmittanceCutoff = 0.98f;
+static const float kDensityScale = 1.0f;
+
+float4 raymarchVolume(float3 localOrigin, float3 localDirection, InstanceData instance)
+{
+    let box = AABB(boxMin, boxMax);
+    let localRay = Ray(localOrigin, localDirection);
+    let hitInfo = intersect(localRay, box);
+    if (!hitInfo.hit) {
+        return float4(0.0f);
+    }
+
+    let tStart = max(hitInfo.tEnter, 0.0f);
+    let tEnd = hitInfo.tExit;
+    if (tEnd <= tStart) {
+        return float4(0.0f);
+    }
+
+    let segmentLength = tEnd - tStart;
+    let stepSize = segmentLength / float(kMaxRaymarchSteps);
+    var accumColor = float3(0.0f);
+    var accumAlpha = 0.0f;
+
+    [loop]
+    for (uint step = 0u; step < kMaxRaymarchSteps; ++step) {
+        let t = tStart + (float(step) + 0.5f) * stepSize;
+        if (t > tEnd) {
+            break;
+        }
+
+        let localPos = localOrigin + localDirection * t;
+        let uvw = localPos + 0.5f;
+        let density = gVolumeTextures[globals->volumeTextureIndex].SampleLevel(uvw, 0.0f).r;
+        if (density <= 0.0f) {
+            continue;
+        }
+
+        let opacity = saturate(1.0f - exp(-density * kDensityScale * stepSize));
+        let sampleColor = float3(density, density, density);//instance.color.rgb * density;
+
+        accumColor += (1.0f - accumAlpha) * opacity * sampleColor;
+        accumAlpha += (1.0f - accumAlpha) * opacity;
+        if (accumAlpha >= kTransmittanceCutoff) {
+            break;
+        }
+    }
+
+    return float4(accumColor, accumAlpha);
+}
 
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -55,32 +106,28 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         worldPos /= worldPos.w;
 
         let rayDirection = normalize(worldPos.xyz - rayOrigin);
-        var hit = false;
+        var volumeColor = float4(0.0f);
 
         [loop]
         for (uint i = 0u; i < globals->instanceCount; ++i) {
             let instance = globals->instances[i];
             let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
             let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
-            let localRay = Ray(localOrigin, localDirection);
-
-            let box = AABB(boxMin, boxMax);
-            var hitInfo = intersect(localRay, box);
-
-            if (kUseCsgDemo) {
-                let sphere = Sphere(float3(0.0, 0.0, 0.0), 0.55);
-                let csgIntervals = csgSubtract(evalIntervals(box, localRay), evalIntervals(sphere, localRay));
-                hitInfo = closestHit(csgIntervals, localRay);
-            }
-
-            if (hitInfo.hit) {
-                hit = true;
-                break;
+            let instanceVolume = raymarchVolume(localOrigin, localDirection, instance);
+            if (instanceVolume.a > 0.0f) {
+                volumeColor.rgb += (1.0f - volumeColor.a) * instanceVolume.rgb;
+                volumeColor.a += (1.0f - volumeColor.a) * instanceVolume.a;
+                if (volumeColor.a >= kTransmittanceCutoff) {
+                    break;
+                }
             }
         }
 
-        if (hit) {
-            gColor[coords, sample] = float4(1.0f, 0.0f, 0.0f, 1.0f);
+        if (volumeColor.a > 0.0f) {
+            let dst = gColor[coords, sample];
+            let outColor = float4(volumeColor.rgb + (1.0f - volumeColor.a) * dst.rgb,
+                                  volumeColor.a + (1.0f - volumeColor.a) * dst.a);
+            gColor[coords, sample] = outColor;
         }
     }
 }

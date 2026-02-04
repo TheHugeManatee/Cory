@@ -23,10 +23,32 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     float3 volumeSize = float3(globals->volumeDimensions) * globals->volumeSpacing;
     voxelPos -= volumeSize * 0.5f;
 
-    // Deform the spherical density volume over time
-    voxelPos += 0.1f * sin(globals->time + voxelPos.yzx * 3.0f);
+    voxelPos /= 10.0f;
 
-    float density = exp(-length(voxelPos) * globals->densityScale);
+    // Add animated deformations
+    voxelPos += 0.15f * sin(globals->time + voxelPos.x * 2.0f) * float3(1, 0.5, 0.5);
+    voxelPos += 0.1f * cos(globals->time * 0.7f + voxelPos.y * 3.0f) * float3(0.5, 1, 0.5);
+    voxelPos += 0.12f * sin(globals->time * 0.5f + voxelPos.z * 2.5f) * float3(0.5, 0.5, 1);
+
+    // Create a more complex density field with multiple features
+    float distFromCenter = length(voxelPos);
+    
+    // Primary density shell
+    float mainShell = exp(-(distFromCenter - 1.5f) * (distFromCenter - 1.5f) * 2.0f);
+    
+    // Add internal turbulent features
+    float turbulence = abs(sin(voxelPos.x * 5.0f + globals->time)) * 
+                      abs(sin(voxelPos.y * 4.0f + globals->time * 0.8f)) *
+                      abs(sin(voxelPos.z * 3.0f + globals->time * 0.6f));
+    
+    // Radial oscillations for dynamic movement
+    float radialOscillation = 0.5f + 0.5f * sin(distFromCenter * 3.0f - globals->time);
+    
+    // Combine the features
+    float density = (mainShell + turbulence * 0.3f) * radialOscillation;
+    density = exp(-density * globals->densityScale);
+    density = (density - 0.3f) * (density - 0.3f);
+    
     volume[dispatchThreadId] = density;
 }
 

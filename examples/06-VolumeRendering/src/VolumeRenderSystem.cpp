@@ -2,6 +2,7 @@
 
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
@@ -9,6 +10,7 @@
 #include <Cory/Renderer/Synchronization.hpp>
 
 #include <KDGpu/gpu_core.h>
+#include <KDGpu/sampler_options.h>
 
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtx/transform.hpp>
@@ -32,6 +34,7 @@ struct RaycastGlobals {
     glm::vec4 cameraPosition;
     glm::uvec2 imageSize;
     uint32_t instanceCount;
+    uint32_t volumeTextureIndex;
     uint32_t padding0;
     Cory::BufferDeviceAddress instances;
 };
@@ -49,6 +52,15 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("raycast_boxes.comp.slang"));
     createVolumeShader_ =
         ctx.shaders().createShader(Cory::ResourceLocator::Locate("create_volume.comp.slang"));
+    volumeSampler_ = ctx.device().createSampler(Gpu::SamplerOptions{
+        .label = "VolumeRenderSystem volume sampler",
+        .magFilter = Gpu::FilterMode::Linear,
+        .minFilter = Gpu::FilterMode::Linear,
+        .mipmapFilter = Gpu::MipmapFilterMode::Linear,
+        .u = Gpu::AddressMode::ClampToEdge,
+        .v = Gpu::AddressMode::ClampToEdge,
+        .w = Gpu::AddressMode::ClampToEdge,
+    });
 }
 
 VolumeRenderSystem::~VolumeRenderSystem()
@@ -256,6 +268,10 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     else {
         renderApi.bindingContext->bindStorageImage2DMS(colorHandle, Gpu::TextureLayout::General);
     }
+    const auto volumeLayout = static_cast<Gpu::TextureLayout>(
+        Cory::Sync::GetVkImageLayout(renderApi.resources->state(volumeTarget).lastAccess));
+    const auto volumeTextureIndex =
+        renderApi.bindingContext->bindTexture3D(volumeTarget, volumeLayout, volumeSampler_.handle());
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
@@ -263,6 +279,7 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
     drawData->imageSize = colorInfo.size;
     drawData->instanceCount = instanceCount;
+    drawData->volumeTextureIndex = volumeTextureIndex;
     drawData->padding0 = 0;
 
     if (instanceCount > 0) {

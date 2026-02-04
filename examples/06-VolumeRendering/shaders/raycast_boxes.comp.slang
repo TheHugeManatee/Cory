@@ -26,6 +26,7 @@ struct RaycastGlobals
 
 static const float3 boxMin = float3(-0.5, -0.5, -0.5);
 static const float3 boxMax = float3(0.5, 0.5, 0.5);
+static const bool kUseCsgDemo = true;
 
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
@@ -39,28 +40,40 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         return;
     }
 
-    int2 coords = int2(dispatchThreadId.xy);
-    float2 resolution = float2(imageWidth, imageHeight);
-    float3 rayOrigin = globals->cameraPosition.xyz;
+    let coords = int2(dispatchThreadId.xy);
+    let resolution = float2(imageWidth, imageHeight);
+    let rayOrigin = globals->cameraPosition.xyz;
 
     [loop]
     for (uint sample = 0; sample < sampleCount; ++sample) {
-        float2 samplePosition = getMsaaSamplePosition(sampleCount, sample);
-        float2 pixel = float2(coords) + samplePosition;
-        float2 ndc = pixel / resolution * 2.0f - 1.0f;
+        let samplePosition = getMsaaSamplePosition(sampleCount, sample);
+        let pixel = float2(coords) + samplePosition;
+        let ndc = pixel / resolution * 2.0f - 1.0f;
 
-        float4 clip = float4(ndc, 1.0f, 1.0f);
-        float4 worldPos = mul(globals->invViewProjection, clip);
+        let clip = float4(ndc, 1.0f, 1.0f);
+        var worldPos = mul(globals->invViewProjection, clip);
         worldPos /= worldPos.w;
 
-        float3 rayDirection = normalize(worldPos.xyz - rayOrigin);
-        bool hit = false;
-        for (uint i = 0u; i < globals->instanceCount; ++i) {
-            InstanceData instance = globals->instances[i];
-            float3 localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
-            float3 localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
+        let rayDirection = normalize(worldPos.xyz - rayOrigin);
+        var hit = false;
 
-            if (intersectsBox(localOrigin, localDirection, boxMin, boxMax)) {
+        [loop]
+        for (uint i = 0u; i < globals->instanceCount; ++i) {
+            let instance = globals->instances[i];
+            let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
+            let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
+            let localRay = Ray(localOrigin, localDirection);
+
+            let box = AABB(boxMin, boxMax);
+            var hitInfo = intersect(localRay, box);
+
+            if (kUseCsgDemo) {
+                let sphere = Sphere(float3(0.0, 0.0, 0.0), 0.55);
+                let csgIntervals = csgSubtract(evalIntervals(box, localRay), evalIntervals(sphere, localRay));
+                hitInfo = closestHit(csgIntervals, localRay);
+            }
+
+            if (hitInfo.hit) {
                 hit = true;
                 break;
             }

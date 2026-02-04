@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" role="img" aria-label="Cory Build Tool icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2DD4BF"/>
+      <stop offset="100%" stop-color="#0F766E"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="400" rx="88" fill="url(#bg)"/>
+  <path d="M96 120h208v40H96zM96 184h208v40H96zM96 248h208v40H96z" fill="#ECFEFF" opacity="0.95"/>
+  <path d="M168 96h64v208h-64z" fill="#134E4A" opacity="0.35"/>
+</svg>

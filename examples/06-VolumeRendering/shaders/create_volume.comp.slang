@@ -47,7 +47,8 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     // Combine the features
     float density = (mainShell + turbulence * 0.3f) * radialOscillation;
     density = exp(-density * globals->densityScale);
-    density = (density - 0.3f) * (density - 0.3f);
+    
+    density = 1.0 - pow(density, 2.0f); // Enhance contrast
     
     volume[dispatchThreadId] = density;
 }

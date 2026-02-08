@@ -7,6 +7,7 @@
 #include <Cory/Application/ImGuiLayer.hpp>
 #include <Cory/Application/LayerStack.hpp>
 #include <Cory/Application/Window.hpp>
+#include <Cory/Base/FileWatchManager.hpp>
 #include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
@@ -20,6 +21,7 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
+#include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
@@ -170,6 +172,8 @@ void VolumeRenderDemoApplication::run()
             processEvents(0);
             glfwPollEvents();
         }
+        ctx().fileWatchManager().processPendingEvents();
+        ctx().shaders().clearDeferredReleases(frameCtx.frameNumber);
 
         // Update time
         auto previousFrameTime = std::exchange(time, Cory::AppClock::now());
@@ -247,8 +251,20 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
                                          frameHandles.depthImage,
                                          volumeGeneration.output());
 
-    auto layersOutput = layers().declareRenderTasks(
-        framegraph, {.color = mainRaycast.output(), .depth = mainPass.output().depthOut});
+    auto layersOutput = [&]() {
+        if (debugRaycast_) {
+            auto debugRaycast = volumeRenderer_->cubeRaycastDebugTask(
+                framegraph.declareTask("TASK_VolumeRaycastDebug"),
+                mainRaycast.output(),
+                frameHandles.depthImage,
+                volumeGeneration.output());
+            return layers().declareRenderTasks(
+                framegraph, {.color = debugRaycast.output(), .depth = mainPass.output().depthOut});
+        }
+
+        return layers().declareRenderTasks(
+            framegraph, {.color = mainRaycast.output(), .depth = mainPass.output().depthOut});
+    }();
 
     auto resolvedSwapchain =
         Cory::StandardRenderTasks::resolve(
@@ -272,29 +288,11 @@ void VolumeRenderDemoApplication::drawImguiControls()
         if (ImGui::Button("Restart")) {
             clock_.reset();
         }
+
+        ImGui::Checkbox("Debug Raycast", &debugRaycast_);
     }
     ImGui::End();
-
-    if (ImGui::Begin("Camera")) {
-        glm::vec3 position = cameraLayer_->position();
-        glm::vec3 center = cameraLayer_->focus();
-        glm::vec3 up = cameraLayer_->up();
-        glm::mat4 mat = glm::transpose(cameraLayer_->worldToViewMatrix());
-
-        [[maybe_unused]] const bool changed = CoImGui::Input("position", position, "%.3f") ||
-                                              CoImGui::Input("center", center, "%.3f") ||
-                                              CoImGui::Input("up", up, "%.3f");
-
-        // if (changed) { camera_.lookAt(position, center, up); }
-        if (ImGui::CollapsingHeader("View Matrix")) {
-            CoImGui::Input("Row 0", mat[0], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("Row 1", mat[1], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("Row 2", mat[2], "%.3f", ImGuiInputTextFlags_ReadOnly);
-            CoImGui::Input("Row 3", mat[3], "%.3f", ImGuiInputTextFlags_ReadOnly);
-        }
-    }
-    ImGui::End();
-
+    
     if (ImGui::Begin("Profiling")) {
         auto records = Cory::Profiler::GetRecords();
 

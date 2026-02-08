@@ -27,6 +27,7 @@ add_library(Cory_TestLib OBJECT
         FramegraphResourceManager_Test.cpp
         CoroutinePlayground.cpp
         ShaderManager_Test.cpp
+        ShaderHotReloader_Test.cpp
         TestUtils.cpp
         TestUtils.hpp
         FmtUtils_Test.cpp

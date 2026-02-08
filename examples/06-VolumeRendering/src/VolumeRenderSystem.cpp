@@ -41,17 +41,42 @@ struct RaycastGlobals {
 
 VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
     : Base()
-    , ctx_(&ctx)
 {
     // Create mesh using Cory::DynamicGeometry, as in 02-CubeDemo
     cube_ = Cory::DynamicGeometry::createCube(ctx);
 
-    vertexShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.vert.slang"));
-    fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
-    raycastShader_ =
-        ctx.shaders().createShader(Cory::ResourceLocator::Locate("raycast_boxes.comp.slang"));
-    createVolumeShader_ =
-        ctx.shaders().createShader(Cory::ResourceLocator::Locate("create_volume.comp.slang"));
+    shaderHotReloader_.initialize(ctx);
+    shaderHotReloader_.addShader({
+        .path = Cory::ResourceLocator::Locate("cube.vert.slang"),
+        .stage = Gpu::ShaderStageFlagBits::VertexBit,
+        .label = "cube.vert.slang",
+        .shaderHandle = &vertexShader_,
+    });
+    shaderHotReloader_.addShader({
+        .path = Cory::ResourceLocator::Locate("cube.frag.slang"),
+        .stage = Gpu::ShaderStageFlagBits::FragmentBit,
+        .label = "cube.frag.slang",
+        .shaderHandle = &fragmentShader_,
+    });
+    shaderHotReloader_.addShader({
+        .path = Cory::ResourceLocator::Locate("raycast_boxes.comp.slang"),
+        .stage = Gpu::ShaderStageFlagBits::ComputeBit,
+        .label = "raycast_boxes.comp.slang",
+        .shaderHandle = &raycastShader_,
+    });
+    shaderHotReloader_.addShader({
+        .path = Cory::ResourceLocator::Locate("raycast_boxes_debug.comp.slang"),
+        .stage = Gpu::ShaderStageFlagBits::ComputeBit,
+        .label = "raycast_boxes_debug.comp.slang",
+        .shaderHandle = &raycastDebugShader_,
+    });
+    shaderHotReloader_.addShader({
+        .path = Cory::ResourceLocator::Locate("create_volume.comp.slang"),
+        .stage = Gpu::ShaderStageFlagBits::ComputeBit,
+        .label = "create_volume.comp.slang",
+        .shaderHandle = &createVolumeShader_,
+    });
+
     volumeSampler_ = ctx.device().createSampler(Gpu::SamplerOptions{
         .label = "VolumeRenderSystem volume sampler",
         .magFilter = Gpu::FilterMode::Linear,
@@ -63,16 +88,7 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
     });
 }
 
-VolumeRenderSystem::~VolumeRenderSystem()
-{
-    if (ctx_) {
-        auto &shaders = ctx_->shaders();
-        shaders.release(vertexShader_);
-        shaders.release(fragmentShader_);
-        shaders.release(raycastShader_);
-        shaders.release(createVolumeShader_);
-    }
-}
+VolumeRenderSystem::~VolumeRenderSystem() {}
 
 void VolumeRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
 {
@@ -134,6 +150,8 @@ VolumeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
     Cory::RenderInput renderApi =
         co_await builder.finishDeclaration(PassOutputs{.colorOut = colorOut, .depthOut = depthOut});
     /// vvvv  RENDERING COMMANDS  vvvv
+
+    shaderHotReloader_.processPendingReloads(renderApi.frameCtx->frameNumber);
 
     auto passRecorder = cubePass.begin(renderApi);
 
@@ -296,4 +314,76 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
         raycastRecorder.dispatchCompute({groupsX, groupsY, 1});
     }
     raycastPass.end(std::move(raycastRecorder));
+}
+
+Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
+VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
+                                         Cory::TransientTextureHandle colorTarget,
+                                         Cory::TransientTextureHandle depthTarget,
+                                         Cory::TransientTextureHandle volumeTarget)
+{
+    builder.read(volumeTarget, Cory::RenderTaskBuilder::TextureReadPreset::ComputeSampled);
+
+    auto [colorHandle, colorInfo] = builder.readWrite(
+        colorTarget, Cory::RenderTaskBuilder::TextureReadWritePreset::GeneralStorage);
+
+    auto debugPass = builder.declareComputePass(Cory::ComputePassDeclaration{
+        .name = "PASS_CubeRaycastDebugLocalPos",
+        .shader = raycastDebugShader_,
+    });
+
+    auto debugShader = raycastDebugShader_;
+    Cory::RenderInput renderApi = co_await builder.finishDeclaration(colorHandle);
+
+    float aspect = static_cast<float>(colorInfo.size.x) / static_cast<float>(colorInfo.size.y);
+    glm::mat4 viewMatrix = camera_.viewMatrix;
+    glm::mat4 projectionMatrix =
+        Cory::makePerspective(camera_.fovy, aspect, camera_.nearPlane, camera_.farPlane);
+    glm::mat4 viewProjection = projectionMatrix * viewMatrix;
+    glm::mat4 invViewProjection = glm::inverse(viewProjection);
+
+    auto debugRecorder = debugPass.begin(renderApi);
+    const auto &shader = renderApi.ctx->shaders()[debugShader];
+    if (!shader.valid()) {
+        CO_CORE_ERROR("Invalid debug raycast shader in VolumeRenderSystem: {}", shader.error());
+        debugPass.end(std::move(debugRecorder));
+        co_return;
+    }
+    debugRecorder.bindShader(shader.shaderHandle());
+    if (colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit) {
+        std::ignore =
+            renderApi.bindingContext->bindStorageImage2D(colorHandle, Gpu::TextureLayout::General);
+    }
+    else {
+        std::ignore = renderApi.bindingContext->bindStorageImage2DMS(colorHandle,
+                                                                     Gpu::TextureLayout::General);
+    }
+
+    const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
+    auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
+    drawData->invViewProjection = invViewProjection;
+    drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
+    drawData->imageSize = colorInfo.size;
+    drawData->instanceCount = instanceCount;
+    drawData->volumeTextureIndex = 0;
+    drawData->padding0 = 0;
+
+    if (instanceCount > 0) {
+        auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
+        std::memcpy(alloc.cpu,
+                    renderState_.data(),
+                    static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+        drawData->instances = alloc.gpu;
+
+        renderApi.bindingContext->push(drawData.gpu);
+        renderApi.bindingContext->flush();
+
+        constexpr uint32_t kThreadGroupSizeX = 16u;
+        constexpr uint32_t kThreadGroupSizeY = 16u;
+        const uint32_t groupsX = (colorInfo.size.x + kThreadGroupSizeX - 1u) / kThreadGroupSizeX;
+        const uint32_t groupsY = (colorInfo.size.y + kThreadGroupSizeY - 1u) / kThreadGroupSizeY;
+
+        debugRecorder.dispatchCompute({groupsX, groupsY, 1});
+    }
+    debugPass.end(std::move(debugRecorder));
 }

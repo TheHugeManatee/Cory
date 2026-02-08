@@ -37,6 +37,7 @@ class VolumeRenderDemoApplication : public Cory::Application {
     Cory::SceneGraph sceneGraph_;
     Cory::SystemCoordinator systems_;
 
+    bool debugRaycast_{false};
     class VolumeRenderSystem *volumeRenderer_{nullptr};
 
     void setupSystems();

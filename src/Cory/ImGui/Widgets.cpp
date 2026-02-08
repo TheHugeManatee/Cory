@@ -23,6 +23,8 @@ void drawProfilerRecords(const std::map<std::string, Cory::Profiler::Record> &re
         ImGui::TableHeadersRow();
 
         for (auto [name, record] : records) {
+            ImGui::PushID(name.c_str());
+
             auto stats = record.stats();
             auto hist = record.history();
             ImGui::TableNextRow();
@@ -40,6 +42,8 @@ void drawProfilerRecords(const std::map<std::string, Cory::Profiler::Record> &re
                      ranges::to<std::vector>;
             ImGui::PlotLines(
                 "", h.data(), gsl::narrow<int>(h.size()), 0, nullptr, 0.0f, float(stats.max));
+
+            ImGui::PopID();
         }
         ImGui::EndTable();
     }

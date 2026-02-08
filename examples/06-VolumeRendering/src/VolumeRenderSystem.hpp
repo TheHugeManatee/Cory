@@ -7,6 +7,7 @@
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/ShaderHotReloader.hpp>
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
@@ -71,18 +72,27 @@ class VolumeRenderSystem
                     Cory::TransientTextureHandle volumeTarget);
 
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
+    cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
+                         Cory::TransientTextureHandle colorTarget,
+                         Cory::TransientTextureHandle depthTarget,
+                         Cory::TransientTextureHandle volumeTarget);
+
+    Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     volumeGenerationTask(Cory::RenderTaskBuilder builder);
 
   private:
     std::vector<InstanceData> renderState_;
     Cory::Components::CameraComponent camera_;
 
-    Cory::Context *ctx_{nullptr};
     Cory::Mesh cube_;
+
     Cory::ShaderHandle vertexShader_;
     Cory::ShaderHandle fragmentShader_;
     Cory::ShaderHandle raycastShader_;
+    Cory::ShaderHandle raycastDebugShader_;
     Cory::ShaderHandle createVolumeShader_;
+    Cory::ShaderHotReloader shaderHotReloader_;
+
     Gpu::Sampler volumeSampler_;
     VolumeGenerationParams volumeParams_{.volumeSpacing = glm::vec3{1.0f},
                                          .densityScale = 1.0f,

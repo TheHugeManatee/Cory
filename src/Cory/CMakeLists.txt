@@ -130,6 +130,8 @@ set(CORY_SOURCES
         Renderer/RadixSorter.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
+        Renderer/ShaderHotReloader.cpp
+        Renderer/ShaderHotReloader.hpp
         Renderer/ShaderManager.cpp
         Renderer/ShaderManager.hpp
         Renderer/SingleShotCommandRecorder.cpp

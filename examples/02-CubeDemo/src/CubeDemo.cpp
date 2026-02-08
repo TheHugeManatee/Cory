@@ -362,8 +362,6 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
 
-    renderApi.bindingContext->flush();
-
     // draw all instances in a single call
     passRecorder.drawIndexed(Gpu::DrawIndexedCommand{
         .indexCount = mesh_->indexCount,

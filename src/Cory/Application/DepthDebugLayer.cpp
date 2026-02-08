@@ -170,7 +170,6 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
     d->window = window.get();
     d->textureIndex = textureIndex;
     renderApi.bindingContext->push(d.gpu);
-    renderApi.bindingContext->flush();
     recorder.draw(Gpu::DrawCommand{.vertexCount = 3, .instanceCount = 1});
 
     depthDebugPass.end(std::move(recorder));

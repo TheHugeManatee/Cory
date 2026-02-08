@@ -154,6 +154,7 @@ set(CORY_SOURCES
         Systems/TransformSystem.hpp
         Renderer/SlangCompilerTools.cpp
         Renderer/SlangCompilerTools.hpp
+        Base/Prop.hpp
 )
 
 

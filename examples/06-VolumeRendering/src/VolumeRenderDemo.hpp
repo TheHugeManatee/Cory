@@ -6,6 +6,7 @@
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
+#include <Cory/Base/Prop.hpp>
 #include <Cory/Systems/SystemCoordinator.hpp>
 
 #include <memory>
@@ -17,6 +18,9 @@ class VolumeRenderDemoApplication : public Cory::Application {
     ~VolumeRenderDemoApplication() override;
 
     void run() override;
+
+    Cory::Property<bool> debugRasterize{false};
+    Cory::Property<bool> debugRaycast{false};
 
   private:
     // create the mesh to be rendered
@@ -37,7 +41,6 @@ class VolumeRenderDemoApplication : public Cory::Application {
     Cory::SceneGraph sceneGraph_;
     Cory::SystemCoordinator systems_;
 
-    bool debugRaycast_{false};
     class VolumeRenderSystem *volumeRenderer_{nullptr};
 
     void setupSystems();

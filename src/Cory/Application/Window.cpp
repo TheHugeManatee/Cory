@@ -180,7 +180,6 @@ FrameContext Window::acquireFrameContext()
 void Window::submitAndPresent(FrameContext &frameCtx)
 {
     CO_CORE_TRACE("Submitting frame {}", frameCtx.frameNumber);
-
     data_->swapchain->present(frameCtx);
 
     if (data_->fpsCounter.lap()) {

@@ -101,7 +101,6 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
         Cory::BufferDeviceAddress globals;
     } pc{instanceCount, 0u, globals.gpu};
 
-    renderApi.bindingContext->flush();
     renderApi.bindingContext->push(pc);
     pass.dispatchCompute({Cory::divideRoundUp(instanceCount, 256u), 1, 1});
     predicatePass.end(std::move(pass));
@@ -264,7 +263,6 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     globals->sortIndices = renderApi.resources->deviceAddress(sortOutput.indices);
 
     auto passRecorder = spritePass.begin(renderApi);
-    renderApi.bindingContext->flush();
     renderApi.bindingContext->push(globals.gpu);
 
     passRecorder.draw(Gpu::DrawCommand{

@@ -116,9 +116,9 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
 }
 
 Cory::RenderTaskDeclaration<VolumeRenderSystem::PassOutputs>
-VolumeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
-                                   Cory::TransientTextureHandle colorTarget,
-                                   Cory::TransientTextureHandle depthTarget)
+VolumeRenderSystem::rasterizationTask(Cory::RenderTaskBuilder builder,
+                                      Cory::TransientTextureHandle colorTarget,
+                                      Cory::TransientTextureHandle depthTarget)
 {
     KDGpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
     KDGpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
@@ -182,7 +182,6 @@ VolumeRenderSystem::cubeRenderTask(Cory::RenderTaskBuilder builder,
         passRecorder.setVertexBuffer(0, cube_.vertexBuffer);
         passRecorder.setIndexBuffer(cube_.indexBuffer);
 
-        renderApi.bindingContext->flush();
         passRecorder.drawIndexed(KDGpu::DrawIndexedCommand{
             .indexCount = cube_.indexCount,
             .instanceCount = instanceCount,
@@ -228,7 +227,6 @@ VolumeRenderSystem::volumeGenerationTask(Cory::RenderTaskBuilder builder)
     auto params = renderApi.bindingContext->alloc<VolumeGenerationParams>();
     *params.cpu = volumeParams_;
     renderApi.bindingContext->push(params.gpu);
-    renderApi.bindingContext->flush();
 
     const glm::uvec3 dims = volumeParams_.volumeDimensions;
     constexpr uint32_t kGroupSizeX = 16u;
@@ -304,7 +302,6 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
         drawData->instances = alloc.gpu;
 
         renderApi.bindingContext->push(drawData.gpu);
-        renderApi.bindingContext->flush();
 
         constexpr uint32_t kThreadGroupSizeX = 16u;
         constexpr uint32_t kThreadGroupSizeY = 16u;
@@ -376,7 +373,6 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
         drawData->instances = alloc.gpu;
 
         renderApi.bindingContext->push(drawData.gpu);
-        renderApi.bindingContext->flush();
 
         constexpr uint32_t kThreadGroupSizeX = 16u;
         constexpr uint32_t kThreadGroupSizeY = 16u;

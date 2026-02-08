@@ -528,6 +528,10 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
     data_->resources->setCurrentFrameNumber(frameCtx.frameNumber);
     data_->lastFrameNumber = frameCtx.frameNumber;
     data_->hasRecordedFrame = true;
+
+    // Flush all binding updates (e.g. image bindings)
+    data_->shaderBindingContext.flush();
+
     auto executionInfo = compile();
 
     const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};

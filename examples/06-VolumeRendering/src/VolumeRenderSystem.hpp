@@ -61,9 +61,9 @@ class VolumeRenderSystem
         Cory::TransientTextureHandle depthOut;
     };
     Cory::RenderTaskDeclaration<PassOutputs>
-    cubeRenderTask(Cory::RenderTaskBuilder builder,
-                   Cory::TransientTextureHandle colorTarget,
-                   Cory::TransientTextureHandle depthTarget);
+    rasterizationTask(Cory::RenderTaskBuilder builder,
+                      Cory::TransientTextureHandle colorTarget,
+                      Cory::TransientTextureHandle depthTarget);
 
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     cubeRaycastTask(Cory::RenderTaskBuilder builder,

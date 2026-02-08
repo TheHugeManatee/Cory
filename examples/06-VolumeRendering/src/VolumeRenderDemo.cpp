@@ -239,32 +239,37 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
 
     auto frameHandles = framegraph.importFrameContext(frameCtx);
 
-    auto mainPass = volumeRenderer_->cubeRenderTask(
-        framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
-
     auto volumeGeneration =
         volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
 
-    auto mainRaycast =
-        volumeRenderer_->cubeRaycastTask(framegraph.declareTask("TASK_VolumeRaycast"),
-                                         mainPass.output().colorOut,
-                                         frameHandles.depthImage,
-                                         volumeGeneration.output());
+    Cory::TransientTextureHandle colorForLayers{};
+    auto depthForLayers = frameHandles.depthImage;
 
-    auto layersOutput = [&]() {
-        if (debugRaycast_) {
-            auto debugRaycast = volumeRenderer_->cubeRaycastDebugTask(
-                framegraph.declareTask("TASK_VolumeRaycastDebug"),
-                mainRaycast.output(),
-                frameHandles.depthImage,
-                volumeGeneration.output());
-            return layers().declareRenderTasks(
-                framegraph, {.color = debugRaycast.output(), .depth = mainPass.output().depthOut});
-        }
+    if (debugRasterize.get()) {
+        auto rasterization = volumeRenderer_->rasterizationTask(
+            framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
+        colorForLayers = rasterization.output().colorOut;
+        depthForLayers = rasterization.output().depthOut;
+    }
+    else if (debugRaycast.get()) {
+        auto debugRaycast =
+            volumeRenderer_->cubeRaycastDebugTask(framegraph.declareTask("TASK_VolumeRaycastDebug"),
+                                                  frameHandles.colorImage,
+                                                  frameHandles.depthImage,
+                                                  volumeGeneration.output());
+        colorForLayers = debugRaycast.output();
+    }
+    else {
+        auto mainRaycast =
+            volumeRenderer_->cubeRaycastTask(framegraph.declareTask("TASK_VolumeRaycast"),
+                                             frameHandles.colorImage,
+                                             frameHandles.depthImage,
+                                             volumeGeneration.output());
+        colorForLayers = mainRaycast.output();
+    }
 
-        return layers().declareRenderTasks(
-            framegraph, {.color = mainRaycast.output(), .depth = mainPass.output().depthOut});
-    }();
+    auto layersOutput =
+        layers().declareRenderTasks(framegraph, {.color = colorForLayers, .depth = depthForLayers});
 
     auto resolvedSwapchain =
         Cory::StandardRenderTasks::resolve(
@@ -289,10 +294,11 @@ void VolumeRenderDemoApplication::drawImguiControls()
             clock_.reset();
         }
 
-        ImGui::Checkbox("Debug Raycast", &debugRaycast_);
+        CoImGui::CheckBox("Debug Rasterizer", debugRasterize);
+        CoImGui::CheckBox("Debug Raycast", debugRaycast);
     }
     ImGui::End();
-    
+
     if (ImGui::Begin("Profiling")) {
         auto records = Cory::Profiler::GetRecords();
 

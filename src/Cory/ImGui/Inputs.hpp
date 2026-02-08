@@ -222,6 +222,16 @@ bool ComboBox(std::string_view label, KDGpu::Flags<E> &flags)
     return wasChanged;
 }
 
+inline bool CheckBox(const char * str, KDBindings::Property<bool> &property)
+{
+    bool v = property.get();
+    if (ImGui::Checkbox(str, &v)) {
+        property.set(v);
+        return true;
+    }
+    return false;
+}
+
 template <typename E>
     requires std::is_enum_v<E>
 bool CheckBoxFlags(std::string_view label, KDGpu::Flags<E> &flags)

@@ -96,12 +96,6 @@ uint64_t FramegraphResourceManager::currentFrameNumber() const
 
 FramegraphTextureHandle FramegraphResourceManager::declareTexture(TextureInfo info)
 {
-    CO_CORE_DEBUG("Declaring '{}' of {} ({}, {} samples)",
-                  info.name,
-                  info.size,
-                  info.format,
-                  info.sampleCount);
-
     auto handle = data_->textureResources_.emplace(
         TextureResource{.info = info,
                         .state = TextureState{.lastAccess = Sync::AccessType::None,
@@ -134,7 +128,6 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
     TextureResource &res = data_->textureResources_[handle];
     Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
     auto &resources = data_->ctx_->resources();
-    CO_CORE_DEBUG("Allocating '{}' of {} ({})", res.info.name, res.info.size, res.info.format);
 
     auto extent = Gpu::Extent3D{
         .width = gsl::narrow<uint32_t>(res.info.size.x),

@@ -8,6 +8,7 @@
 
 #include "Log.hpp"
 
+#include <algorithm>
 #include <deque>
 #include <filesystem>
 #include <limits>
@@ -87,37 +88,42 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
         // the target path of the watch before adding it to the pending events.
         auto data = fileWatchThreadData.lock();
 
-        auto lookup = data->watchIdToHandle.find(watchId);
-        if (lookup == data->watchIdToHandle.end()) return;
+        auto lookup = data->watchIdToDescriptors.find(watchId);
+        if (lookup == data->watchIdToDescriptors.end()) return;
 
         const auto eventType = actionToEvent(action);
         if (eventType == FileWatchEventType::Unknown) return;
 
         const auto newPath = absoluteNormalized(fs::path(dir) / filename);
-        bool relevant = newPath == lookup->second.targetPath;
+        const auto oldPath =
+            oldFilename.empty() ? fs::path{} : absoluteNormalized(fs::path(dir) / oldFilename);
 
-        if (!relevant && !oldFilename.empty()) {
-            const auto oldPath = absoluteNormalized(fs::path(dir) / oldFilename);
-            relevant = oldPath == lookup->second.targetPath;
+        for (const auto &watchDescriptor : lookup->second) {
+            bool relevant = newPath == watchDescriptor.targetPath;
+
+            if (!relevant && !oldFilename.empty()) {
+                relevant = oldPath == watchDescriptor.targetPath;
+            }
+
+            if (!relevant) continue;
+
+            data->pendingEvents.push_back(FileWatchEvent{
+                .handle = watchDescriptor.handle,
+                .type = eventType,
+            });
         }
-
-        if (!relevant) return;
-
-        data->pendingEvents.push_back(FileWatchEvent{
-            .handle = lookup->second.handle,
-            .type = eventType,
-        });
     }
 
     void stopAll()
     {
         auto data = fileWatchThreadData.lock();
-        for (const auto &[watchId, _] : data->watchIdToHandle) {
+        for (const auto &[watchId, _] : data->watchIdToDescriptors) {
             if (watchId != kInvalidWatchId) {
                 watcher->removeWatch(watchId);
             }
         }
-        data->watchIdToHandle.clear();
+        data->watchIdToDescriptors.clear();
+        data->directoryToWatchId.clear();
         data->pendingEvents.clear();
         watches.clear();
     }
@@ -126,7 +132,8 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
     std::unique_ptr<efsw::FileWatcher> watcher;
 
     struct FileWatchThreadData {
-        std::unordered_map<efsw::WatchID, WatchDescriptor> watchIdToHandle;
+        std::unordered_map<efsw::WatchID, std::vector<WatchDescriptor>> watchIdToDescriptors;
+        std::unordered_map<fs::path, efsw::WatchID> directoryToWatchId;
         std::vector<FileWatchEvent> pendingEvents;
     };
     Locked<FileWatchThreadData> fileWatchThreadData;
@@ -198,21 +205,33 @@ FileWatchHandle FileWatchManager::watch(FileWatch watch)
         return {};
     }
 
-    efsw::WatchID watchId = data_->watcher->addWatch(directoryPath.string(), data_.get(), false);
+    efsw::WatchID watchId = kInvalidWatchId;
+    {
+        auto watchThreadData = data_->fileWatchThreadData.lock();
 
-    if (watchId < 0) {
-        CO_CORE_ERROR("Failed to start file watch for '{}': invalid watch id returned.",
-                      targetPath.string());
-        return {};
+        if (auto existingWatch = watchThreadData->directoryToWatchId.find(directoryPath);
+            existingWatch != watchThreadData->directoryToWatchId.end()) {
+            watchId = existingWatch->second;
+        }
+        else {
+            watchId = data_->watcher->addWatch(directoryPath.string(), data_.get(), false);
+            if (watchId < 0) {
+                CO_CORE_ERROR("Failed to start file watch for {} -- invalid watch id returned.",
+                              targetPath.string());
+                return {};
+            }
+            watchThreadData->directoryToWatchId[directoryPath] = watchId;
+            watchThreadData->watchIdToDescriptors[watchId] = {};
+        }
     }
 
     SlotMapHandle handle = data_->watches.emplace(watchId);
     {
         auto watchThreadData = data_->fileWatchThreadData.lock();
-        watchThreadData->watchIdToHandle[watchId] = WatchDescriptor{
+        watchThreadData->watchIdToDescriptors[watchId].push_back(WatchDescriptor{
             .handle = handle,
             .targetPath = targetPath,
-        };
+        });
     }
     return handle;
 }
@@ -222,6 +241,7 @@ bool FileWatchManager::unwatch(FileWatchHandle handle)
     if (!handle) return false;
 
     efsw::WatchID watchId = kInvalidWatchId;
+    bool removeDirectoryWatch = false;
     std::vector<cppcoro::coroutine_handle<>> waiters;
     {
         if (!data_->watches.isValid(handle)) return false;
@@ -231,7 +251,31 @@ bool FileWatchManager::unwatch(FileWatchHandle handle)
 
         if (watchId != kInvalidWatchId) {
             auto watchThreadData = data_->fileWatchThreadData.lock();
-            watchThreadData->watchIdToHandle.erase(watchId);
+
+            auto descriptorsIt = watchThreadData->watchIdToDescriptors.find(watchId);
+            if (descriptorsIt != watchThreadData->watchIdToDescriptors.end()) {
+                auto &descriptors = descriptorsIt->second;
+                descriptors.erase(std::remove_if(descriptors.begin(),
+                                                 descriptors.end(),
+                                                 [handle](const WatchDescriptor &descriptor) {
+                                                     return descriptor.handle == handle;
+                                                 }),
+                                  descriptors.end());
+
+                if (descriptors.empty()) {
+                    watchThreadData->watchIdToDescriptors.erase(descriptorsIt);
+                    for (auto dirIt = watchThreadData->directoryToWatchId.begin();
+                         dirIt != watchThreadData->directoryToWatchId.end();
+                         ++dirIt) {
+                        if (dirIt->second == watchId) {
+                            watchThreadData->directoryToWatchId.erase(dirIt);
+                            break;
+                        }
+                    }
+                    removeDirectoryWatch = true;
+                }
+            }
+
             entry.watchId = kInvalidWatchId;
         }
 
@@ -249,7 +293,7 @@ bool FileWatchManager::unwatch(FileWatchHandle handle)
         }
     }
 
-    if (watchId != kInvalidWatchId) {
+    if (removeDirectoryWatch && watchId != kInvalidWatchId) {
         data_->watcher->removeWatch(watchId);
     }
 

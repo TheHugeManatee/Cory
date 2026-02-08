@@ -55,7 +55,10 @@ class BitField {
     auto operator<=>(const BitField &rhs) const = default;
 
     /// access to the raw enum
-    [[nodiscard]] constexpr UnderlyingEnum bits() const { return static_cast<UnderlyingEnum>(bits_); }
+    [[nodiscard]] constexpr UnderlyingEnum bits() const
+    {
+        return static_cast<UnderlyingEnum>(bits_);
+    }
     /// access to the underlying bits
     [[nodiscard]] constexpr UnderlyingType underlying_bits() const { return bits_; }
 

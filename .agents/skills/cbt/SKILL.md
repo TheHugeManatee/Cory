@@ -45,7 +45,7 @@ Use `./cbt` as the single entrypoint for project tasks. Avoid direct `cmake`, `c
 
 ### Run an interactive example safely
 ```bash
-./cbt run <target> --frames 120
+./cbt run <target> --frames=120
 ```
 
 ### Validate shader edits
@@ -56,7 +56,7 @@ Use `./cbt` as the single entrypoint for project tasks. Avoid direct `cmake`, `c
 ## Guardrails
 
 - Run only the specific test or regex needed.
-- Do not run interactive targets without `--frames N`.
+- Do not run interactive targets without `--frames=N`.
 - Prefer `./cbt` command outputs over guessing paths or tool invocations.
 - Keep command usage repo-root relative.
 

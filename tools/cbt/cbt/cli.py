@@ -832,7 +832,7 @@ def build(
     )
 
 
-@cli.command(name="run", short_help="Build (optional) and run a built target")
+@cli.command(name="run", short_help="Build (optional) and run a built target", context_settings={"ignore_unknown_options": True})
 @click.option("--profile")
 @click.option("--build-root", type=click.Path(path_type=Path))
 @click.option("--working-dir", type=click.Path(path_type=Path))

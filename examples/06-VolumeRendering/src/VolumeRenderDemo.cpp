@@ -178,8 +178,7 @@ void VolumeRenderDemoApplication::run()
         if (!headless_) {
             // Update layers
             layers().update(Cory::LogicUpdateContext{
-                .simulationTime =
-                    std::chrono::duration<double>(time.time_since_epoch()).count(),
+                .simulationTime = std::chrono::duration<double>(time.time_since_epoch()).count(),
                 .deltaTime = delta.count(),
             });
         }

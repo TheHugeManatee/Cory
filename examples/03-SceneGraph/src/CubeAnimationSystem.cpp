@@ -55,7 +55,7 @@ void CubeAnimationSystem::animate(AnimationComponent &d,
 {
     float i = d.entityIndex;
     const float angle = ad_.r0 + ad_.rt * t + ad_.ri * i + ad_.rti * i * t;
-    //const float scale = ad_.s0 + ad_.st * t + ad_.si * i;
+    // const float scale = ad_.s0 + ad_.st * t + ad_.si * i;
 
     const float tsf = ad_.tsf / 2.0f + ad_.tsf * sin(t / 10.0f);
     const glm::vec3 translation{sin(i * tsf) * i * ad_.tsi, cos(i * tsf) * i * ad_.tsi, i * ad_.ti};

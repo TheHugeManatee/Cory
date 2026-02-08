@@ -153,12 +153,12 @@ DescriptorSets &DescriptorSets::write(ImageBindPoint bindPoint,
         return *this;
     }
 
-    auto &writes =
-        data_->pendingWrites[DescriptorSetType::BindlessTextures][gsl::narrow_cast<size_t>(instanceIndex)];
+    auto &writes = data_->pendingWrites[DescriptorSetType::BindlessTextures]
+                                       [gsl::narrow_cast<size_t>(instanceIndex)];
 
-    const bool isStorageImage =
-        bindPoint == ImageBindPoint::StorageImage2D || bindPoint == ImageBindPoint::StorageImage3D ||
-        bindPoint == ImageBindPoint::StorageImage2DMS;
+    const bool isStorageImage = bindPoint == ImageBindPoint::StorageImage2D ||
+                                bindPoint == ImageBindPoint::StorageImage3D ||
+                                bindPoint == ImageBindPoint::StorageImage2DMS;
     if (isStorageImage) {
         writes.emplace_back(Gpu::BindGroupEntry{
             .binding = bindPoint,
@@ -185,8 +185,8 @@ DescriptorSets &DescriptorSets::write(gsl::index instanceIndex,
     CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
     CO_CORE_ASSERT(samplerIndex < MAX_SAMPLERS, "Texture index out of range");
 
-    auto &writes =
-        data_->pendingWrites[DescriptorSetType::BindlessTextures][gsl::narrow_cast<size_t>(instanceIndex)];
+    auto &writes = data_->pendingWrites[DescriptorSetType::BindlessTextures]
+                                       [gsl::narrow_cast<size_t>(instanceIndex)];
     writes.emplace_back(Gpu::BindGroupEntry{
         .binding = ImageBindPoint::Samplers,
         .resource = Gpu::SamplerBinding{.sampler = sampler},
@@ -212,9 +212,8 @@ DescriptorSets &DescriptorSets::flush(gsl::index instanceIndex)
     for (DescriptorSetType set : magic_enum::enum_values<DescriptorSetType>()) {
         auto &writes = data_->pendingWrites[set][gsl::narrow_cast<size_t>(instanceIndex)];
 
-        auto vulkanBindGroup =
-            resources.getBindGroup(
-                data_->bindGroups[set][gsl::narrow_cast<size_t>(instanceIndex)].handle());
+        auto vulkanBindGroup = resources.getBindGroup(
+            data_->bindGroups[set][gsl::narrow_cast<size_t>(instanceIndex)].handle());
 
         for (const auto &write : writes) {
             vulkanBindGroup->fillWriteBindGroupData(writeStorage[writeCount], write);

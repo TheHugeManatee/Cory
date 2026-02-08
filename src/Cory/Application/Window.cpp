@@ -97,7 +97,8 @@ Window::Window(Context &context,
         })
         .release();
 
-    title.valueChanged().connect([this]([[maybe_unused]] const std::string_view newTitle) { updateTitle(); });
+    title.valueChanged().connect(
+        [this]([[maybe_unused]] const std::string_view newTitle) { updateTitle(); });
 }
 
 Window::~Window()
@@ -244,14 +245,19 @@ void Window::createWindow()
         glfwTerminate();
     });
     glfwSetWindowUserPointer(glfwWindow.get(), this);
-    glfwSetCursorPosCallback(glfwWindow.get(), [](GLFWwindow *windowHandle, double mouseX, double mouseY) {
-        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
-        self.onMouseMoved.emit({.position = {mouseX, mouseY},
-                                .button = GLFWUtils::getMouseButtonState(windowHandle),
-                                .modifiers = GLFWUtils::getModifierState(windowHandle)});
-    });
+    glfwSetCursorPosCallback(
+        glfwWindow.get(), [](GLFWwindow *windowHandle, double mouseX, double mouseY) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
+            self.onMouseMoved.emit({.position = {mouseX, mouseY},
+                                    .button = GLFWUtils::getMouseButtonState(windowHandle),
+                                    .modifiers = GLFWUtils::getModifierState(windowHandle)});
+        });
     glfwSetMouseButtonCallback(
-        glfwWindow.get(), [](GLFWwindow *windowHandle, [[maybe_unused]] int button, int action, [[maybe_unused]] int mods) {
+        glfwWindow.get(),
+        [](GLFWwindow *windowHandle,
+           [[maybe_unused]] int button,
+           int action,
+           [[maybe_unused]] int mods) {
             Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
             double mouseX, mouseY;
             glfwGetCursorPos(windowHandle, &mouseX, &mouseY);
@@ -261,16 +267,18 @@ void Window::createWindow()
                 .action = action == GLFW_PRESS ? ButtonAction::Press : ButtonAction::Release,
                 .modifiers = GLFWUtils::getModifierState(windowHandle)});
         });
-    glfwSetScrollCallback(glfwWindow.get(), [](GLFWwindow *windowHandle, double xOffset, double yOffset) {
-        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
-        double mouseX, mouseY;
-        glfwGetCursorPos(windowHandle, &mouseX, &mouseY);
-        self.onMouseScrolled.emit({.position = {mouseX, mouseY},
-                                   .scrollDelta = {xOffset, yOffset},
-                                   .modifiers = GLFWUtils::getModifierState(windowHandle)});
-    });
+    glfwSetScrollCallback(
+        glfwWindow.get(), [](GLFWwindow *windowHandle, double xOffset, double yOffset) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
+            double mouseX, mouseY;
+            glfwGetCursorPos(windowHandle, &mouseX, &mouseY);
+            self.onMouseScrolled.emit({.position = {mouseX, mouseY},
+                                       .scrollDelta = {xOffset, yOffset},
+                                       .modifiers = GLFWUtils::getModifierState(windowHandle)});
+        });
     glfwSetKeyCallback(
-        glfwWindow.get(), [](GLFWwindow *windowHandle, int key, int scancode, int action, int mods) {
+        glfwWindow.get(),
+        [](GLFWwindow *windowHandle, int key, int scancode, int action, int mods) {
             Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
             self.onKeyCallback.emit(
                 KeyEvent{.key = key, .scanCode = scancode, .action = action, .modifiers = mods});

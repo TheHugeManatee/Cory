@@ -9,15 +9,15 @@
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/view/enumerate.hpp>
 
-#include <vulkan/vulkan.hpp>
-#include <vulkan/vulkan_to_string.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <sstream>
 #include <string_view>
-#include <utility>
 #include <unordered_map>
+#include <utility>
+#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan_to_string.hpp>
 
 namespace Cory {
 
@@ -63,23 +63,29 @@ struct Index {
 void FramegraphVisualizer::build([[maybe_unused]] Index &index,
                                  [[maybe_unused]] const ExecutionInfo &executionInfo) const
 {
-    auto findTransitionInfo = [&](TransientTextureHandle resource,
-                                  RenderTaskHandle task) -> std::optional<ExecutionInfo::TransitionInfo> {
+    auto findTransitionInfo =
+        [&](TransientTextureHandle resource,
+            RenderTaskHandle task) -> std::optional<ExecutionInfo::TransitionInfo> {
         auto it = ranges::find_if(executionInfo.transitions,
                                   [&](const ExecutionInfo::TransitionInfo &info) {
                                       return info.resource == resource && info.task == task;
                                   });
-        if (it == executionInfo.transitions.end()) { return std::nullopt; }
+        if (it == executionInfo.transitions.end()) {
+            return std::nullopt;
+        }
         return *it;
     };
 
-    auto findBufferTransitionInfo = [&](TransientBufferHandle resource,
-                                        RenderTaskHandle task) -> std::optional<ExecutionInfo::BufferTransitionInfo> {
+    auto findBufferTransitionInfo =
+        [&](TransientBufferHandle resource,
+            RenderTaskHandle task) -> std::optional<ExecutionInfo::BufferTransitionInfo> {
         auto it = ranges::find_if(executionInfo.bufferTransitions,
                                   [&](const ExecutionInfo::BufferTransitionInfo &info) {
                                       return info.resource == resource && info.task == task;
                                   });
-        if (it == executionInfo.bufferTransitions.end()) { return std::nullopt; }
+        if (it == executionInfo.bufferTransitions.end()) {
+            return std::nullopt;
+        }
         return *it;
     };
 
@@ -132,11 +138,11 @@ void FramegraphVisualizer::build([[maybe_unused]] Index &index,
             index.textures.at(externalInput).external = true;
         }
         else {
-            index.textures.insert(std::make_pair(
-                externalInput,
-                Index::TextureData{.handle = externalInput,
-                                   .info = graph_.resources().info(externalInput),
-                                   .external = true}));
+            index.textures.insert(
+                std::make_pair(externalInput,
+                               Index::TextureData{.handle = externalInput,
+                                                  .info = graph_.resources().info(externalInput),
+                                                  .external = true}));
         }
     }
     // mark all output resources
@@ -145,23 +151,27 @@ void FramegraphVisualizer::build([[maybe_unused]] Index &index,
             index.textures.at(externalOutput).output = true;
         }
         else {
-            index.textures.insert(std::make_pair(
-                externalOutput,
-                Index::TextureData{.handle = externalOutput,
-                                   .info = graph_.resources().info(externalOutput),
-                                   .output = true}));
+            index.textures.insert(
+                std::make_pair(externalOutput,
+                               Index::TextureData{.handle = externalOutput,
+                                                  .info = graph_.resources().info(externalOutput),
+                                                  .output = true}));
         }
     }
     // mark all texture entries that refer to an allocated resource as allocated
     for (auto allocated : executionInfo.resources) {
         for (auto &[h, data] : index.textures) {
-            if (data.handle.texture() == allocated) { data.allocated = true; }
+            if (data.handle.texture() == allocated) {
+                data.allocated = true;
+            }
         }
     }
     // mark all buffer entries that refer to an allocated resource as allocated
     for (auto allocated : executionInfo.buffers) {
         for (auto &[h, data] : index.buffers) {
-            if (data.handle.buffer() == allocated) { data.allocated = true; }
+            if (data.handle.buffer() == allocated) {
+                data.allocated = true;
+            }
         }
     }
 }
@@ -173,9 +183,15 @@ std::string escapeDotString(std::string_view s)
     out.reserve(s.size() + 8);
     for (const char c : s) {
         switch (c) {
-        case '"': out += "\\\""; break;
-        case '\n': out += "\\n"; break;
-        default: out += c; break;
+        case '"':
+            out += "\\\"";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        default:
+            out += c;
+            break;
         }
     }
     return out;
@@ -184,7 +200,9 @@ std::string escapeDotString(std::string_view s)
 std::string readFileToString(const std::filesystem::path &path)
 {
     std::ifstream in(path, std::ios::in | std::ios::binary);
-    if (!in) { return {}; }
+    if (!in) {
+        return {};
+    }
     std::ostringstream ss;
     ss << in.rdbuf();
     return ss.str();
@@ -209,9 +227,7 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
         out += fmt::format(format, std::forward<Args>(args)...);
     };
 
-    auto appendRaw = [&](std::string_view s) {
-        out.append(s.data(), s.size());
-    };
+    auto appendRaw = [&](std::string_view s) { out.append(s.data(), s.size()); };
 
     constexpr std::string_view bgColor = "#1a1b26";
     constexpr std::string_view fgColor = "#a9b1d6";
@@ -223,8 +239,11 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     appendRaw("digraph Framegraph {\n");
     appendRaw("  rankdir=TB;\n");
     append("  bgcolor=\"{0}\";\n", bgColor);
-    append("  graph [fontname=\"Inter\", fontcolor=\"{0}\", color=\"{1}\"];\n", fgColor, mutedColor);
-    append("  node  [fontname=\"Inter\", fontcolor=\"{0}\", style=filled, fillcolor=\"{1}\"];\n", fgColor, surfaceColor);
+    append(
+        "  graph [fontname=\"Inter\", fontcolor=\"{0}\", color=\"{1}\"];\n", fgColor, mutedColor);
+    append("  node  [fontname=\"Inter\", fontcolor=\"{0}\", style=filled, fillcolor=\"{1}\"];\n",
+           fgColor,
+           surfaceColor);
     append("  edge  [fontname=\"Inter\", color=\"{0}\"];\n\n", lineColor);
 
     auto node_id = [&](const auto &h) {
@@ -254,13 +273,15 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     for (const auto &[h, taskData] : index.tasks) {
         const std::string tid = node_id(h);
         const std::string tlabel = escapeDotString(make_label(taskData));
-        const std::string strokeColor = taskData.executed ? std::string(accentColor) : std::string(mutedColor);
-        const std::string textColor = taskData.executed ? std::string(fgColor) : std::string(mutedColor);
+        const std::string strokeColor =
+            taskData.executed ? std::string(accentColor) : std::string(mutedColor);
+        const std::string textColor =
+            taskData.executed ? std::string(fgColor) : std::string(mutedColor);
         const auto rankIt = executionRank.find(h);
-        const std::string execRankLabel = rankIt != executionRank.end()
-                                              ? fmt::format("#{0}", rankIt->second + 1)
-                                              : std::string{};
-        append("  {0} [shape=ellipse, penwidth=2, color=\"{1}\", fontcolor=\"{2}\", fillcolor=\"{3}\", label=\"{4}\", xlabel=\"{5}\"];\n",
+        const std::string execRankLabel =
+            rankIt != executionRank.end() ? fmt::format("#{0}", rankIt->second + 1) : std::string{};
+        append("  {0} [shape=ellipse, penwidth=2, color=\"{1}\", fontcolor=\"{2}\", "
+               "fillcolor=\"{3}\", label=\"{4}\", xlabel=\"{5}\"];\n",
                tid,
                strokeColor,
                textColor,
@@ -271,17 +292,19 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
 
     for (const auto &[handle, textureData] : index.textures) {
         const std::string color = textureData.external    ? std::string(accentColor)
-                                      : textureData.allocated ? std::string(fgColor)
-                                                              : std::string(mutedColor);
-        const std::string label = fmt::format("{} {}\\n[{} {}]",
-                                              make_label(textureData),
-                                              textureData.external ? " (ext)" : "",
-                                              textureData.info.size,
-                                              vk::to_string(static_cast<vk::Format>(textureData.info.format)));
+                                  : textureData.allocated ? std::string(fgColor)
+                                                          : std::string(mutedColor);
+        const std::string label =
+            fmt::format("{} {}\\n[{} {}]",
+                        make_label(textureData),
+                        textureData.external ? " (ext)" : "",
+                        textureData.info.size,
+                        vk::to_string(static_cast<vk::Format>(textureData.info.format)));
         const float penWidth = textureData.output ? 3.0f : 1.0f;
         const std::string nid = node_id(handle);
         const std::string nlabel = escapeDotString(label);
-        append("  {0} [shape=box3d, penwidth={2}, color=\"{1}\", fontcolor=\"{3}\", fillcolor=\"{4}\", label=\"{5}\"];\n",
+        append("  {0} [shape=box3d, penwidth={2}, color=\"{1}\", fontcolor=\"{3}\", "
+               "fillcolor=\"{4}\", label=\"{5}\"];\n",
                nid,
                color,
                penWidth,
@@ -291,11 +314,14 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     }
 
     for (const auto &[handle, bufferData] : index.buffers) {
-        const std::string color = bufferData.allocated ? std::string(fgColor) : std::string(mutedColor);
-        const std::string label = fmt::format("{}\\n[{} bytes]", make_label(bufferData), bufferData.info.size);
+        const std::string color =
+            bufferData.allocated ? std::string(fgColor) : std::string(mutedColor);
+        const std::string label =
+            fmt::format("{}\\n[{} bytes]", make_label(bufferData), bufferData.info.size);
         const std::string bid = node_id(handle);
         const std::string blabel = escapeDotString(label);
-        append("  {0} [shape=box, penwidth=1.5, color=\"{1}\", fontcolor=\"{3}\", fillcolor=\"{4}\", label=\"{5}\"];\n",
+        append("  {0} [shape=box, penwidth=1.5, color=\"{1}\", fontcolor=\"{3}\", "
+               "fillcolor=\"{4}\", label=\"{5}\"];\n",
                bid,
                color,
                1.5f,
@@ -306,7 +332,8 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
 
     if (executionInfo.tasks.size() > 1) {
         for (size_t idx = 1; idx < executionInfo.tasks.size(); ++idx) {
-            append("  {0} -> {1} [style=dashed, color=\"{2}\", penwidth=1, constraint=true, minlen=2, weight=4];\n",
+            append("  {0} -> {1} [style=dashed, color=\"{2}\", penwidth=1, constraint=true, "
+                   "minlen=2, weight=4];\n",
                    node_id(executionInfo.tasks[idx - 1]),
                    node_id(executionInfo.tasks[idx]),
                    accentColor);
@@ -398,15 +425,19 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
     return out;
 }
 
-void FramegraphVisualizer::writeGraphHtml(const ExecutionInfo &executionInfo, std::filesystem::path outputPath) const
+void FramegraphVisualizer::writeGraphHtml(const ExecutionInfo &executionInfo,
+                                          std::filesystem::path outputPath) const
 {
     const std::string dot = generateDotGraph(executionInfo);
 
-    const auto outputDir = outputPath.has_parent_path() ? outputPath.parent_path() : std::filesystem::path{"."};
-    const bool jsNextToHtml = std::filesystem::exists(outputDir / "js" / "viz-global.js")
-                             && std::filesystem::exists(outputDir / "js" / "viz-wrapper.js");
-    const std::string vizGlobalSrc = jsNextToHtml ? "./js/viz-global.js" : "./graphviz/js/viz-global.js";
-    const std::string vizWrapperSrc = jsNextToHtml ? "./js/viz-wrapper.js" : "./graphviz/js/viz-wrapper.js";
+    const auto outputDir =
+        outputPath.has_parent_path() ? outputPath.parent_path() : std::filesystem::path{"."};
+    const bool jsNextToHtml = std::filesystem::exists(outputDir / "js" / "viz-global.js") &&
+                              std::filesystem::exists(outputDir / "js" / "viz-wrapper.js");
+    const std::string vizGlobalSrc =
+        jsNextToHtml ? "./js/viz-global.js" : "./graphviz/js/viz-global.js";
+    const std::string vizWrapperSrc =
+        jsNextToHtml ? "./js/viz-wrapper.js" : "./graphviz/js/viz-wrapper.js";
 
     // Prefer deployed assets next to the executable (CMAKE_RUNTIME_OUTPUT_DIRECTORY/bin)
     // but fall back to source tree when running from repo root.
@@ -420,9 +451,15 @@ void FramegraphVisualizer::writeGraphHtml(const ExecutionInfo &executionInfo, st
     if (content.empty()) {
         content = "<!doctype html>\n<html><head><meta charset=\"utf-8\"/>\n"
                   "<title>Graphviz (Viz.js)</title></head><body>\n"
-                  "<pre class=\"dot\">\n" + dot + "\n</pre>\n"
-                  "<script src=\"" + vizGlobalSrc + "\"></script>\n"
-                  "<script src=\"" + vizWrapperSrc + "\"></script>\n"
+                  "<pre class=\"dot\">\n" +
+                  dot +
+                  "\n</pre>\n"
+                  "<script src=\"" +
+                  vizGlobalSrc +
+                  "\"></script>\n"
+                  "<script src=\"" +
+                  vizWrapperSrc +
+                  "\"></script>\n"
                   "</body></html>\n";
     }
     else {

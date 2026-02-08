@@ -62,7 +62,7 @@ void CameraLayer::onDetach([[maybe_unused]] Context &ctx)
 bool CameraLayer::onEvent(Event event)
 {
     return std::visit(lambda_visitor{
-                          []([[maybe_unused]] auto &&ev) { return false; },
+                          [](auto) { return false; },
                           [this](const ScrollEvent &event) { return mouseScroll(event); },
                           [this](const MouseMovedEvent &event) { return mouseMove(event); },
                           [this](const MouseButtonEvent &event) { return mouseButton(event); },

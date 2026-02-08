@@ -34,12 +34,16 @@ TransientComputePass::~TransientComputePass()
 
 Gpu::ComputePassCommandRecorder TransientComputePass::begin(const RenderInput &renderApi)
 {
+    wasEnded_ = false;
+    currentRenderApi_ = nullptr;
+    bindingScope_.reset();
+
     auto options = Gpu::ComputePassCommandRecorderOptions{};
     auto recorder = renderApi.cmd->beginComputePass(std::move(options));
 
     // Set the pipeline layout so it is known for things like bind groups etc.
     recorder.setPipelineLayout(pipelineLayoutHandle());
-    renderApi.bindingContext->bind(recorder);
+    bindingScope_ = renderApi.bindingContext->scoped(recorder);
     currentRenderApi_ = &renderApi;
 
     return recorder;
@@ -48,8 +52,9 @@ Gpu::ComputePassCommandRecorder TransientComputePass::begin(const RenderInput &r
 void TransientComputePass::end(Gpu::ComputePassCommandRecorder &&recorder)
 {
     CO_CORE_ASSERT(currentRenderApi_ != nullptr, "Begin was never called on this pass!");
+    bindingScope_.reset();
+    currentRenderApi_ = nullptr;
     recorder.end();
-    currentRenderApi_->bindingContext->unbind();
 
     wasEnded_ = true;
 }

@@ -58,10 +58,7 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
                               uint32_t instanceCount)
 {
     auto [writtenSortKeys, sortKeysInfo] =
-        builder.write(sortKeys,
-                      Gpu::BufferUsageFlagBits::StorageBufferBit |
-                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
-                      Cory::Sync::AccessType::ComputeShaderWrite);
+        builder.write(sortKeys, Cory::RenderTaskBuilder::BufferWritePreset::ComputeStorage);
     (void)sortKeysInfo;
     auto predicatePass = builder.declareComputePass(Cory::ComputePassDeclaration{
         .name = "PASS_PointSpriteSortPreprocess",
@@ -238,9 +235,8 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         instanceCount);
 
     sortOutput = sorter_.sort(builder, predicateTask.output(), instanceCount);
-    auto sortedIndicesInfo = builder.read(sortOutput.indices,
-                                          Gpu::BufferUsageFlagBits::StorageBufferBit,
-                                          Sync::AccessType::VertexShaderReadOther);
+    auto sortedIndicesInfo =
+        builder.read(sortOutput.indices, Cory::RenderTaskBuilder::BufferReadPreset::VertexStorage);
 
     /// ^^^^     DECLARATION      ^^^^
     RenderInput renderApi =

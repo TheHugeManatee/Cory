@@ -35,6 +35,8 @@ class GpuBumpAllocator {
     }
 
     void reset() { offset_ = 0; }
+    [[nodiscard]] size_t usedBytes() const { return offset_; }
+    [[nodiscard]] size_t capacityBytes() const { return baseAllocation_.size; }
 
   private:
     GpuAllocation<std::byte> baseAllocation_;

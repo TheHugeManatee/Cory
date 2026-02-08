@@ -18,6 +18,7 @@
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
@@ -70,8 +71,9 @@ VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *>
     setupScene();
     setupSystems();
 
-    const auto viewportDimensions =
-        headless_ ? glm::i32vec2(headlessFrames_->extent()) : window_->dimensions();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    const auto viewportDimensions = glm::i32vec2(frameSource.extent());
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = viewportDimensions};
     cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);
@@ -125,7 +127,10 @@ void VolumeRenderDemoApplication::setupSystems()
     using Cory::Components::CameraComponent;
     // set up a system to update the camera from the camera manipulator
     systems_.emplace<Cory::CallbackSystem<CameraComponent>>(
-        [this](Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity e, CameraComponent &c) {
+        [this]([[maybe_unused]] Cory::SceneGraph &sg,
+               [[maybe_unused]] Cory::TickInfo tick,
+               [[maybe_unused]] Cory::Entity e,
+               CameraComponent &c) {
             c.position = cameraLayer_->position();
             c.direction = cameraLayer_->focus() - c.position;
             c.viewMatrix = cameraLayer_->worldToViewMatrix();
@@ -134,7 +139,7 @@ void VolumeRenderDemoApplication::setupSystems()
     // Rotate all transforms slowly around the Y axis to introduce some motion
     systems_.emplace<Cory::CallbackSystem<Cory::Components::Transform>>(
         [](Cory::SceneGraph &, Cory::TickInfo tick, Cory::Entity, Cory::Components::Transform &t) {
-            t.rotation += glm::vec3{0.0f, 0.1f * tick.delta.count(), 0.0f};
+            t.rotation += glm::vec3{0.0f, static_cast<float>(0.1 * tick.delta.count()), 0.0f};
         });
 
     // after the "logic" has updated, sync all the transforms of the scenegraph
@@ -173,7 +178,8 @@ void VolumeRenderDemoApplication::run()
         if (!headless_) {
             // Update layers
             layers().update(Cory::LogicUpdateContext{
-                .simulationTime = std::chrono::duration(time.time_since_epoch()).count(),
+                .simulationTime =
+                    std::chrono::duration<double>(time.time_since_epoch()).count(),
                 .deltaTime = delta.count(),
             });
         }
@@ -209,7 +215,9 @@ void VolumeRenderDemoApplication::run()
         }
     };
 
-    auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    auto frames = frameSource.frames();
     for (auto &frameCtx : frames) {
         runFrame(frameCtx);
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
@@ -274,9 +282,9 @@ void VolumeRenderDemoApplication::drawImguiControls()
         glm::vec3 up = cameraLayer_->up();
         glm::mat4 mat = glm::transpose(cameraLayer_->worldToViewMatrix());
 
-        bool changed = CoImGui::Input("position", position, "%.3f");
-        changed = CoImGui::Input("center", center, "%.3f") || changed;
-        changed = CoImGui::Input("up", up, "%.3f") || changed;
+        [[maybe_unused]] const bool changed = CoImGui::Input("position", position, "%.3f") ||
+                                              CoImGui::Input("center", center, "%.3f") ||
+                                              CoImGui::Input("up", up, "%.3f");
 
         // if (changed) { camera_.lookAt(position, center, up); }
         if (ImGui::CollapsingHeader("View Matrix")) {

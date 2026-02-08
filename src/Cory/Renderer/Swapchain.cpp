@@ -209,6 +209,7 @@ SwapchainPrivate::SwapchainPrivate(Context &ctx_,
 
     // Create a swapchain of images that we will render to.
     const SwapchainOptions swapchainOptions = {
+        .label = swapchainName,
         .surface = surface,
         .format = swapchainSetup.format,
         .minImageCount = getSuitableImageCount(surfaceCapabilities),
@@ -266,6 +267,7 @@ void SwapchainPrivate::createColorAndDepthResources(Gpu::SampleCountFlagBits sam
                           .extent = {swapchainSetup.extent.width, swapchainSetup.extent.height, 1},
                           .mipLevels = 1,
                           .samples = samples,
+                          .createFlags = {},
                           .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit |
                                    Gpu::TextureUsageFlagBits::TransferSrcBit |
                                    Gpu::TextureUsageFlagBits::SampledBit |
@@ -296,6 +298,7 @@ void SwapchainPrivate::createColorAndDepthResources(Gpu::SampleCountFlagBits sam
                           .extent = {swapchainSetup.extent.width, swapchainSetup.extent.height, 1},
                           .mipLevels = 1,
                           .samples = samples,
+                          .createFlags = {},
                           .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
                                    Gpu::TextureUsageFlagBits::SampledBit,
                           .memoryUsage = Gpu::MemoryUsage::GpuOnly,

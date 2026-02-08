@@ -137,7 +137,7 @@ class Framegraph : NoCopy {
     [[nodiscard]] PassTransitions executePass(CommandRecorder &cmd, RenderTaskHandle handle);
 
     /// Ensure that all output resources are transitioned to their final access states
-    void finalizeOutputs(ExecutionInfo executionInfo);
+    void finalizeOutputs(ExecutionInfo &executionInfo);
 
   private:                    /* members */
     friend RenderTaskBuilder; // convenience so it can call finishTaskDeclaration

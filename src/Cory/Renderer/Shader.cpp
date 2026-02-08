@@ -57,8 +57,8 @@ ShaderSource::ShaderSource(std::string source,
 }
 
 ShaderSource::ShaderSource(std::filesystem::path filePath, Gpu::ShaderStageFlagBits type)
-    : type_{type}
-    , filename_{std::move(filePath)}
+    : filename_{std::move(filePath)}
+    , type_{type}
 {
     auto fileBytes = readFile(filename_);
     source_ = std::string{fileBytes.begin(), fileBytes.end()};

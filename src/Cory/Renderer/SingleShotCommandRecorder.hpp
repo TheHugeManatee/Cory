@@ -32,7 +32,7 @@ class SingleShotCommandRecorder : NoCopy {
 
     CommandRecorder &buffer() { return commandRecorder_; }
 
-    CommandRecorder *operator->() { return &commandRecorder_; };
+    CommandRecorder *operator->() { return &commandRecorder_; }
 
   private:
     Context *ctx_;

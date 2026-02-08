@@ -86,6 +86,10 @@ TransientRenderPass::~TransientRenderPass()
 
 Gpu::RenderPassCommandRecorder TransientRenderPass::begin(const RenderInput &renderApi)
 {
+    wasEnded_ = false;
+    currentRenderApi_ = nullptr;
+    bindingScope_.reset();
+
     // if a render area has not been set up explicitly, we determine it by checking the attachments
     if (dynamicStates_.renderArea.offset.x == 0 && dynamicStates_.renderArea.offset.y == 0 &&
         dynamicStates_.renderArea.extent.width == 0 &&
@@ -168,7 +172,7 @@ Gpu::RenderPassCommandRecorder TransientRenderPass::begin(const RenderInput &ren
         renderPassRecorder.bindShaders(stages, handles);
     }
     renderPassRecorder.setPipelineLayout(pipelineLayoutHandle());
-    renderApi.bindingContext->bind(renderPassRecorder);
+    bindingScope_ = renderApi.bindingContext->scoped(renderPassRecorder);
 
     renderPassRecorder.setPrimitiveTopology(Gpu::PrimitiveTopology::TriangleList);
     renderPassRecorder.setFrontFace(Gpu::FrontFace::CounterClockwise);
@@ -254,8 +258,9 @@ void TransientRenderPass::end(Gpu::RenderPassCommandRecorder &&recorder)
 {
     if (!pass_.options.is_set(PassOptionFlagBits::SkipPipelineBind)) {
         CO_CORE_ASSERT(currentRenderApi_ != nullptr, "Begin was never called on this pass!");
-        currentRenderApi_->bindingContext->unbind();
     }
+    bindingScope_.reset();
+    currentRenderApi_ = nullptr;
     recorder.end();
 
     wasEnded_ = true;

@@ -26,6 +26,55 @@ std::unique_ptr<MappedCoherentDeviceBuffer> createPerDrawDataBuffer(Gpu::Device 
 }
 } // namespace
 
+ShaderBindingContext::ScopedBinding::ScopedBinding(ShaderBindingContext &context,
+                                                   bool autoFlushOnExit)
+    : context_{&context}
+    , autoFlushOnExit_{autoFlushOnExit}
+{
+}
+
+ShaderBindingContext::ScopedBinding::~ScopedBinding()
+{
+    release();
+}
+
+ShaderBindingContext::ScopedBinding::ScopedBinding(ScopedBinding &&rhs) noexcept
+    : context_{std::exchange(rhs.context_, nullptr)}
+    , autoFlushOnExit_{rhs.autoFlushOnExit_}
+{
+}
+
+ShaderBindingContext::ScopedBinding &
+ShaderBindingContext::ScopedBinding::operator=(ScopedBinding &&rhs) noexcept
+{
+    if (this == &rhs) {
+        return *this;
+    }
+    release();
+    context_ = std::exchange(rhs.context_, nullptr);
+    autoFlushOnExit_ = rhs.autoFlushOnExit_;
+    return *this;
+}
+
+void ShaderBindingContext::ScopedBinding::flush()
+{
+    if (context_ != nullptr) {
+        context_->flush();
+    }
+}
+
+void ShaderBindingContext::ScopedBinding::release()
+{
+    if (context_ == nullptr) {
+        return;
+    }
+    if (autoFlushOnExit_ && context_->isDirty_) {
+        context_->flush();
+    }
+    context_->unbind();
+    context_ = nullptr;
+}
+
 ShaderBindingContext::ShaderBindingContext(Gpu::Device &device,
                                            FramegraphResourceManager &resources,
                                            DescriptorSets &descriptorSets,
@@ -49,7 +98,6 @@ TextureHeapIndex ShaderBindingContext::bindTexture2D(TransientTextureHandle text
                                                      Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::Texture2D, resources_->imageView(textureHandle), layout, sampler);
 }
@@ -59,7 +107,6 @@ TextureHeapIndex ShaderBindingContext::bindTexture2D(Gpu::TextureViewHandle view
                                                      Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(ImageBindPoint::Texture2D, view, layout, sampler);
 }
 
@@ -68,7 +115,6 @@ TextureHeapIndex ShaderBindingContext::bindTexture3D(TransientTextureHandle text
                                                      Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::Texture3D, resources_->imageView(textureHandle), layout, sampler);
 }
@@ -78,7 +124,6 @@ TextureHeapIndex ShaderBindingContext::bindTexture3D(Gpu::TextureViewHandle view
                                                      Gpu::TextureSamplerHandle sampler)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(ImageBindPoint::Texture3D, view, layout, sampler);
 }
 
@@ -86,7 +131,6 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage2D(TransientTextureHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::StorageImage2D, resources_->imageView(textureHandle), layout, {});
 }
@@ -95,24 +139,21 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage2D(Gpu::TextureViewHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(ImageBindPoint::StorageImage2D, view, layout, {});
 }
 
 TextureHeapIndex ShaderBindingContext::bindStorageImage2DMS(TransientTextureHandle textureHandle,
-                                                           Gpu::TextureLayout layout)
+                                                            Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::StorageImage2DMS, resources_->imageView(textureHandle), layout, {});
 }
 
 TextureHeapIndex ShaderBindingContext::bindStorageImage2DMS(Gpu::TextureViewHandle view,
-                                                           Gpu::TextureLayout layout)
+                                                            Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(ImageBindPoint::StorageImage2DMS, view, layout, {});
 }
 
@@ -120,7 +161,6 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage3D(TransientTextureHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(
         ImageBindPoint::StorageImage3D, resources_->imageView(textureHandle), layout, {});
 }
@@ -129,7 +169,6 @@ TextureHeapIndex ShaderBindingContext::bindStorageImage3D(Gpu::TextureViewHandle
                                                           Gpu::TextureLayout layout)
 {
     CO_CORE_ASSERT(resources_ != nullptr, "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
     return bindTexture(ImageBindPoint::StorageImage3D, view, layout, {});
 }
 
@@ -137,9 +176,15 @@ SamplerHeapIndex ShaderBindingContext::bindSampler(Gpu::TextureSamplerHandle sam
 {
     CO_CORE_DEBUG_ASSERT(descriptorSets_ != nullptr,
                          "ShaderBindingContext has no resource manager");
-    isDirty_ = true;
-    auto index = nextSamplerIndex_++;
+    const SamplerBindingKey key{.sampler = sampler};
+    if (auto it = samplerBindingCache_.find(key); it != samplerBindingCache_.end()) {
+        return it->second;
+    }
+
+    const auto index = nextSamplerIndex_++;
     descriptorSets_->write(instanceIndex_, index, sampler);
+    samplerBindingCache_.emplace(key, index);
+    isDirty_ = true;
     return index;
 }
 
@@ -169,6 +214,29 @@ void ShaderBindingContext::bind(Gpu::ComputePassCommandRecorder &cmd)
                    "previous pass did not unbind/end correctly!");
     passRecorder_ = &cmd;
     descriptorSets_->bind(cmd, instanceIndex_);
+}
+
+ShaderBindingContext::ScopedBinding
+ShaderBindingContext::scoped(Gpu::RenderPassCommandRecorder &cmd, bool autoFlushOnExit)
+{
+    bind(cmd);
+    return ScopedBinding{*this, autoFlushOnExit};
+}
+
+ShaderBindingContext::ScopedBinding
+ShaderBindingContext::scoped(Gpu::RenderPassCommandRecorder &cmd,
+                             Gpu::PipelineLayoutHandle pipelineLayout,
+                             bool autoFlushOnExit)
+{
+    bind(cmd, pipelineLayout);
+    return ScopedBinding{*this, autoFlushOnExit};
+}
+
+ShaderBindingContext::ScopedBinding
+ShaderBindingContext::scoped(Gpu::ComputePassCommandRecorder &cmd, bool autoFlushOnExit)
+{
+    bind(cmd);
+    return ScopedBinding{*this, autoFlushOnExit};
 }
 
 void ShaderBindingContext::unbind()
@@ -210,6 +278,21 @@ void ShaderBindingContext::flush()
     isDirty_ = false;
 }
 
+void ShaderBindingContext::resizeDrawDataBuffer(size_t drawDataBufferSize)
+{
+    CO_CORE_ASSERT(drawDataBufferSize > 0,
+                   "ShaderBindingContext: drawDataBufferSize must be larger than zero.");
+    if (drawDataBufferSize == perDrawDataBuffer_->allocation().size) {
+        return;
+    }
+
+    perDrawDataBuffer_ = createPerDrawDataBuffer(*device_, drawDataBufferSize);
+    CO_CORE_ASSERT(perDrawDataBuffer_ != nullptr && perDrawDataBuffer_->isValid(),
+                   "ShaderBindingContext: per-draw data buffer recreation failed.");
+    allocator_ = GpuBumpAllocator{GpuAllocation{perDrawDataBuffer_->allocation()}};
+    reset();
+}
+
 TextureHeapIndex &ShaderBindingContext::nextTextureIndex(ImageBindPoint bindPoint)
 {
     switch (bindPoint) {
@@ -234,9 +317,21 @@ TextureHeapIndex ShaderBindingContext::bindTexture(ImageBindPoint bindPoint,
                                                    Gpu::TextureLayout layout,
                                                    Gpu::TextureSamplerHandle sampler)
 {
+    const TextureBindingKey key{
+        .bindPoint = bindPoint,
+        .view = view,
+        .layout = layout,
+        .sampler = sampler,
+    };
+    if (auto it = textureBindingCache_.find(key); it != textureBindingCache_.end()) {
+        return it->second;
+    }
+
     auto &nextIndex = nextTextureIndex(bindPoint);
     const TextureHeapIndex index = nextIndex++;
     descriptorSets_->write(bindPoint, instanceIndex_, index, layout, view, sampler);
+    textureBindingCache_.emplace(key, index);
+    isDirty_ = true;
     return index;
 }
 
@@ -250,6 +345,8 @@ void ShaderBindingContext::reset()
     nextStorageImage3DIndex_ = 0;
     nextStorageImage2DMSIndex_ = 0;
     nextSamplerIndex_ = 0;
+    textureBindingCache_.clear();
+    samplerBindingCache_.clear();
 }
 
 } // namespace Cory

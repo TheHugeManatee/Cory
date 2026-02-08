@@ -39,14 +39,14 @@ struct WindowPrivate {
 };
 
 Window::Window(Context &context,
-               glm::i32vec2 dimensions,
+               glm::i32vec2 requestedDimensions,
                std::string windowName,
                int32_t sampleCount)
     : data_{std::make_unique<WindowPrivate>()}
 {
     data_->ctx = &context;
     this->title = std::move(windowName);
-    this->dimensions = dimensions;
+    dimensions = requestedDimensions;
 
     samples = static_cast<Gpu::SampleCountFlagBits>(sampleCount);
 
@@ -85,7 +85,7 @@ Window::Window(Context &context,
                                                    data_->surface,
                                                    SwapchainCreateInfo{
                                                        .label = title(),
-                                                       .size = dimensions,
+                                                       .size = requestedDimensions,
                                                        .samples = samples(),
                                                    });
 
@@ -97,7 +97,7 @@ Window::Window(Context &context,
         })
         .release();
 
-    title.valueChanged().connect([this](const std::string_view newTitle) { updateTitle(); });
+    title.valueChanged().connect([this]([[maybe_unused]] const std::string_view newTitle) { updateTitle(); });
 }
 
 Window::~Window()
@@ -172,7 +172,7 @@ FrameContext Window::acquireFrameContext()
         CO_CORE_TRACE("Acquired swapchain image {} for frame {}",
                       frameCtx.swapchainImageIndex,
                       frameCtx.frameNumber);
-        return std::move(frameCtx);
+        return frameCtx;
     }
 }
 
@@ -194,12 +194,26 @@ Gpu::Format Window::depthFormat() const noexcept
 {
     return data_->swapchain->depthFormat();
 }
+glm::u32vec2 Window::extent() const noexcept
+{
+    return data_->swapchain->extent();
+}
+
+Gpu::SampleCountFlagBits Window::sampleCount() const noexcept
+{
+    return samples();
+}
+
+size_t Window::size() const noexcept
+{
+    return data_->swapchain->size();
+}
 
 cppcoro::generator<FrameContext> Window::frameGenerator()
 {
     while (!shouldClose()) {
         auto frameCtx = acquireFrameContext();
-        co_yield std::move(frameCtx);
+        co_yield frameCtx;
     }
 }
 
@@ -224,45 +238,45 @@ void Window::createWindow()
     auto dims = dimensions();
     auto windowHandle = glfwCreateWindow(dims.x, dims.y, title().c_str(), nullptr, nullptr);
 
-    std::shared_ptr<GLFWwindow> window(windowHandle, [=](auto *ptr) {
+    std::shared_ptr<GLFWwindow> glfwWindow(windowHandle, [=](auto *ptr) {
         CO_CORE_TRACE("Destroying GLFW context");
         glfwDestroyWindow(ptr);
         glfwTerminate();
     });
-    glfwSetWindowUserPointer(window.get(), this);
-    glfwSetCursorPosCallback(window.get(), [](GLFWwindow *window, double mouseX, double mouseY) {
-        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+    glfwSetWindowUserPointer(glfwWindow.get(), this);
+    glfwSetCursorPosCallback(glfwWindow.get(), [](GLFWwindow *windowHandle, double mouseX, double mouseY) {
+        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
         self.onMouseMoved.emit({.position = {mouseX, mouseY},
-                                .button = GLFWUtils::getMouseButtonState(window),
-                                .modifiers = GLFWUtils::getModifierState(window)});
+                                .button = GLFWUtils::getMouseButtonState(windowHandle),
+                                .modifiers = GLFWUtils::getModifierState(windowHandle)});
     });
     glfwSetMouseButtonCallback(
-        window.get(), [](GLFWwindow *window, int button, int action, int mods) {
-            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+        glfwWindow.get(), [](GLFWwindow *windowHandle, [[maybe_unused]] int button, int action, [[maybe_unused]] int mods) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
             double mouseX, mouseY;
-            glfwGetCursorPos(window, &mouseX, &mouseY);
+            glfwGetCursorPos(windowHandle, &mouseX, &mouseY);
             self.onMouseButton.emit(MouseButtonEvent{
                 .position = glm::vec2{mouseX, mouseY},
-                .button = GLFWUtils::getMouseButtonState(window),
+                .button = GLFWUtils::getMouseButtonState(windowHandle),
                 .action = action == GLFW_PRESS ? ButtonAction::Press : ButtonAction::Release,
-                .modifiers = GLFWUtils::getModifierState(window)});
+                .modifiers = GLFWUtils::getModifierState(windowHandle)});
         });
-    glfwSetScrollCallback(window.get(), [](GLFWwindow *window, double xOffset, double yOffset) {
-        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+    glfwSetScrollCallback(glfwWindow.get(), [](GLFWwindow *windowHandle, double xOffset, double yOffset) {
+        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
         double mouseX, mouseY;
-        glfwGetCursorPos(window, &mouseX, &mouseY);
+        glfwGetCursorPos(windowHandle, &mouseX, &mouseY);
         self.onMouseScrolled.emit({.position = {mouseX, mouseY},
                                    .scrollDelta = {xOffset, yOffset},
-                                   .modifiers = GLFWUtils::getModifierState(window)});
+                                   .modifiers = GLFWUtils::getModifierState(windowHandle)});
     });
     glfwSetKeyCallback(
-        window.get(), [](GLFWwindow *window, int key, int scancode, int action, int mods) {
-            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+        glfwWindow.get(), [](GLFWwindow *windowHandle, int key, int scancode, int action, int mods) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
             self.onKeyCallback.emit(
                 KeyEvent{.key = key, .scanCode = scancode, .action = action, .modifiers = mods});
         });
 
-    data_->window = std::move(window);
+    data_->window = std::move(glfwWindow);
 }
 
 void Window::updateTitle()

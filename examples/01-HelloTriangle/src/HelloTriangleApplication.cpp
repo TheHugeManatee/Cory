@@ -12,6 +12,7 @@
 #include <Cory/Cory.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
 
@@ -126,12 +127,11 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
     }
 
     createGeometry();
-    const Gpu::Format colorFormat =
-        headless_ ? headlessFrames_->colorFormat() : window_->colorFormat();
-    const Gpu::Format depthFormat =
-        headless_ ? headlessFrames_->depthFormat() : window_->depthFormat();
-    const Gpu::SampleCountFlagBits sampleCount =
-        headless_ ? headlessFrames_->sampleCount() : window_->samples();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    const Gpu::Format colorFormat = frameSource.colorFormat();
+    const Gpu::Format depthFormat = frameSource.depthFormat();
+    const Gpu::SampleCountFlagBits sampleCount = frameSource.sampleCount();
     pipeline_ =
         std::make_unique<TrianglePipeline>(ctx(),
                                            colorFormat,
@@ -149,8 +149,6 @@ HelloTriangleApplication::HelloTriangleApplication(int argc, char **argv)
         window_->onSwapchainResized.connect(recreateSizedResources);
         recreateSizedResources({window_->dimensions()});
 
-        Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
-                                              .viewportDimensions = window_->dimensions()};
         // ImGui layer does not currently support non-dynamic rendering anymore..
         // imguiLayer_ =
         //    &layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
@@ -193,7 +191,9 @@ void HelloTriangleApplication::run()
         recordCommands(frameCtx);
     };
 
-    auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    auto frames = frameSource.frames();
 
     for (auto &frameCtx : frames) {
         runFrame(frameCtx);
@@ -201,7 +201,7 @@ void HelloTriangleApplication::run()
             break;
         }
     }
-    
+
     // wait until last frame is finished rendering
     ctx().device().waitUntilIdle();
 }

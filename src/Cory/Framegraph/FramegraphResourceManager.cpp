@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <gsl/narrow>
+#include <span>
 #include <vector>
 
 namespace Cory {
@@ -216,9 +217,8 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
                                .prevLayout = Sync::ImageLayout::Optimal,
                                .nextLayout = Sync::ImageLayout::Optimal,
                                .discardContents = discard,
-                               // todo: probably problematic once we actually use more queues
-                               .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                               .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                               .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamilyIndex(),
+                               .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamilyIndex(),
                                .image = vkImageHandle,
                                .subresourceRange = {
                                    .aspectMask = aspectMask.toInt(),
@@ -452,11 +452,14 @@ FramegraphBufferView FramegraphResourceManager::bufferView(FramegraphBufferHandl
     if (res.arena == BufferResource::Arena::HostMapped) {
         CO_CORE_ASSERT(data_->hostBuffer != nullptr, "Host buffer was not allocated");
         const auto baseAllocation = data_->hostBuffer->allocation();
+        auto hostRange =
+            std::span{baseAllocation.cpu, gsl::narrow_cast<size_t>(baseAllocation.size)};
+        auto hostSubRange = hostRange.subspan(gsl::narrow_cast<size_t>(res.offset));
         return FramegraphBufferView{
             .deviceAddress = baseAllocation.gpu + res.offset,
             .offset = res.offset,
             .size = res.info.size,
-            .cpu = baseAllocation.cpu + res.offset,
+            .cpu = hostSubRange.data(),
             .hostVisible = true,
         };
     }

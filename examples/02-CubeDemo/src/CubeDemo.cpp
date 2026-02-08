@@ -17,6 +17,7 @@
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -123,13 +124,14 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.parse(argc, argv);
+    const std::vector<const char *> appArgs{argv, argv + argc};
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
 
     init(Cory::ContextCreationInfo{.validation = disableValidation_
                                                      ? Cory::ValidationLayers::Disabled
                                                      : Cory::ValidationLayers::Enabled,
-                                   .args = std::span{argv, gsl::narrow<std::size_t>(argc)}});
+                                   .args = std::span{appArgs}});
 
     // determine msaa sample count to use - for simplicity, we use either 8 or one sample
     // const auto &limits = ctx().physicalDevice().limits;
@@ -254,7 +256,9 @@ void CubeDemoApplication::run()
         }
     };
 
-    auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    auto frames = frameSource.frames();
     for (auto &frameCtx : frames) {
         runFrame(frameCtx);
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
@@ -292,7 +296,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle depthTarget)
 {
 
-    Gpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    Gpu::ColorClearValue clearColor{{0.0f, 0.0f, 0.0f, 1.0f}};
     Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
     const auto &colorInfo = builder.textureInfo(colorTarget);
@@ -307,6 +311,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                 .load = Gpu::AttachmentLoadOperation::Clear,
                 .store = Gpu::AttachmentStoreOperation::Store,
                 .clearColor = clearColor,
+                .blend = std::nullopt,
             },
         }},
         .depthAttachment =
@@ -316,6 +321,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                 .store = Gpu::AttachmentStoreOperation::Store,
                 .clearDepthStencil = clearDepthStencil,
             },
+        .stencilAttachment = {},
         .vertexOptions = vertexOptions(),
         .dynamicStates = {.cullMode = Cory::CullMode::None},
     });
@@ -341,8 +347,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     CO_CORE_ASSERT(instanceCount > 0, "No instances to render!");
 
     auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
-    std::memcpy(
-        alloc.cpu, instanceData_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+    std::copy_n(instanceData_.begin(), instanceCount, alloc.cpu);
 
     // update the per-frame data
     auto data = renderApi.bindingContext->alloc<CubeUBO>();

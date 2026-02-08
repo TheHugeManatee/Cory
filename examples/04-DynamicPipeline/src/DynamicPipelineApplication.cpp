@@ -13,6 +13,7 @@
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -32,6 +33,7 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <stdexcept>
 #include <string>
@@ -45,7 +47,7 @@ int ShaderEditorCallback(ImGuiInputTextCallbackData *data)
 {
     if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
         auto *str = static_cast<std::string *>(data->UserData);
-        str->resize(data->BufTextLen);
+        str->resize(gsl::narrow<std::string::size_type>(data->BufTextLen));
         data->Buf = str->data();
     }
     return 0;
@@ -77,12 +79,16 @@ DynamicPipelineApplication::DynamicPipelineApplication(int argc, char **argv)
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.parse(argc, argv);
+    const std::vector<const char *> appArgs{argv, argv + argc};
 
-    Cory::ResourceLocator::addSearchPath(DYNAMIC_PIPELINE_RESOURCE_DIR);
+    // ResourceLocator appends "shaders/" for shader lookups, so register the demo root.
+    Cory::ResourceLocator::addSearchPath(
+        std::filesystem::path{DYNAMIC_PIPELINE_RESOURCE_DIR}.parent_path());
 
     init(Cory::ContextCreationInfo{
         .validation =
             disableValidation_ ? Cory::ValidationLayers::Disabled : Cory::ValidationLayers::Enabled,
+        .args = std::span{appArgs},
     });
 
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1280, 720};
@@ -164,7 +170,9 @@ void DynamicPipelineApplication::run()
         recordCommands(frameCtx);
     };
 
-    auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    auto frames = frameSource.frames();
     for (auto &frameCtx : frames) {
         runFrame(frameCtx);
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
@@ -263,7 +271,8 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
     KDGpu::RenderPassCommandRecorderWithDynamicRenderingOptions passOptions{
         .colorAttachments = {{
             .view = *frameCtx.swapchainImageView,
-            .clearValue = {r, g, b, 1.0f},
+            .resolveView = {},
+            .clearValue = {{r, g, b, 1.0f}},
             .initialLayout = Gpu::TextureLayout::ColorAttachmentOptimal,
             .finalLayout = headless_ ? Gpu::TextureLayout::ColorAttachmentOptimal
                                      : Gpu::TextureLayout::PresentSrc,
@@ -271,6 +280,7 @@ void DynamicPipelineApplication::recordCommands(Cory::FrameContext &frameCtx)
         .depthStencilAttachment =
             {
                 .view = *frameCtx.depthImageView,
+                .resolveView = {},
                 .initialLayout = Gpu::TextureLayout::DepthStencilAttachmentOptimal,
             },
         .samples = frameCtx.sampleCount,
@@ -416,6 +426,7 @@ void DynamicPipelineApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx
 
 void DynamicPipelineApplication::drawUi(const Cory::FrameContext &frameCtx)
 {
+    (void)frameCtx;
     if (ImGui::Begin("Dynamic pipeline controls")) {
         CoImGui::ComboBox("Cull Mode", settings_.cullMode);
         CoImGui::ComboBox("Polygon Mode", settings_.polygonMode);
@@ -565,8 +576,7 @@ void DynamicPipelineApplication::resetAttachmentLayouts()
         return;
     }
 
-    const size_t imageCount =
-        window_ ? window_->swapchain().size() : headlessFrames_->size();
+    const size_t imageCount = window_ ? window_->swapchain().size() : headlessFrames_->size();
     swapchainLayouts_.assign(imageCount, Gpu::TextureLayout::Undefined);
     depthLayouts_.assign(imageCount, Gpu::TextureLayout::Undefined);
 }

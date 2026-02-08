@@ -3,6 +3,7 @@
 #include <Cory/Base/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/FrameGenerator.hpp>
+#include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <glm/vec2.hpp>
@@ -25,18 +26,18 @@ struct HeadlessFrameSourceCreateInfo {
 
 class Context;
 
-class HeadlessFrameSource : NoCopy, NoMove {
+class HeadlessFrameSource : public FrameSource, NoCopy, NoMove {
   public:
     HeadlessFrameSource(Context &context, HeadlessFrameSourceCreateInfo createInfo);
-    ~HeadlessFrameSource();
+    ~HeadlessFrameSource() override;
 
-    [[nodiscard]] FrameGenerator frames();
+    [[nodiscard]] FrameGenerator frames() override;
 
-    [[nodiscard]] Gpu::Format colorFormat() const noexcept;
-    [[nodiscard]] Gpu::Format depthFormat() const noexcept;
-    [[nodiscard]] glm::u32vec2 extent() const noexcept;
-    [[nodiscard]] Gpu::SampleCountFlagBits sampleCount() const noexcept;
-    [[nodiscard]] size_t size() const noexcept;
+    [[nodiscard]] Gpu::Format colorFormat() const noexcept override;
+    [[nodiscard]] Gpu::Format depthFormat() const noexcept override;
+    [[nodiscard]] glm::u32vec2 extent() const noexcept override;
+    [[nodiscard]] Gpu::SampleCountFlagBits sampleCount() const noexcept override;
+    [[nodiscard]] size_t size() const noexcept override;
 
   private:
     cppcoro::generator<FrameContext> frameGenerator();

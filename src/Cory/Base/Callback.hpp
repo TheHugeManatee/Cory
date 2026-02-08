@@ -38,7 +38,7 @@ template <typename... Args> class Callback {
     {
         std::function<void(Args...)> fn;
         {
-            std::lock_guard lk{mtx_};
+            std::lock_guard<std::mutex> lk{mtx_};
             fn = cb_;
         }
         if (fn) {
@@ -51,14 +51,14 @@ template <typename... Args> class Callback {
         requires CompatibleCallable<Callable, Args...>
     void operator()(Callable &&callable)
     {
-        std::lock_guard lk{mtx_};
+        std::lock_guard<std::mutex> lk{mtx_};
         cb_ = std::move(callable);
     }
 
     /// reset the callback function, removing any previously registered callback function
     void reset()
     {
-        std::lock_guard lk_{mtx_};
+        std::lock_guard<std::mutex> lk_{mtx_};
         cb_ = {};
     }
 
@@ -93,7 +93,7 @@ template <> class Callback<void> {
     {
         std::function<void()> fn;
         {
-            std::lock_guard lk{mtx_};
+            std::lock_guard<std::mutex> lk{mtx_};
             fn = cb_;
         }
         if (fn) {
@@ -107,7 +107,7 @@ template <> class Callback<void> {
     /// reset the callback function, removing any previously registered callback function
     void reset()
     {
-        std::unique_lock lk_{mtx_};
+        std::unique_lock<std::mutex> lk_{mtx_};
         cb_ = {};
     }
 

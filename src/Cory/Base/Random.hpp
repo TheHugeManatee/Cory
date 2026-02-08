@@ -11,8 +11,8 @@ class RNG {
   public:
     static std::random_device &Device()
     {
-        thread_local std::random_device rd;
-        return rd;
+        thread_local auto *rd = new std::random_device{};
+        return *rd;
     }
     static std::mt19937 &Generator()
     {

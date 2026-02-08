@@ -64,6 +64,33 @@ struct RenderTaskInfo {
  */
 class RenderTaskBuilder : NoCopy {
   public:
+    enum class TextureReadPreset {
+        TransferSrc,
+        ComputeSampled,
+        FragmentSampled,
+    };
+    enum class TextureWritePreset {
+        TransferDst,
+        ColorAttachment,
+        DepthStencilAttachment,
+        ComputeStorage,
+    };
+    enum class TextureReadWritePreset {
+        GeneralStorage,
+        ColorAttachment,
+        DepthStencilAttachment,
+    };
+    enum class BufferReadPreset {
+        ComputeStorage,
+        VertexStorage,
+    };
+    enum class BufferWritePreset {
+        ComputeStorage,
+    };
+    enum class BufferReadWritePreset {
+        ComputeStorage,
+    };
+
     RenderTaskBuilder(Context &ctx, Framegraph &framegraph, std::string_view taskName);
     ~RenderTaskBuilder();
 
@@ -90,30 +117,40 @@ class RenderTaskBuilder : NoCopy {
     /// declares a dependency to the named resource
     TextureInfo
     read(TransientTextureHandle h, Gpu::TextureUsageFlags usage, Sync::AccessType readAccess);
+    TextureInfo read(TransientTextureHandle h, TextureReadPreset preset);
 
     /// declares a dependency to the named buffer resource
     BufferInfo
     read(TransientBufferHandle h, Gpu::BufferUsageFlags usage, Sync::AccessType readAccess);
+    BufferInfo read(TransientBufferHandle h, BufferReadPreset preset);
 
     /// declare that a render task writes to a certain texture
     [[nodiscard]] std::pair<TransientTextureHandle, TextureInfo> write(
         TransientTextureHandle handle, Gpu::TextureUsageFlags usage, Sync::AccessType writeAccess);
+    [[nodiscard]] std::pair<TransientTextureHandle, TextureInfo>
+    write(TransientTextureHandle handle, TextureWritePreset preset);
 
     /// declare that a render task writes to a certain buffer
     [[nodiscard]] std::pair<TransientBufferHandle, BufferInfo>
     write(TransientBufferHandle handle, Gpu::BufferUsageFlags usage, Sync::AccessType writeAccess);
+    [[nodiscard]] std::pair<TransientBufferHandle, BufferInfo> write(TransientBufferHandle handle,
+                                                                     BufferWritePreset preset);
 
     /// declare that a render task reads from and writes to a certain texture
     [[nodiscard]] std::pair<TransientTextureHandle, TextureInfo>
     readWrite(TransientTextureHandle handle,
               Gpu::TextureUsageFlags usage,
               Sync::AccessType readWriteAccess);
+    [[nodiscard]] std::pair<TransientTextureHandle, TextureInfo>
+    readWrite(TransientTextureHandle handle, TextureReadWritePreset preset);
 
     /// declare that a render task reads from and writes to a certain buffer
     [[nodiscard]] std::pair<TransientBufferHandle, BufferInfo>
     readWrite(TransientBufferHandle handle,
               Gpu::BufferUsageFlags usage,
               Sync::AccessType readWriteAccess);
+    [[nodiscard]] std::pair<TransientBufferHandle, BufferInfo>
+    readWrite(TransientBufferHandle handle, BufferReadWritePreset preset);
 
     /// Declares a render pass and registers implicit attachment dependencies.
     TransientRenderPass declareRenderPass(RenderPassDeclaration passDeclaration);
@@ -166,6 +203,7 @@ void RenderTaskExecutionAwaiter<RenderTaskOutput>::await_suspend(
         coroHandle) noexcept
 {
     coroHandle.promise().set_output(std::move(output));
+    coroHandle.promise().mark_handed_off();
     fg.enqueueRenderPass(passHandle, coroHandle);
 }
 

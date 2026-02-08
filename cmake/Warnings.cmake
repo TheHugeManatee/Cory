@@ -53,40 +53,18 @@ function(target_set_warnings)
             if (WGCC)
                 list(APPEND WarningFlags "-Wall" "-Wextra" "-Wpedantic")
             elseif (WCLANG)
-                list(APPEND WarningFlags "-Wall" "-Weverything" "-Wpedantic" 
+                list(APPEND WarningFlags "-Wall" "-Wextra" "-Wpedantic"
                     "-Wno-nullability-completeness" 
                     "-Wno-nullability-extension"
                     "-Wno-documentation-deprecated-sync"
                 )
             endif ()
 
-            ## This list is from Jason Turner's (@lefticus) cmake-starter project
-            list(APPEND WarningFlags -Wall
-                    -Wextra # reasonable and standard
-                    -Wshadow # warn the user if a variable declaration shadows one from a
-                    # parent context
-                    -Wnon-virtual-dtor # warn the user if a class with virtual functions has a
-                    # non-virtual destructor. This helps catch hard to
-                    # track down memory errors
-                    -Wold-style-cast # warn for c-style casts
-                    -Wcast-align # warn for potential performance problem casts
-                    -Wunused # warn on anything being unused
-                    -Woverloaded-virtual # warn if you overload (not override) a virtual
-                    # function
-                    -Wpedantic # warn if non-standard C++ is used
-                    -Wconversion # warn on type conversions that may lose data
-                    -Wsign-conversion # warn on sign conversions
-                    -Wmisleading-indentation # warn if identation implies blocks where blocks
-                    # do not exist
-                    -Wduplicated-cond # warn if if / else chain has duplicated conditions
-                    -Wduplicated-branches # warn if if / else branches have duplicated code
-                    -Wlogical-op # warn about logical operations being used where bitwise were
-                    # probably wanted
-                    -Wnull-dereference # warn if a null dereference is detected
-                    -Wuseless-cast # warn if you perform a cast to the same type
-                    -Wdouble-promotion # warn if float is implicit promoted to double
-                    -Wformat=2 # warn on security issues around functions that format output
-                    # (ie printf)
+            list(APPEND WarningFlags
+                    -Wnon-virtual-dtor
+                    -Woverloaded-virtual
+                    -Wnull-dereference
+                    -Wformat=2
             )
         endif ()
     elseif (NOT ${disable_all} EQUAL -1)
@@ -120,6 +98,19 @@ function(target_set_warnings)
             list(APPEND WarningFlags -Wno-switch-enum)
             if (WCLANG)
                 list(APPEND WarningFlags -Wno-unknown-warning-option -Wno-padded -Wno-undef -Wno-reserved-id-macro -fcomment-block-commands=test,retval)
+                list(APPEND WarningFlags
+                        -Wno-unused-parameter
+                        -Wno-unused-private-field
+                        -Wno-unused-variable
+                        -Wno-unused-result
+                        -Wno-missing-designated-field-initializers
+                        -Wno-missing-braces
+                        -Wno-reorder-init-list
+                        -Wno-pessimizing-move
+                        -Wno-mismatched-tags
+                        -Wno-absolute-value
+                        -Wno-macro-redefined
+                )
                 if (NOT CMAKE_CXX_STANDARD EQUAL 98)
                     list(APPEND WarningFlags -Wno-c++98-compat -Wno-c++98-compat-pedantic)
                 endif ()

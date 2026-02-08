@@ -167,33 +167,6 @@ void FramegraphVisualizer::build([[maybe_unused]] Index &index,
 }
 
 namespace {
-std::string escapeDotHtmlLabel(std::string_view s)
-{
-    std::string out;
-    out.reserve(s.size());
-    for (size_t i = 0; i < s.size(); ++i) {
-        // Support both real newlines and literal "\\n" sequences.
-        if (s[i] == '\n') {
-            out += "<BR/>";
-            continue;
-        }
-        if (s[i] == '\\' && (i + 1) < s.size() && s[i + 1] == 'n') {
-            out += "<BR/>";
-            ++i;
-            continue;
-        }
-
-        switch (s[i]) {
-        case '&': out += "&amp;"; break;
-        case '<': out += "&lt;"; break;
-        case '>': out += "&gt;"; break;
-        case '"': out += "&quot;"; break;
-        default: out += s[i]; break;
-        }
-    }
-    return out;
-}
-
 std::string escapeDotString(std::string_view s)
 {
     std::string out;
@@ -369,7 +342,7 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
                accentColor);
     }
 
-    for (const auto &[idx, dep] : ranges::views::enumerate(index.outputDependencies)) {
+    for (auto [idx, dep] : ranges::views::enumerate(index.outputDependencies)) {
         const std::string barrierName = fmt::format("Barrier_{}", idx);
         if (dep.transitionInfo) {
             append("  {0} [shape=diamond, color=\"{1}\", fontcolor=\"{1}\", label=\"Barrier\"];\n",
@@ -395,7 +368,7 @@ std::string FramegraphVisualizer::generateDotGraph(const ExecutionInfo &executio
         }
     }
 
-    for (const auto &[idx, dep] : ranges::views::enumerate(index.outputBufferDependencies)) {
+    for (auto [idx, dep] : ranges::views::enumerate(index.outputBufferDependencies)) {
         const std::string barrierName = fmt::format("BufferBarrier_{}", idx);
         if (dep.transitionInfo) {
             append("  {0} [shape=diamond, color=\"{1}\", fontcolor=\"{1}\", label=\"Barrier\"];\n",

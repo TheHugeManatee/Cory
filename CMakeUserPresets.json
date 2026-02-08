@@ -6,7 +6,8 @@
     "include": [
         "build/clion-debug/CMakePresets.json",
         "build/clion-release/CMakePresets.json",
-        "build/vscode/CMakePresets.json"
+        "build/vscode/CMakePresets.json",
+        "../../../../home/j/cory-work/codex/CMakePresets.json"
     ],
     "configurePresets": [
         {

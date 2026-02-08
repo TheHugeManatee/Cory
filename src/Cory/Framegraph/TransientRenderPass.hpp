@@ -2,6 +2,7 @@
 
 #include <Cory/Base/BitField.hpp>
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <KDGpu/graphics_pipeline_options.h>
@@ -114,6 +115,7 @@ class TransientRenderPass : NoCopy {
 
     Gpu::PipelineLayoutHandle pipelineLayout_;
     const RenderInput *currentRenderApi_{};
+    std::optional<ShaderBindingContext::ScopedBinding> bindingScope_;
 };
 
 } // namespace Cory

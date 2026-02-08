@@ -230,14 +230,10 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle depthTarget,
                                     Cory::TransientTextureHandle volumeTarget)
 {
-    builder.read(volumeTarget,
-                 Gpu::TextureUsageFlagBits::SampledBit,
-                 Cory::Sync::AccessType::ComputeShaderReadOther);
+    builder.read(volumeTarget, Cory::RenderTaskBuilder::TextureReadPreset::ComputeSampled);
 
     auto [colorHandle, colorInfo] = builder.readWrite(
-        colorTarget,
-        Gpu::TextureUsageFlagBits::ColorAttachmentBit | Gpu::TextureUsageFlagBits::StorageBit,
-        Cory::Sync::AccessType::General);
+        colorTarget, Cory::RenderTaskBuilder::TextureReadWritePreset::GeneralStorage);
 
     auto raycastPass = builder.declareComputePass(Cory::ComputePassDeclaration{
         .name = "PASS_CubeRaycast",
@@ -270,8 +266,8 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     }
     const auto volumeLayout = static_cast<Gpu::TextureLayout>(
         Cory::Sync::GetVkImageLayout(renderApi.resources->state(volumeTarget).lastAccess));
-    const auto volumeTextureIndex =
-        renderApi.bindingContext->bindTexture3D(volumeTarget, volumeLayout, volumeSampler_.handle());
+    const auto volumeTextureIndex = renderApi.bindingContext->bindTexture3D(
+        volumeTarget, volumeLayout, volumeSampler_.handle());
 
     const uint32_t instanceCount = static_cast<uint32_t>(renderState_.size());
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();

@@ -76,32 +76,32 @@ void DepthDebugLayer::onDetach(Context &ctx)
 bool DepthDebugLayer::onEvent(Event event)
 {
     auto eventHandler = lambda_visitor{
-        [](auto event) { return false; },
-        [this](const SwapchainResizedEvent &event) {
+        []([[maybe_unused]] auto &&ev) { return false; },
+        [this](const SwapchainResizedEvent &resizeEvent) {
             if (!renderEnabled()) return false;
-            state_->viewportDimensions = event.size;
+            state_->viewportDimensions = resizeEvent.size;
             return false;
         },
-        [this](const ScrollEvent &event) {
+        [this](const ScrollEvent &scrollEvent) {
             if (!renderEnabled()) return false;
             glm::vec2 size_delta{};
-            if (event.modifiers.is_set(ModifierFlagBits::Shift)) {
-                size_delta.x = event.scrollDelta.y;
+            if (scrollEvent.modifiers.is_set(ModifierFlagBits::Shift)) {
+                size_delta.x = scrollEvent.scrollDelta.y;
             }
             else {
-                size_delta.y = event.scrollDelta.y;
+                size_delta.y = scrollEvent.scrollDelta.y;
             }
             size = size.get() + size_delta * 0.03f;
             return true;
         },
-        [this](const MouseMovedEvent &event) {
+        [this](const MouseMovedEvent &mouseMovedEvent) {
             if (!renderEnabled()) return false;
-            center = event.position / state_->viewportDimensions;
+            center = mouseMovedEvent.position / state_->viewportDimensions;
             return true;
         },
-        [this](const KeyEvent &event) {
-            if (event.action == GLFW_PRESS && event.key == GLFW_KEY_D &&
-                event.modifiers == GLFW_MOD_CONTROL) {
+        [this](const KeyEvent &keyEvent) {
+            if (keyEvent.action == GLFW_PRESS && keyEvent.key == GLFW_KEY_D &&
+                keyEvent.modifiers == GLFW_MOD_CONTROL) {
                 renderEnabled = !renderEnabled();
                 return true;
             }
@@ -111,7 +111,7 @@ bool DepthDebugLayer::onEvent(Event event)
     return std::visit(eventHandler, event);
 }
 
-void DepthDebugLayer::onUpdate(const LogicUpdateContext &updateCtx)
+void DepthDebugLayer::onUpdate([[maybe_unused]] const LogicUpdateContext &updateCtx)
 {
     if (::ImGui::Begin("DepthDebugLayer")) {
         if (bool is_enabled = renderEnabled.get(); ::ImGui::Checkbox("Enabled", &is_enabled)) {
@@ -141,6 +141,7 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
         .dynamicStates = {.cullMode = CullMode::None,
                           .depthTest = DepthTest::Disabled,
                           .depthWrite = DepthWrite::Disabled},
+        .depthAttachment = {},
     });
     const auto colorOut = depthDebugPass.colorOutputs().front();
 

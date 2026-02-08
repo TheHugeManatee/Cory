@@ -16,6 +16,8 @@
 
 namespace Cory {
 
+class AsyncUploader;
+
 struct DebugMessageInfo {
     DebugMessageSeverity severity;
     DebugMessageType messageType;
@@ -82,6 +84,8 @@ class Context : NoCopy {
 
     DescriptorSets &descriptors();
     const DescriptorSets &descriptors() const;
+
+    AsyncUploader &uploader();
 
     FileWatchManager &fileWatchManager();
     const FileWatchManager &fileWatchManager() const;

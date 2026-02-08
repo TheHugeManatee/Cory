@@ -105,6 +105,8 @@ set(CORY_SOURCES
         RenderTasks/StandardRenderTasks.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
+        Renderer/AsyncUploader.cpp
+        Renderer/AsyncUploader.hpp
         Renderer/Context.cpp
         Renderer/Context.hpp
         Renderer/DescriptorSets.cpp

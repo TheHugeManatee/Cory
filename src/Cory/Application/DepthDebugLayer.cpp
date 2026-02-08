@@ -138,10 +138,10 @@ RenderTaskDeclaration<LayerPassOutputs> DepthDebugLayer::renderTask(RenderTaskBu
             .clearColor = {},
             .blend = std::nullopt,
         }},
+        .depthAttachment = {},
         .dynamicStates = {.cullMode = CullMode::None,
                           .depthTest = DepthTest::Disabled,
                           .depthWrite = DepthWrite::Disabled},
-        .depthAttachment = {},
     });
     const auto colorOut = depthDebugPass.colorOutputs().front();
 

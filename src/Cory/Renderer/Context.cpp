@@ -1,5 +1,6 @@
 #include "DescriptorSets.hpp"
 
+#include <Cory/Renderer/AsyncUploader.hpp>
 #include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/Debugger.hpp>
@@ -114,6 +115,7 @@ struct ContextPrivate {
     uint32_t graphicsQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
     uint32_t computeQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
     uint32_t transferQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
+    std::unique_ptr<AsyncUploader> uploader;
 
     ShaderManager shaders;
     DescriptorSets descriptorSets;
@@ -389,6 +391,7 @@ void Context::setupDeviceFromSurface(const Gpu::Surface &surface)
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+    data_->uploader = std::make_unique<AsyncUploader>(*this);
 
     setupDescriptors();
 }
@@ -474,6 +477,7 @@ void Context::setupHeadlessDevice()
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+    data_->uploader = std::make_unique<AsyncUploader>(*this);
 
     setupDescriptors();
 }
@@ -570,6 +574,13 @@ const DescriptorSets &Context::descriptors() const
 {
     return data_->descriptorSets;
 }
+
+AsyncUploader &Context::uploader()
+{
+    CO_CORE_ASSERT(data_->uploader != nullptr, "Uploader is not initialized");
+    return *data_->uploader;
+}
+
 FileWatchManager &Context::fileWatchManager()
 {
     return data_->fileWatchManager;

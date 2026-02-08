@@ -260,20 +260,22 @@ void SwapchainPrivate::createColorAndDepthResources(Gpu::SampleCountFlagBits sam
     // COLOR images (multisampled)
     colorImages = ranges::views::indices(swapchain.textures().size()) |
                   ranges::views::transform([&](auto idx) {
-                      return device.createTexture(Gpu::TextureOptions{
-                          .label = fmt::format("TEX_WndColor[{}] {} (IMG)", idx, extent),
-                          .type = Gpu::TextureType::TextureType2D,
-                          .format = swapchainSetup.format,
-                          .extent = {swapchainSetup.extent.width, swapchainSetup.extent.height, 1},
-                          .mipLevels = 1,
-                          .samples = samples,
-                          .createFlags = {},
-                          .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit |
-                                   Gpu::TextureUsageFlagBits::TransferSrcBit |
-                                   Gpu::TextureUsageFlagBits::SampledBit |
-                                   Gpu::TextureUsageFlagBits::StorageBit,
-                          .memoryUsage = Gpu::MemoryUsage::GpuOnly,
-                      });
+                      Gpu::TextureOptions options{};
+                      options.label = fmt::format("TEX_WndColor[{}] {} (IMG)", idx, extent);
+                      options.type = Gpu::TextureType::TextureType2D;
+                      options.format = swapchainSetup.format;
+                      options.extent = {swapchainSetup.extent.width,
+                                        swapchainSetup.extent.height,
+                                        1};
+                      options.mipLevels = 1;
+                      options.samples = samples;
+                      options.createFlags = {};
+                      options.usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit |
+                                       Gpu::TextureUsageFlagBits::TransferSrcBit |
+                                       Gpu::TextureUsageFlagBits::SampledBit |
+                                       Gpu::TextureUsageFlagBits::StorageBit;
+                      options.memoryUsage = Gpu::MemoryUsage::GpuOnly;
+                      return device.createTexture(options);
                   }) |
                   ranges::to<std::vector>;
 
@@ -290,19 +292,20 @@ void SwapchainPrivate::createColorAndDepthResources(Gpu::SampleCountFlagBits sam
     // DEPTH images
     depthImages = ranges::views::indices(swapchain.textures().size()) |
                   ranges::views::transform([&](auto idx) {
-                      // Create a depth texture to use for depth-correct rendering
-                      return device.createTexture(Gpu::TextureOptions{
-                          .label = fmt::format("TEX_WndDepth[{}] {} (IMG)", idx, extent),
-                          .type = Gpu::TextureType::TextureType2D,
-                          .format = swapchainSetup.depthFormat,
-                          .extent = {swapchainSetup.extent.width, swapchainSetup.extent.height, 1},
-                          .mipLevels = 1,
-                          .samples = samples,
-                          .createFlags = {},
-                          .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
-                                   Gpu::TextureUsageFlagBits::SampledBit,
-                          .memoryUsage = Gpu::MemoryUsage::GpuOnly,
-                      });
+                      Gpu::TextureOptions options{};
+                      options.label = fmt::format("TEX_WndDepth[{}] {} (IMG)", idx, extent);
+                      options.type = Gpu::TextureType::TextureType2D;
+                      options.format = swapchainSetup.depthFormat;
+                      options.extent = {swapchainSetup.extent.width,
+                                        swapchainSetup.extent.height,
+                                        1};
+                      options.mipLevels = 1;
+                      options.samples = samples;
+                      options.createFlags = {};
+                      options.usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
+                                       Gpu::TextureUsageFlagBits::SampledBit;
+                      options.memoryUsage = Gpu::MemoryUsage::GpuOnly;
+                      return device.createTexture(options);
                   }) |
                   ranges::to<std::vector>;
 

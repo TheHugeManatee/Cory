@@ -10,6 +10,7 @@
 #include <Cory/Base/Profiling.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Cory.hpp>
+#include <Cory/Renderer/AsyncUploader.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
@@ -274,9 +275,6 @@ void HelloTriangleApplication::createGeometry()
 
     mesh_ = std::make_unique<Mesh>();
 
-    KDGpu::UploadStagingBuffer vertex_staging_buffer;
-    KDGpu::UploadStagingBuffer index_staging_buffer;
-
     // Create a buffer to hold triangle vertex data
     {
         const float r = 0.8f;
@@ -303,14 +301,15 @@ void HelloTriangleApplication::createGeometry()
 
         mesh_->vertexBuffer = device.createBuffer(bufferOptions);
 
-        const KDGpu::BufferUploadOptions uploadOptions = {
-            .destinationBuffer = mesh_->vertexBuffer,
+        const auto uploadOptions = Cory::AsyncUploader::BufferUploadRequest{
+            .destinationBuffer = mesh_->vertexBuffer.handle(),
+            .data = vertexData.data(),
+            .byteSize = dataByteSize,
             .dstStages = KDGpu::PipelineStageFlagBit::VertexAttributeInputBit,
             .dstMask = KDGpu::AccessFlagBit::VertexAttributeReadBit,
-            .data = vertexData.data(),
-            .byteSize = dataByteSize};
+        };
 
-        vertex_staging_buffer = ctx().graphicsQueue().uploadBufferData(uploadOptions);
+        ctx().uploader().enqueueBufferUpload(uploadOptions);
     }
     // Create a buffer to hold the geometry index data
     {
@@ -323,17 +322,15 @@ void HelloTriangleApplication::createGeometry()
                                                         KDGpu::BufferUsageFlagBits::TransferDstBit,
                                                     .memoryUsage = KDGpu::MemoryUsage::GpuOnly};
         mesh_->indexBuffer = device.createBuffer(bufferOptions);
-        const KDGpu::BufferUploadOptions uploadOptions = {
-            .destinationBuffer = mesh_->indexBuffer,
+        const auto uploadOptions = Cory::AsyncUploader::BufferUploadRequest{
+            .destinationBuffer = mesh_->indexBuffer.handle(),
+            .data = indexData.data(),
+            .byteSize = dataByteSize,
             .dstStages = KDGpu::PipelineStageFlagBit::IndexInputBit,
             .dstMask = KDGpu::AccessFlagBit::IndexReadBit,
-            .data = indexData.data(),
-            .byteSize = dataByteSize};
-        index_staging_buffer = ctx().graphicsQueue().uploadBufferData(uploadOptions);
+        };
+        ctx().uploader().enqueueBufferUpload(uploadOptions);
     }
-    // Ensure upload is finished.
-    vertex_staging_buffer.fence.wait();
-    index_staging_buffer.fence.wait();
 }
 
 void HelloTriangleApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx,

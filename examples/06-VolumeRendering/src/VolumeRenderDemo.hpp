@@ -12,6 +12,10 @@
 #include <memory>
 #include <span>
 
+namespace Cory {
+class ImGuizmoTransformSystem;
+}
+
 class VolumeRenderDemoApplication : public Cory::Application {
   public:
     explicit VolumeRenderDemoApplication(std::span<const char *> args);
@@ -21,6 +25,7 @@ class VolumeRenderDemoApplication : public Cory::Application {
 
     Cory::Property<bool> debugRasterize{false};
     Cory::Property<bool> debugRaycast{false};
+    Cory::Property<bool> showImGuizmo{false};
 
   private:
     // create the mesh to be rendered
@@ -42,6 +47,7 @@ class VolumeRenderDemoApplication : public Cory::Application {
     Cory::SystemCoordinator systems_;
 
     class VolumeRenderSystem *volumeRenderer_{nullptr};
+    Cory::ImGuizmoTransformSystem *imguizmoSystem_{nullptr};
 
     void setupSystems();
     void setupScene();

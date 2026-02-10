@@ -115,7 +115,7 @@ void VolumeRenderDemoApplication::setupScene()
             .transferFunction =
                 {
                     .densityMin = 0.05f,
-                    .densityMax = 0.80f,
+                    .densityMax = 0.20f,
                     .opacityScale = 30.0f,
                     .gamma = 0.9f,
                 },
@@ -157,16 +157,18 @@ void VolumeRenderDemoApplication::setupSystems()
             c.viewMatrix = cameraLayer_->worldToViewMatrix();
         });
 
-    // Rotate all transforms slowly around the Y axis to introduce some motion
-    systems_.emplace<Cory::CallbackSystem<Cory::Components::Transform>>(
-        [](Cory::SceneGraph &, Cory::TickInfo tick, Cory::Entity, Cory::Components::Transform &t) {
-            const float deltaYaw = static_cast<float>(0.1 * tick.delta.count());
-            const auto delta = glm::angleAxis(deltaYaw, glm::vec3{0.0f, 1.0f, 0.0f});
-            t.orientation = glm::normalize(delta * t.orientation);
-        });
+    // // Rotate all transforms slowly around the Y axis to introduce some motion
+    // systems_.emplace<Cory::CallbackSystem<Cory::Components::Transform>>(
+    //     [](Cory::SceneGraph &, Cory::TickInfo tick, Cory::Entity, Cory::Components::Transform &t)
+    //     {
+    //         const float deltaYaw = static_cast<float>(0.1 * tick.delta.count());
+    //         const auto delta = glm::angleAxis(deltaYaw, glm::vec3{0.0f, 1.0f, 0.0f});
+    //         t.orientation = glm::normalize(delta * t.orientation);
+    //     });
 
     // render ImGuizmo handles for all transform components before propagation to world space
-    systems_.emplace<Cory::ImGuizmoTransformSystem>();
+    imguizmoSystem_ = &systems_.emplace<Cory::ImGuizmoTransformSystem>();
+    imguizmoSystem_->setEnabled(showImGuizmo.get());
 
     // after the "logic" has updated, sync all the transforms of the scenegraph
     systems_.emplace<Cory::TransformSystem>();
@@ -196,6 +198,7 @@ void VolumeRenderDemoApplication::run()
          .clearDeferredShaderReleases = true},
         [this, &framegraphs](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
             auto tickInfo = clock_.tick();
+            imguizmoSystem_->setEnabled(showImGuizmo.get());
             systems_.tick(sceneGraph_, tickInfo);
 
             auto recordedFrame = recordFramegraph(
@@ -293,6 +296,7 @@ void VolumeRenderDemoApplication::drawImguiControls()
 
         CoImGui::CheckBox("Debug Rasterizer", debugRasterize);
         CoImGui::CheckBox("Debug Raycast", debugRaycast);
+        CoImGui::CheckBox("Show ImGuizmo", showImGuizmo);
 
         ImGui::Separator();
         CoImGui::Text("Volume Transfer Functions");

@@ -22,7 +22,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     float3 volumeSize = float3(globals->volumeDimensions) * globals->volumeSpacing;
     voxelPos -= volumeSize * 0.5f;
 
-    voxelPos /= 20.0f; // global scaling
+    voxelPos /= 30.0f; // global scaling
 
     // Add animated deformations
     voxelPos += 0.15f * sin(globals->time + voxelPos.x * 2.0f) * float3(1, 0.5, 0.5);
@@ -34,11 +34,12 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     
     // Primary density shell
     float mainShell = exp(-(distFromCenter - 1.5f) * (distFromCenter - 1.5f) * 2.0f);
-    
+
     // Add internal turbulent features
-    float turbulence = abs(sin(voxelPos.x * 5.0f + globals->time)) * 
-                      abs(sin(voxelPos.y * 4.0f + globals->time * 0.8f)) *
-                      abs(sin(voxelPos.z * 3.0f + globals->time * 0.6f));
+    // float turbulence = abs(sin(voxelPos.x * 5.0f + globals->time)) *
+    //                  abs(sin(voxelPos.y * 4.0f + globals->time * 0.8f)) *
+    //                  abs(sin(voxelPos.z * 3.0f + globals->time * 0.6f));
+    float turbulence = 0;
     
     // Radial oscillations for dynamic movement
     float radialOscillation = 0.5f + 0.5f * sin(distFromCenter * 3.0f - globals->time);

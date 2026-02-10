@@ -168,7 +168,7 @@ struct FrontToBackAccumulator : IAccumulator<VolumeSample, FrontToBackState, flo
 float4 raymarchVolume(float3 localOrigin,
                       float3 localDirection,
                       InstanceData instance,
-                      float2 intervalJitter)
+                      float phaseJitter)
 {
     let box = AABB(boxMin, boxMax);
     let localRay = Ray(localOrigin, localDirection);
@@ -189,19 +189,14 @@ float4 raymarchVolume(float3 localOrigin,
     let voxelSize = 1.0f / float(max(maxDim, 1u));
     let stepMultiplier = max(instance.raymarchParams.x, 0.01f);
     let jitterEnabled = instance.raymarchParams.y > 0.5f;
-    let jitterScale = jitterEnabled ? 1.0f : 0.0f;
     let stepSize = stepMultiplier * voxelSize / dirLength;
-    let jitterWindow = stepSize;
-    let jitteredStart = clamp(tStart + intervalJitter.x * jitterWindow * jitterScale, tStart, tEnd);
-    let jitteredEnd =
-        clamp(tEnd + intervalJitter.y * jitterWindow * jitterScale, jitteredStart + stepSize, tEnd);
-    if (jitteredEnd <= jitteredStart) {
-        return float4(0.0f);
-    }
-    let segmentLength = jitteredEnd - jitteredStart;
-    let stepCount = min(max(uint(ceil(segmentLength / stepSize)), 1u), kMaxRaymarchStepsLimit);
+    let segmentLength = tEnd - tStart;
+    let jitterCentered = (phaseJitter - 0.5f) * (jitterEnabled ? 1.0f : 0.0f);
+    // Shift sampling phase by up to +/- half a step while keeping the integration interval fixed.
+    let marchStart = tStart + jitterCentered * stepSize;
+    let stepCount = min(max(uint(ceil(segmentLength / stepSize)) + 1u, 1u), kMaxRaymarchStepsLimit);
 
-    let marchRay = Ray(localOrigin, localDirection, jitteredStart, jitteredEnd);
+    let marchRay = Ray(localOrigin, localDirection, marchStart, tEnd);
     let cfg = MarchConfig(stepSize, stepCount);
     let sampler = VolumeSampler(instance, stepSize);
     let accum = FrontToBackAccumulator();
@@ -243,9 +238,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         let rayDirection = normalize(worldPos.xyz - rayOrigin);
         let jitterSeed = float3(float2(coords) + samplePosition,
                                 globals->time * 91.7f + float(sample) * 17.0f);
-        let intervalJitter = float2(hash13(jitterSeed + float3(13.1f, 7.7f, 3.3f)),
-                                    hash13(jitterSeed + float3(2.4f, 11.9f, 19.2f))) -
-                             0.5f;
+        let phaseJitter = hash13(jitterSeed + float3(13.1f, 7.7f, 3.3f));
         var volumeColor = float4(0.0f);
 
         [loop]
@@ -253,7 +246,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             let instance = globals->instances[i];
             let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
             let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
-            let instanceVolume = raymarchVolume(localOrigin, localDirection, instance, intervalJitter);
+            let instanceVolume = raymarchVolume(localOrigin, localDirection, instance, phaseJitter);
             if (instanceVolume.a > 0.0f) {
                 volumeColor.rgb += (1.0f - volumeColor.a) * instanceVolume.rgb;
                 volumeColor.a += (1.0f - volumeColor.a) * instanceVolume.a;

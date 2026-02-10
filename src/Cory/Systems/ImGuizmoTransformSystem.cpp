@@ -31,6 +31,10 @@ void ImGuizmoTransformSystem::beforeUpdate(SceneGraph &graph, [[maybe_unused]] u
     worldMatrices_.clear();
     graph.sortByDepth<Transform>();
 
+    if (!enabled_) {
+        return;
+    }
+
     if (ImGui::GetCurrentContext() == nullptr) {
         return;
     }
@@ -85,6 +89,10 @@ void ImGuizmoTransformSystem::update(SceneGraph &graph,
                                      Entity entity,
                                      Transform &transform)
 {
+    if (!enabled_) {
+        return;
+    }
+
     const auto localMatrix = localMatrixFromTransform(transform);
     const auto parentMatrix =
         transform.mode == TransformMode::Local ? parentWorldMatrix(graph, entity) : glm::mat4{1.0f};

@@ -79,6 +79,11 @@ class Framegraph : NoCopy {
                                                       Sync::AccessType lastWriteAccess,
                                                       const Texture &image,
                                                       const TextureView &imageView);
+    [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
+                                                      Sync::AccessType lastWriteAccess,
+                                                      Gpu::TextureHandle image,
+                                                      Gpu::TextureViewHandle imageView);
+    [[nodiscard]] TransientTextureHandle declareInput(TransientTextureHandle handle);
 
     /// @brief declare an external resource dependency for the framegraph
     /// @param finalAccess The desired final access type for the output resource

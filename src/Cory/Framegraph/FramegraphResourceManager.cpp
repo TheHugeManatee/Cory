@@ -161,13 +161,21 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
                             .createFlags = {}});
 
     // Create the view
+    const auto aspectMask = flagsForFormat(res.info.format);
     res.view = resources.createTextureView(
         deviceHandle,
         res.image,
         Gpu::TextureViewOptions{.label = fmt::format("{} (VIEW)", res.info.name),
                                 .viewType = viewType,
                                 .format = res.info.format,
-                                .range = {},
+                                .range =
+                                    {
+                                        .aspectMask = aspectMask,
+                                        .baseMipLevel = 0,
+                                        .levelCount = 1,
+                                        .baseArrayLayer = 0,
+                                        .layerCount = 1,
+                                    },
                                 .yCbCrConversion = {}});
 
     res.state.status = TextureMemoryStatus::Allocated;

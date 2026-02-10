@@ -5,9 +5,12 @@
 #include <Cory/Base/Prop.hpp>
 #include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
 #include <Cory/Systems/SystemCoordinator.hpp>
+
+#include <glm/vec2.hpp>
 
 #include <memory>
 #include <span>
@@ -26,10 +29,13 @@ class VolumeRenderDemoApplication : public Cory::Application {
     Cory::Property<bool> debugRasterize{false};
     Cory::Property<bool> debugRaycast{false};
     Cory::Property<bool> showImGuizmo{false};
+    Cory::Property<bool> temporalAccumulation{true};
+    Cory::Property<float> temporalAccumulationAlpha{0.10f};
 
   private:
     // create the mesh to be rendered
     void defineRenderPasses(Cory::Framegraph &framegraph, const Cory::FrameContext &frameCtx);
+    void ensureTemporalHistoryTexture(const Cory::FrameContext &frameCtx);
 
     void drawImguiControls();
 
@@ -48,6 +54,14 @@ class VolumeRenderDemoApplication : public Cory::Application {
 
     class VolumeRenderSystem *volumeRenderer_{nullptr};
     Cory::ImGuizmoTransformSystem *imguizmoSystem_{nullptr};
+
+    Cory::FramegraphTextureHandle temporalHistoryResource_{};
+    Cory::FramegraphResourceManager *framegraphResources_{nullptr};
+    glm::u32vec2 temporalHistoryExtent_{0u, 0u};
+    Gpu::Format temporalHistoryFormat_{};
+    Gpu::SampleCountFlagBits temporalHistorySampleCount_{Gpu::SampleCountFlagBits::Samples1Bit};
+    bool temporalHistoryValid_{false};
+    bool forceTemporalReset_{false};
 
     void setupSystems();
     void setupScene();

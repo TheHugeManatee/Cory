@@ -38,7 +38,7 @@ struct RaycastGlobals {
     uint32_t instanceCount;
     uint32_t volumeTextureIndex;
     uint32_t colorTargetIsMsaa;
-    uint32_t padding1;
+    float temporalBlendFactor;
     Cory::BufferDeviceAddress instances;
 };
 
@@ -254,7 +254,8 @@ Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
 VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle colorTarget,
                                     Cory::TransientTextureHandle depthTarget,
-                                    Cory::TransientTextureHandle volumeTarget)
+                                    Cory::TransientTextureHandle volumeTarget,
+                                    float temporalBlendFactor)
 {
     builder.read(volumeTarget, Cory::RenderTaskBuilder::TextureReadPreset::ComputeSampled);
 
@@ -305,24 +306,24 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->volumeTextureIndex = volumeTextureIndex;
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
-    drawData->padding1 = 0u;
+    drawData->temporalBlendFactor = std::clamp(temporalBlendFactor, 0.0f, 1.0f);
 
+    drawData->instances = 0;
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
         std::memcpy(alloc.cpu,
                     renderState_.data(),
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
         drawData->instances = alloc.gpu;
-
-        renderApi.bindingContext->push(drawData.gpu);
-
-        constexpr uint32_t kThreadGroupSizeX = 16u;
-        constexpr uint32_t kThreadGroupSizeY = 16u;
-        const uint32_t groupsX = (colorInfo.size.x + kThreadGroupSizeX - 1u) / kThreadGroupSizeX;
-        const uint32_t groupsY = (colorInfo.size.y + kThreadGroupSizeY - 1u) / kThreadGroupSizeY;
-
-        raycastRecorder.dispatchCompute({groupsX, groupsY, 1});
     }
+    renderApi.bindingContext->push(drawData.gpu);
+
+    constexpr uint32_t kThreadGroupSizeX = 16u;
+    constexpr uint32_t kThreadGroupSizeY = 16u;
+    const uint32_t groupsX = (colorInfo.size.x + kThreadGroupSizeX - 1u) / kThreadGroupSizeX;
+    const uint32_t groupsY = (colorInfo.size.y + kThreadGroupSizeY - 1u) / kThreadGroupSizeY;
+
+    raycastRecorder.dispatchCompute({groupsX, groupsY, 1});
     raycastPass.end(std::move(raycastRecorder));
 }
 
@@ -379,7 +380,7 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     drawData->volumeTextureIndex = 0;
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
-    drawData->padding1 = 0u;
+    drawData->temporalBlendFactor = 1.0f;
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);

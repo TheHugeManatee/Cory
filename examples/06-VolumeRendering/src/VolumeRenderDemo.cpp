@@ -34,6 +34,7 @@
 #include <gsl/narrow>
 
 #include <algorithm>
+#include <vector>
 
 VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *> args)
 {
@@ -185,6 +186,7 @@ VolumeRenderDemoApplication::~VolumeRenderDemoApplication()
 void VolumeRenderDemoApplication::run()
 {
     Cory::FramegraphResourceManager framegraphResources{ctx()};
+    framegraphResources_ = &framegraphResources;
     auto framegraphs = createFramegraphs(framegraphResources);
 
     auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
@@ -217,6 +219,41 @@ void VolumeRenderDemoApplication::run()
             }
         },
         [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
+    framegraphResources_ = nullptr;
+}
+
+void VolumeRenderDemoApplication::ensureTemporalHistoryTexture(const Cory::FrameContext &frameCtx)
+{
+    CO_CORE_ASSERT(framegraphResources_ != nullptr,
+                   "FramegraphResourceManager must be available before declaring temporal history");
+
+    const auto extent = frameCtx.extent;
+    const auto format = frameCtx.colorFormat;
+    const auto sampleCount = frameCtx.sampleCount;
+    const bool needsRecreate =
+        !temporalHistoryResource_.valid() || temporalHistoryExtent_ != extent ||
+        temporalHistoryFormat_ != format || temporalHistorySampleCount_ != sampleCount;
+    if (!needsRecreate) {
+        return;
+    }
+
+    auto historyTexture = framegraphResources_->declareTexture(Cory::TextureInfo{
+        .name = "TEX_VolumeTemporalHistory",
+        .size = glm::uvec3{extent, 1u},
+        .format = format,
+        .usage = Gpu::TextureUsageFlagBits::StorageBit | Gpu::TextureUsageFlagBits::TransferSrcBit |
+                 Gpu::TextureUsageFlagBits::TransferDstBit,
+        .sampleCount = sampleCount,
+        .textureType = Gpu::TextureType::TextureType2D,
+    });
+    framegraphResources_->allocate(std::vector<Cory::FramegraphTextureHandle>{historyTexture});
+    temporalHistoryResource_ = historyTexture;
+
+    temporalHistoryExtent_ = extent;
+    temporalHistoryFormat_ = format;
+    temporalHistorySampleCount_ = sampleCount;
+    temporalHistoryValid_ = false;
+    forceTemporalReset_ = true;
 }
 
 void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
@@ -230,12 +267,16 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
     auto depthForLayers = frameHandles.depthImage;
 
     if (debugRasterize.get()) {
+        temporalHistoryResource_ = {};
+        temporalHistoryValid_ = false;
         auto rasterization = volumeRenderer_->rasterizationTask(
             framegraph.declareTask("TASK_Cubes"), colorForLayers, depthForLayers);
         colorForLayers = rasterization.output().colorOut;
         depthForLayers = rasterization.output().depthOut;
     }
     else if (debugRaycast.get()) {
+        temporalHistoryResource_ = {};
+        temporalHistoryValid_ = false;
         auto clearAttachments = Cory::StandardRenderTasks::clearAttachments(
             framegraph.declareTask("TASK_ClearAttachments"),
             frameHandles.colorImage,
@@ -252,20 +293,37 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
         depthForLayers = clearAttachments.output().depth.value_or(depthForLayers);
     }
     else {
+        ensureTemporalHistoryTexture(frameCtx);
         auto clearAttachments = Cory::StandardRenderTasks::clearAttachments(
             framegraph.declareTask("TASK_ClearAttachments"),
             frameHandles.colorImage,
             frameHandles.depthImage);
+        CO_CORE_ASSERT(temporalHistoryResource_.valid(),
+                       "Temporal history resource expected to be valid");
+        auto temporalHistory =
+            framegraph.declareInput(Cory::TransientTextureHandle{temporalHistoryResource_});
         auto volumeGeneration =
             volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
 
+        const float temporalAlpha = std::clamp(temporalAccumulationAlpha.get(), 0.01f, 1.0f);
+        const bool applyTemporal =
+            temporalAccumulation.get() && temporalHistoryValid_ && !forceTemporalReset_;
+        const float blendFactor = applyTemporal ? temporalAlpha : 1.0f;
+
         auto mainRaycast = volumeRenderer_->cubeRaycastTask(
             framegraph.declareTask("TASK_VolumeRaycast"),
-            clearAttachments.output().color,
+            temporalHistory,
             clearAttachments.output().depth.value_or(depthForLayers),
-            volumeGeneration.output());
-        colorForLayers = mainRaycast.output();
+            volumeGeneration.output(),
+            blendFactor);
+        auto temporalToColor =
+            Cory::StandardRenderTasks::resolve(framegraph.declareTask("TASK_TemporalToColor"),
+                                               mainRaycast.output(),
+                                               clearAttachments.output().color);
+        colorForLayers = temporalToColor.output();
         depthForLayers = clearAttachments.output().depth.value_or(depthForLayers);
+        temporalHistoryValid_ = true;
+        forceTemporalReset_ = false;
     }
 
     auto layersOutput =
@@ -292,11 +350,24 @@ void VolumeRenderDemoApplication::drawImguiControls()
                       clock_.lastTick().ticks);
         if (ImGui::Button("Restart")) {
             clock_.reset();
+            forceTemporalReset_ = true;
+            temporalHistoryValid_ = false;
         }
 
         CoImGui::CheckBox("Debug Rasterizer", debugRasterize);
         CoImGui::CheckBox("Debug Raycast", debugRaycast);
         CoImGui::CheckBox("Show ImGuizmo", showImGuizmo);
+
+        ImGui::Separator();
+        CoImGui::Text("Temporal Accumulation");
+        CoImGui::CheckBox("Enable Temporal", temporalAccumulation);
+        auto temporalAlpha = temporalAccumulationAlpha.get();
+        CoImGui::Slider("Temporal Alpha", temporalAlpha, 0.01f, 1.0f);
+        temporalAccumulationAlpha = std::clamp(temporalAlpha, 0.01f, 1.0f);
+        if (ImGui::Button("Reset Temporal")) {
+            forceTemporalReset_ = true;
+            temporalHistoryValid_ = false;
+        }
 
         ImGui::Separator();
         CoImGui::Text("Volume Transfer Functions");

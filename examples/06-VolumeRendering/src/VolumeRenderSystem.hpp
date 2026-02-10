@@ -70,7 +70,8 @@ class VolumeRenderSystem
     cubeRaycastTask(Cory::RenderTaskBuilder builder,
                     Cory::TransientTextureHandle colorTarget,
                     Cory::TransientTextureHandle depthTarget,
-                    Cory::TransientTextureHandle volumeTarget);
+                    Cory::TransientTextureHandle volumeTarget,
+                    float temporalBlendFactor);
 
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,

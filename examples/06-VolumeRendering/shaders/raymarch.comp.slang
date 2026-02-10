@@ -22,7 +22,7 @@ struct RaycastGlobals
     uint instanceCount;
     uint volumeTextureIndex;
     uint colorTargetIsMsaa;
-    uint padding1;
+    float temporalBlendFactor;
     Ptr<InstanceData, Access::Read> instances;
 };
 
@@ -256,19 +256,19 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
             }
         }
 
-        if (volumeColor.a > 0.0f) {
-            if (globals->colorTargetIsMsaa != 0u) {
-                let dst = gBindlessStorageImage2DMS[coords, sample];
-                let outColor = float4(volumeColor.rgb + (1.0f - volumeColor.a) * dst.rgb,
-                                      volumeColor.a + (1.0f - volumeColor.a) * dst.a);
-                gBindlessStorageImage2DMS[coords, sample] = outColor;
-            }
-            else {
-                let dst = gBindlessStorageImage2D[coords];
-                let outColor = float4(volumeColor.rgb + (1.0f - volumeColor.a) * dst.rgb,
-                                      volumeColor.a + (1.0f - volumeColor.a) * dst.a);
-                gBindlessStorageImage2D[coords] = outColor;
-            }
+        let currentColor = float4(volumeColor.rgb, 1.0f);
+        let temporalBlend = saturate(globals->temporalBlendFactor);
+        if (globals->colorTargetIsMsaa != 0u) {
+            let outColor = temporalBlend >= 0.999f
+                               ? currentColor
+                               : lerp(gBindlessStorageImage2DMS[coords, sample], currentColor, temporalBlend);
+            gBindlessStorageImage2DMS[coords, sample] = outColor;
+        }
+        else {
+            let outColor = temporalBlend >= 0.999f
+                               ? currentColor
+                               : lerp(gBindlessStorageImage2D[coords], currentColor, temporalBlend);
+            gBindlessStorageImage2D[coords] = outColor;
         }
     }
 }

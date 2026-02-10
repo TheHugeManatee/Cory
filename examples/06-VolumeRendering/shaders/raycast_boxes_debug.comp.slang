@@ -21,7 +21,7 @@ struct RaycastGlobals
     uint instanceCount;
     uint volumeTextureIndex;
     uint colorTargetIsMsaa;
-    uint padding1;
+    float temporalBlendFactor;
     Ptr<InstanceData, Access::Read> instances;
 };
 

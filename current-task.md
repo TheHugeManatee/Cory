@@ -76,3 +76,22 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
   `VolumeComponent` -> `InstanceData::raymarchParams`.
 - Unified volume shader time inputs to use the application simulation clock value (`tick.now`) propagated from
   `VolumeRenderSystem` for both volume generation and raymarch/debug passes (removed frame-number-derived shader time).
+- Implemented initial temporal accumulation (EMA) for the main volume raymarch path:
+  - Added temporal blend factor controls in ImGui (enable/alpha/reset).
+  - Added a persistent history texture imported into the framegraph each frame.
+  - Updated raymarch shader to blend current frame with history using `temporalBlendFactor`.
+  - Copied accumulated history back to the frame color target before layer rendering.
+- Added a reusable `ImGuizmoTransformSystem` in Cory core systems and integrated it into `VolumeRenderDemo` so every
+  entity with `Transform` gets an on-screen ImGuizmo manipulator each frame.
+- Stabilized ImGuizmo transform round-tripping by decomposing edited local matrices with a Y-X-Z extractor that matches
+  Cory's `makeTransform()` convention and unwrapping Euler angles to avoid frame-to-frame rotation/scale flipping.
+- Centralized TRS math in `Cory::Math` (`eulerYXZToQuaternion`, `quaternionToEulerYXZ`, quaternion overload for
+  `makeTransform`, and `decomposeTransform`) and switched `TransformSystem` + `ImGuizmoTransformSystem` to use it.
+- Added quaternion-authoritative transform handling (`Transform::orientation`) with compatibility syncing for legacy
+  Euler writes; during ImGuizmo drags we now update quaternion/scale/position continuously and only refresh Euler
+  angles on interaction release to prevent jitter.
+- Removed `Transform::rotation` entirely and migrated all transform updates to quaternion-only (`orientation`), including
+  SceneGraph and VolumeRendering animation paths.
+- Added a runtime `Show ImGuizmo` toggle in `VolumeRenderDemo` (default off) and wired it to
+  `ImGuizmoTransformSystem::setEnabled()` for enabling/disabling gizmo rendering and interaction.
+- Added focused math tests for TRS decomposition round-trip and Euler<->quaternion Y-X-Z conversion consistency.

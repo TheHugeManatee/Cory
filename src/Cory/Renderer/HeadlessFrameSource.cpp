@@ -164,6 +164,7 @@ HeadlessFrameSource::HeadlessFrameSource(Context &context, HeadlessFrameSourceCr
                 .samples = data_->sampleCount,
                 .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit |
                          Gpu::TextureUsageFlagBits::TransferSrcBit |
+                         Gpu::TextureUsageFlagBits::TransferDstBit |
                          Gpu::TextureUsageFlagBits::SampledBit |
                          Gpu::TextureUsageFlagBits::StorageBit,
                 .memoryUsage = Gpu::MemoryUsage::GpuOnly,

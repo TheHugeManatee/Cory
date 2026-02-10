@@ -717,6 +717,14 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
                                                 const Texture &image,
                                                 const TextureView &imageView)
 {
+    return declareInput(std::move(info), lastWriteAccess, image.handle(), imageView.handle());
+}
+
+TransientTextureHandle Framegraph::declareInput(TextureInfo info,
+                                                Sync::AccessType lastWriteAccess,
+                                                Gpu::TextureHandle image,
+                                                Gpu::TextureViewHandle imageView)
+{
     auto handle =
         data_->resources->registerExternal(std::move(info), lastWriteAccess, image, imageView);
 
@@ -724,6 +732,12 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
 
     data_->externalInputs.push_back(thandle);
     return thandle;
+}
+
+TransientTextureHandle Framegraph::declareInput(TransientTextureHandle handle)
+{
+    data_->externalInputs.push_back(handle);
+    return handle;
 }
 
 std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureHandle handle,

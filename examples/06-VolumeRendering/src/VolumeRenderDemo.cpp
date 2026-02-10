@@ -9,6 +9,7 @@
 #include <Cory/Application/Window.hpp>
 #include <Cory/Base/FileWatchManager.hpp>
 #include <Cory/Base/GlmUtils.hpp>
+#include <Cory/Base/Math.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Time.hpp>
@@ -22,6 +23,7 @@
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
+#include <Cory/Systems/ImGuizmoTransformSystem.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
@@ -98,45 +100,47 @@ void VolumeRenderDemoApplication::setupScene()
                                           .nearPlane = 0.2f,
                                           .farPlane = 1000.0f});
 
-    sceneGraph_.createEntityWithComponents(root,
-                                           "Main Volume",
-                                           Cory::Components::Transform{
-                                               .mode = Cory::Components::TransformMode::Local,
-                                               .position = {0.0f, 0.0f, 0.0f},
-                                               .rotation = {0.0, 0.0, 0.0},
-                                               .scale = {1.0f, 1.0f, 1.0f},
-                                           },
-                                           VolumeComponent{
-                                               .size = {5.0f, 5.0f, 5.0f},
-                                               .raymarchStepSizeMultiplier = 4.0f,
-                                               .transferFunction =
-                                                   {
-                                                       .densityMin = 0.05f,
-                                                       .densityMax = 0.80f,
-                                                       .opacityScale = 30.0f,
-                                                       .gamma = 0.9f,
-                                                   },
-                                           });
+    sceneGraph_.createEntityWithComponents(
+        root,
+        "Main Volume",
+        Cory::Components::Transform{
+            .mode = Cory::Components::TransformMode::Local,
+            .position = {0.0f, 0.0f, 0.0f},
+            .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
+            .scale = {1.0f, 1.0f, 1.0f},
+        },
+        VolumeComponent{
+            .size = {5.0f, 5.0f, 5.0f},
+            .raymarchStepSizeMultiplier = 4.0f,
+            .transferFunction =
+                {
+                    .densityMin = 0.05f,
+                    .densityMax = 0.80f,
+                    .opacityScale = 30.0f,
+                    .gamma = 0.9f,
+                },
+        });
 
-    sceneGraph_.createEntityWithComponents(root,
-                                           "Secondary Volume",
-                                           Cory::Components::Transform{
-                                               .mode = Cory::Components::TransformMode::Local,
-                                               .position = {5.0f, 2.0f, 0.0f},
-                                               .rotation = {30.0, 45.0, 0.0},
-                                               .scale = {1.0f, 1.0f, 1.0f},
-                                           },
-                                           VolumeComponent{
-                                               .size = {2.0f, 4.0f, 2.0f},
-                                               .raymarchStepSizeMultiplier = 2.0f,
-                                               .transferFunction =
-                                                   {
-                                                       .densityMin = 0.25f,
-                                                       .densityMax = 0.98f,
-                                                       .opacityScale = 14.0f,
-                                                       .gamma = 1.45f,
-                                                   },
-                                           });
+    sceneGraph_.createEntityWithComponents(
+        root,
+        "Secondary Volume",
+        Cory::Components::Transform{
+            .mode = Cory::Components::TransformMode::Local,
+            .position = {5.0f, 2.0f, 0.0f},
+            .orientation = Cory::eulerYXZToQuaternion({30.0, 45.0, 0.0}),
+            .scale = {1.0f, 1.0f, 1.0f},
+        },
+        VolumeComponent{
+            .size = {2.0f, 4.0f, 2.0f},
+            .raymarchStepSizeMultiplier = 2.0f,
+            .transferFunction =
+                {
+                    .densityMin = 0.25f,
+                    .densityMax = 0.98f,
+                    .opacityScale = 14.0f,
+                    .gamma = 1.45f,
+                },
+        });
 }
 
 void VolumeRenderDemoApplication::setupSystems()
@@ -156,8 +160,13 @@ void VolumeRenderDemoApplication::setupSystems()
     // Rotate all transforms slowly around the Y axis to introduce some motion
     systems_.emplace<Cory::CallbackSystem<Cory::Components::Transform>>(
         [](Cory::SceneGraph &, Cory::TickInfo tick, Cory::Entity, Cory::Components::Transform &t) {
-            t.rotation += glm::vec3{0.0f, static_cast<float>(0.1 * tick.delta.count()), 0.0f};
+            const float deltaYaw = static_cast<float>(0.1 * tick.delta.count());
+            const auto delta = glm::angleAxis(deltaYaw, glm::vec3{0.0f, 1.0f, 0.0f});
+            t.orientation = glm::normalize(delta * t.orientation);
         });
+
+    // render ImGuizmo handles for all transform components before propagation to world space
+    systems_.emplace<Cory::ImGuizmoTransformSystem>();
 
     // after the "logic" has updated, sync all the transforms of the scenegraph
     systems_.emplace<Cory::TransformSystem>();

@@ -16,9 +16,8 @@ struct Transform {
 
     glm::vec3 position{0.0f};
 
-    /// the rotation in euler angles (corresponds to a tayt-bryan rotation, see
-    /// Cory::makeTransform())
-    glm::vec3 rotation{0.0f, 0.0f, 0.0f};
+    /// Internal rotation representation in Y-X-Z (Tait-Bryan) convention.
+    glm::quat orientation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 scale{1.0f};
 
     // updated by the system, other systems shouldn't modify this

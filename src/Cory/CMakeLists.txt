@@ -148,6 +148,8 @@ set(CORY_SOURCES
         SceneGraph/System.cpp
         SceneGraph/System.hpp
         Systems/CommonComponents.hpp
+        Systems/ImGuizmoTransformSystem.cpp
+        Systems/ImGuizmoTransformSystem.hpp
         Systems/SystemCoordinator.cpp
         Systems/SystemCoordinator.hpp
         Systems/TransformSystem.cpp

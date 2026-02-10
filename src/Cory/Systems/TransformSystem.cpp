@@ -1,5 +1,6 @@
 #include <Cory/Systems/TransformSystem.hpp>
 
+#include <Cory/Base/Math.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -44,8 +45,9 @@ void TransformSystem::update(SceneGraph &sg,
         parent = parentTransform(sg, entity);
     }
 
+    transform.orientation = glm::normalize(transform.orientation);
     transform.modelToWorld =
-        parent * makeTransform(transform.position, transform.rotation, transform.scale);
+        parent * makeTransform(transform.position, transform.orientation, transform.scale);
 
     //    CO_CORE_INFO("Translation for {} is {} (parent={})",
     //                 sg.data(entity).name,

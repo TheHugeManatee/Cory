@@ -129,7 +129,6 @@ void SceneGraphDemoApplication::setupScene()
                                                   },
                                                   Cory::Components::Transform{
                                                       .position = pos,
-                                                      .rotation = glm::vec3{0.0f, 0.0f, 0.0f},
                                                       .scale = scale,
                                                   });
             entities.push_back(child);

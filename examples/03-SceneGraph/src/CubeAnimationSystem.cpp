@@ -1,5 +1,6 @@
 #include "CubeAnimationSystem.hpp"
 
+#include <Cory/Base/Math.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 
@@ -64,7 +65,8 @@ void CubeAnimationSystem::animate(AnimationComponent &d,
     const glm::vec3 translation{sin(i * tsf) * i * ad_.tsi, cos(i * tsf) * i * ad_.tsi, i * ad_.ti};
 
     // transform.position = ad_.translation + translation;
-    transform.rotation = ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f};
+    const glm::vec3 rotation = ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f};
+    transform.orientation = Cory::eulerYXZToQuaternion(rotation);
     // transform.scale = glm::vec3{scale};
 
     const float colorFreq = 1.0f / (ad_.cf0 + ad_.cfi * i);

@@ -233,7 +233,6 @@ VolumeRenderSystem::volumeGenerationTask(Cory::RenderTaskBuilder builder)
     recorder.bindShader(shader.shaderHandle());
     renderApi.bindingContext->bindStorageImage3D(volumeHandle, Gpu::TextureLayout::General);
 
-    volumeParams_.time = float(renderApi.frameCtx->frameNumber) / 300.0f; // TODO where's my time at
     auto params = renderApi.bindingContext->alloc<VolumeGenerationParams>();
     *params.cpu = volumeParams_;
     renderApi.bindingContext->push(params.gpu);
@@ -300,7 +299,7 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
     drawData->volumeDimensions = volumeParams_.volumeDimensions;
-    drawData->time = float(renderApi.frameCtx->frameNumber) / 60.0f;
+    drawData->time = volumeParams_.time;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = volumeTextureIndex;
     drawData->padding1 = glm::uvec2{0u};
@@ -372,7 +371,7 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
     drawData->volumeDimensions = volumeParams_.volumeDimensions;
-    drawData->time = float(renderApi.frameCtx->frameNumber) / 60.0f;
+    drawData->time = volumeParams_.time;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = 0;
     drawData->padding1 = glm::uvec2{0u};

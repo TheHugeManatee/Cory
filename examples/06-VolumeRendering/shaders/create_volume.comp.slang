@@ -45,7 +45,7 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     float radialOscillation = 0.5f + 0.5f * sin(distFromCenter * 3.0f - globals->time);
     
     // Combine the features
-    float density = (mainShell + turbulence * 0.3f) * radialOscillation;
+    float density = (mainShell + turbulence * 0.2f) * radialOscillation;
     density = exp(-density * globals->densityScale);
     
     density = 1.0 - pow(density, 2.0f); // Enhance contrast

@@ -53,7 +53,7 @@ VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *>
     });
 
     // Use Cory API for MSAA sample count
-    const int msaaSamples = 2; // Or use window_->samples() after window creation if needed
+    const int msaaSamples = 1; // Or use window_->samples() after window creation if needed
     static constexpr auto WINDOW_SIZE = glm::i32vec2{1024, 1024};
     if (headless_) {
         ctx().setupHeadlessDevice();

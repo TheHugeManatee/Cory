@@ -27,7 +27,6 @@
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
-#include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -200,74 +199,31 @@ CubeDemoApplication::~CubeDemoApplication()
 void CubeDemoApplication::run()
 {
     Cory::FramegraphResourceManager framegraphResources{ctx()};
-    // one framegraph for each frame in flight
-    std::vector<Cory::Framegraph> framegraphs;
-    uint32_t idx = 0;
-    std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
-        return Cory::Framegraph(ctx(), framegraphResources, idx++);
-    });
-
-    auto time = getElapsedTimeSeconds();
-
-    auto runFrame = [&](Cory::FrameContext &frameCtx) {
-        // Process KDGui events
-        if (!headless_) {
-            processEvents(0);
-            glfwPollEvents();
-        }
-
-        // Update time
-        auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
-        auto delta = time - previousFrameTime;
-
-        if (!headless_) {
-            // Update layers
-            layers().update(Cory::LogicUpdateContext{
-                .simulationTime = time,
-                .deltaTime = delta,
-            });
-        }
-
-        if (!headless_) {
-            drawImguiControls();
-        }
-
-        Cory::Framegraph &fg = framegraphs[frameCtx.inFlightIndex];
-        // retire old resources from the last time this framegraph was
-        // used - our frame synchronization ensures that the resources
-        // are no longer in use
-        fg.resetForNextFrame(frameCtx.frameNumber);
-
-        defineRenderPasses(fg, frameCtx);
-
-        auto execInfo = fg.record(frameCtx);
-
-        if (dumpNextFramegraph_) {
-            std::filesystem::path outputPath =
-                std::filesystem::current_path() /
-                fmt::format("CubeDemo_Frame_{:04}.html", frameCtx.frameNumber);
-            fg.dump(execInfo, outputPath);
-            auto file_link = "file://" + absolute(outputPath).string();
-            // replace backslashes with forward slashes so IDE's add auto-links for convenience
-            std::ranges::replace(file_link, '\\', '/');
-
-            CO_CORE_INFO("Dumped framegraph to\n{}", file_link);
-            dumpNextFramegraph_ = false;
-        }
-    };
+    auto framegraphs = createFramegraphs(framegraphResources);
 
     auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
                                   : static_cast<Cory::FrameSource &>(*window_);
-    auto frames = frameSource.frames();
-    for (auto &frameCtx : frames) {
-        runFrame(frameCtx);
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
-        }
-    }
+    runMainLoop(
+        frameSource,
+        framesToRender_,
+        {.headless = headless_, .pollPlatformEvents = true},
+        [this, &framegraphs](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
+            auto recordedFrame = recordFramegraph(
+                framegraphs,
+                frameCtx,
+                [this](Cory::Framegraph &fg, const Cory::FrameContext &currentFrame) {
+                    defineRenderPasses(fg, currentFrame);
+                });
 
-    // wait until last frame is finished rendering
-    ctx().device().waitUntilIdle();
+            if (dumpNextFramegraph_) {
+                dumpFramegraph(recordedFrame.framegraph,
+                               recordedFrame.executionInfo,
+                               "CubeDemo",
+                               frameCtx.frameNumber);
+                dumpNextFramegraph_ = false;
+            }
+        },
+        [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
 }
 
 void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,

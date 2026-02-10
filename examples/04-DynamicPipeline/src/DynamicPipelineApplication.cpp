@@ -136,49 +136,25 @@ DynamicPipelineApplication::~DynamicPipelineApplication()
 
 void DynamicPipelineApplication::run()
 {
-    auto finalSync = gsl::finally([this]() { ctx().device().waitUntilIdle(); });
-    double currentTime = getElapsedTimeSeconds();
-
-    auto runFrame = [&](Cory::FrameContext &frameCtx) {
-        if (!headless_) {
-            processEvents();
-        }
-        // Process any file changes - triggers e.g. shader reloads
-        ctx().fileWatchManager().processPendingEvents();
-
-        ctx().shaders().clearDeferredReleases(frameCtx.frameNumber);
-
-        double previousTime = std::exchange(currentTime, getElapsedTimeSeconds());
-        const double delta = currentTime - previousTime;
-
-        if (!headless_) {
-            layers().update(Cory::LogicUpdateContext{
-                .simulationTime = currentTime,
-                .deltaTime = delta,
-            });
-        }
-
-        if (!headless_) {
-            drawUi(frameCtx);
-        }
-
-        if (requestCompile_) {
-            compileFragmentShaderSource(fragmentShaderEditorSource_, frameCtx.frameNumber);
-            requestCompile_ = false;
-        }
-
-        recordCommands(frameCtx);
-    };
-
     auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
                                   : static_cast<Cory::FrameSource &>(*window_);
-    auto frames = frameSource.frames();
-    for (auto &frameCtx : frames) {
-        runFrame(frameCtx);
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
-        }
-    }
+    runMainLoop(
+        frameSource,
+        framesToRender_,
+        {.headless = headless_,
+         .processFileWatchEvents = true,
+         .clearDeferredShaderReleases = true},
+        [this](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
+            if (requestCompile_) {
+                compileFragmentShaderSource(fragmentShaderEditorSource_, frameCtx.frameNumber);
+                requestCompile_ = false;
+            }
+
+            recordCommands(frameCtx);
+        },
+        [this](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
+            drawUi(frameCtx);
+        });
 }
 
 Cory::EagerJob DynamicPipelineApplication::loadShaders()

@@ -1,3 +1,4 @@
+import CoryBindings;
 
 struct VolumeGenerationParams {
     float3 volumeSpacing;
@@ -7,8 +8,6 @@ struct VolumeGenerationParams {
 }
 
 [[vk::push_constant]] VolumeGenerationParams *globals;
-
-[[vk::binding(3, 1)]] RWTexture3D<float> volume;
 
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadId: SV_DispatchThreadID)
@@ -50,6 +49,6 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     
     density = 1.0 - pow(density, 2.0f); // Enhance contrast
     
-    volume[dispatchThreadId] = density;
+    gBindlessStorageImage3D[dispatchThreadId] = density;
 }
 

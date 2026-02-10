@@ -125,31 +125,30 @@ FrameContext Window::nextSwapchainImage()
 FrameContext Window::acquireFrameContext()
 {
     while (true) {
-        auto nextImageResult = data_->swapchain->nextImage();
         auto dims = dimensions();
+        glfwGetFramebufferSize(data_->window.get(), &dims.x, &dims.y);
+        dimensions = dims;
+
+        if (dims.x == 0 || dims.y == 0) {
+            // Minimized/zero-sized surfaces cannot acquire or recreate swapchains.
+            glfwWaitEventsTimeout(0.05);
+            continue;
+        }
+
+        auto nextImageResult = data_->swapchain->nextImage();
         if (!nextImageResult.has_value()) {
             auto error = nextImageResult.error();
             if (error == SwapchainError::Unknown) {
                 throw std::runtime_error(fmt::format(
                     "Failed to acquire next swapchain image for window '{}': {}", title(), error));
             }
-        }
-        if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
 
-            // wait until the surface dimensions are non-zero - this might happen
-            // while the app is minimized or the window has been resized to zero height
-            // or width, in which case we don't render anything
-            // do {
-            //     glfwPollEvents();
-            //     // VkSurfaceCapabilitiesKHR capabilities{};
-            //     // data_->ctx->instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
-            //     //     data_->ctx->physicalDevice(), surface_, &capabilities);
-            //     // size = {capabilities.currentExtent.width, capabilities.currentExtent.height};
-            //     std::this_thread::yield();
-            // } while (dimensions().x == 0 || dimensions().y == 0);
-
-            glfwGetWindowSize(data_->window.get(), &dims.x, &dims.y);
+            glfwGetFramebufferSize(data_->window.get(), &dims.x, &dims.y);
             dimensions = dims;
+            if (dims.x == 0 || dims.y == 0) {
+                glfwWaitEventsTimeout(0.05);
+                continue;
+            }
 
             // Hard sync to make sure no commands are in flight before recreating the swapchain
             data_->ctx->device().waitUntilIdle();

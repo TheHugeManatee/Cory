@@ -1,5 +1,6 @@
 import Raycast;
 import Msaa;
+import CoryBindings;
 
 struct InstanceData
 {
@@ -19,13 +20,12 @@ struct RaycastGlobals
     float time;
     uint instanceCount;
     uint volumeTextureIndex;
-    uint2 padding1;
+    uint colorTargetIsMsaa;
+    uint padding1;
     Ptr<InstanceData, Access::Read> instances;
 };
 
 [[vk::push_constant]] RaycastGlobals *globals;
-
-[[vk::binding(5, 1)]] RWTexture2DMS<float4> gColor;
 
 static const float3 boxMin = float3(-0.5, -0.5, -0.5);
 static const float3 boxMax = float3(0.5, 0.5, 0.5);
@@ -70,8 +70,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     uint imageWidth = 0;
     uint imageHeight = 0;
-    uint sampleCount = 0;
-    gColor.GetDimensions(imageWidth, imageHeight, sampleCount);
+    uint sampleCount = 1;
+    if (globals->colorTargetIsMsaa != 0u) {
+        gBindlessStorageImage2DMS.GetDimensions(imageWidth, imageHeight, sampleCount);
+    }
+    else {
+        gBindlessStorageImage2D.GetDimensions(imageWidth, imageHeight);
+    }
 
     if (dispatchThreadId.x >= imageWidth || dispatchThreadId.y >= imageHeight) {
         return;
@@ -98,6 +103,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         }
 
         let local01 = saturate(hit.localPos + 0.5f);
-        gColor[coords, sample] = float4(local01, 1.0f);
+        if (globals->colorTargetIsMsaa != 0u) {
+            gBindlessStorageImage2DMS[coords, sample] = float4(local01, 1.0f);
+        }
+        else {
+            gBindlessStorageImage2D[coords] = float4(local01, 1.0f);
+        }
     }
 }

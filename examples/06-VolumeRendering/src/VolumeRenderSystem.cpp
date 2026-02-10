@@ -37,7 +37,8 @@ struct RaycastGlobals {
     float time;
     uint32_t instanceCount;
     uint32_t volumeTextureIndex;
-    glm::uvec2 padding1;
+    uint32_t colorTargetIsMsaa;
+    uint32_t padding1;
     Cory::BufferDeviceAddress instances;
 };
 
@@ -302,7 +303,9 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->time = volumeParams_.time;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = volumeTextureIndex;
-    drawData->padding1 = glm::uvec2{0u};
+    drawData->colorTargetIsMsaa =
+        colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
+    drawData->padding1 = 0u;
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
@@ -374,7 +377,9 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     drawData->time = volumeParams_.time;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = 0;
-    drawData->padding1 = glm::uvec2{0u};
+    drawData->colorTargetIsMsaa =
+        colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
+    drawData->padding1 = 0u;
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);

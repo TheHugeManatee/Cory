@@ -1,6 +1,7 @@
 import Raycast;
 import Raymarch;
 import Msaa;
+import CoryBindings;
 
 struct InstanceData
 {
@@ -20,14 +21,12 @@ struct RaycastGlobals
     float time;
     uint instanceCount;
     uint volumeTextureIndex;
-    uint2 padding1;
+    uint colorTargetIsMsaa;
+    uint padding1;
     Ptr<InstanceData, Access::Read> instances;
 };
 
 [[vk::push_constant]] RaycastGlobals *globals;
-
-[[vk::binding(1, 1)]] Sampler3D<float> gVolumeTextures[];
-[[vk::binding(5, 1)]] RWTexture2DMS<float4> gColor;
 
 static const float3 boxMin = float3(-0.5, -0.5, -0.5);
 static const float3 boxMax = float3(0.5, 0.5, 0.5);
@@ -45,7 +44,7 @@ float hash13(float3 p)
 
 float sampleDensity(float3 uvw)
 {
-    return gVolumeTextures[globals->volumeTextureIndex].SampleLevel(saturate(uvw), 0.0f).r;
+    return gBindlessTexture3D[globals->volumeTextureIndex].SampleLevel(saturate(uvw), 0.0f).r;
 }
 
 float3 estimateGradient(float3 uvw)
@@ -215,8 +214,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     uint imageWidth = 0;
     uint imageHeight = 0;
-    uint sampleCount = 0;
-    gColor.GetDimensions(imageWidth, imageHeight, sampleCount);
+    uint sampleCount = 1;
+    if (globals->colorTargetIsMsaa != 0u) {
+        gBindlessStorageImage2DMS.GetDimensions(imageWidth, imageHeight, sampleCount);
+    }
+    else {
+        gBindlessStorageImage2D.GetDimensions(imageWidth, imageHeight);
+    }
 
     if (dispatchThreadId.x >= imageWidth || dispatchThreadId.y >= imageHeight) {
         return;
@@ -260,10 +264,18 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         }
 
         if (volumeColor.a > 0.0f) {
-            let dst = gColor[coords, sample];
-            let outColor = float4(volumeColor.rgb + (1.0f - volumeColor.a) * dst.rgb,
-                                  volumeColor.a + (1.0f - volumeColor.a) * dst.a);
-            gColor[coords, sample] = outColor;
+            if (globals->colorTargetIsMsaa != 0u) {
+                let dst = gBindlessStorageImage2DMS[coords, sample];
+                let outColor = float4(volumeColor.rgb + (1.0f - volumeColor.a) * dst.rgb,
+                                      volumeColor.a + (1.0f - volumeColor.a) * dst.a);
+                gBindlessStorageImage2DMS[coords, sample] = outColor;
+            }
+            else {
+                let dst = gBindlessStorageImage2D[coords];
+                let outColor = float4(volumeColor.rgb + (1.0f - volumeColor.a) * dst.rgb,
+                                      volumeColor.a + (1.0f - volumeColor.a) * dst.a);
+                gBindlessStorageImage2D[coords] = outColor;
+            }
         }
     }
 }

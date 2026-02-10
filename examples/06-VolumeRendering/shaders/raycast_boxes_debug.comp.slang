@@ -7,16 +7,19 @@ struct InstanceData
     float4x4 worldToModel;
     float4x4 normalToWorld;
     float4 color;
-    float4 parameters;
+    float4 transferParams;
+    float4 raymarchParams;
 };
 
 struct RaycastGlobals
 {
     float4x4 invViewProjection;
     float4 cameraPosition;
+    uint3 volumeDimensions;
+    uint padding0;
     uint instanceCount;
     uint volumeTextureIndex;
-    uint2 padding0;
+    uint2 padding1;
     Ptr<InstanceData, Access::Read> instances;
 };
 

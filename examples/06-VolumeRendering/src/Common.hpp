@@ -12,5 +12,7 @@ struct VolumeTransferFunction {
 struct VolumeComponent {
     // size of the volume in world units
     glm::vec3 size{1.0f, 2.0f, 1.0f};
+    // raymarch step size in units of voxels sampled per step
+    float raymarchStepSizeMultiplier{2.0f};
     VolumeTransferFunction transferFunction{};
 };

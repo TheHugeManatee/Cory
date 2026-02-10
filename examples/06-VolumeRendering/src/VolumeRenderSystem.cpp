@@ -33,9 +33,11 @@ struct DrawData {
 struct RaycastGlobals {
     glm::mat4 invViewProjection;
     glm::vec4 cameraPosition;
+    glm::uvec3 volumeDimensions;
+    uint32_t padding0;
     uint32_t instanceCount;
     uint32_t volumeTextureIndex;
-    glm::uvec2 padding0;
+    glm::uvec2 padding1;
     Cory::BufferDeviceAddress instances;
 };
 
@@ -59,9 +61,9 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
         .shaderHandle = &fragmentShader_,
     });
     shaderHotReloader_.addShader({
-        .path = Cory::ResourceLocator::Locate("raycast_boxes.comp.slang"),
+        .path = Cory::ResourceLocator::Locate("raymarch.comp.slang"),
         .stage = Gpu::ShaderStageFlagBits::ComputeBit,
-        .label = "raycast_boxes.comp.slang",
+        .label = "raymarch.comp.slang",
         .shaderHandle = &raycastShader_,
     });
     shaderHotReloader_.addShader({
@@ -111,12 +113,14 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
         .worldToModel = inverse(transform.modelToWorld * glm::scale(volume.size)),
         .normalToWorld = transpose(inverse(transform.modelToWorld)),
         .color = Cory::Color{1.0, 0.0, 0.0, 1.0},
-        .parameters = glm::vec4{std::clamp(volume.transferFunction.densityMin, 0.0f, 1.0f),
-                                std::clamp(volume.transferFunction.densityMax,
-                                           volume.transferFunction.densityMin + 0.001f,
-                                           1.0f),
-                                std::max(volume.transferFunction.opacityScale, 0.01f),
-                                std::max(volume.transferFunction.gamma, 0.01f)},
+        .transferParams = glm::vec4{std::clamp(volume.transferFunction.densityMin, 0.0f, 1.0f),
+                                    std::clamp(volume.transferFunction.densityMax,
+                                               volume.transferFunction.densityMin + 0.001f,
+                                               1.0f),
+                                    std::max(volume.transferFunction.opacityScale, 0.01f),
+                                    std::max(volume.transferFunction.gamma, 0.01f)},
+        .raymarchParams =
+            glm::vec4{std::max(volume.raymarchStepSizeMultiplier, 0.01f), 0.0f, 0.0f, 0.0f},
     });
 }
 
@@ -228,7 +232,7 @@ VolumeRenderSystem::volumeGenerationTask(Cory::RenderTaskBuilder builder)
     recorder.bindShader(shader.shaderHandle());
     renderApi.bindingContext->bindStorageImage3D(volumeHandle, Gpu::TextureLayout::General);
 
-    volumeParams_.time = float(renderApi.frameCtx->frameNumber) / 60.0f; // TODO where's my time at
+    volumeParams_.time = float(renderApi.frameCtx->frameNumber) / 300.0f; // TODO where's my time at
     auto params = renderApi.bindingContext->alloc<VolumeGenerationParams>();
     *params.cpu = volumeParams_;
     renderApi.bindingContext->push(params.gpu);
@@ -294,9 +298,11 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
+    drawData->volumeDimensions = volumeParams_.volumeDimensions;
+    drawData->padding0 = 0u;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = volumeTextureIndex;
-    drawData->padding0 = glm::uvec2{0u};
+    drawData->padding1 = glm::uvec2{0u};
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
@@ -364,9 +370,11 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
+    drawData->volumeDimensions = volumeParams_.volumeDimensions;
+    drawData->padding0 = 0u;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = 0;
-    drawData->padding0 = glm::uvec2{0u};
+    drawData->padding1 = glm::uvec2{0u};
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);

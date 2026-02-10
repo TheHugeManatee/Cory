@@ -4,7 +4,8 @@ struct InstanceData
     float4x4 worldToModel;
     float4x4 normalToWorld;
     float4 color;
-    float4 parameters;
+    float4 transferParams;
+    float4 raymarchParams;
 };
 
 struct ViewData
@@ -52,6 +53,6 @@ VSOutput main(VSInput input)
     output.normal = mul(normalMatrix, float4(input.normal, 0.0f)).xyz;
     output.color = input.color;
     output.instanceColor = instance.color;
-    output.blend = instance.parameters.x;
+    output.blend = instance.transferParams.x;
     return output;
 }

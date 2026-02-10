@@ -23,11 +23,12 @@ struct alignas(16) InstanceData {
     glm::mat4 worldToModel{1.0f};
     glm::mat4 normalToWorld{1.0f};
     glm::vec4 color{1.0f};
-    glm::vec4 parameters{0.0f};
+    glm::vec4 transferParams{0.0f};
+    glm::vec4 raymarchParams{0.0f};
 };
 
 static_assert(std::is_trivially_copyable_v<InstanceData>);
-static_assert(sizeof(InstanceData) == 3 * sizeof(glm::mat4) + 2 * sizeof(glm::vec4));
+static_assert(sizeof(InstanceData) == 3 * sizeof(glm::mat4) + 3 * sizeof(glm::vec4));
 
 struct alignas(16) VolumeGenerationParams {
     glm::vec3 volumeSpacing{1.0f};

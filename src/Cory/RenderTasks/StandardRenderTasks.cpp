@@ -7,6 +7,44 @@
 
 namespace Cory::StandardRenderTasks {
 
+RenderTaskDeclaration<ClearPassOutputs>
+clearAttachments(RenderTaskBuilder builder,
+                 TransientTextureHandle colorTarget,
+                 std::optional<TransientTextureHandle> depthTarget,
+                 Gpu::ColorClearValue clearColor,
+                 Gpu::DepthStencilClearValue clearDepth)
+{
+    auto clearPass = builder.declareRenderPass(RenderPassDeclaration{
+        .name = "PASS_ClearAttachments",
+        .options = PassOptionFlagBits::SkipPipelineBind,
+        .attachments = {{
+            {
+                .target = colorTarget,
+                .load = Gpu::AttachmentLoadOperation::Clear,
+                .store = Gpu::AttachmentStoreOperation::Store,
+                .clearColor = clearColor,
+                .blend = std::nullopt,
+            },
+        }},
+        .depthAttachment = depthTarget.has_value()
+                               ? std::optional<DepthStencilAttachment>{DepthStencilAttachment{
+                                     .target = *depthTarget,
+                                     .load = Gpu::AttachmentLoadOperation::Clear,
+                                     .store = Gpu::AttachmentStoreOperation::Store,
+                                     .clearDepthStencil = clearDepth,
+                                 }}
+                               : std::nullopt,
+    });
+
+    const auto colorOut = clearPass.colorOutputs().front();
+    const auto depthOut = clearPass.depthOutput();
+    RenderInput renderApi =
+        co_await builder.finishDeclaration(ClearPassOutputs{.color = colorOut, .depth = depthOut});
+
+    auto recorder = clearPass.begin(renderApi);
+    clearPass.end(std::move(recorder));
+}
+
 RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
                                                       TransientTextureHandle sourceImage,
                                                       TransientTextureHandle targetImage)

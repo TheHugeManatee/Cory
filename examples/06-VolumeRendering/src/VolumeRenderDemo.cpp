@@ -109,6 +109,7 @@ void VolumeRenderDemoApplication::setupScene()
                                            },
                                            VolumeComponent{
                                                .size = {5.0f, 5.0f, 5.0f},
+                                               .raymarchStepSizeMultiplier = 4.0f,
                                                .transferFunction =
                                                    {
                                                        .densityMin = 0.05f,
@@ -128,6 +129,7 @@ void VolumeRenderDemoApplication::setupScene()
                                            },
                                            VolumeComponent{
                                                .size = {2.0f, 4.0f, 2.0f},
+                                               .raymarchStepSizeMultiplier = 2.0f,
                                                .transferFunction =
                                                    {
                                                        .densityMin = 0.25f,
@@ -253,33 +255,46 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
 
     auto frameHandles = framegraph.importFrameContext(frameCtx);
 
-    auto volumeGeneration =
-        volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
-
-    Cory::TransientTextureHandle colorForLayers{};
+    Cory::TransientTextureHandle colorForLayers = frameHandles.colorImage;
     auto depthForLayers = frameHandles.depthImage;
 
     if (debugRasterize.get()) {
         auto rasterization = volumeRenderer_->rasterizationTask(
-            framegraph.declareTask("TASK_Cubes"), frameHandles.colorImage, frameHandles.depthImage);
+            framegraph.declareTask("TASK_Cubes"), colorForLayers, depthForLayers);
         colorForLayers = rasterization.output().colorOut;
         depthForLayers = rasterization.output().depthOut;
     }
     else if (debugRaycast.get()) {
-        auto debugRaycast =
-            volumeRenderer_->cubeRaycastDebugTask(framegraph.declareTask("TASK_VolumeRaycastDebug"),
-                                                  frameHandles.colorImage,
-                                                  frameHandles.depthImage,
-                                                  volumeGeneration.output());
+        auto clearAttachments = Cory::StandardRenderTasks::clearAttachments(
+            framegraph.declareTask("TASK_ClearAttachments"),
+            frameHandles.colorImage,
+            frameHandles.depthImage);
+        auto volumeGeneration =
+            volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
+
+        auto debugRaycast = volumeRenderer_->cubeRaycastDebugTask(
+            framegraph.declareTask("TASK_VolumeRaycastDebug"),
+            clearAttachments.output().color,
+            clearAttachments.output().depth.value_or(depthForLayers),
+            volumeGeneration.output());
         colorForLayers = debugRaycast.output();
+        depthForLayers = clearAttachments.output().depth.value_or(depthForLayers);
     }
     else {
-        auto mainRaycast =
-            volumeRenderer_->cubeRaycastTask(framegraph.declareTask("TASK_VolumeRaycast"),
-                                             frameHandles.colorImage,
-                                             frameHandles.depthImage,
-                                             volumeGeneration.output());
+        auto clearAttachments = Cory::StandardRenderTasks::clearAttachments(
+            framegraph.declareTask("TASK_ClearAttachments"),
+            frameHandles.colorImage,
+            frameHandles.depthImage);
+        auto volumeGeneration =
+            volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
+
+        auto mainRaycast = volumeRenderer_->cubeRaycastTask(
+            framegraph.declareTask("TASK_VolumeRaycast"),
+            clearAttachments.output().color,
+            clearAttachments.output().depth.value_or(depthForLayers),
+            volumeGeneration.output());
         colorForLayers = mainRaycast.output();
+        depthForLayers = clearAttachments.output().depth.value_or(depthForLayers);
     }
 
     auto layersOutput =
@@ -324,11 +339,15 @@ void VolumeRenderDemoApplication::drawImguiControls()
             ImGui::PushID(static_cast<int>(entity));
             if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                 auto &tf = volume->transferFunction;
+                CoImGui::Slider(
+                    "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 8.0f);
                 CoImGui::Slider("Density Min", tf.densityMin, 0.0f, 1.0f);
                 CoImGui::Slider("Density Max", tf.densityMax, 0.0f, 1.0f);
                 CoImGui::Slider("Opacity Scale", tf.opacityScale, 0.01f, 64.0f);
                 CoImGui::Slider("Gamma", tf.gamma, 0.05f, 3.0f);
 
+                volume->raymarchStepSizeMultiplier =
+                    std::max(volume->raymarchStepSizeMultiplier, 0.01f);
                 tf.densityMin = std::clamp(tf.densityMin, 0.0f, 1.0f);
                 tf.densityMax = std::clamp(tf.densityMax, tf.densityMin + 0.001f, 1.0f);
                 tf.opacityScale = std::max(tf.opacityScale, 0.01f);

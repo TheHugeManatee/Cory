@@ -8,16 +8,19 @@ struct InstanceData
     float4x4 worldToModel;
     float4x4 normalToWorld;
     float4 color;
-    float4 parameters;
+    float4 transferParams;
+    float4 raymarchParams;
 };
 
 struct RaycastGlobals
 {
     float4x4 invViewProjection;
     float4 cameraPosition;
+    uint3 volumeDimensions;
+    uint padding0;
     uint instanceCount;
     uint volumeTextureIndex;
-    uint2 padding0;
+    uint2 padding1;
     Ptr<InstanceData, Access::Read> instances;
 };
 
@@ -28,11 +31,10 @@ struct RaycastGlobals
 
 static const float3 boxMin = float3(-0.5, -0.5, -0.5);
 static const float3 boxMax = float3(0.5, 0.5, 0.5);
-static const uint kMaxRaymarchSteps = 96u;
+static const uint kMaxRaymarchStepsLimit = 1024u;
 static const float kTransmittanceCutoff = 0.98f;
 static const float3 kTransferLowColor = float3(0.08f, 0.20f, 0.42f);
 static const float3 kTransferHighColor = float3(1.00f, 0.86f, 0.48f);
-static const float kGradientStep = 1.0f / 64.0f;
 
 float sampleDensity(float3 uvw)
 {
@@ -41,9 +43,12 @@ float sampleDensity(float3 uvw)
 
 float3 estimateGradient(float3 uvw)
 {
-    let offsetX = float3(kGradientStep, 0.0f, 0.0f);
-    let offsetY = float3(0.0f, kGradientStep, 0.0f);
-    let offsetZ = float3(0.0f, 0.0f, kGradientStep);
+    let dims = float3(globals->volumeDimensions);
+    let texel = 1.0f / max(dims, float3(1.0f));
+
+    let offsetX = float3(texel.x, 0.0f, 0.0f);
+    let offsetY = float3(0.0f, texel.y, 0.0f);
+    let offsetZ = float3(0.0f, 0.0f, texel.z);
 
     let gx = sampleDensity(uvw + offsetX) - sampleDensity(uvw - offsetX);
     let gy = sampleDensity(uvw + offsetY) - sampleDensity(uvw - offsetY);
@@ -98,7 +103,7 @@ struct VolumeSampler : ISampler<VolumeSample>
         let localPos = ray.at(t);
         let uvw = localPos + 0.5f;
         let density = sampleDensity(uvw);
-        let transfer = evaluateTransferFunction(density, stepSize, instance.parameters);
+        let transfer = evaluateTransferFunction(density, stepSize, instance.transferParams);
         if (transfer.a <= 0.0f) {
             return VolumeSample();
         }
@@ -170,12 +175,19 @@ float4 raymarchVolume(float3 localOrigin, float3 localDirection, InstanceData in
     }
 
     let segmentLength = tEnd - tStart;
-    let stepSize = segmentLength / float(kMaxRaymarchSteps);
+    let dirLength = max(length(localDirection), 1e-6f);
+    let maxDim = max(globals->volumeDimensions.x,
+                     max(globals->volumeDimensions.y, globals->volumeDimensions.z));
+    let voxelSize = 1.0f / float(max(maxDim, 1u));
+    let stepMultiplier = max(instance.raymarchParams.x, 0.01f);
+    let stepSize = stepMultiplier * voxelSize / dirLength;
+    let stepCount = min(max(uint(ceil(segmentLength / stepSize)), 1u), kMaxRaymarchStepsLimit);
+
     let marchRay = Ray(localOrigin, localDirection, tStart, tEnd);
-    let cfg = MarchConfig(stepSize, kMaxRaymarchSteps);
+    let cfg = MarchConfig(stepSize, stepCount);
     let sampler = VolumeSampler(instance, stepSize);
     let accum = FrontToBackAccumulator();
-    
+
     return raymarch(marchRay, cfg, sampler, accum);
 }
 

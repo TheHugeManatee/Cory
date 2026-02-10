@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <algorithm>
 #include <cstddef>
 
 struct DrawData {
@@ -32,10 +33,9 @@ struct DrawData {
 struct RaycastGlobals {
     glm::mat4 invViewProjection;
     glm::vec4 cameraPosition;
-    glm::uvec2 imageSize;
     uint32_t instanceCount;
     uint32_t volumeTextureIndex;
-    uint32_t padding0;
+    glm::uvec2 padding0;
     Cory::BufferDeviceAddress instances;
 };
 
@@ -111,7 +111,12 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
         .worldToModel = inverse(transform.modelToWorld * glm::scale(volume.size)),
         .normalToWorld = transpose(inverse(transform.modelToWorld)),
         .color = Cory::Color{1.0, 0.0, 0.0, 1.0},
-        .parameters = glm::vec4{0.2, 1.0f, 8.0f, 0.0f},
+        .parameters = glm::vec4{std::clamp(volume.transferFunction.densityMin, 0.0f, 1.0f),
+                                std::clamp(volume.transferFunction.densityMax,
+                                           volume.transferFunction.densityMin + 0.001f,
+                                           1.0f),
+                                std::max(volume.transferFunction.opacityScale, 0.01f),
+                                std::max(volume.transferFunction.gamma, 0.01f)},
     });
 }
 
@@ -289,10 +294,9 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->imageSize = colorInfo.size;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = volumeTextureIndex;
-    drawData->padding0 = 0;
+    drawData->padding0 = glm::uvec2{0u};
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
@@ -360,10 +364,9 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->imageSize = colorInfo.size;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = 0;
-    drawData->padding0 = 0;
+    drawData->padding0 = glm::uvec2{0u};
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);

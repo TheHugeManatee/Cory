@@ -109,6 +109,13 @@ void VolumeRenderDemoApplication::setupScene()
                                            },
                                            VolumeComponent{
                                                .size = {5.0f, 5.0f, 5.0f},
+                                               .transferFunction =
+                                                   {
+                                                       .densityMin = 0.05f,
+                                                       .densityMax = 0.80f,
+                                                       .opacityScale = 30.0f,
+                                                       .gamma = 0.9f,
+                                                   },
                                            });
 
     sceneGraph_.createEntityWithComponents(root,
@@ -121,6 +128,13 @@ void VolumeRenderDemoApplication::setupScene()
                                            },
                                            VolumeComponent{
                                                .size = {2.0f, 4.0f, 2.0f},
+                                               .transferFunction =
+                                                   {
+                                                       .densityMin = 0.25f,
+                                                       .densityMax = 0.98f,
+                                                       .opacityScale = 14.0f,
+                                                       .gamma = 1.45f,
+                                                   },
                                            });
 }
 
@@ -296,6 +310,35 @@ void VolumeRenderDemoApplication::drawImguiControls()
 
         CoImGui::CheckBox("Debug Rasterizer", debugRasterize);
         CoImGui::CheckBox("Debug Raycast", debugRaycast);
+
+        ImGui::Separator();
+        CoImGui::Text("Volume Transfer Functions");
+        bool hasVolumeComponent = false;
+        for (auto entity : sceneGraph_.depthFirstTraversal()) {
+            auto *volume = sceneGraph_.getComponent<VolumeComponent>(entity);
+            if (volume == nullptr) {
+                continue;
+            }
+            hasVolumeComponent = true;
+            const auto &meta = sceneGraph_.data(entity);
+            ImGui::PushID(static_cast<int>(entity));
+            if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                auto &tf = volume->transferFunction;
+                CoImGui::Slider("Density Min", tf.densityMin, 0.0f, 1.0f);
+                CoImGui::Slider("Density Max", tf.densityMax, 0.0f, 1.0f);
+                CoImGui::Slider("Opacity Scale", tf.opacityScale, 0.01f, 64.0f);
+                CoImGui::Slider("Gamma", tf.gamma, 0.05f, 3.0f);
+
+                tf.densityMin = std::clamp(tf.densityMin, 0.0f, 1.0f);
+                tf.densityMax = std::clamp(tf.densityMax, tf.densityMin + 0.001f, 1.0f);
+                tf.opacityScale = std::max(tf.opacityScale, 0.01f);
+                tf.gamma = std::max(tf.gamma, 0.05f);
+            }
+            ImGui::PopID();
+        }
+        if (!hasVolumeComponent) {
+            CoImGui::Text("No VolumeComponent found in scene.");
+        }
     }
     ImGui::End();
 

@@ -2,11 +2,11 @@
 
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/Common.hpp>
+#include <Cory/Base/Prop.hpp>
 #include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
-#include <Cory/Base/Prop.hpp>
 #include <Cory/Systems/SystemCoordinator.hpp>
 
 #include <memory>

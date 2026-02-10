@@ -14,10 +14,9 @@ struct RaycastGlobals
 {
     float4x4 invViewProjection;
     float4 cameraPosition;
-    uint2 imageSize;
     uint instanceCount;
     uint volumeTextureIndex;
-    uint padding0;
+    uint2 padding0;
     Ptr<InstanceData, Access::Read> instances;
 };
 

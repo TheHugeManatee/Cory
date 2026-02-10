@@ -23,7 +23,7 @@ glm::mat4 parentTransform(SceneGraph &sg, Entity entity)
 }
 } // namespace
 
-void TransformSystem::beforeUpdate(SceneGraph &sg)
+void TransformSystem::beforeUpdate(SceneGraph &sg, [[maybe_unused]] uint64_t frameNumber)
 {
     // note - this can potentially be quite expensive so we should
     // eventually figure out a way to only do that when actually needed,
@@ -33,7 +33,10 @@ void TransformSystem::beforeUpdate(SceneGraph &sg)
     sg.sortByDepth<Transform>();
 }
 
-void TransformSystem::update(SceneGraph &sg, [[maybe_unused]] TickInfo tickInfo, Entity entity, Transform &transform)
+void TransformSystem::update(SceneGraph &sg,
+                             [[maybe_unused]] TickInfo tickInfo,
+                             Entity entity,
+                             Transform &transform)
 {
     glm::mat4 parent{1.0f};
 

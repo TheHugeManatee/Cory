@@ -19,7 +19,9 @@ concept System = requires(T sys, SceneGraph &graph, TickInfo tickInfo, Entity en
 };
 
 template <typename Sys>
-concept SystemHasBeforeUpdate = requires(Sys sys, SceneGraph &graph) { sys.beforeUpdate(graph); };
+concept SystemHasBeforeUpdate = requires(Sys sys, SceneGraph &graph, TickInfo tickInfo) {
+    sys.beforeUpdate(graph, tickInfo.ticks);
+};
 template <typename Sys>
 concept SystemHasAfterUpdate = requires(Sys sys, SceneGraph &graph) { sys.afterUpdate(graph); };
 
@@ -36,7 +38,7 @@ class BasicSystem {
     void tick(SceneGraph &graph, TickInfo tickInfo)
     {
         if constexpr (SystemHasBeforeUpdate<Derived>) {
-            static_cast<Derived *>(this)->beforeUpdate(graph);
+            static_cast<Derived *>(this)->beforeUpdate(graph, tickInfo.ticks);
         }
 
         auto view = graph.registry().template view<Cmps...>();

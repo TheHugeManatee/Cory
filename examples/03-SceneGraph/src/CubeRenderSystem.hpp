@@ -46,7 +46,7 @@ class CubeRenderSystem
     explicit CubeRenderSystem(Cory::Context &ctx);
     ~CubeRenderSystem();
 
-    void beforeUpdate(Cory::SceneGraph &sg);
+    void beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber);
 
     void update(Cory::SceneGraph &sg,
                 Cory::TickInfo tick,

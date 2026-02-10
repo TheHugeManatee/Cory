@@ -34,7 +34,7 @@ struct RaycastGlobals {
     glm::mat4 invViewProjection;
     glm::vec4 cameraPosition;
     glm::uvec3 volumeDimensions;
-    uint32_t padding0;
+    float time;
     uint32_t instanceCount;
     uint32_t volumeTextureIndex;
     glm::uvec2 padding1;
@@ -92,8 +92,9 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
 
 VolumeRenderSystem::~VolumeRenderSystem() {}
 
-void VolumeRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
+void VolumeRenderSystem::beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber)
 {
+    shaderHotReloader_.processPendingReloads(frameNumber);
     renderState_.clear();
     // update the camera's state
     forEach<Cory::Components::CameraComponent>(
@@ -119,8 +120,10 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
                                                1.0f),
                                     std::max(volume.transferFunction.opacityScale, 0.01f),
                                     std::max(volume.transferFunction.gamma, 0.01f)},
-        .raymarchParams =
-            glm::vec4{std::max(volume.raymarchStepSizeMultiplier, 0.01f), 0.0f, 0.0f, 0.0f},
+        .raymarchParams = glm::vec4{std::max(volume.raymarchStepSizeMultiplier, 0.01f),
+                                    volume.raymarchJitteringEnabled ? 1.0f : 0.0f,
+                                    0.0f,
+                                    0.0f},
     });
 }
 
@@ -159,8 +162,6 @@ VolumeRenderSystem::rasterizationTask(Cory::RenderTaskBuilder builder,
     Cory::RenderInput renderApi =
         co_await builder.finishDeclaration(PassOutputs{.colorOut = colorOut, .depthOut = depthOut});
     /// vvvv  RENDERING COMMANDS  vvvv
-
-    shaderHotReloader_.processPendingReloads(renderApi.frameCtx->frameNumber);
 
     auto passRecorder = cubePass.begin(renderApi);
 
@@ -299,7 +300,7 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
     drawData->volumeDimensions = volumeParams_.volumeDimensions;
-    drawData->padding0 = 0u;
+    drawData->time = float(renderApi.frameCtx->frameNumber) / 60.0f;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = volumeTextureIndex;
     drawData->padding1 = glm::uvec2{0u};
@@ -371,7 +372,7 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
     drawData->volumeDimensions = volumeParams_.volumeDimensions;
-    drawData->padding0 = 0u;
+    drawData->time = float(renderApi.frameCtx->frameNumber) / 60.0f;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = 0;
     drawData->padding1 = glm::uvec2{0u};

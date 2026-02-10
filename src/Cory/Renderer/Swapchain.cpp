@@ -380,7 +380,7 @@ void SwapchainPrivate::present(FrameContext &frameCtx)
 {
     {
         const ScopeTimer s{"Window/Submit"};
-        
+
         auto command_buffer = frameCtx.commandBuffer.finish();
 
         Gpu::SubmitOptions submitOptions{

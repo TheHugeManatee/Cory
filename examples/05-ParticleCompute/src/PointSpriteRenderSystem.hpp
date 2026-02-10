@@ -47,7 +47,7 @@ class PointSpriteRenderSystem
     explicit PointSpriteRenderSystem(Cory::Context &ctx);
     ~PointSpriteRenderSystem();
 
-    void beforeUpdate(Cory::SceneGraph &sg);
+    void beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber);
 
     void update(Cory::SceneGraph &sg,
                 Cory::TickInfo tick,

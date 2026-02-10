@@ -36,7 +36,7 @@ CubeRenderSystem::~CubeRenderSystem()
     }
 }
 
-void CubeRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
+void CubeRenderSystem::beforeUpdate(Cory::SceneGraph &sg, [[maybe_unused]] uint64_t frameNumber)
 {
     renderState_.clear();
     // update the camera's state

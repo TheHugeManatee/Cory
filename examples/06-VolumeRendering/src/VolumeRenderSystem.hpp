@@ -49,7 +49,7 @@ class VolumeRenderSystem
     explicit VolumeRenderSystem(Cory::Context &ctx);
     ~VolumeRenderSystem();
 
-    void beforeUpdate(Cory::SceneGraph &sg);
+    void beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber);
 
     void update(Cory::SceneGraph &sg,
                 Cory::TickInfo tick,
@@ -97,6 +97,6 @@ class VolumeRenderSystem
     Gpu::Sampler volumeSampler_;
     VolumeGenerationParams volumeParams_{.volumeSpacing = glm::vec3{1.0f},
                                          .densityScale = 1.0f,
-                                         .volumeDimensions = glm::uvec3{64u, 64u, 64u},
+                                         .volumeDimensions = glm::uvec3{128u, 128u, 128u},
                                          .time = 0.0f};
 };

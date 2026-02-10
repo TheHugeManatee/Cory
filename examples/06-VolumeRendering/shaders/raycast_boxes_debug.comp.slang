@@ -16,7 +16,7 @@ struct RaycastGlobals
     float4x4 invViewProjection;
     float4 cameraPosition;
     uint3 volumeDimensions;
-    uint padding0;
+    float time;
     uint instanceCount;
     uint volumeTextureIndex;
     uint2 padding1;

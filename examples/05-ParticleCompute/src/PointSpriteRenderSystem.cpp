@@ -133,7 +133,8 @@ PointSpriteRenderSystem::~PointSpriteRenderSystem()
     }
 }
 
-void PointSpriteRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
+void PointSpriteRenderSystem::beforeUpdate(Cory::SceneGraph &sg,
+                                           [[maybe_unused]] uint64_t frameNumber)
 {
     renderState_.clear();
     // update the camera's state

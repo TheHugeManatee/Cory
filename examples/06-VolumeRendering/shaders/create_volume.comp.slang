@@ -23,15 +23,15 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     float3 volumeSize = float3(globals->volumeDimensions) * globals->volumeSpacing;
     voxelPos -= volumeSize * 0.5f;
 
-    voxelPos /= 10.0f;
+    voxelPos /= 20.0f; // global scaling
 
     // Add animated deformations
     voxelPos += 0.15f * sin(globals->time + voxelPos.x * 2.0f) * float3(1, 0.5, 0.5);
-    voxelPos += 0.1f * cos(globals->time * 0.7f + voxelPos.y * 3.0f) * float3(0.5, 1, 0.5);
+    voxelPos += 0.1f * cos(globals->time * 0.7f + voxelPos.y * 5.0f) * float3(0.5, 1, 0.5);
     voxelPos += 0.12f * sin(globals->time * 0.5f + voxelPos.z * 2.5f) * float3(0.5, 0.5, 1);
 
     // Create a more complex density field with multiple features
-    float distFromCenter = length(voxelPos);
+    float distFromCenter = length(voxelPos) * 2.0f;
     
     // Primary density shell
     float mainShell = exp(-(distFromCenter - 1.5f) * (distFromCenter - 1.5f) * 2.0f);

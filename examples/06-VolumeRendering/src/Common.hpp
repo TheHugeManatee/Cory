@@ -14,5 +14,7 @@ struct VolumeComponent {
     glm::vec3 size{1.0f, 2.0f, 1.0f};
     // raymarch step size in units of voxels sampled per step
     float raymarchStepSizeMultiplier{2.0f};
+    // toggles interval jittering for start/end raymarch bounds
+    bool raymarchJitteringEnabled{true};
     VolumeTransferFunction transferFunction{};
 };

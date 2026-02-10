@@ -222,7 +222,7 @@ bool ComboBox(std::string_view label, KDGpu::Flags<E> &flags)
     return wasChanged;
 }
 
-inline bool CheckBox(const char * str, KDBindings::Property<bool> &property)
+inline bool CheckBox(const char *str, KDBindings::Property<bool> &property)
 {
     bool v = property.get();
     if (ImGui::Checkbox(str, &v)) {

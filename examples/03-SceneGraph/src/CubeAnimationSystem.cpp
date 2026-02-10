@@ -5,7 +5,10 @@
 
 #include <glm/gtx/transform.hpp>
 
-void CubeAnimationSystem::beforeUpdate(Cory::SceneGraph &sg) {}
+void CubeAnimationSystem::beforeUpdate([[maybe_unused]] Cory::SceneGraph &sg,
+                                       [[maybe_unused]] uint64_t frameNumber)
+{
+}
 
 void CubeAnimationSystem::update(Cory::SceneGraph &sg,
                                  Cory::TickInfo tick,

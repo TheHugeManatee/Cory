@@ -339,6 +339,7 @@ void VolumeRenderDemoApplication::drawImguiControls()
             ImGui::PushID(static_cast<int>(entity));
             if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                 auto &tf = volume->transferFunction;
+                ImGui::Checkbox("Enable Jitter", &volume->raymarchJitteringEnabled);
                 CoImGui::Slider(
                     "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 8.0f);
                 CoImGui::Slider("Density Min", tf.densityMin, 0.0f, 1.0f);

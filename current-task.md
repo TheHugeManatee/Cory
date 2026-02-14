@@ -96,3 +96,11 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
 - Added a runtime `Show ImGuizmo` toggle in `VolumeRenderDemo` (default off) and wired it to
   `ImGuizmoTransformSystem::setEnabled()` for enabling/disabling gizmo rendering and interaction.
 - Added focused math tests for TRS decomposition round-trip and Euler<->quaternion Y-X-Z conversion consistency.
+
+## Open Investigation: Eager Task Declaration + Virtual Textures
+
+- When `VolumeRenderSystem::volumeFrameTask` was refactored to eagerly declare all subtasks and branch only by output handle wiring, we hit a framegraph synchronization assertion in `synchronizeTexture` for `TEX_VolumeScratchDebugColor`.
+- Symptom: barrier emission was attempted for a texture still in `TextureMemoryStatus::Virtual` (never allocated).
+- Repro context: debug-raycast toggle / startup paths after switching to eager declaration.
+- Likely cause: scratch textures were created in the parent task, while required work was performed by subtasks. If the parent task is not required by output resolution, those created resources are not pulled into required allocation, but required subtasks can still reference them.
+- Decision for now: revert to conditional subtask declaration/wiring (pre-refactor behavior) to restore stability; investigate a general framegraph fix separately.

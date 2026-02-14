@@ -4,6 +4,7 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
+#include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -19,6 +20,7 @@
 #include <glm/vec4.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 struct DrawData {
@@ -96,6 +98,56 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
 
 VolumeRenderSystem::~VolumeRenderSystem() {}
 
+void VolumeRenderSystem::setResourceManager(Cory::FramegraphResourceManager *resourceManager)
+{
+    resourceManager_ = resourceManager;
+}
+
+void VolumeRenderSystem::resetTemporalHistory()
+{
+    temporalHistory_.resource = {};
+    temporalHistory_.extent = {0u, 0u};
+    temporalHistory_.format = {};
+    temporalHistory_.sampleCount = Gpu::SampleCountFlagBits::Samples1Bit;
+    temporalHistory_.valid = false;
+    temporalHistory_.forceTemporalReset = true;
+}
+
+void VolumeRenderSystem::ensureTemporalHistoryTexture(const Cory::FrameContext &frameCtx)
+{
+    CO_CORE_ASSERT(resourceManager_ != nullptr,
+                   "FramegraphResourceManager must be set before temporal history setup");
+
+    const auto extent = frameCtx.extent;
+    const auto format = frameCtx.colorFormat;
+    const auto sampleCount = frameCtx.sampleCount;
+    const bool needsRecreate =
+        !temporalHistory_.resource.valid() || temporalHistory_.extent != extent ||
+        temporalHistory_.format != format || temporalHistory_.sampleCount != sampleCount;
+    if (!needsRecreate) {
+        return;
+    }
+
+    auto historyTexture = resourceManager_->declareTexture(Cory::TextureInfo{
+        .name = "TEX_VolumeTemporalHistory",
+        .size = glm::uvec3{extent, 1u},
+        .format = format,
+        .usage = Gpu::TextureUsageFlagBits::StorageBit |
+                 Gpu::TextureUsageFlagBits::ColorAttachmentBit |
+                 Gpu::TextureUsageFlagBits::TransferSrcBit |
+                 Gpu::TextureUsageFlagBits::TransferDstBit,
+        .sampleCount = sampleCount,
+        .textureType = Gpu::TextureType::TextureType2D,
+    });
+    resourceManager_->allocate(std::vector<Cory::FramegraphTextureHandle>{historyTexture});
+    temporalHistory_.resource = historyTexture;
+    temporalHistory_.extent = extent;
+    temporalHistory_.format = format;
+    temporalHistory_.sampleCount = sampleCount;
+    temporalHistory_.valid = false;
+    temporalHistory_.forceTemporalReset = true;
+}
+
 void VolumeRenderSystem::beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber)
 {
     shaderHotReloader_.processPendingReloads(frameNumber);
@@ -111,6 +163,7 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
                                 const VolumeComponent &volume,
                                 const Cory::Components::Transform &transform)
 {
+    lastFrameDeltaSeconds_ = std::max(static_cast<float>(tick.delta.count()), 1e-6f);
     volumeParams_.time = static_cast<float>(tick.now.time_since_epoch().count());
 
     renderState_.push_back({
@@ -208,6 +261,68 @@ VolumeRenderSystem::rasterizationTask(Cory::RenderTaskBuilder builder,
     cubePass.end(std::move(passRecorder));
 }
 
+Cory::RenderTaskDeclaration<VolumeRenderSystem::PassOutputs>
+VolumeRenderSystem::volumeFrameTask(Cory::RenderTaskBuilder builder,
+                                    Cory::Framegraph &framegraph,
+                                    const Cory::FrameContext &frameCtx,
+                                    Cory::TransientTextureHandle colorTarget,
+                                    Cory::TransientTextureHandle depthTarget)
+{
+    const bool useRasterizePath = debugRasterize.get();
+    const bool useDebugRaycastPath = !useRasterizePath && debugRaycast.get();
+    if (useRasterizePath) {
+        const auto rasterization = rasterizationTask(
+                                       builder.subtask("Rasterization"), colorTarget, depthTarget)
+                                       .output();
+        resetTemporalHistory();
+        co_await builder.finishDeclaration(PassOutputs{
+            .colorOut = rasterization.colorOut,
+            .depthOut = rasterization.depthOut,
+        });
+        co_return;
+    }
+
+    const auto volumeGeneration = volumeGenerationTask(builder.subtask("VolumeGenerate")).output();
+    const auto clearAttachments = Cory::StandardRenderTasks::clearAttachments(
+                                      builder.subtask("ClearAttachments"), colorTarget, depthTarget)
+                                      .output();
+
+    if (useDebugRaycastPath) {
+        const auto debugRaycastOutput =
+            cubeRaycastDebugTask(builder.subtask("VolumeRaycastDebug"),
+                                 clearAttachments.color,
+                                 clearAttachments.depth.value_or(depthTarget),
+                                 volumeGeneration)
+                .output();
+        resetTemporalHistory();
+        co_await builder.finishDeclaration(PassOutputs{
+            .colorOut = debugRaycastOutput,
+            .depthOut = clearAttachments.depth.value_or(depthTarget),
+        });
+        co_return;
+    }
+
+    ensureTemporalHistoryTexture(frameCtx);
+    CO_CORE_ASSERT(temporalHistory_.resource.valid(), "Temporal history resource expected to be valid");
+    auto temporalHistoryInput =
+        framegraph.declareInput(Cory::TransientTextureHandle{temporalHistory_.resource});
+    const auto raycastResult = cubeRaycastTask(builder.subtask("VolumeRaycast"),
+                                               temporalHistoryInput,
+                                               clearAttachments.depth.value_or(depthTarget),
+                                               volumeGeneration)
+                                   .output();
+
+    // Keep the persistent history handle in sync with the latest version after read/write.
+    temporalHistory_.resource = Cory::FramegraphTextureHandle{raycastResult};
+    temporalHistory_.valid = true;
+    temporalHistory_.forceTemporalReset = false;
+
+    co_await builder.finishDeclaration(PassOutputs{
+        .colorOut = raycastResult,
+        .depthOut = clearAttachments.depth.value_or(depthTarget),
+    });
+}
+
 Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
 VolumeRenderSystem::volumeGenerationTask(Cory::RenderTaskBuilder builder)
 {
@@ -257,10 +372,7 @@ Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
 VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle colorTarget,
                                     Cory::TransientTextureHandle depthTarget,
-                                    Cory::TransientTextureHandle volumeTarget,
-                                    float temporalBlendFactor,
-                                    int32_t iterations,
-                                    float alphaDeltaRejectThreshold)
+                                    Cory::TransientTextureHandle volumeTarget)
 {
     builder.read(volumeTarget, Cory::RenderTaskBuilder::TextureReadPreset::ComputeSampled);
 
@@ -311,9 +423,14 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->volumeTextureIndex = volumeTextureIndex;
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
-    drawData->temporalBlendFactor = std::clamp(temporalBlendFactor, 0.0f, 1.0f);
-    drawData->iterations = static_cast<uint32_t>(std::max(iterations, 1));
-    drawData->alphaDeltaRejectThreshold = std::max(alphaDeltaRejectThreshold, 0.0f);
+    const auto temporalTauSeconds = std::max(temporalEmaTauMs.get() * 0.001f, 1e-4f);
+    const auto temporalAlpha =
+        std::clamp(1.0f - std::exp(-lastFrameDeltaSeconds_ / temporalTauSeconds), 0.001f, 1.0f);
+    const bool applyTemporal =
+        temporalAccumulation.get() && temporalHistory_.valid && !temporalHistory_.forceTemporalReset;
+    drawData->temporalBlendFactor = applyTemporal ? temporalAlpha : 1.0f;
+    drawData->iterations = static_cast<uint32_t>(std::max(temporalIterations.get(), 1));
+    drawData->alphaDeltaRejectThreshold = std::max(alphaDeltaRejectThreshold.get(), 0.0f);
     drawData->padding0 = 0u;
 
     drawData->instances = 0;

@@ -210,7 +210,10 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
     auto &state = resource.state;
 
     auto *texture = data_->ctx_->resources().getTexture(image(handle));
-    CO_CORE_DEBUG_ASSERT(texture != nullptr, "Texture resource is null");
+    CO_CORE_DEBUG_ASSERT(texture != nullptr,
+                         "Texture resource '{}' is null (Memory Status = {}')",
+                         resource.info.name,
+                         magic_enum::enum_name(state.status));
     VkImage vkImageHandle = texture->image;
     const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
     Sync::ImageBarrier barrier{.prevAccesses{state.lastAccess},

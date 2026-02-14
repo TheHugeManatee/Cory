@@ -35,6 +35,7 @@
 #include <gsl/narrow>
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *> args)
@@ -186,7 +187,7 @@ VolumeRenderDemoApplication::~VolumeRenderDemoApplication()
 void VolumeRenderDemoApplication::run()
 {
     Cory::FramegraphResourceManager framegraphResources{ctx()};
-    resourceManager_ = &framegraphResources;
+    volumeRenderer_->setResourceManager(&framegraphResources);
     auto framegraphs = createFramegraphs(framegraphResources);
 
     auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
@@ -219,40 +220,7 @@ void VolumeRenderDemoApplication::run()
             }
         },
         [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
-    resourceManager_ = nullptr;
-}
-
-void VolumeRenderDemoApplication::ensureTemporalHistoryTexture(const Cory::FrameContext &frameCtx)
-{
-    CO_CORE_ASSERT(resourceManager_ != nullptr,
-                   "FramegraphResourceManager must be available before declaring temporal history");
-
-    const auto extent = frameCtx.extent;
-    const auto format = frameCtx.colorFormat;
-    const auto sampleCount = frameCtx.sampleCount;
-    const bool needsRecreate =
-        !temporalHistory_.resource.valid() || temporalHistory_.extent != extent ||
-        temporalHistory_.format != format || temporalHistory_.sampleCount != sampleCount;
-    if (!needsRecreate) {
-        return;
-    }
-
-    auto historyTexture = resourceManager_->declareTexture(Cory::TextureInfo{
-        .name = "TEX_VolumeTemporalHistory",
-        .size = glm::uvec3{extent, 1u},
-        .format = format,
-        .usage = Gpu::TextureUsageFlagBits::StorageBit | Gpu::TextureUsageFlagBits::TransferSrcBit |
-                 Gpu::TextureUsageFlagBits::TransferDstBit,
-        .sampleCount = sampleCount,
-        .textureType = Gpu::TextureType::TextureType2D,
-    });
-    resourceManager_->allocate(std::vector<Cory::FramegraphTextureHandle>{historyTexture});
-    temporalHistory_.resource = historyTexture;
-    temporalHistory_.extent = extent;
-    temporalHistory_.format = format;
-    temporalHistory_.sampleCount = sampleCount;
-    temporalHistory_.valid = false;
-    temporalHistory_.forceTemporalReset = true;
+    volumeRenderer_->setResourceManager(nullptr);
 }
 
 void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
@@ -262,69 +230,16 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
 
     auto frameHandles = framegraph.importFrameContext(frameCtx);
 
-    Cory::TransientTextureHandle colorForLayers = frameHandles.colorImage;
-    auto depthForLayers = frameHandles.depthImage;
-
-    if (debugRasterize.get()) {
-        temporalHistory_.resource = {};
-        temporalHistory_.valid = false;
-        auto rasterization = volumeRenderer_->rasterizationTask(
-            framegraph.declareTask("TASK_Cubes"), colorForLayers, depthForLayers);
-        colorForLayers = rasterization.output().colorOut;
-        depthForLayers = rasterization.output().depthOut;
-    }
-    else if (debugRaycast.get()) {
-        temporalHistory_.resource = {};
-        temporalHistory_.valid = false;
-        auto clearAttachments = Cory::StandardRenderTasks::clearAttachments(
-            framegraph.declareTask("TASK_ClearAttachments"),
-            frameHandles.colorImage,
-            frameHandles.depthImage);
-        auto volumeGeneration =
-            volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
-
-        auto debugRaycast = volumeRenderer_->cubeRaycastDebugTask(
-            framegraph.declareTask("TASK_VolumeRaycastDebug"),
-            clearAttachments.output().color,
-            clearAttachments.output().depth.value_or(depthForLayers),
-            volumeGeneration.output());
-        colorForLayers = debugRaycast.output();
-        depthForLayers = clearAttachments.output().depth.value_or(depthForLayers);
-    }
-    else {
-        ensureTemporalHistoryTexture(frameCtx);
-        auto clearAttachments = Cory::StandardRenderTasks::clearAttachments(
-            framegraph.declareTask("TASK_ClearAttachments"),
-            frameHandles.colorImage,
-            frameHandles.depthImage);
-        CO_CORE_ASSERT(temporalHistory_.resource.valid(),
-                       "Temporal history resource expected to be valid");
-        auto temporalHistory =
-            framegraph.declareInput(Cory::TransientTextureHandle{temporalHistory_.resource});
-        auto volumeGeneration =
-            volumeRenderer_->volumeGenerationTask(framegraph.declareTask("TASK_VolumeGenerate"));
-
-        const float temporalAlpha = std::clamp(temporalAccumulationAlpha.get(), 0.01f, 1.0f);
-        const bool applyTemporal = temporalAccumulation.get() && temporalHistory_.valid &&
-                                   !temporalHistory_.forceTemporalReset;
-        const float blendFactor = applyTemporal ? temporalAlpha : 1.0f;
-
-        auto raycastResult =
-            volumeRenderer_
-                ->cubeRaycastTask(framegraph.declareTask("TASK_VolumeRaycast"),
-                                  temporalHistory,
-                                  clearAttachments.output().depth.value_or(depthForLayers),
-                                  volumeGeneration.output(),
-                                  blendFactor,
-                                  iterations(),
-                                  alphaDeltaRejectThreshold())
-                .output();
-
-        colorForLayers = raycastResult;
-        depthForLayers = clearAttachments.output().depth.value_or(depthForLayers);
-        temporalHistory_.valid = true;
-        temporalHistory_.forceTemporalReset = false;
-    }
+    auto volumeResult =
+        volumeRenderer_
+            ->volumeFrameTask(framegraph.declareTask("TASK_Volume"),
+                              framegraph,
+                              frameCtx,
+                              frameHandles.colorImage,
+                              frameHandles.depthImage)
+            .output();
+    auto colorForLayers = volumeResult.colorOut;
+    auto depthForLayers = volumeResult.depthOut;
 
     auto layersOutput =
         layers().declareRenderTasks(framegraph, {.color = colorForLayers, .depth = depthForLayers});
@@ -350,12 +265,11 @@ void VolumeRenderDemoApplication::drawImguiControls()
                       clock_.lastTick().ticks);
         if (ImGui::Button("Restart")) {
             clock_.reset();
-            temporalHistory_.forceTemporalReset = true;
-            temporalHistory_.valid = false;
+            volumeRenderer_->resetTemporalHistory();
         }
 
-        CoImGui::CheckBox("Debug Rasterizer", debugRasterize);
-        CoImGui::CheckBox("Debug Raycast", debugRaycast);
+        CoImGui::CheckBox("Debug Rasterizer", volumeRenderer_->debugRasterize);
+        CoImGui::CheckBox("Debug Raycast", volumeRenderer_->debugRaycast);
         CoImGui::CheckBox("Show ImGuizmo", showImGuizmo);
         if (!headless_ && window_ != nullptr) {
             ImGui::Separator();
@@ -381,24 +295,32 @@ void VolumeRenderDemoApplication::drawImguiControls()
             if (selectedMsaa != currentMsaa) {
                 window_->requestSampleCount(static_cast<Gpu::SampleCountFlagBits>(selectedMsaa));
                 msaaSamples = static_cast<int32_t>(window_->sampleCount());
-                temporalHistory_.valid = false;
-                temporalHistory_.forceTemporalReset = true;
+                volumeRenderer_->resetTemporalHistory();
             }
         }
 
         ImGui::Separator();
         CoImGui::Text("Temporal Accumulation");
-        CoImGui::CheckBox("Enable Temporal", temporalAccumulation);
-        auto temporalAlpha = temporalAccumulationAlpha.get();
-        auto alphaRejectThreshold = alphaDeltaRejectThreshold.get();
+        CoImGui::CheckBox("Enable Temporal", volumeRenderer_->temporalAccumulation);
+        auto temporalTimeMs = volumeRenderer_->temporalEmaTauMs.get();
+        auto alphaRejectThreshold = volumeRenderer_->alphaDeltaRejectThreshold.get();
+        auto iterations = volumeRenderer_->temporalIterations.get();
+        const auto frameDeltaSeconds =
+            std::max(static_cast<float>(clock_.lastTick().delta.count()), 1e-6f);
+        const auto temporalTauSeconds = std::max(temporalTimeMs * 0.001f, 1e-4f);
+        const auto effectiveAlpha =
+            std::clamp(1.0f - std::exp(-frameDeltaSeconds / temporalTauSeconds), 0.001f, 1.0f);
         CoImGui::Slider("Iterations", iterations, 1, 200);
-        CoImGui::Slider("Temporal Alpha", temporalAlpha, 0.01f, 1.0f);
+        CoImGui::Slider("Temporal EMA Tau (ms)", temporalTimeMs, 1.0f, 2000.0f);
         CoImGui::Slider("Alpha Reject Threshold", alphaRejectThreshold, 0.0f, 0.25f);
-        temporalAccumulationAlpha = std::clamp(temporalAlpha, 0.01f, 1.0f);
-        alphaDeltaRejectThreshold = std::max(alphaRejectThreshold, 0.0f);
+        CoImGui::Text("Effective Alpha: {:.4f} (dt: {:.2f} ms)",
+                      effectiveAlpha,
+                      frameDeltaSeconds * 1000.0f);
+        volumeRenderer_->temporalIterations = std::max(iterations, 1);
+        volumeRenderer_->temporalEmaTauMs = std::max(temporalTimeMs, 1.0f);
+        volumeRenderer_->alphaDeltaRejectThreshold = std::max(alphaRejectThreshold, 0.0f);
         if (ImGui::Button("Reset Temporal")) {
-            temporalHistory_.forceTemporalReset = true;
-            temporalHistory_.valid = false;
+            volumeRenderer_->resetTemporalHistory();
         }
 
         ImGui::Separator();

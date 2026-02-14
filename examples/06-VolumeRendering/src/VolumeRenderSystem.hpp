@@ -3,10 +3,13 @@
 #include "Common.hpp"
 
 #include <Cory/Application/DynamicGeometry.hpp>
+#include <Cory/Base/Prop.hpp>
 #include <Cory/Framegraph/Common.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
+#include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderHotReloader.hpp>
 #include <Cory/SceneGraph/System.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
@@ -49,6 +52,16 @@ class VolumeRenderSystem
     explicit VolumeRenderSystem(Cory::Context &ctx);
     ~VolumeRenderSystem();
 
+    Cory::Property<bool> debugRasterize{false};
+    Cory::Property<bool> debugRaycast{false};
+    Cory::Property<bool> temporalAccumulation{false};
+    Cory::Property<int32_t> temporalIterations{1};
+    Cory::Property<float> temporalEmaTauMs{120.0f};
+    Cory::Property<float> alphaDeltaRejectThreshold{0.01f};
+
+    void setResourceManager(Cory::FramegraphResourceManager *resourceManager);
+    void resetTemporalHistory();
+
     void beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber);
 
     void update(Cory::SceneGraph &sg,
@@ -66,14 +79,18 @@ class VolumeRenderSystem
                       Cory::TransientTextureHandle colorTarget,
                       Cory::TransientTextureHandle depthTarget);
 
+    Cory::RenderTaskDeclaration<PassOutputs>
+    volumeFrameTask(Cory::RenderTaskBuilder builder,
+                    Cory::Framegraph &framegraph,
+                    const Cory::FrameContext &frameCtx,
+                    Cory::TransientTextureHandle colorTarget,
+                    Cory::TransientTextureHandle depthTarget);
+
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     cubeRaycastTask(Cory::RenderTaskBuilder builder,
                     Cory::TransientTextureHandle colorTarget,
                     Cory::TransientTextureHandle depthTarget,
-                    Cory::TransientTextureHandle volumeTarget,
-                    float temporalBlendFactor,
-                    int32_t iterations,
-                    float alphaDeltaRejectThreshold);
+                    Cory::TransientTextureHandle volumeTarget);
 
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
@@ -102,4 +119,18 @@ class VolumeRenderSystem
                                          .densityScale = 1.0f,
                                          .volumeDimensions = glm::uvec3{128u, 128u, 128u},
                                          .time = 0.0f};
+    float lastFrameDeltaSeconds_{1.0f / 60.0f};
+
+    Cory::FramegraphResourceManager *resourceManager_{nullptr};
+    struct TemporalHistoryBuffer {
+        Cory::FramegraphTextureHandle resource{};
+        glm::u32vec2 extent{0u, 0u};
+        Gpu::Format format{};
+        Gpu::SampleCountFlagBits sampleCount{Gpu::SampleCountFlagBits::Samples1Bit};
+        bool valid{false};
+        bool forceTemporalReset{false};
+    };
+    TemporalHistoryBuffer temporalHistory_{};
+
+    void ensureTemporalHistoryTexture(const Cory::FrameContext &frameCtx);
 };

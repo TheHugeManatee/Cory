@@ -78,7 +78,8 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
   `VolumeRenderSystem` for both volume generation and raymarch/debug passes (removed frame-number-derived shader time).
 - Implemented initial temporal accumulation (EMA) for the main volume raymarch path:
   - Added temporal blend factor controls in ImGui (enable/alpha/reset).
-  - Added a persistent history texture imported into the framegraph each frame.
+  - Added a persistent history texture allocated via `FramegraphResourceManager` and marked as an
+    existing framegraph input each frame.
   - Updated raymarch shader to blend current frame with history using `temporalBlendFactor`.
   - Copied accumulated history back to the frame color target before layer rendering.
 - Added a reusable `ImGuizmoTransformSystem` in Cory core systems and integrated it into `VolumeRenderDemo` so every

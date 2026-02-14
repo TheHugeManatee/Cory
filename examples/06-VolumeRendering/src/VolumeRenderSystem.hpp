@@ -71,7 +71,9 @@ class VolumeRenderSystem
                     Cory::TransientTextureHandle colorTarget,
                     Cory::TransientTextureHandle depthTarget,
                     Cory::TransientTextureHandle volumeTarget,
-                    float temporalBlendFactor);
+                    float temporalBlendFactor,
+                    int32_t iterations,
+                    float alphaDeltaRejectThreshold);
 
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,

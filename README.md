@@ -25,12 +25,12 @@ As such, it uses features that are only supported in rather modern compilers.
     - [x] actually execute render pass code that renders stuff
     - [x] implement a multi-pass example that reads from a texture
     - [x] vulkan object debug names set up
-    - [ ] restructure swapchain frame generation as a coroutine-based generator
-    - [ ] extend multi-pass to dynamic uniforms & interactivity
-    - [ ] proper allocation of transient textures from arena
-    - [ ] create AccessInfo templates for most common usages
-    - [ ] automatically figure out required image usage for a transient image
-    - [ ] extend transient resource system to buffers
+    - [x] restructure swapchain frame generation as a coroutine-based generator
+    - [x] extend multi-pass to dynamic uniforms & interactivity
+    - [x] proper allocation of transient textures from arena
+    - [x] create AccessInfo templates for most common usages
+    - [x] automatically figure out required image usage for a transient image
+    - [x] extend transient resource system to buffers
     - [ ] split barriers
 - Window and event system
     - [x] basic mouse and kb event forwarding
@@ -45,7 +45,7 @@ As such, it uses features that are only supported in rather modern compilers.
 - Shader System
     - [x] push constants
     - [x] On-the fly shader compilation using [Slang](https://github.com/shader-slang/slang)
-    - [ ] shader hot-reloading
+    - [x] shader hot-reloading
     - [ ] shader reflection using [SPIR-V Reflect](https://github.com/KhronosGroup/SPIRV-Reflect)
     - [ ] shader compilation cache
     - [ ] [shader specialization constants](https://blogs.igalia.com/itoral/2018/03/20/improving-shader-performance-with-vulkans-specialization-constants/)
@@ -81,7 +81,7 @@ As such, it uses features that are only supported in rather modern compilers.
 
 ### Inspiration and Resources
 
-- Engine structure and basic from Hazel engine by TheCherno, greatly documented on his [Youtube
+- Ideas around Engine structure and event handling basics from Hazel engine by TheCherno, greatly documented on his [Youtube
   Channel](https://www.youtube.com/user/TheChernoProject)
 - Alexander Overvoorde's excellent [Vulkan tutorial](https://vulkan-tutorial.com/)
 - Brendan Galea's [Vulkan Tutorial](https://www.youtube.com/watch?v=Y9U9IE0gVHA&list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR)

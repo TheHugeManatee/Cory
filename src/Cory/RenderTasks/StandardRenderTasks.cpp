@@ -1,5 +1,6 @@
 #include "StandardRenderTasks.hpp"
 
+#include <Cory/Base/Log.hpp>
 #include <Cory/Base/GlmUtils.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 
@@ -63,6 +64,9 @@ RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
 
     // Depending on the MSAA state of the window image, either resolve or blit to the swapchain
     if (colorInfo.sampleCount != Gpu::SampleCountFlagBits::Samples1Bit) {
+        CO_CORE_ASSERT(swapchainInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit,
+                       "Resolve destination must be single-sampled, got {}",
+                       static_cast<uint32_t>(swapchainInfo.sampleCount));
         renderApi.cmd->resolveTexture(Gpu::TextureResolveOptions{
             .srcTexture = windowImage,
             .srcLayout = Gpu::TextureLayout::TransferSrcOptimal,

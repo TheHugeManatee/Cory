@@ -703,7 +703,9 @@ Framegraph::FrameContextHandles Framegraph::importFrameContext(const FrameContex
             .name = "TEX_SwapCh_Present",
             .size = size,
             .format = frameCtx.colorFormat,
-            .sampleCount = frameCtx.sampleCount,
+            // Presentable swapchain images are single-sampled; only offscreen color/depth
+            // carry the configured MSAA sample count.
+            .sampleCount = Gpu::SampleCountFlagBits::Samples1Bit,
         },
         Cory::Sync::AccessType::None,
         *frameCtx.swapchainImage,

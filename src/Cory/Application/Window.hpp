@@ -16,7 +16,9 @@
 
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <string>
+#include <vector>
 
 struct GLFWwindow;
 
@@ -47,6 +49,8 @@ class Window : public FrameSource, NoCopy, NoMove {
     [[nodiscard]] Gpu::Format depthFormat() const noexcept override;
     [[nodiscard]] glm::u32vec2 extent() const noexcept override;
     [[nodiscard]] Gpu::SampleCountFlagBits sampleCount() const noexcept override;
+    [[nodiscard]] std::span<const Gpu::SampleCountFlagBits> supportedSampleCounts() const noexcept;
+    void requestSampleCount(Gpu::SampleCountFlagBits sampleCount);
     [[nodiscard]] size_t size() const noexcept override;
 
     /**

@@ -86,8 +86,11 @@ bool ImGuiLayer::onEvent(Event event)
             [](auto event) { return false; },
             [this](const SwapchainResizedEvent &event) {
                 data_->windowSize = event.size;
-
-                // data_->imguiRenderer->updateScale(1.0f);
+                data_->imguiRenderer->cleanup();
+                data_->imguiRenderer->initialize(1.0f,
+                                                 data_->window->samples(),
+                                                 data_->window->colorFormat(),
+                                                 data_->window->depthFormat());
                 return false;
             },
             // we just need to prevent lower layers from using the events, actual processing

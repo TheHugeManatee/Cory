@@ -23,6 +23,9 @@ struct RaycastGlobals
     uint volumeTextureIndex;
     uint colorTargetIsMsaa;
     float temporalBlendFactor;
+    uint iterations;
+    float alphaDeltaRejectThreshold;
+    uint _padding0;
     Ptr<InstanceData, Access::Read> instances;
 };
 
@@ -204,6 +207,16 @@ float4 raymarchVolume(float3 localOrigin,
     return raymarch(marchRay, cfg, sampler, accum);
 }
 
+float4 integrateTemporalHistory(float4 historyColor,
+                                float4 currentColor,
+                                float temporalBlend,
+                                float alphaDeltaRejectThreshold)
+{
+    let rejectHistory = abs(historyColor.a - currentColor.a) > alphaDeltaRejectThreshold;
+    return rejectHistory ? currentColor
+                         : lerp(historyColor, currentColor, saturate(temporalBlend));
+}
+
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
@@ -236,38 +249,52 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         worldPos /= worldPos.w;
 
         let rayDirection = normalize(worldPos.xyz - rayOrigin);
-        let jitterSeed = float3(float2(coords) + samplePosition,
-                                globals->time * 91.7f + float(sample) * 17.0f);
-        let phaseJitter = hash13(jitterSeed + float3(13.1f, 7.7f, 3.3f));
-        var volumeColor = float4(0.0f);
+        let iterationCount = max(globals->iterations, 1u);
+        var averagedVolume = float4(0.0f);
 
         [loop]
-        for (uint i = 0u; i < globals->instanceCount; ++i) {
-            let instance = globals->instances[i];
-            let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
-            let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
-            let instanceVolume = raymarchVolume(localOrigin, localDirection, instance, phaseJitter);
-            if (instanceVolume.a > 0.0f) {
-                volumeColor.rgb += (1.0f - volumeColor.a) * instanceVolume.rgb;
-                volumeColor.a += (1.0f - volumeColor.a) * instanceVolume.a;
-                if (volumeColor.a >= kTransmittanceCutoff) {
-                    break;
+        for (uint iteration = 0u; iteration < iterationCount; ++iteration) {
+            let jitterSeed = float3(float2(coords) + samplePosition,
+                                    globals->time * 91.7f + float(sample) * 17.0f +
+                                        float(iteration) * 59.3f);
+            let phaseJitter = hash13(jitterSeed + float3(13.1f, 7.7f, 3.3f));
+            var volumeColor = float4(0.0f);
+
+            [loop]
+            for (uint i = 0u; i < globals->instanceCount; ++i) {
+                let instance = globals->instances[i];
+                let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
+                let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
+                let instanceVolume = raymarchVolume(localOrigin, localDirection, instance, phaseJitter);
+                if (instanceVolume.a > 0.0f) {
+                    volumeColor.rgb += (1.0f - volumeColor.a) * instanceVolume.rgb;
+                    volumeColor.a += (1.0f - volumeColor.a) * instanceVolume.a;
+                    if (volumeColor.a >= kTransmittanceCutoff) {
+                        break;
+                    }
                 }
             }
+
+            let weight = 1.0f / float(iteration + 1u);
+            averagedVolume = lerp(averagedVolume, volumeColor, weight);
         }
 
-        let currentColor = float4(volumeColor.rgb, 1.0f);
-        let temporalBlend = saturate(globals->temporalBlendFactor);
+        let currentColor = averagedVolume;
+        let temporalBlend = globals->temporalBlendFactor;
         if (globals->colorTargetIsMsaa != 0u) {
-            let outColor = temporalBlend >= 0.999f
-                               ? currentColor
-                               : lerp(gBindlessStorageImage2DMS[coords, sample], currentColor, temporalBlend);
+            let historyColor = gBindlessStorageImage2DMS[coords, sample];
+            let outColor = integrateTemporalHistory(historyColor,
+                                                    currentColor,
+                                                    temporalBlend,
+                                                    globals->alphaDeltaRejectThreshold);
             gBindlessStorageImage2DMS[coords, sample] = outColor;
         }
         else {
-            let outColor = temporalBlend >= 0.999f
-                               ? currentColor
-                               : lerp(gBindlessStorageImage2D[coords], currentColor, temporalBlend);
+            let historyColor = gBindlessStorageImage2D[coords];
+            let outColor = integrateTemporalHistory(historyColor,
+                                                    currentColor,
+                                                    temporalBlend,
+                                                    globals->alphaDeltaRejectThreshold);
             gBindlessStorageImage2D[coords] = outColor;
         }
     }

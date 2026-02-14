@@ -22,6 +22,9 @@ struct RaycastGlobals
     uint volumeTextureIndex;
     uint colorTargetIsMsaa;
     float temporalBlendFactor;
+    uint iterations;
+    float alphaDeltaRejectThreshold;
+    uint _padding0;
     Ptr<InstanceData, Access::Read> instances;
 };
 

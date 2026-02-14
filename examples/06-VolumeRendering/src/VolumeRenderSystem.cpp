@@ -39,6 +39,9 @@ struct RaycastGlobals {
     uint32_t volumeTextureIndex;
     uint32_t colorTargetIsMsaa;
     float temporalBlendFactor;
+    uint32_t iterations;
+    float alphaDeltaRejectThreshold;
+    uint32_t padding0;
     Cory::BufferDeviceAddress instances;
 };
 
@@ -255,7 +258,9 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle colorTarget,
                                     Cory::TransientTextureHandle depthTarget,
                                     Cory::TransientTextureHandle volumeTarget,
-                                    float temporalBlendFactor)
+                                    float temporalBlendFactor,
+                                    int32_t iterations,
+                                    float alphaDeltaRejectThreshold)
 {
     builder.read(volumeTarget, Cory::RenderTaskBuilder::TextureReadPreset::ComputeSampled);
 
@@ -307,6 +312,9 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
     drawData->temporalBlendFactor = std::clamp(temporalBlendFactor, 0.0f, 1.0f);
+    drawData->iterations = static_cast<uint32_t>(std::max(iterations, 1));
+    drawData->alphaDeltaRejectThreshold = std::max(alphaDeltaRejectThreshold, 0.0f);
+    drawData->padding0 = 0u;
 
     drawData->instances = 0;
     if (instanceCount > 0) {
@@ -381,6 +389,9 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
     drawData->temporalBlendFactor = 1.0f;
+    drawData->iterations = 1u;
+    drawData->alphaDeltaRejectThreshold = 0.0f;
+    drawData->padding0 = 0u;
 
     if (instanceCount > 0) {
         auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);

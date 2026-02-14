@@ -23,7 +23,64 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#include <algorithm>
+#include <array>
+
 namespace Cory {
+
+namespace {
+std::vector<Gpu::SampleCountFlagBits> querySupportedSampleCounts(Context &ctx)
+{
+    static constexpr std::array<Gpu::SampleCountFlagBits, 7> kAllSamples{
+        Gpu::SampleCountFlagBits::Samples1Bit,
+        Gpu::SampleCountFlagBits::Samples2Bit,
+        Gpu::SampleCountFlagBits::Samples4Bit,
+        Gpu::SampleCountFlagBits::Samples8Bit,
+        Gpu::SampleCountFlagBits::Samples16Bit,
+        Gpu::SampleCountFlagBits::Samples32Bit,
+        Gpu::SampleCountFlagBits::Samples64Bit,
+    };
+
+    const auto limits = ctx.device().adapter()->properties().limits;
+    const auto supportedMask = static_cast<uint32_t>(limits.framebufferColorSampleCounts.toInt() &
+                                                     limits.framebufferDepthSampleCounts.toInt());
+
+    auto supported = std::vector<Gpu::SampleCountFlagBits>{};
+    supported.reserve(kAllSamples.size());
+    for (const auto sample : kAllSamples) {
+        if ((supportedMask & static_cast<uint32_t>(sample)) != 0u) {
+            supported.push_back(sample);
+        }
+    }
+    if (supported.empty()) {
+        supported.push_back(Gpu::SampleCountFlagBits::Samples1Bit);
+    }
+    return supported;
+}
+
+Gpu::SampleCountFlagBits
+clampSampleCountToSupported(Gpu::SampleCountFlagBits requested,
+                            std::span<const Gpu::SampleCountFlagBits> supportedSampleCounts)
+{
+    if (supportedSampleCounts.empty()) {
+        return Gpu::SampleCountFlagBits::Samples1Bit;
+    }
+
+    const auto requestedMask = static_cast<uint32_t>(requested);
+    if (std::ranges::find(supportedSampleCounts, requested) != supportedSampleCounts.end()) {
+        return requested;
+    }
+
+    // Prefer the largest supported sample count that does not exceed the request.
+    auto clamped = supportedSampleCounts.front();
+    for (const auto sample : supportedSampleCounts) {
+        if (static_cast<uint32_t>(sample) <= requestedMask) {
+            clamped = sample;
+        }
+    }
+    return clamped;
+}
+} // namespace
 
 struct WindowPrivate {
     Context *ctx;
@@ -32,11 +89,43 @@ struct WindowPrivate {
                                                    // destroyed separately from the Gpu::Surface
     Gpu::Surface surface{};
     std::unique_ptr<Swapchain> swapchain;
+    std::vector<Gpu::SampleCountFlagBits> supportedSampleCounts{};
+    bool swapchainRecreatePending{false};
+    bool updatingSamples{false};
 
     LapTimer fpsCounter{std::chrono::milliseconds{2000}};
 
-    void recreateSwapchain();
+    void recreateSwapchain(const std::string &title,
+                           const glm::i32vec2 &dimensions,
+                           KDBindings::Signal<SwapchainResizedEvent> &onSwapchainResized,
+                           Gpu::SampleCountFlagBits samples);
 };
+
+void WindowPrivate::recreateSwapchain(const std::string &title,
+                                      const glm::i32vec2 &dimensions,
+                                      KDBindings::Signal<SwapchainResizedEvent> &onSwapchainResized,
+                                      Gpu::SampleCountFlagBits samples)
+{
+    if (dimensions.x == 0 || dimensions.y == 0) {
+        return;
+    }
+
+    ctx->device().waitUntilIdle();
+    swapchain.reset();
+    CO_CORE_INFO("Recreating swapchain for window {} with size {} and {}x MSAA",
+                 title,
+                 dimensions,
+                 static_cast<uint32_t>(samples));
+    swapchain = std::make_unique<Swapchain>(*ctx,
+                                            surface,
+                                            SwapchainCreateInfo{
+                                                .label = title,
+                                                .size = dimensions,
+                                                .samples = samples,
+                                            });
+    onSwapchainResized.emit(SwapchainResizedEvent{.size{dimensions}});
+    swapchainRecreatePending = false;
+}
 
 Window::Window(Context &context,
                glm::i32vec2 requestedDimensions,
@@ -47,8 +136,6 @@ Window::Window(Context &context,
     data_->ctx = &context;
     this->title = std::move(windowName);
     dimensions = requestedDimensions;
-
-    samples = static_cast<Gpu::SampleCountFlagBits>(sampleCount);
 
     glfwInit();
 
@@ -81,6 +168,17 @@ Window::Window(Context &context,
         context.graphicsApi().createSurfaceFromExistingVkSurface(instance_handle, surfaceHandle);
     context.setupDeviceFromSurface(data_->surface);
 
+    data_->supportedSampleCounts = querySupportedSampleCounts(context);
+    const auto requestedSamples = static_cast<Gpu::SampleCountFlagBits>(sampleCount);
+    const auto initialSamples =
+        clampSampleCountToSupported(requestedSamples, data_->supportedSampleCounts);
+    if (initialSamples != requestedSamples) {
+        CO_CORE_WARN("Requested {}x MSAA is not supported, clamping to {}x",
+                     static_cast<uint32_t>(requestedSamples),
+                     static_cast<uint32_t>(initialSamples));
+    }
+    samples = initialSamples;
+
     data_->swapchain = std::make_unique<Swapchain>(context,
                                                    data_->surface,
                                                    SwapchainCreateInfo{
@@ -91,9 +189,21 @@ Window::Window(Context &context,
 
     samples.valueChanged()
         .connect([this]() {
-            CO_CORE_INFO("Samples changed to {}", samples());
-            CO_CORE_FATAL("Changing sample count dynamically is not implemented yet!");
-            // createColorAndDepthResources();
+            if (data_->updatingSamples) {
+                return;
+            }
+
+            const auto requested = samples();
+            const auto clamped =
+                clampSampleCountToSupported(requested, data_->supportedSampleCounts);
+            if (clamped != requested) {
+                data_->updatingSamples = true;
+                samples = clamped;
+                data_->updatingSamples = false;
+            }
+
+            CO_CORE_INFO("Samples changed to {}", static_cast<uint32_t>(samples()));
+            data_->swapchainRecreatePending = true;
         })
         .release();
 
@@ -135,6 +245,10 @@ FrameContext Window::acquireFrameContext()
             continue;
         }
 
+        if (data_->swapchainRecreatePending) {
+            data_->recreateSwapchain(title(), dims, onSwapchainResized, samples());
+        }
+
         auto nextImageResult = data_->swapchain->nextImage();
         if (!nextImageResult.has_value()) {
             auto error = nextImageResult.error();
@@ -150,21 +264,7 @@ FrameContext Window::acquireFrameContext()
                 continue;
             }
 
-            // Hard sync to make sure no commands are in flight before recreating the swapchain
-            data_->ctx->device().waitUntilIdle();
-            // recreate the necessary resized resources and notify client code via
-            // the onSwaphcainResized callback
-            data_->swapchain.reset();
-            CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dims);
-            data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
-                                                           data_->surface,
-                                                           SwapchainCreateInfo{
-                                                               .label = title(),
-                                                               .size = dims,
-                                                               .samples = samples(),
-                                                           });
-            onSwapchainResized.emit(SwapchainResizedEvent{.size{dims}});
-
+            data_->recreateSwapchain(title(), dims, onSwapchainResized, samples());
             continue;
         }
 
@@ -201,6 +301,20 @@ glm::u32vec2 Window::extent() const noexcept
 Gpu::SampleCountFlagBits Window::sampleCount() const noexcept
 {
     return samples();
+}
+
+std::span<const Gpu::SampleCountFlagBits> Window::supportedSampleCounts() const noexcept
+{
+    return data_->supportedSampleCounts;
+}
+
+void Window::requestSampleCount(Gpu::SampleCountFlagBits requestedSampleCount)
+{
+    const auto clamped =
+        clampSampleCountToSupported(requestedSampleCount, data_->supportedSampleCounts);
+    if (samples() != clamped) {
+        samples = clamped;
+    }
 }
 
 size_t Window::size() const noexcept

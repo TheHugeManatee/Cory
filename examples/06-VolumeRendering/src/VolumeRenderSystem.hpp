@@ -5,7 +5,6 @@
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/Prop.hpp>
 #include <Cory/Framegraph/Common.hpp>
-#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 #include <Cory/Renderer/Common.hpp>
@@ -20,6 +19,10 @@
 #include <cstdint>
 #include <type_traits>
 #include <vector>
+
+namespace Cory {
+class Context;
+}
 
 struct alignas(16) InstanceData {
     glm::mat4 modelToWorld{1.0f};
@@ -59,7 +62,6 @@ class VolumeRenderSystem
     Cory::Property<float> temporalEmaTauMs{120.0f};
     Cory::Property<float> alphaDeltaRejectThreshold{0.01f};
 
-    void setResourceManager(Cory::FramegraphResourceManager *resourceManager);
     void resetTemporalHistory();
 
     void beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber);
@@ -121,7 +123,7 @@ class VolumeRenderSystem
                                          .time = 0.0f};
     float lastFrameDeltaSeconds_{1.0f / 60.0f};
 
-    Cory::FramegraphResourceManager *resourceManager_{nullptr};
+    Cory::Context *ctx_{nullptr};
     struct TemporalHistoryBuffer {
         Cory::FramegraphTextureHandle resource{};
         glm::u32vec2 extent{0u, 0u};

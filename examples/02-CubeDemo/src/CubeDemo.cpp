@@ -34,7 +34,6 @@
 #include <gsl/narrow>
 #include <imgui.h>
 
-#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <algorithm>
 #include <chrono>
@@ -198,8 +197,7 @@ CubeDemoApplication::~CubeDemoApplication()
 
 void CubeDemoApplication::run()
 {
-    Cory::FramegraphResourceManager framegraphResources{ctx()};
-    auto framegraphs = createFramegraphs(framegraphResources);
+    auto framegraphs = createFramegraphs();
 
     auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
                                   : static_cast<Cory::FrameSource &>(*window_);

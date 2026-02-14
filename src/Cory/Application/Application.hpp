@@ -3,7 +3,6 @@
 #include <Cory/Application/Common.hpp>
 #include <Cory/Base/Common.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
 
@@ -51,8 +50,7 @@ class Application : NoCopy, NoMove, public KDGui::GuiApplication {
         ExecutionInfo executionInfo;
     };
 
-    [[nodiscard]] std::vector<Framegraph> createFramegraphs(FramegraphResourceManager &resources,
-                                                            uint32_t count = MAX_FRAMES_IN_FLIGHT);
+    [[nodiscard]] std::vector<Framegraph> createFramegraphs(uint32_t count = MAX_FRAMES_IN_FLIGHT);
 
     template <typename FrameFunc>
     void runFrames(FrameSource &frameSource, int64_t framesToRender, FrameFunc &&runFrame)

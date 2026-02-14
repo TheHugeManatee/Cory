@@ -49,6 +49,7 @@ struct RaycastGlobals {
 
 VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
     : Base()
+    , ctx_{&ctx}
 {
     // Create mesh using Cory::DynamicGeometry, as in 02-CubeDemo
     cube_ = Cory::DynamicGeometry::createCube(ctx);
@@ -98,11 +99,6 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
 
 VolumeRenderSystem::~VolumeRenderSystem() {}
 
-void VolumeRenderSystem::setResourceManager(Cory::FramegraphResourceManager *resourceManager)
-{
-    resourceManager_ = resourceManager;
-}
-
 void VolumeRenderSystem::resetTemporalHistory()
 {
     temporalHistory_.resource = {};
@@ -115,8 +111,8 @@ void VolumeRenderSystem::resetTemporalHistory()
 
 void VolumeRenderSystem::ensureTemporalHistoryTexture(const Cory::FrameContext &frameCtx)
 {
-    CO_CORE_ASSERT(resourceManager_ != nullptr,
-                   "FramegraphResourceManager must be set before temporal history setup");
+    CO_CORE_ASSERT(ctx_ != nullptr, "Context is not set in VolumeRenderSystem");
+    auto &resourceManager = ctx_->framegraphResources();
 
     const auto extent = frameCtx.extent;
     const auto format = frameCtx.colorFormat;
@@ -128,7 +124,7 @@ void VolumeRenderSystem::ensureTemporalHistoryTexture(const Cory::FrameContext &
         return;
     }
 
-    auto historyTexture = resourceManager_->declareTexture(Cory::TextureInfo{
+    auto historyTexture = resourceManager.declareTexture(Cory::TextureInfo{
         .name = "TEX_VolumeTemporalHistory",
         .size = glm::uvec3{extent, 1u},
         .format = format,
@@ -139,7 +135,7 @@ void VolumeRenderSystem::ensureTemporalHistoryTexture(const Cory::FrameContext &
         .sampleCount = sampleCount,
         .textureType = Gpu::TextureType::TextureType2D,
     });
-    resourceManager_->allocate(std::vector<Cory::FramegraphTextureHandle>{historyTexture});
+    resourceManager.allocate(std::vector<Cory::FramegraphTextureHandle>{historyTexture});
     temporalHistory_.resource = historyTexture;
     temporalHistory_.extent = extent;
     temporalHistory_.format = format;

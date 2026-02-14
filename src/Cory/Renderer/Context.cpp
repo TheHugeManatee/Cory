@@ -7,6 +7,7 @@
 #include <Cory/Base/FileWatchManager.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
@@ -89,10 +90,14 @@ Function<void(const DebugMessageInfo &)> &validationMessageCallback()
 
 uint32_t makeApiVersion(uint32_t variant, uint32_t major, uint32_t minor, uint32_t patch)
 {
+#if !defined(_WIN32)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
     return KDGPU_MAKE_API_VERSION(variant, major, minor, patch);
+#if !defined(_WIN32)
 #pragma clang diagnostic pop
+#endif
 }
 
 } // namespace
@@ -120,6 +125,7 @@ struct ContextPrivate {
     ShaderManager shaders;
     DescriptorSets descriptorSets;
     std::unique_ptr<PipelineCache> pipelineCache;
+    std::unique_ptr<FramegraphResourceManager> framegraphResources;
 
     static void receiveDebugUtilsMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                          VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -158,16 +164,29 @@ Context::Context(ContextCreationInfo creationInfo)
     }
     data_->instance = data_->api.createInstance(instanceOptions);
     data_->shaders.setContext(*this);
+    data_->framegraphResources = std::make_unique<FramegraphResourceManager>(*this);
 }
 
 Context::Context(Context &&rhs) noexcept
 {
     std::swap(rhs.data_, data_);
+    if (data_ && data_->framegraphResources) {
+        data_->framegraphResources->setContext(*this);
+    }
+    if (rhs.data_ && rhs.data_->framegraphResources) {
+        rhs.data_->framegraphResources->setContext(rhs);
+    }
 }
 Context &Context::operator=(Context &&rhs) noexcept
 {
     if (this != &rhs) {
         std::swap(rhs.data_, data_);
+        if (data_ && data_->framegraphResources) {
+            data_->framegraphResources->setContext(*this);
+        }
+        if (rhs.data_ && rhs.data_->framegraphResources) {
+            rhs.data_->framegraphResources->setContext(rhs);
+        }
     }
     return *this;
 }
@@ -579,6 +598,20 @@ AsyncUploader &Context::uploader()
 {
     CO_CORE_ASSERT(data_->uploader != nullptr, "Uploader is not initialized");
     return *data_->uploader;
+}
+
+FramegraphResourceManager &Context::framegraphResources()
+{
+    CO_CORE_ASSERT(data_->framegraphResources != nullptr,
+                   "FramegraphResourceManager is not initialized");
+    return *data_->framegraphResources;
+}
+
+const FramegraphResourceManager &Context::framegraphResources() const
+{
+    CO_CORE_ASSERT(data_->framegraphResources != nullptr,
+                   "FramegraphResourceManager is not initialized");
+    return *data_->framegraphResources;
 }
 
 FileWatchManager &Context::fileWatchManager()

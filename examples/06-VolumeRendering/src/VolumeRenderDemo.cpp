@@ -14,7 +14,6 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Time.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
@@ -186,9 +185,7 @@ VolumeRenderDemoApplication::~VolumeRenderDemoApplication()
 
 void VolumeRenderDemoApplication::run()
 {
-    Cory::FramegraphResourceManager framegraphResources{ctx()};
-    volumeRenderer_->setResourceManager(&framegraphResources);
-    auto framegraphs = createFramegraphs(framegraphResources);
+    auto framegraphs = createFramegraphs();
 
     auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
                                   : static_cast<Cory::FrameSource &>(*window_);
@@ -220,7 +217,6 @@ void VolumeRenderDemoApplication::run()
             }
         },
         [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
-    volumeRenderer_->setResourceManager(nullptr);
 }
 
 void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,

@@ -84,6 +84,11 @@ FramegraphResourceManager::FramegraphResourceManager(FramegraphResourceManager &
 FramegraphResourceManager &
 FramegraphResourceManager::operator=(FramegraphResourceManager &&) noexcept = default;
 
+void FramegraphResourceManager::setContext(Context &ctx)
+{
+    data_->ctx_ = &ctx;
+}
+
 void FramegraphResourceManager::setCurrentFrameNumber(uint64_t frameNumber)
 {
     data_->currentFrameNumber = frameNumber;

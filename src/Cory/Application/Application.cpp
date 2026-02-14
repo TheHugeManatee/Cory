@@ -53,11 +53,11 @@ const LayerStack &Application::layers() const
 }
 // </editor-fold>
 
-std::vector<Framegraph> Application::createFramegraphs(FramegraphResourceManager &resources,
-                                                       uint32_t count)
+std::vector<Framegraph> Application::createFramegraphs(uint32_t count)
 {
     std::vector<Framegraph> framegraphs;
     framegraphs.reserve(count);
+    auto &resources = ctx().framegraphResources();
     for (uint32_t idx = 0; idx < count; ++idx) {
         framegraphs.emplace_back(ctx(), resources, idx);
     }

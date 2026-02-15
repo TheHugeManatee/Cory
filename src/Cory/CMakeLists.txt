@@ -96,6 +96,8 @@ set(CORY_SOURCES
         Framegraph/TransientComputePass.hpp
         Framegraph/TransientRenderPass.cpp
         Framegraph/TransientRenderPass.hpp
+        IO/Bmp.cpp
+        IO/Bmp.hpp
         ImGui/ImguiRenderer.cpp
         ImGui/ImguiRenderer.hpp
         ImGui/Inputs.hpp

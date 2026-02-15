@@ -20,17 +20,15 @@
 
 #include <algorithm>
 #include <cmath>
-#include <fstream>
 #include <stdexcept>
 #include <utility>
 
 namespace {
 
-[[nodiscard]] Gpu::Texture
-createTexture3D(const std::string &label,
-                glm::uvec3 dimensions,
-                Cory::Context &ctx,
-                Gpu::TextureUsageFlags usage)
+[[nodiscard]] Gpu::Texture createTexture3D(const std::string &label,
+                                           glm::uvec3 dimensions,
+                                           Cory::Context &ctx,
+                                           Gpu::TextureUsageFlags usage)
 {
     return ctx.device().createTexture(Gpu::TextureOptions{
         .label = label,
@@ -73,32 +71,6 @@ createTexture3D(const std::string &label,
     });
 }
 
-[[nodiscard]] std::vector<std::byte> readFileBytes(const std::filesystem::path &path,
-                                                   std::string &errorOut)
-{
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        errorOut = fmt::format("Failed to open file '{}'", path.string());
-        return {};
-    }
-
-    const auto endPos = file.tellg();
-    if (endPos < 0) {
-        errorOut = fmt::format("Failed to query file size '{}'", path.string());
-        return {};
-    }
-
-    const auto size = static_cast<size_t>(endPos);
-    std::vector<std::byte> bytes(size);
-    file.seekg(0, std::ios::beg);
-    file.read(reinterpret_cast<char *>(bytes.data()), static_cast<std::streamsize>(size));
-    if (!file.good() && !file.eof()) {
-        errorOut = fmt::format("Failed while reading '{}'", path.string());
-        return {};
-    }
-    return bytes;
-}
-
 struct alignas(16) VolumeGenerationParams {
     glm::vec3 volumeSpacing{1.0f};
     float densityScale{1.0f};
@@ -124,7 +96,6 @@ constexpr size_t kManagerDrawDataBufferSize = 64u * 1024u;
 
 VolumeManagerSystem::VolumeManagerSystem(Cory::Context &ctx)
     : ctx_{&ctx}
-    , worker_{[this]() { workerLoop(); }}
 {
     const auto createVolumePath = Cory::ResourceLocator::Locate("create_volume.comp.slang");
     if (!createVolumePath.has_value()) {
@@ -142,14 +113,7 @@ VolumeManagerSystem::VolumeManagerSystem(Cory::Context &ctx)
 
 VolumeManagerSystem::~VolumeManagerSystem()
 {
-    {
-        std::scoped_lock lock(requestMutex_);
-        stopWorker_ = true;
-    }
-    requestCv_.notify_all();
-    if (worker_.joinable()) {
-        worker_.join();
-    }
+    cppcoro::sync_wait(readScope_.join());
 }
 
 void VolumeManagerSystem::tick(Cory::SceneGraph &graph, Cory::TickInfo tickInfo)
@@ -180,91 +144,66 @@ std::vector<std::pair<std::string, std::string>> VolumeManagerSystem::datasetSta
     return statuses;
 }
 
-void VolumeManagerSystem::workerLoop()
+cppcoro::task<void> VolumeManagerSystem::loadAndQueueResult(std::string datasetId,
+                                                            VolumeLevel level,
+                                                            Cory::LoadStackRequest request)
 {
-    while (true) {
-        ReadRequest request{};
-        {
-            std::unique_lock lock(requestMutex_);
-            requestCv_.wait(lock, [this]() { return stopWorker_ || !pendingReads_.empty(); });
-            if (stopWorker_ && pendingReads_.empty()) {
-                return;
-            }
-            request = std::move(pendingReads_.front());
-            pendingReads_.pop_front();
-        }
+    auto result = ReadResult{
+        .datasetId = std::move(datasetId),
+        .level = level,
+    };
 
-        ReadResult result{
-            .datasetId = request.datasetId,
-            .level = request.level,
-            .dimensions = request.dimensions,
-        };
-        if (request.source == ReadRequest::Source::BmpStack) {
-            auto stackResult = cppcoro::sync_wait(datasetLoader_.loadBmpStack(Cory::LoadStackRequest{
-                .directory = request.stackDirectory,
-                .pattern = request.stackPattern,
-                .maxConcurrency = request.stackMaxConcurrency,
-            }));
-            if (!stackResult) {
-                result.error = std::move(stackResult.error());
-            } else {
-                result.dimensions = stackResult->dimensions;
-                result.bytes = std::move(stackResult->voxelsR8);
-            }
-        } else {
-            std::string readError{};
-            result.bytes = readFileBytes(request.blobPath, readError);
-            if (!readError.empty()) {
-                result.error = std::move(readError);
-            } else if (!result.bytes.empty() && request.expectedByteSize != 0 &&
-                       request.expectedByteSize != result.bytes.size()) {
-                result.error = fmt::format("File '{}' size mismatch: expected {} bytes, got {} bytes",
-                                           request.blobPath.string(),
-                                           request.expectedByteSize,
-                                           result.bytes.size());
-            }
+    try {
+        auto stackResult = co_await datasetLoader_.loadBmpStack(request);
+        if (!stackResult) {
+            result.error = std::move(stackResult.error());
         }
+        else {
+            result.dimensions = stackResult->dimensions;
+            result.bytes = std::move(stackResult->voxelsR8);
+        }
+    }
+    catch (const std::exception &e) {
+        result.error = fmt::format(
+            "Unhandled exception while loading dataset '{}': {}", result.datasetId, e.what());
+    }
+    catch (...) {
+        result.error =
+            fmt::format("Unhandled unknown exception while loading dataset '{}'", result.datasetId);
+    }
 
-        {
-            std::scoped_lock lock(resultMutex_);
-            completedReads_.push_back(std::move(result));
-        }
+    {
+        std::scoped_lock lock(resultMutex_);
+        completedReads_.push_back(std::move(result));
     }
 }
 
 void VolumeManagerSystem::enqueueRead(DatasetRuntime &dataset, VolumeLevel level)
 {
-    const auto isPreview = level == VolumeLevel::Preview;
-    const auto loadFromBmpStack = !isPreview && dataset.manifest.bmpStack.has_value();
-    const auto &blob = isPreview ? dataset.manifest.preview : dataset.manifest.full;
-
-    {
-        std::scoped_lock lock(requestMutex_);
-        auto request = ReadRequest{
-            .datasetId = dataset.manifest.datasetId,
-            .level = level,
-            .source = loadFromBmpStack ? ReadRequest::Source::BmpStack : ReadRequest::Source::RawBlob,
-            .blobPath = blob.path,
-            .dimensions = blob.dimensions,
-            .expectedByteSize = blob.byteSize,
-        };
-        if (loadFromBmpStack) {
-            request.stackDirectory = dataset.manifest.bmpStack->directory;
-            request.stackPattern = dataset.manifest.bmpStack->pattern;
-            request.stackMaxConcurrency = dataset.manifest.bmpStack->maxConcurrency;
-            request.dimensions = glm::uvec3{0u};
-            request.expectedByteSize = 0;
-        }
-        pendingReads_.push_back(std::move(request));
-        if (isPreview) {
-            dataset.previewQueued = true;
-            dataset.state = StreamState::PendingPreviewRead;
-        } else {
-            dataset.fullQueued = true;
-            dataset.state = StreamState::PendingFullRead;
-        }
+    if (!dataset.manifest.bmpStack.has_value()) {
+        dataset.state = StreamState::Error;
+        dataset.error = fmt::format("Dataset '{}' is missing required bmp_stack configuration",
+                                    dataset.manifest.datasetId);
+        return;
     }
-    requestCv_.notify_one();
+
+    const auto isPreview = level == VolumeLevel::Preview;
+    const auto stackRequest = Cory::LoadStackRequest{
+        .directory = dataset.manifest.bmpStack->directory,
+        .pattern = dataset.manifest.bmpStack->pattern,
+        .maxConcurrency = dataset.manifest.bmpStack->maxConcurrency,
+    };
+
+    readScope_.spawn(loadAndQueueResult(dataset.manifest.datasetId, level, stackRequest));
+
+    if (isPreview) {
+        dataset.previewQueued = true;
+        dataset.state = StreamState::PendingPreviewRead;
+    }
+    else {
+        dataset.fullQueued = true;
+        dataset.state = StreamState::PendingFullRead;
+    }
 }
 
 void VolumeManagerSystem::processReadResults()
@@ -351,7 +290,8 @@ void VolumeManagerSystem::uploadBytesToVolume(DatasetRuntime &dataset, const Rea
     if (isPreview) {
         dataset.previewUpload = std::move(upload);
         dataset.state = StreamState::PreviewUploading;
-    } else {
+    }
+    else {
         dataset.fullUpload = std::move(upload);
         dataset.state = StreamState::FullUploading;
     }
@@ -399,7 +339,8 @@ void VolumeManagerSystem::retireOldVolumes(uint64_t frameNumber)
         if (frameNumber >= it->retireFrame &&
             frameNumber - it->retireFrame >= Cory::MAX_FRAMES_IN_FLIGHT) {
             it = retiredVolumes_.erase(it);
-        } else {
+        }
+        else {
             ++it;
         }
     }
@@ -451,13 +392,23 @@ void VolumeManagerSystem::ensureDatasetRegistered(const StreamedVolume &streamed
                      streamedVolume.manifestPath.string());
     }
     manifest.datasetId = streamedVolume.datasetId;
-    auto [it, inserted] =
-        datasets_.emplace(streamedVolume.datasetId, DatasetRuntime{.manifest = std::move(manifest)});
+    auto [it, inserted] = datasets_.emplace(streamedVolume.datasetId,
+                                            DatasetRuntime{.manifest = std::move(manifest)});
     if (!inserted) {
         return;
     }
 
-    enqueueRead(it->second, VolumeLevel::Preview);
+    if (!it->second.manifest.bmpStack.has_value()) {
+        it->second.state = StreamState::Error;
+        it->second.error =
+            fmt::format("Dataset '{}' manifest '{}' is missing required bmp_stack configuration",
+                        it->second.manifest.datasetId,
+                        streamedVolume.manifestPath.string());
+        CO_CORE_ERROR("VolumeManager: {}", it->second.error);
+        return;
+    }
+
+    enqueueRead(it->second, VolumeLevel::Full);
 }
 
 void VolumeManagerSystem::updateStreamedEntities(Cory::SceneGraph &graph)
@@ -482,15 +433,17 @@ void VolumeManagerSystem::updateStreamedEntities(Cory::SceneGraph &graph)
         }
         const auto &dataset = it->second;
 
-        const auto *resident = dataset.fullResident ? &(*dataset.fullResident)
-                                                    : (dataset.previewResident ? &(*dataset.previewResident)
-                                                                               : nullptr);
+        const auto *resident =
+            dataset.fullResident
+                ? &(*dataset.fullResident)
+                : (dataset.previewResident ? &(*dataset.previewResident) : nullptr);
         if (resident != nullptr) {
             volume->textureView = resident->view.handle();
             volume->textureDimensions = resident->dimensions;
             volume->hasTexture = true;
             volume->fullQuality = dataset.fullResident.has_value();
-        } else {
+        }
+        else {
             volume->hasTexture = false;
         }
     }
@@ -505,8 +458,8 @@ void VolumeManagerSystem::enqueueProceduralGeneration(Cory::Entity entity,
     auto &ctx = *ctx_;
     auto &runtime = proceduralVolumes_[entity];
 
-    const auto needsResize = !runtime.resident.has_value() ||
-                             runtime.generatedDimensions != procedural.dimensions;
+    const auto needsResize =
+        !runtime.resident.has_value() || runtime.generatedDimensions != procedural.dimensions;
     if (needsResize && runtime.resident.has_value()) {
         retiredVolumes_.push_back(
             RetiredVolume{.volume = std::move(*runtime.resident), .retireFrame = frameNumber});
@@ -514,7 +467,8 @@ void VolumeManagerSystem::enqueueProceduralGeneration(Cory::Entity entity,
     }
 
     if (!runtime.resident.has_value()) {
-        auto textureLabel = fmt::format("VolumeManager procedural {}", static_cast<uint32_t>(entity));
+        auto textureLabel =
+            fmt::format("VolumeManager procedural {}", static_cast<uint32_t>(entity));
         auto texture = createTexture3D(textureLabel,
                                        procedural.dimensions,
                                        ctx,
@@ -530,7 +484,8 @@ void VolumeManagerSystem::enqueueProceduralGeneration(Cory::Entity entity,
 
     const auto &shader = ctx.shaders()[createVolumeShader_];
     if (!shader.valid()) {
-        CO_CORE_ERROR("Invalid volume generation shader in VolumeManagerSystem: {}", shader.error());
+        CO_CORE_ERROR("Invalid volume generation shader in VolumeManagerSystem: {}",
+                      shader.error());
         return;
     }
 
@@ -542,7 +497,8 @@ void VolumeManagerSystem::enqueueProceduralGeneration(Cory::Entity entity,
         .srcMask = Gpu::AccessFlagBit::None,
         .dstStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
         .dstMask = Gpu::AccessFlagBit::ShaderWriteBit,
-        .oldLayout = needsResize ? Gpu::TextureLayout::Undefined : Gpu::TextureLayout::ShaderReadOnlyOptimal,
+        .oldLayout =
+            needsResize ? Gpu::TextureLayout::Undefined : Gpu::TextureLayout::ShaderReadOnlyOptimal,
         .newLayout = Gpu::TextureLayout::General,
         .texture = runtime.resident->texture.handle(),
         .range = imageRange,
@@ -557,12 +513,16 @@ void VolumeManagerSystem::enqueueProceduralGeneration(Cory::Entity entity,
     pass.setPipelineLayout(pipelineLayout);
 
     const auto frameIndex = static_cast<uint32_t>(frameNumber % Cory::MAX_FRAMES_IN_FLIGHT);
-    Cory::ShaderBindingContext bindingContext{
-        ctx.device(), ctx.framegraphResources(), ctx.descriptors(), frameIndex, kManagerDrawDataBufferSize};
+    Cory::ShaderBindingContext bindingContext{ctx.device(),
+                                              ctx.framegraphResources(),
+                                              ctx.descriptors(),
+                                              frameIndex,
+                                              kManagerDrawDataBufferSize};
     {
         auto bindingScope = bindingContext.scoped(pass);
         pass.bindShader(shader.shaderHandle());
-        bindingContext.bindStorageImage3D(runtime.resident->view.handle(), Gpu::TextureLayout::General);
+        bindingContext.bindStorageImage3D(runtime.resident->view.handle(),
+                                          Gpu::TextureLayout::General);
 
         auto params = bindingContext.alloc<VolumeGenerationParams>();
         *params.cpu = VolumeGenerationParams{
@@ -594,11 +554,10 @@ void VolumeManagerSystem::enqueueProceduralGeneration(Cory::Entity entity,
     });
 
     auto commands = recorder.finish();
-    auto completionFence = ctx.device().createFence(
-        Gpu::FenceOptions{
-            .label = "VolumeManager procedural generation fence",
-            .createSignalled = false,
-        });
+    auto completionFence = ctx.device().createFence(Gpu::FenceOptions{
+        .label = "VolumeManager procedural generation fence",
+        .createSignalled = false,
+    });
     ctx.computeQueue().submit(Gpu::SubmitOptions{
         .commandBuffers = {commands.handle()},
         .signalFence = completionFence.handle(),
@@ -619,12 +578,11 @@ void VolumeManagerSystem::updateProceduralEntities(Cory::SceneGraph &graph,
             continue;
         }
         auto &runtime = proceduralVolumes_[entity];
-        const auto parametersChanged = runtime.generatedDimensions != procedural->dimensions ||
-                                       std::abs(runtime.generatedDensityScale -
-                                                procedural->densityScale) > 1e-5f;
-        const auto needsRebuild =
-            procedural->regenerate || !runtime.resident.has_value() || procedural->updateEveryFrame ||
-            parametersChanged;
+        const auto parametersChanged =
+            runtime.generatedDimensions != procedural->dimensions ||
+            std::abs(runtime.generatedDensityScale - procedural->densityScale) > 1e-5f;
+        const auto needsRebuild = procedural->regenerate || !runtime.resident.has_value() ||
+                                  procedural->updateEveryFrame || parametersChanged;
         if (needsRebuild) {
             enqueueProceduralGeneration(entity, *procedural, frameNumber, timeSeconds);
             procedural->regenerate = false;
@@ -641,7 +599,8 @@ void VolumeManagerSystem::updateProceduralEntities(Cory::SceneGraph &graph,
             volume->textureDimensions = runtime.resident->dimensions;
             volume->hasTexture = true;
             volume->fullQuality = true;
-        } else {
+        }
+        else {
             volume->hasTexture = false;
         }
     }

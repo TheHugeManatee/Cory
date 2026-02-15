@@ -12,14 +12,15 @@
 #include <KDGpu/texture.h>
 #include <KDGpu/texture_view.h>
 
-#include <condition_variable>
+#include <cppcoro/async_scope.hpp>
+#include <cppcoro/task.hpp>
+
 #include <cstdint>
 #include <deque>
 #include <filesystem>
 #include <mutex>
 #include <optional>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -115,23 +116,6 @@ class VolumeManagerSystem {
         float generatedDensityScale{1.0f};
     };
 
-    struct ReadRequest {
-        enum class Source : uint8_t {
-            RawBlob,
-            BmpStack,
-        };
-
-        std::string datasetId{};
-        VolumeLevel level{VolumeLevel::Preview};
-        Source source{Source::RawBlob};
-        std::filesystem::path blobPath{};
-        std::filesystem::path stackDirectory{};
-        std::string stackPattern{"*.bmp"};
-        size_t stackMaxConcurrency{0};
-        glm::uvec3 dimensions{0u};
-        size_t expectedByteSize{0};
-    };
-
     struct ReadResult {
         std::string datasetId{};
         VolumeLevel level{VolumeLevel::Preview};
@@ -145,8 +129,9 @@ class VolumeManagerSystem {
         uint64_t retireFrame{0};
     };
 
-    void workerLoop();
     void enqueueRead(DatasetRuntime &dataset, VolumeLevel level);
+    [[nodiscard]] cppcoro::task<void>
+    loadAndQueueResult(std::string datasetId, VolumeLevel level, Cory::LoadStackRequest request);
     void processReadResults();
     void processUploadCompletion(uint64_t frameNumber);
     void retireOldVolumes(uint64_t frameNumber);
@@ -170,16 +155,11 @@ class VolumeManagerSystem {
     std::unordered_map<std::string, DatasetRuntime> datasets_{};
     std::unordered_map<Cory::Entity, ProceduralRuntime> proceduralVolumes_{};
 
-    std::mutex requestMutex_{};
-    std::condition_variable requestCv_{};
-    std::deque<ReadRequest> pendingReads_{};
-
     std::mutex resultMutex_{};
     std::deque<ReadResult> completedReads_{};
 
     std::vector<RetiredVolume> retiredVolumes_{};
 
-    bool stopWorker_{false};
-    std::jthread worker_;
+    cppcoro::async_scope readScope_{};
     Cory::DatasetLoader datasetLoader_{};
 };

@@ -74,6 +74,8 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
   - Independent unit tests for happy paths and parse-failure cases.
   - Added checked-in test asset `tests/data/gray16x16_uncompressed_24bpp.bmp` (generated via Python)
     and a unit test that validates exact grayscale pixel values loaded in C++.
+- Changedthe ResourceLocator::Locate interface to replace throwing exceptions with returning a Cory::Result
+- Introduced async parallel dataset loading via `DatasetLoader` class
 
 ## Open Investigation: Eager Task Declaration + Virtual Textures
 

@@ -22,6 +22,8 @@ add_library(Cory_TestLib OBJECT
         Utils_Test.cpp
         SlotMap_Test.cpp
         BitField_Test.cpp
+        ../examples/06-VolumeRendering/src/VolumeManifest.cpp
+        VolumeManifest_Test.cpp
         Callback_Test.cpp
         FrameGraph_Test.cpp
         FramegraphResourceManager_Test.cpp
@@ -56,7 +58,10 @@ add_library(Cory_TestLib OBJECT
         ApiPass_Test.cpp
 )
 
-target_include_directories(Cory_TestLib PRIVATE ${CMAKE_SOURCE_DIR}/examples/05-ParticleCompute/src)
+target_include_directories(Cory_TestLib PRIVATE
+        ${CMAKE_SOURCE_DIR}/examples/05-ParticleCompute/src
+        ${CMAKE_SOURCE_DIR}/examples/06-VolumeRendering/src
+)
 
 target_link_libraries(Cory_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(Cory_TestLib PRIVATE Cory::project_options)

@@ -126,6 +126,11 @@ template <typename T, size_t N>
     return true;
 }
 
+[[nodiscard]] bool isNonZeroDimensions(const glm::uvec3 &value)
+{
+    return value.x > 0u && value.y > 0u && value.z > 0u;
+}
+
 [[nodiscard]] bool parseVec3(std::string_view sv, glm::vec3 &valueOut)
 {
     std::array<float, 3> values{};
@@ -238,7 +243,8 @@ bool loadVolumeManifest(const std::filesystem::path &manifestPath,
     }
 
     manifest.preview.path = *previewBlob;
-    if (!parseUvec3(*previewDimensions, manifest.preview.dimensions)) {
+    if (!parseUvec3(*previewDimensions, manifest.preview.dimensions) ||
+        !isNonZeroDimensions(manifest.preview.dimensions)) {
         errorOut = fmt::format(
             "Invalid preview_dimensions '{}' in '{}'", *previewDimensions, manifestPath.string());
         return false;
@@ -250,7 +256,8 @@ bool loadVolumeManifest(const std::filesystem::path &manifestPath,
     }
 
     manifest.full.path = *fullBlob;
-    if (!parseUvec3(*fullDimensions, manifest.full.dimensions)) {
+    if (!parseUvec3(*fullDimensions, manifest.full.dimensions) ||
+        !isNonZeroDimensions(manifest.full.dimensions)) {
         errorOut = fmt::format(
             "Invalid full_dimensions '{}' in '{}'", *fullDimensions, manifestPath.string());
         return false;

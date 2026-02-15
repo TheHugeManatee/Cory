@@ -186,7 +186,8 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
             InstanceData{
                 .modelToWorld = transform.modelToWorld * glm::scale(volume.size),
                 .worldToModel = inverse(transform.modelToWorld * glm::scale(volume.size)),
-                .normalToWorld = transpose(inverse(transform.modelToWorld)),
+                .normalToWorld =
+                    transpose(inverse(transform.modelToWorld * glm::scale(volume.size))),
                 .color = Cory::Color{1.0, 0.0, 0.0, 1.0},
                 .transferParams =
                     glm::vec4{std::clamp(volume.transferFunction.densityMin, 0.0f, 1.0f),

@@ -52,6 +52,7 @@ class VolumeRenderDemoApplication : public Cory::Application {
     Cory::SystemCoordinator systems_;
 
     class VolumeRenderSystem *volumeRenderer_{nullptr};
+    class VolumeManagerSystem *volumeManager_{nullptr};
     Cory::ImGuizmoTransformSystem *imguizmoSystem_{nullptr};
 
     struct CatalogDataset {

@@ -3,6 +3,7 @@ set(TARGET_NAME "VolumeRendering")
 find_package(Vulkan REQUIRED)
 find_package(range-v3 REQUIRED)
 find_package(CLI11 REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 # Always list the files explicitly
 add_executable(${TARGET_NAME}
@@ -12,12 +13,12 @@ add_executable(${TARGET_NAME}
 
         src/VolumeRenderSystem.cpp
         src/VolumeRenderSystem.hpp
+        src/VolumeManagerSystem.cpp
+        src/VolumeManagerSystem.hpp
         src/VolumeManifest.cpp
         src/VolumeManifest.hpp
         src/VolumeCatalog.cpp
         src/VolumeCatalog.hpp
-        src/VolumeStreaming.cpp
-        src/VolumeStreaming.hpp
         src/Common.hpp
 )
 
@@ -32,6 +33,7 @@ target_link_libraries(${TARGET_NAME}
         Cory::Cory
         Cory::ThirdParty
         CLI11::CLI11
+        nlohmann_json::nlohmann_json
 )
 
 if (CORY_BUILD_TESTS)

@@ -41,18 +41,27 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
 
 - Async parallel data loading
 
-# Current Status
-- 
+# Current Status 
 - Added initial oVert volume import pipeline (ADR-06):
   - New `.cvol` dataset manifest + `.cvolcat` catalog parsing in the VolumeRendering example.
-  - New `VolumeStreaming` runtime service for preview-first async ingestion:
+  - Migrated `.cvol` manifest format from line-based key/value to JSON and switched loader parsing
+    to `nlohmann::json` (simpler schema validation and lower parser complexity).
+  - Replaced `VolumeStreaming` with `VolumeManagerSystem`:
+    - Component-driven streamed volume ingestion via `StreamedVolume`.
+    - Component-driven procedural generation via `ProceduralVolume`.
     - Background disk I/O thread reads preview/full raw blobs.
     - Main thread creates 3D textures and submits uploads through `AsyncUploader`.
     - Automatic preview -> full promotion with deferred preview resource retirement.
-  - Extended `VolumeComponent` with `datasetId` and wired `--volume-catalog` CLI option in
-    `VolumeRenderDemo` to spawn one volume entity per catalog dataset.
-  - Updated raymarch path to support per-instance bindless 3D texture selection + per-instance
-    volume dimensions (`InstanceData::volumeMeta`) with procedural fallback retained.
+    - Manager writes runtime texture state into `VolumeComponent` (`textureView`,
+      `textureDimensions`, `hasTexture`, `fullQuality`).
+  - `VolumeRenderSystem` is now render-only:
+    - No manifest registration or streaming ownership.
+    - No compute-based fallback volume generation pass.
+    - Raymarching consumes only runtime texture state from `VolumeComponent`.
+    - Temporal accumulation history is copied to frame color before layer composition.
+  - Wired `--volume-catalog` flow to spawn per-dataset entities with `StreamedVolume`
+    and renderer settings on `VolumeComponent`.
+  - Default scene now uses `ProceduralVolume` components for manager-driven generation.
   - Added `tools/volume/convert_stack.py` converter that outputs:
     - one small downsampled preview volume (`*.preview.raw`)
     - one larger app-ingestible volume (`*.full.raw`)
@@ -63,6 +72,8 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
   - Self-contained decode path for uncompressed 24-bit/32-bit BMP files (top-down and bottom-up).
   - Public API for decode-from-memory and load-from-disk returning `Cory::Result<BmpImage>`.
   - Independent unit tests for happy paths and parse-failure cases.
+  - Added checked-in test asset `tests/data/gray16x16_uncompressed_24bpp.bmp` (generated via Python)
+    and a unit test that validates exact grayscale pixel values loaded in C++.
 
 ## Open Investigation: Eager Task Declaration + Virtual Textures
 

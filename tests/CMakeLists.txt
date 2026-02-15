@@ -15,6 +15,7 @@ endif ()
 # ---- Dependencies ----
 
 find_package(Catch2 REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 include(Catch)
 
@@ -22,6 +23,7 @@ add_library(Cory_TestLib OBJECT
         Utils_Test.cpp
         SlotMap_Test.cpp
         BitField_Test.cpp
+        Bmp_Test.cpp
         ../examples/06-VolumeRendering/src/VolumeManifest.cpp
         VolumeManifest_Test.cpp
         Callback_Test.cpp
@@ -65,6 +67,7 @@ target_include_directories(Cory_TestLib PRIVATE
 
 target_link_libraries(Cory_TestLib PUBLIC Catch2::Catch2)
 target_link_libraries(Cory_TestLib PRIVATE Cory::project_options)
+target_link_libraries(Cory_TestLib PRIVATE nlohmann_json::nlohmann_json)
 target_link_libraries(Cory_TestLib PUBLIC Cory::Cory)
 
 add_executable(Cory_Tests catch_main.cpp)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -292,26 +293,28 @@ def write_manifest(
     normalization: str,
     full_downsampled_from: VolumeDims | None,
 ) -> None:
-    lines = [
-        "cory_volume_manifest_version=1",
-        f"dataset_id={dataset_id}",
-        "voxel_format=r8_unorm",
-        "endianness=little",
-        f"spacing_mm={spacing_mm[0]},{spacing_mm[1]},{spacing_mm[2]}",
-        f"source_dimensions={src_dims.x},{src_dims.y},{src_dims.z}",
-        f"preview_blob={preview_blob_name}",
-        f"preview_dimensions={preview_dims.x},{preview_dims.y},{preview_dims.z}",
-        f"preview_byte_size={preview_dims.voxel_count}",
-        f"full_blob={full_blob_name}",
-        f"full_dimensions={full_dims.x},{full_dims.y},{full_dims.z}",
-        f"full_byte_size={full_dims.voxel_count}",
-        f"normalization={normalization}",
-    ]
+    manifest = {
+        "cory_volume_manifest_version": 1,
+        "dataset_id": dataset_id,
+        "voxel_format": "r8_unorm",
+        "endianness": "little",
+        "spacing_mm": [spacing_mm[0], spacing_mm[1], spacing_mm[2]],
+        "source_dimensions": [src_dims.x, src_dims.y, src_dims.z],
+        "preview_blob": preview_blob_name,
+        "preview_dimensions": [preview_dims.x, preview_dims.y, preview_dims.z],
+        "preview_byte_size": preview_dims.voxel_count,
+        "full_blob": full_blob_name,
+        "full_dimensions": [full_dims.x, full_dims.y, full_dims.z],
+        "full_byte_size": full_dims.voxel_count,
+        "normalization": normalization,
+    }
     if full_downsampled_from is not None:
-        lines.append(
-            f"full_downsampled_from={full_downsampled_from.x},{full_downsampled_from.y},{full_downsampled_from.z}"
-        )
-    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        manifest["full_downsampled_from"] = [
+            full_downsampled_from.x,
+            full_downsampled_from.y,
+            full_downsampled_from.z,
+        ]
+    output_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 def append_catalog_entry(catalog_path: Path, manifest_path: Path) -> None:

@@ -2,6 +2,7 @@
 
 #include "Common.hpp"
 #include "VolumeCatalog.hpp"
+#include "VolumeManagerSystem.hpp"
 #include "VolumeManifest.hpp"
 #include "VolumeRenderSystem.hpp"
 
@@ -180,6 +181,12 @@ void VolumeRenderDemoApplication::setupScene()
                         .opacityScale = 30.0f,
                         .gamma = 0.9f,
                     },
+            },
+            ProceduralVolume{
+                .dimensions = {128u, 128u, 128u},
+                .densityScale = 1.0f,
+                .updateEveryFrame = true,
+                .animationSpeed = 1.0f,
             });
 
         sceneGraph_.createEntityWithComponents(
@@ -201,6 +208,12 @@ void VolumeRenderDemoApplication::setupScene()
                         .opacityScale = 14.0f,
                         .gamma = 1.45f,
                     },
+            },
+            ProceduralVolume{
+                .dimensions = {96u, 128u, 96u},
+                .densityScale = 0.9f,
+                .updateEveryFrame = true,
+                .animationSpeed = 1.4f,
             });
         return;
     }
@@ -220,7 +233,6 @@ void VolumeRenderDemoApplication::setupScene()
             },
             VolumeComponent{
                 .size = dataset.volumeSize,
-                .datasetId = dataset.datasetId,
                 .raymarchStepSizeMultiplier = 2.0f,
                 .transferFunction =
                     {
@@ -229,6 +241,10 @@ void VolumeRenderDemoApplication::setupScene()
                         .opacityScale = 22.0f,
                         .gamma = 1.0f,
                     },
+            },
+            StreamedVolume{
+                .datasetId = dataset.datasetId,
+                .manifestPath = dataset.manifestPath,
             });
     }
 }
@@ -263,11 +279,11 @@ void VolumeRenderDemoApplication::setupSystems()
     // after the "logic" has updated, sync all the transforms of the scenegraph
     systems_.emplace<Cory::TransformSystem>();
 
+    // manager runs before rendering to populate runtime volume textures/components
+    volumeManager_ = &systems_.emplace<VolumeManagerSystem>(ctx());
+
     // render system should go last to be aware of the latest state
     volumeRenderer_ = &systems_.emplace<VolumeRenderSystem>(ctx());
-    for (const auto &dataset : catalogDatasets_) {
-        volumeRenderer_->registerDatasetManifest(dataset.manifestPath);
-    }
 }
 
 VolumeRenderDemoApplication::~VolumeRenderDemoApplication()
@@ -411,7 +427,7 @@ void VolumeRenderDemoApplication::drawImguiControls()
         }
 
         ImGui::Separator();
-        CoImGui::Text("Volume Transfer Functions");
+        CoImGui::Text("Volume Components");
         bool hasVolumeComponent = false;
         for (auto entity : sceneGraph_.depthFirstTraversal()) {
             auto *volume = sceneGraph_.getComponent<VolumeComponent>(entity);
@@ -421,11 +437,48 @@ void VolumeRenderDemoApplication::drawImguiControls()
             hasVolumeComponent = true;
             const auto &meta = sceneGraph_.data(entity);
             ImGui::PushID(static_cast<int>(entity));
-            if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_Framed)) {
+                if (auto *procedural = sceneGraph_.getComponent<ProceduralVolume>(entity);
+                    procedural != nullptr) {
+                    ImGui::SeparatorText("ProceduralVolume");
+                    auto dims = glm::ivec3{procedural->dimensions};
+                    ImGui::InputInt3("Dimensions", &dims.x);
+                    dims = glm::max(dims, glm::ivec3{1});
+                    procedural->dimensions = glm::uvec3{dims};
+                    CoImGui::Slider("Density Scale", procedural->densityScale, 0.01f, 4.0f);
+                    ImGui::Checkbox("Update Every Frame", &procedural->updateEveryFrame);
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(procedural->updateEveryFrame);
+                    if (ImGui::Button("Regenerate")) {
+                        procedural->regenerate = true;
+                    }
+                    ImGui::EndDisabled();
+
+                    CoImGui::Slider("Animation Speed", procedural->animationSpeed, 0.0f, 8.0f);
+                    procedural->densityScale = std::max(procedural->densityScale, 0.01f);
+                    procedural->animationSpeed = std::max(procedural->animationSpeed, 0.0f);
+                }
+
+                if (auto *streamed = sceneGraph_.getComponent<StreamedVolume>(entity);
+                    streamed != nullptr) {
+                    ImGui::SeparatorText("StreamedVolume");
+                    CoImGui::Text("Dataset: {}", streamed->datasetId);
+                    CoImGui::Text("Manifest: {}", streamed->manifestPath.string());
+                }
+
+                ImGui::SeparatorText("VolumeComponent");
+                CoImGui::Text("Texture Ready: {}", volume->hasTexture ? "yes" : "no");
+                if (volume->hasTexture) {
+                    CoImGui::Text("Texture Dims: {} x {} x {}",
+                                  volume->textureDimensions.x,
+                                  volume->textureDimensions.y,
+                                  volume->textureDimensions.z);
+                    CoImGui::Text("Quality: {}", volume->fullQuality ? "full" : "preview");
+                }
                 auto &tf = volume->transferFunction;
                 ImGui::Checkbox("Enable Jitter", &volume->raymarchJitteringEnabled);
                 CoImGui::Slider(
-                    "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 8.0f);
+                    "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 20.0f);
                 CoImGui::Slider("Density Min", tf.densityMin, 0.0f, 1.0f);
                 CoImGui::Slider("Density Max", tf.densityMax, 0.0f, 1.0f);
                 CoImGui::Slider("Opacity Scale", tf.opacityScale, 0.01f, 64.0f);
@@ -444,7 +497,8 @@ void VolumeRenderDemoApplication::drawImguiControls()
             CoImGui::Text("No VolumeComponent found in scene.");
         }
 
-        const auto statuses = volumeRenderer_->datasetStatuses();
+        const auto statuses = volumeManager_ != nullptr ? volumeManager_->datasetStatuses()
+                                                        : std::vector<std::pair<std::string, std::string>>{};
         if (!statuses.empty()) {
             ImGui::Separator();
             CoImGui::Text("Dataset Streaming");

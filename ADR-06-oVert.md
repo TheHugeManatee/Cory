@@ -15,7 +15,7 @@ Goals:
 
 ## Decision
 Adopt a two-stage import/runtime model:
-1. Offline conversion script writes raw ingestible blobs plus a small text manifest.
+1. Offline conversion script writes raw ingestible blobs plus a small JSON manifest.
 2. Runtime loads manifests/catalog, streams preview first, then promotes to full volume.
 
 The runtime format for this phase is fixed to `r8_unorm` (single-channel, tightly packed).
@@ -23,7 +23,7 @@ The runtime format for this phase is fixed to `r8_unorm` (single-channel, tightl
 ## Implemented Architecture
 
 ### File Formats
-1. Dataset manifest: `.cvol` (line-based `key=value`, UTF-8)
+1. Dataset manifest: `.cvol` (JSON, UTF-8)
 2. Dataset catalog: `.cvolcat` (line-based list of dataset manifests)
 
 Implemented parsers:
@@ -75,23 +75,42 @@ Important implementation detail:
 
 ## Current Data Contract
 
-### Required `.cvol` Keys
-1. `cory_volume_manifest_version=1`
-2. `dataset_id=<string>`
-3. `voxel_format=r8_unorm`
-4. `endianness=little`
-5. `spacing_mm=<sx>,<sy>,<sz>`
-6. `source_dimensions=<x>,<y>,<z>`
-7. `preview_blob=<relative path>`
-8. `preview_dimensions=<x>,<y>,<z>`
-9. `preview_byte_size=<bytes>`
-10. `full_blob=<relative path>`
-11. `full_dimensions=<x>,<y>,<z>`
-12. `full_byte_size=<bytes>`
-13. `normalization=<identity|percentile:...|...>`
+### Required `.cvol` JSON Keys
+1. `cory_volume_manifest_version` (integer, currently `1`)
+2. `dataset_id` (string)
+3. `voxel_format` (string, currently `r8_unorm`)
+4. `endianness` (string, currently `little`)
+5. `spacing_mm` (array of 3 numbers: `[sx, sy, sz]`)
+6. `source_dimensions` (array of 3 unsigned integers: `[x, y, z]`)
+7. `preview_blob` (string, relative path)
+8. `preview_dimensions` (array of 3 unsigned integers)
+9. `preview_byte_size` (unsigned integer, bytes)
+10. `full_blob` (string, relative path)
+11. `full_dimensions` (array of 3 unsigned integers)
+12. `full_byte_size` (unsigned integer, bytes)
+13. `normalization` (string, e.g. `identity`, `percentile:0.5,99.5`)
 
 Optional:
-1. `full_downsampled_from=<x>,<y>,<z>`
+1. `full_downsampled_from` (array of 3 unsigned integers)
+
+Example:
+```json
+{
+  "cory_volume_manifest_version": 1,
+  "dataset_id": "g_meandricus_5",
+  "voxel_format": "r8_unorm",
+  "endianness": "little",
+  "spacing_mm": [0.0298, 0.0298, 0.0298],
+  "source_dimensions": [512, 512, 765],
+  "preview_blob": "g_meandricus_5.preview.raw",
+  "preview_dimensions": [128, 128, 192],
+  "preview_byte_size": 3145728,
+  "full_blob": "g_meandricus_5.full.raw",
+  "full_dimensions": [384, 384, 512],
+  "full_byte_size": 75497472,
+  "normalization": "identity"
+}
+```
 
 ### Raw Blob Layout
 1. Single channel (`uint8`)

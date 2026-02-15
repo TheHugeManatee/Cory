@@ -8,7 +8,6 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
-#include <Cory/Renderer/Synchronization.hpp>
 
 #include <KDGpu/gpu_core.h>
 #include <KDGpu/sampler_options.h>
@@ -24,7 +23,6 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
-#include <ranges>
 
 struct DrawData {
     glm::mat4 projection;
@@ -54,7 +52,6 @@ static constexpr uint32_t kInvalidVolumeTextureIndex = std::numeric_limits<uint3
 
 VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
     : Base()
-    , volumeStreaming_(ctx)
     , ctx_{&ctx}
 {
     // Create mesh using Cory::DynamicGeometry, as in 02-CubeDemo
@@ -85,12 +82,6 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
         .label = "raycast_boxes_debug.comp.slang",
         .shaderHandle = &raycastDebugShader_,
     });
-    shaderHotReloader_.addShader({
-        .path = Cory::ResourceLocator::Locate("create_volume.comp.slang"),
-        .stage = Gpu::ShaderStageFlagBits::ComputeBit,
-        .label = "create_volume.comp.slang",
-        .shaderHandle = &createVolumeShader_,
-    });
 
     volumeSampler_ = ctx.device().createSampler(Gpu::SamplerOptions{
         .label = "VolumeRenderSystem volume sampler",
@@ -104,16 +95,6 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
 }
 
 VolumeRenderSystem::~VolumeRenderSystem() {}
-
-bool VolumeRenderSystem::registerDatasetManifest(const std::filesystem::path &manifestPath)
-{
-    return volumeStreaming_.registerDataset(manifestPath);
-}
-
-std::vector<std::pair<std::string, std::string>> VolumeRenderSystem::datasetStatuses() const
-{
-    return volumeStreaming_.allDatasetStatuses();
-}
 
 void VolumeRenderSystem::resetTemporalHistory()
 {
@@ -162,7 +143,6 @@ void VolumeRenderSystem::ensureTemporalHistoryTexture(const Cory::FrameContext &
 void VolumeRenderSystem::beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber)
 {
     shaderHotReloader_.processPendingReloads(frameNumber);
-    volumeStreaming_.poll(frameNumber);
     renderState_.clear();
     // update the camera's state
     forEach<Cory::Components::CameraComponent>(
@@ -179,7 +159,7 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
     (void)entity;
 
     lastFrameDeltaSeconds_ = std::max(static_cast<float>(tick.delta.count()), 1e-6f);
-    volumeParams_.time = static_cast<float>(tick.now.time_since_epoch().count());
+    currentFrameTimeSeconds_ = static_cast<float>(tick.now.time_since_epoch().count());
 
     auto entry = RenderStateEntry{
         .data =
@@ -200,22 +180,16 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
                                             volume.raymarchJitteringEnabled ? 1.0f : 0.0f,
                                             0.0f,
                                             0.0f},
-                .volumeMeta = glm::uvec4{kInvalidVolumeTextureIndex,
-                                         volumeParams_.volumeDimensions.x,
-                                         volumeParams_.volumeDimensions.y,
-                                         volumeParams_.volumeDimensions.z},
+                .volumeMeta = glm::uvec4{kInvalidVolumeTextureIndex, 1u, 1u, 1u},
             },
     };
 
-    if (!volume.datasetId.empty()) {
-        if (auto activeVolume = volumeStreaming_.activeVolume(volume.datasetId);
-            activeVolume.has_value()) {
-            entry.hasTexture = true;
-            entry.textureView = activeVolume->view;
-            entry.data.volumeMeta.y = activeVolume->dimensions.x;
-            entry.data.volumeMeta.z = activeVolume->dimensions.y;
-            entry.data.volumeMeta.w = activeVolume->dimensions.z;
-        }
+    if (volume.hasTexture) {
+        entry.hasTexture = true;
+        entry.textureView = volume.textureView;
+        entry.data.volumeMeta.y = std::max(volume.textureDimensions.x, 1u);
+        entry.data.volumeMeta.z = std::max(volume.textureDimensions.y, 1u);
+        entry.data.volumeMeta.w = std::max(volume.textureDimensions.z, 1u);
     }
 
     renderState_.push_back(std::move(entry));
@@ -327,13 +301,6 @@ VolumeRenderSystem::volumeFrameTask(Cory::RenderTaskBuilder builder,
                                       builder.subtask("ClearAttachments"), colorTarget, depthTarget)
                                       .output();
 
-    const bool hasMissingVolumes = std::ranges::any_of(
-        renderState_, [](const RenderStateEntry &entry) { return !entry.hasTexture; });
-    Cory::TransientTextureHandle fallbackVolumeTarget{};
-    if (hasMissingVolumes) {
-        fallbackVolumeTarget = volumeGenerationTask(builder.subtask("VolumeGenerate")).output();
-    }
-
     if (useDebugRaycastPath) {
         const auto debugRaycastOutput =
             cubeRaycastDebugTask(builder.subtask("VolumeRaycastDebug"),
@@ -355,9 +322,7 @@ VolumeRenderSystem::volumeFrameTask(Cory::RenderTaskBuilder builder,
         framegraph.declareInput(Cory::TransientTextureHandle{temporalHistory_.resource});
     const auto raycastResult = cubeRaycastTask(builder.subtask("VolumeRaycast"),
                                                temporalHistoryInput,
-                                               clearAttachments.depth.value_or(depthTarget),
-                                               fallbackVolumeTarget,
-                                               hasMissingVolumes)
+                                               clearAttachments.depth.value_or(depthTarget))
                                    .output();
 
     // Keep the persistent history handle in sync with the latest version after read/write.
@@ -377,62 +342,11 @@ VolumeRenderSystem::volumeFrameTask(Cory::RenderTaskBuilder builder,
 }
 
 Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
-VolumeRenderSystem::volumeGenerationTask(Cory::RenderTaskBuilder builder)
-{
-    auto volumeHandle = builder.create("TEX_VolumeData",
-                                       volumeParams_.volumeDimensions,
-                                       Gpu::Format::R32_SFLOAT,
-                                       Gpu::TextureUsageFlagBits::StorageBit |
-                                           Gpu::TextureUsageFlagBits::SampledBit,
-                                       Cory::Sync::AccessType::ComputeShaderWrite,
-                                       Gpu::TextureType::TextureType3D);
-
-    auto volumePass = builder.declareComputePass(Cory::ComputePassDeclaration{
-        .name = "PASS_VolumeGeneration",
-        .shader = createVolumeShader_,
-    });
-
-    Cory::RenderInput renderApi = co_await builder.finishDeclaration(volumeHandle);
-
-    auto recorder = volumePass.begin(renderApi);
-    const auto &shader = renderApi.ctx->shaders()[createVolumeShader_];
-    if (!shader.valid()) {
-        CO_CORE_ERROR("Invalid volume generation shader in VolumeRenderSystem: {}", shader.error());
-        volumePass.end(std::move(recorder));
-        co_return;
-    }
-
-    recorder.bindShader(shader.shaderHandle());
-    renderApi.bindingContext->bindStorageImage3D(volumeHandle, Gpu::TextureLayout::General);
-
-    auto params = renderApi.bindingContext->alloc<VolumeGenerationParams>();
-    *params.cpu = volumeParams_;
-    renderApi.bindingContext->push(params.gpu);
-
-    const glm::uvec3 dims = volumeParams_.volumeDimensions;
-    constexpr uint32_t kGroupSizeX = 16u;
-    constexpr uint32_t kGroupSizeY = 16u;
-    const uint32_t groupsX = (dims.x + kGroupSizeX - 1u) / kGroupSizeX;
-    const uint32_t groupsY = (dims.y + kGroupSizeY - 1u) / kGroupSizeY;
-    const uint32_t groupsZ = dims.z;
-
-    recorder.dispatchCompute({groupsX, groupsY, groupsZ});
-    volumePass.end(std::move(recorder));
-    co_return;
-}
-
-Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
 VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle colorTarget,
-                                    Cory::TransientTextureHandle depthTarget,
-                                    Cory::TransientTextureHandle fallbackVolumeTarget,
-                                    bool hasFallbackVolume)
+                                    Cory::TransientTextureHandle depthTarget)
 {
     (void)depthTarget;
-    if (hasFallbackVolume) {
-        builder.read(fallbackVolumeTarget,
-                     Cory::RenderTaskBuilder::TextureReadPreset::ComputeSampled);
-    }
 
     auto [colorHandle, colorInfo] = builder.readWrite(
         colorTarget, Cory::RenderTaskBuilder::TextureReadWritePreset::GeneralStorage);
@@ -467,43 +381,32 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
         renderApi.bindingContext->bindStorageImage2DMS(colorHandle, Gpu::TextureLayout::General);
     }
 
-    const auto fallbackVolumeTextureIndex =
-        hasFallbackVolume ? renderApi.bindingContext->bindTexture3D(
-                                fallbackVolumeTarget,
-                                static_cast<Gpu::TextureLayout>(Cory::Sync::GetVkImageLayout(
-                                    renderApi.resources->state(fallbackVolumeTarget).lastAccess)),
-                                volumeSampler_.handle())
-                          : kInvalidVolumeTextureIndex;
-
     std::vector<InstanceData> packedInstances;
     packedInstances.reserve(renderState_.size());
     for (const auto &entry : renderState_) {
-        auto instance = entry.data;
-        if (entry.hasTexture) {
-            instance.volumeMeta.x =
-                renderApi.bindingContext->bindTexture3D(entry.textureView,
-                                                        Gpu::TextureLayout::ShaderReadOnlyOptimal,
-                                                        volumeSampler_.handle());
-            packedInstances.push_back(instance);
+        if (!entry.hasTexture) {
             continue;
         }
-        if (hasFallbackVolume) {
-            instance.volumeMeta.x = fallbackVolumeTextureIndex;
-            instance.volumeMeta.y = volumeParams_.volumeDimensions.x;
-            instance.volumeMeta.z = volumeParams_.volumeDimensions.y;
-            instance.volumeMeta.w = volumeParams_.volumeDimensions.z;
-            packedInstances.push_back(instance);
-        }
+        auto instance = entry.data;
+        instance.volumeMeta.x =
+            renderApi.bindingContext->bindTexture3D(entry.textureView,
+                                                    Gpu::TextureLayout::ShaderReadOnlyOptimal,
+                                                    volumeSampler_.handle());
+        packedInstances.push_back(instance);
     }
 
     const uint32_t instanceCount = static_cast<uint32_t>(packedInstances.size());
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->volumeDimensions = volumeParams_.volumeDimensions;
-    drawData->time = volumeParams_.time;
+    drawData->volumeDimensions =
+        instanceCount > 0 ? glm::uvec3{packedInstances.front().volumeMeta.y,
+                                       packedInstances.front().volumeMeta.z,
+                                       packedInstances.front().volumeMeta.w}
+                          : glm::uvec3{1u, 1u, 1u};
+    drawData->time = currentFrameTimeSeconds_;
     drawData->instanceCount = instanceCount;
-    drawData->volumeTextureIndex = fallbackVolumeTextureIndex;
+    drawData->volumeTextureIndex = kInvalidVolumeTextureIndex;
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
     const auto temporalTauSeconds = std::max(temporalEmaTauMs.get() * 0.001f, 1e-4f);
@@ -516,14 +419,16 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     drawData->alphaDeltaRejectThreshold = std::max(alphaDeltaRejectThreshold.get(), 0.0f);
     drawData->padding0 = 0u;
 
-    drawData->instances = 0;
+    const auto uploadCount = std::max(instanceCount, 1u);
+    auto alloc = renderApi.bindingContext->alloc<InstanceData>(uploadCount);
     if (instanceCount > 0) {
-        auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
         std::memcpy(alloc.cpu,
                     packedInstances.data(),
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-        drawData->instances = alloc.gpu;
+    } else {
+        *alloc.cpu = InstanceData{};
     }
+    drawData->instances = alloc.gpu;
     renderApi.bindingContext->push(drawData.gpu);
 
     constexpr uint32_t kThreadGroupSizeX = 16u;
@@ -586,8 +491,12 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->volumeDimensions = volumeParams_.volumeDimensions;
-    drawData->time = volumeParams_.time;
+    drawData->volumeDimensions =
+        instanceCount > 0 ? glm::uvec3{packedInstances.front().volumeMeta.y,
+                                       packedInstances.front().volumeMeta.z,
+                                       packedInstances.front().volumeMeta.w}
+                          : glm::uvec3{1u, 1u, 1u};
+    drawData->time = currentFrameTimeSeconds_;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = 0;
     drawData->colorTargetIsMsaa =

@@ -175,3 +175,24 @@ TEST_CASE("BMP loader reads files from disk", "[Cory/IO]")
     CHECK(loaded->height == 1);
     CHECK(rgbaAt(loaded->pixelsRgba8, 0) == std::array<uint8_t, 4>{255, 0, 0, 255});
 }
+
+TEST_CASE("BMP loader reads checked-in python-generated grayscale BMP", "[Cory/IO]")
+{
+    const auto testDataPath = std::filesystem::path{__FILE__}.parent_path() / "data" /
+                              "gray16x16_uncompressed_24bpp.bmp";
+    const auto loaded = Cory::IO::loadBmp(testDataPath);
+
+    REQUIRE(loaded);
+    CHECK(loaded->width == 16);
+    CHECK(loaded->height == 16);
+    REQUIRE(loaded->pixelsRgba8.size() == 16u * 16u * 4u);
+
+    // top-left pixel
+    CHECK(rgbaAt(loaded->pixelsRgba8, 0) == std::array<uint8_t, 4>{0, 0, 0, 255});
+    // center-ish pixel (x=8,y=8 => 136)
+    CHECK(rgbaAt(loaded->pixelsRgba8, 8u + 8u * 16u) ==
+          std::array<uint8_t, 4>{136, 136, 136, 255});
+    // bottom-right pixel (255)
+    CHECK(rgbaAt(loaded->pixelsRgba8, 15u + 15u * 16u) ==
+          std::array<uint8_t, 4>{255, 255, 255, 255});
+}

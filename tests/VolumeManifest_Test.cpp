@@ -13,23 +13,25 @@ namespace {
 
 std::string makeManifestText(std::string_view previewDimensions, std::string_view fullDimensions)
 {
-    return "cory_volume_manifest_version=1\n"
-           "dataset_id=test_dataset\n"
-           "voxel_format=r8_unorm\n"
-           "endianness=little\n"
-           "spacing_mm=1.0,1.0,1.0\n"
-           "source_dimensions=16,16,16\n"
-           "preview_blob=preview.raw\n"
-           "preview_dimensions=" +
+    return "{\n"
+           "  \"cory_volume_manifest_version\": 1,\n"
+           "  \"dataset_id\": \"test_dataset\",\n"
+           "  \"voxel_format\": \"r8_unorm\",\n"
+           "  \"endianness\": \"little\",\n"
+           "  \"spacing_mm\": [1.0, 1.0, 1.0],\n"
+           "  \"source_dimensions\": [16, 16, 16],\n"
+           "  \"preview_blob\": \"preview.raw\",\n"
+           "  \"preview_dimensions\": [" +
            std::string{previewDimensions} +
-           "\n"
-           "preview_byte_size=512\n"
-           "full_blob=full.raw\n"
-           "full_dimensions=" +
+           "],\n"
+           "  \"preview_byte_size\": 512,\n"
+           "  \"full_blob\": \"full.raw\",\n"
+           "  \"full_dimensions\": [" +
            std::string{fullDimensions} +
-           "\n"
-           "full_byte_size=4096\n"
-           "normalization=none\n";
+           "],\n"
+           "  \"full_byte_size\": 4096,\n"
+           "  \"normalization\": \"none\"\n"
+           "}\n";
 }
 
 fs::path writeManifestFile(std::string_view contents, std::string_view name)
@@ -47,7 +49,7 @@ fs::path writeManifestFile(std::string_view contents, std::string_view name)
 TEST_CASE("VolumeManifest rejects zero preview_dimensions", "[VolumeManifest]")
 {
     const auto manifestPath =
-        writeManifestFile(makeManifestText("0,16,16", "32,32,32"), "zero_preview.cvol");
+        writeManifestFile(makeManifestText("0, 16, 16", "32, 32, 32"), "zero_preview.cvol");
 
     VolumeManifest manifest{};
     std::string error{};
@@ -61,7 +63,7 @@ TEST_CASE("VolumeManifest rejects zero preview_dimensions", "[VolumeManifest]")
 TEST_CASE("VolumeManifest rejects zero full_dimensions", "[VolumeManifest]")
 {
     const auto manifestPath =
-        writeManifestFile(makeManifestText("16,16,16", "0,32,32"), "zero_full.cvol");
+        writeManifestFile(makeManifestText("16, 16, 16", "0, 32, 32"), "zero_full.cvol");
 
     VolumeManifest manifest{};
     std::string error{};
@@ -75,7 +77,7 @@ TEST_CASE("VolumeManifest rejects zero full_dimensions", "[VolumeManifest]")
 TEST_CASE("VolumeManifest accepts non-zero preview and full dimensions", "[VolumeManifest]")
 {
     const auto manifestPath =
-        writeManifestFile(makeManifestText("16,16,16", "32,32,32"), "valid_dims.cvol");
+        writeManifestFile(makeManifestText("16, 16, 16", "32, 32, 32"), "valid_dims.cvol");
 
     VolumeManifest manifest{};
     std::string error{};

@@ -37,8 +37,39 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <vector>
+
+namespace {
+
+[[nodiscard]] glm::uvec3 selectDimensionsForPhysicalExtent(const VolumeManifest &manifest)
+{
+    if (manifest.sourceDimensions.x > 0u && manifest.sourceDimensions.y > 0u &&
+        manifest.sourceDimensions.z > 0u) {
+        return manifest.sourceDimensions;
+    }
+    if (manifest.fullDownsampledFrom.has_value() && manifest.fullDownsampledFrom->x > 0u &&
+        manifest.fullDownsampledFrom->y > 0u && manifest.fullDownsampledFrom->z > 0u) {
+        return *manifest.fullDownsampledFrom;
+    }
+    return manifest.full.dimensions;
+}
+
+[[nodiscard]] glm::vec3 volumeSizeFromManifest(const VolumeManifest &manifest)
+{
+    constexpr float kSceneLongestAxis = 4.0f;
+    const auto dimensions = selectDimensionsForPhysicalExtent(manifest);
+    const auto clampedSpacing = glm::max(manifest.spacingMm, glm::vec3{0.000001f});
+    const auto physicalSize = glm::vec3{dimensions} * clampedSpacing;
+    const float longestAxis = std::max({physicalSize.x, physicalSize.y, physicalSize.z});
+    if (!std::isfinite(longestAxis) || longestAxis <= 0.0f) {
+        return glm::vec3{kSceneLongestAxis};
+    }
+    return (physicalSize / longestAxis) * kSceneLongestAxis;
+}
+
+} // namespace
 
 VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *> args)
 {
@@ -70,6 +101,7 @@ VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *>
             catalogDatasets_.push_back(CatalogDataset{
                 .datasetId = manifest.datasetId,
                 .manifestPath = entry.manifestPath,
+                .volumeSize = volumeSizeFromManifest(manifest),
             });
         }
     }
@@ -187,7 +219,7 @@ void VolumeRenderDemoApplication::setupScene()
                 .scale = {1.0f, 1.0f, 1.0f},
             },
             VolumeComponent{
-                .size = {4.0f, 4.0f, 4.0f},
+                .size = dataset.volumeSize,
                 .datasetId = dataset.datasetId,
                 .raymarchStepSizeMultiplier = 2.0f,
                 .transferFunction =

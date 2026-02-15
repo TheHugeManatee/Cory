@@ -10,6 +10,7 @@
 #include <Cory/Systems/SystemCoordinator.hpp>
 
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 #include <filesystem>
 #include <memory>
@@ -56,6 +57,7 @@ class VolumeRenderDemoApplication : public Cory::Application {
     struct CatalogDataset {
         std::string datasetId{};
         std::filesystem::path manifestPath{};
+        glm::vec3 volumeSize{4.0f, 4.0f, 4.0f};
     };
     std::vector<CatalogDataset> catalogDatasets_{};
 

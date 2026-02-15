@@ -1,72 +1,81 @@
-# ADR-06 oVert Volume Data Import (Preview-First Streaming)
+# ADR-06: oVert Volume Data Import and Preview-First Streaming
 
 ## Status
-Proposed
+Implemented (current as of 2026-02-15)
 
 ## Context
-`examples/06-VolumeRendering` currently raymarches a procedurally generated 3D texture.
+The volume rendering example (`examples/06-VolumeRendering`) originally rendered procedural data and assumed a uniform cube.
+We needed a practical way to ingest oVert CT stacks from disk without adding per-format decoders in C++.
 
-We need to ingest oVert CT scan stacks from `volumedata/` without adding direct source-format
-decoders in C++. The import path must:
+Goals:
+1. Keep runtime ingestion simple and fast.
+2. Support preview-first rendering while full data uploads asynchronously.
+3. Preserve dataset aspect ratio from voxel spacing and dimensions.
+4. Keep procedural generation as fallback when no dataset is configured.
 
-1. Use a simple bespoke dataset format for runtime ingestion.
-2. Load a small preview volume quickly.
-3. Continue loading/uploading a larger volume in the background.
-4. Promote to the large volume when ready without blocking rendering.
+## Decision
+Adopt a two-stage import/runtime model:
+1. Offline conversion script writes raw ingestible blobs plus a small text manifest.
+2. Runtime loads manifests/catalog, streams preview first, then promotes to full volume.
 
-## Decision Summary
-1. Introduce a text dataset manifest format (`.cvol`) that references raw single-channel blob files.
-2. Introduce a catalog format (`.cvolcat`) to load multiple datasets at startup.
-3. Runtime voxel format for this phase is fixed to `R8_UNORM`.
-4. Each catalog dataset maps to one rendered `VolumeComponent` entity.
-5. Loader behavior is preview-first, then full-resolution promotion.
-6. Use `Cory::AsyncUploader::enqueueImageUpload` for GPU transfers.
-7. Use a dedicated background thread for disk I/O.
-8. Python conversion uses percentile normalization (`0.5%` / `99.5%` default) for high-bit-depth
-   sources to `R8`.
-9. Converter always outputs:
-   - one small downsampled preview volume
-   - one large volume that is directly ingestible by the app
+The runtime format for this phase is fixed to `r8_unorm` (single-channel, tightly packed).
 
-## Public API / Interface Changes
+## Implemented Architecture
 
-### `examples/06-VolumeRendering` CLI
-Add:
+### File Formats
+1. Dataset manifest: `.cvol` (line-based `key=value`, UTF-8)
+2. Dataset catalog: `.cvolcat` (line-based list of dataset manifests)
 
-`--volume-catalog <path>`
+Implemented parsers:
+1. `examples/06-VolumeRendering/src/VolumeManifest.hpp`
+2. `examples/06-VolumeRendering/src/VolumeManifest.cpp`
+3. `examples/06-VolumeRendering/src/VolumeCatalog.hpp`
+4. `examples/06-VolumeRendering/src/VolumeCatalog.cpp`
 
-If provided, catalog datasets are loaded and spawned as volume entities.
-If omitted, existing procedural-volume fallback remains available.
+### Converter (Offline)
+Implemented script:
+1. `tools/volume/convert_stack.py`
 
-### `VolumeComponent`
-Extend `examples/06-VolumeRendering/src/Common.hpp` with dataset identity:
+Outputs per dataset:
+1. `<dataset_id>.preview.raw`
+2. `<dataset_id>.full.raw`
+3. `<dataset_id>.cvol`
+4. Optional catalog append (`dataset=...`) to `.cvolcat`
 
-- `std::string datasetId`
+Behavior:
+1. Discovers image slices by numeric suffix and validates contiguous ordering.
+2. Validates consistent source shape/dtype.
+3. Converts to `r8_unorm` (identity for 8-bit by default, percentile normalization for high bit depth).
+4. Always emits preview and full volumes.
+5. Downsamples full volume only when constrained by `--full-max-dim` or `--full-max-bytes`.
 
-### Shader/CPU Instance Contract
-Update per-instance data in:
+### Runtime Streaming
+Implemented service:
+1. `examples/06-VolumeRendering/src/VolumeStreaming.hpp`
+2. `examples/06-VolumeRendering/src/VolumeStreaming.cpp`
 
-- `examples/06-VolumeRendering/src/VolumeRenderSystem.hpp`
-- `examples/06-VolumeRendering/shaders/raymarch.comp.slang`
+Flow:
+1. Background thread reads preview/full blob bytes from disk.
+2. Main/render thread creates 3D textures and enqueues transfers through `Cory::AsyncUploader`.
+3. Preview becomes active first.
+4. Full volume promotes when upload is complete.
+5. Previous preview texture is retired safely after promotion.
 
-Add per-instance:
+### VolumeRendering Integration
+Integration points:
+1. `--volume-catalog` CLI option in `VolumeRenderDemo`.
+2. `VolumeComponent.datasetId` selects streamed dataset.
+3. Per-instance bindless texture index + dimensions in shader contract (`volumeMeta`).
+4. Procedural fallback retained for entities with no dataset.
 
-- bindless texture index
-- active volume dimensions
+Important implementation detail:
+1. Dataset entities now derive `VolumeComponent::size` from manifest physical extent:
+   `physical_size = spacing_mm * source_dimensions` (with safe fallback to other manifest dimensions).
+2. The physical extent is normalized so the longest axis maps to `4.0` scene units, preserving anisotropic proportions.
 
-This removes the single-global-volume assumption in the current raymarch path.
+## Current Data Contract
 
-## File Format Specifications
-
-### Dataset Manifest: `.cvol`
-UTF-8 text, line-based `key=value`.
-
-Rules:
-1. `#` starts a comment.
-2. Unknown keys are ignored with warning.
-3. Paths are relative to the `.cvol` file directory.
-
-Required keys:
+### Required `.cvol` Keys
 1. `cory_volume_manifest_version=1`
 2. `dataset_id=<string>`
 3. `voxel_format=r8_unorm`
@@ -79,154 +88,96 @@ Required keys:
 10. `full_blob=<relative path>`
 11. `full_dimensions=<x>,<y>,<z>`
 12. `full_byte_size=<bytes>`
-13. `normalization=percentile:0.5,99.5`
+13. `normalization=<identity|percentile:...|...>`
 
-Optional keys:
+Optional:
 1. `full_downsampled_from=<x>,<y>,<z>`
 
-Raw blob memory layout:
-1. Single channel, tightly packed.
-2. X fastest, then Y, then Z.
-3. Z order follows ascending numeric slice index from converter discovery.
+### Raw Blob Layout
+1. Single channel (`uint8`)
+2. X-major, then Y, then Z
+3. Tight packing (no row/slice padding)
 
-### Dataset Catalog: `.cvolcat`
-UTF-8 text, line-based `key=value`.
-
+### `.cvolcat` Format
 Required:
 1. `cory_volume_catalog_version=1`
-2. One or more `dataset=<relative/path/to/file.cvol>` entries
+2. One or more `dataset=<relative/or/absolute/path/to/file.cvol>` entries
 
-## Runtime Architecture
+## Runbook (Generate + Run)
 
-### New Types
-Add example-local runtime helpers:
+### 1. Session Setup
+Run once per session from repo root:
 
-1. `VolumeManifest.hpp/.cpp`
-2. `VolumeCatalog.hpp/.cpp`
-3. `VolumeStreaming.hpp/.cpp`
+```bash
+./cbt start
+```
 
-### Dataset Streaming State Machine
-Per dataset:
+### 2. Convert `G_maeandricus_5` Stack to `.cvol`
+Install converter deps if needed:
 
-1. `PendingPreviewRead`
-2. `PreviewUploading`
-3. `PreviewReady`
-4. `PendingFullRead`
-5. `FullUploading`
-6. `FullReady`
-7. `Error`
+```bash
+python3 -m pip install --user Pillow numpy
+```
 
-### Threading Model
-1. Background loader thread:
-   - reads preview/full raw blobs from disk
-   - validates byte count
-   - posts `LoadedBlob` messages to main-thread queue
-2. Main thread (`VolumeRenderSystem::beforeUpdate`):
-   - consumes loaded blobs
-   - creates GPU 3D textures/views
-   - submits async upload tickets
-   - polls `UploadTicket::ready()`
-   - promotes active texture from preview to full when available
+Generate preview/full blobs and append to catalog:
 
-### Upload/Sync Contract
-Use `AsyncUploader::ImageUploadRequest` with:
+```bash
+python3 tools/volume/convert_stack.py \
+  --input-dir "volumedata/Media 000451578 - Whole Body CTImageSeries CT/G_maeandricus_5" \
+  --output-dir volumedata/converted \
+  --dataset-id g_meandricus_5 \
+  --pattern "*.bmp" \
+  --spacing-mm 0.02983882 0.02983882 0.02983882 \
+  --preview-max-dim 192 \
+  --full-max-dim 512 \
+  --full-max-bytes 300000000 \
+  --append-catalog volumedata/converted/overt.cvolcat
+```
 
-1. `oldLayout = Undefined`
-2. `finalLayout = ShaderReadOnlyOptimal`
-3. `finalStages = ComputeShaderBit`
-4. `finalMask = ShaderReadBit`
+### 3. Build VolumeRendering
 
-`VolumeRenderSystem` must only bind dataset textures when their ticket is ready.
+```bash
+./cbt build --target VolumeRendering
+```
 
-### Resource Lifetime During Promotion
-When swapping preview -> full:
+### 4. Run Headless Smoke (Recommended for CI/quick checks)
 
-1. Keep old preview texture/view alive for at least `MAX_FRAMES_IN_FLIGHT`.
-2. Retire safely after frame-lifetime delay (same pattern as deferred release helpers).
+```bash
+./cbt run VolumeRendering --headless --frames 220 --volume-catalog volumedata/converted/overt.cvolcat
+```
 
-## Python Converter Specification
+Expected logs include:
+1. `queued preview load`
+2. `preview ready`
+3. `uploading full volume`
+4. `full volume ready`
 
-Add:
+### 5. Run Interactive
 
-`tools/volume/convert_stack.py`
+```bash
+./cbt run VolumeRendering --frames 600 --volume-catalog volumedata/converted/overt.cvolcat
+```
 
-Dependencies:
-1. `python3`
-2. `Pillow`
-3. `numpy`
+## Consequences
+Positive:
+1. No C++ source-format decoder complexity for medical stacks.
+2. Fast initial visual feedback via preview-first strategy.
+3. Async upload path avoids blocking the render loop.
+4. Dataset anisotropy is now represented in scene-space volume size.
 
-### Inputs
-1. Source stack directory
-2. Slice selection pattern (glob or regex)
-3. Output directory
-4. `dataset_id`
-5. Optional spacing (`sx,sy,sz` mm)
-6. Preview size cap
-7. Full-size caps
-8. Percentile parameters
+Tradeoffs:
+1. Current runtime supports only `r8_unorm`.
+2. Converter is required as a preprocessing step.
+3. Very large datasets may still be downsampled based on configured caps.
 
-### Core Behavior
-1. Discover slices, parse numeric index suffix, sort ascending.
-2. Validate contiguous or fail with explicit error.
-3. Validate all selected slices have same width/height and single-channel intent.
-4. Convert to `R8`:
-   - native 8-bit input: identity by default
-   - high-bit-depth input: percentile window normalization (`0.5/99.5` default)
-5. Always produce a small downsampled preview blob.
-6. Produce a large blob intended for direct runtime ingestion:
-   - keep source dimensions when within configured limits
-   - downsample only when limits are exceeded
-7. If downsampled, emit warning with source and output dimensions and limiting constraint.
-8. Write:
-   - `<dataset_id>.preview.raw`
-   - `<dataset_id>.full.raw`
-   - `<dataset_id>.cvol`
-9. Optionally append `dataset=...` to a `.cvolcat`.
-
-## Renderer Integration Plan
-1. Parse catalog in `VolumeRenderDemo` when `--volume-catalog` is supplied.
-2. Spawn one scene entity per dataset entry with `VolumeComponent.datasetId`.
-3. Add `VolumeStreaming` ownership to `VolumeRenderSystem`.
-4. Replace `volumeGenerationTask` path for loaded datasets with sampled uploaded textures.
-5. Keep procedural generation path only as fallback when no catalog/dataset is active.
-6. Update ImGui panel to show per-dataset load status:
-   - loading preview
-   - preview ready
-   - loading full
-   - full ready
-   - error
-
-## Testing Plan
-1. Add parser tests in `tests/`:
-   - valid `.cvol` and `.cvolcat`
-   - missing required keys
-   - malformed dimensions/byte sizes
-   - unsupported version/format
-2. Add converter tests (small synthetic stacks):
-   - 8-bit passthrough
-   - 16-bit percentile normalization
-   - preview and full outputs have expected byte sizes
-   - warning emitted when downsampling full
-3. Add runtime smoke test:
-   - run `VolumeRendering --headless --frames 20 --volume-catalog <path>`
-   - verify no crash/assert and valid preview/full transition behavior
-4. Keep existing no-catalog smoke path intact.
-
-## Acceptance Criteria
-1. `VolumeRendering` loads datasets from catalog and renders one entity per dataset.
-2. Preview volume appears first while full volume is still processing.
-3. Full volume replaces preview without blocking render loop.
-4. Converted full blob is directly ingestible by app (no extra format conversion at runtime).
-5. Parser/converter/runtime tests pass via `./cbt test` with focused filters.
-
-## Assumptions and Defaults
-1. Scope is limited to `examples/06-VolumeRendering` for now.
-2. Runtime format is `R8_UNORM` only in this phase.
-3. Blob paths are relative to manifest directory.
-4. Compression and bricked virtual textures are out of scope.
-5. `current-task.md` should be updated during implementation with final deviations/tradeoffs.
+## Non-Goals (Current Phase)
+1. Runtime DICOM/PDF/other source decoders in C++
+2. Compression/streaming bricks/virtual volume paging
+3. Multi-channel scalar/vector volume formats
 
 ## References
-1. `ADR-04-async-upload.md`
+1. `examples/06-VolumeRendering/src/VolumeRenderDemo.cpp`
 2. `examples/06-VolumeRendering/src/VolumeRenderSystem.cpp`
-3. `src/Cory/Renderer/AsyncUploader.hpp`
+3. `examples/06-VolumeRendering/src/VolumeStreaming.cpp`
+4. `tools/volume/convert_stack.py`
+5. `ADR-04-async-upload.md`

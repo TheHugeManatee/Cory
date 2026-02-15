@@ -87,12 +87,6 @@ class VolumeManagerSystem {
         glm::uvec3 dimensions{0u};
     };
 
-    /// Async transfer state for streamed dataset uploads.
-    struct InFlightUpload {
-        ResidentVolume volume{};
-        Cory::AsyncUploader::UploadTicket ticket{};
-    };
-
     /// Runtime state for one streamed dataset (`StreamedVolume::datasetId`).
     struct DatasetRuntime {
         VolumeManifest manifest{};
@@ -102,11 +96,15 @@ class VolumeManagerSystem {
         bool previewQueued{false};
         bool fullQueued{false};
 
-        std::optional<InFlightUpload> previewUpload{};
-        std::optional<InFlightUpload> fullUpload{};
-
         std::optional<ResidentVolume> previewResident{};
         std::optional<ResidentVolume> fullResident{};
+
+        uint32_t expectedSlices{0u};
+        uint32_t uploadedSlices{0u};
+        bool loadCompleted{false};
+        bool firstSliceSubmitted{false};
+        std::deque<std::pair<size_t, std::vector<std::byte>>> pendingSliceUploads{};
+        std::deque<Cory::AsyncUploader::UploadTicket> inFlightSliceUploads{};
     };
 
     /// Runtime state for one procedural entity (`ProceduralVolume`).
@@ -120,6 +118,14 @@ class VolumeManagerSystem {
         std::string datasetId{};
         VolumeLevel level{VolumeLevel::Preview};
         glm::uvec3 dimensions{0u};
+        std::string error{};
+    };
+
+    struct SliceResult {
+        std::string datasetId{};
+        VolumeLevel level{VolumeLevel::Preview};
+        glm::uvec3 dimensions{0u};
+        size_t sliceIndex{0u};
         std::vector<std::byte> bytes{};
         std::string error{};
     };
@@ -132,10 +138,11 @@ class VolumeManagerSystem {
     void enqueueRead(DatasetRuntime &dataset, VolumeLevel level);
     [[nodiscard]] cppcoro::task<void>
     loadAndQueueResult(std::string datasetId, VolumeLevel level, Cory::LoadStackRequest request);
+    void processSliceResults();
     void processReadResults();
     void processUploadCompletion(uint64_t frameNumber);
     void retireOldVolumes(uint64_t frameNumber);
-    void uploadBytesToVolume(DatasetRuntime &dataset, const ReadResult &result);
+    void startNextSliceUpload(DatasetRuntime &dataset);
     static std::string stateToString(StreamState state);
 
     /// Ensures `datasets_` contains runtime state for this `StreamedVolume`.
@@ -157,6 +164,8 @@ class VolumeManagerSystem {
 
     std::mutex resultMutex_{};
     std::deque<ReadResult> completedReads_{};
+    std::mutex sliceResultMutex_{};
+    std::deque<SliceResult> completedSliceReads_{};
 
     std::vector<RetiredVolume> retiredVolumes_{};
 

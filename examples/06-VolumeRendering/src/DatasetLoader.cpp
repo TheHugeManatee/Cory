@@ -204,11 +204,12 @@ DatasetLoader::scanSlices(const LoadStackRequest &request)
 
 cppcoro::task<Result<void>>
 DatasetLoader::loadSliceR8(const std::filesystem::path &bmpPath,
-                           std::span<std::byte> targetBuffer,
                            glm::uvec2 expectedDimensions,
+                           glm::uvec3 volumeDimensions,
                            size_t sliceIndex,
                            cppcoro::cancellation_token cancellationToken,
-                           cppcoro::cancellation_source *cancellationSource)
+                           cppcoro::cancellation_source *cancellationSource,
+                           SliceLoadedCallback *onSliceLoaded)
 {
     auto failAndCancel = [&](std::string message) -> Result<void> {
         if (cancellationSource != nullptr) {
@@ -252,29 +253,38 @@ DatasetLoader::loadSliceR8(const std::filesystem::path &bmpPath,
 
     const auto expectedVoxels =
         static_cast<size_t>(expectedDimensions.x) * static_cast<size_t>(expectedDimensions.y);
-    if (targetBuffer.size() != expectedVoxels) {
-        co_return failAndCancel(
-            fmt::format("Slice {} ('{}') target buffer mismatch: expected {} bytes, got {} bytes",
-                        sliceIndex,
-                        bmpPath.string(),
-                        expectedVoxels,
-                        targetBuffer.size()));
-    }
+    auto sliceVoxels = std::vector<std::byte>(expectedVoxels);
 
-    auto decoded = IO::decodeBmp(bmpBytes, targetBuffer);
+    auto decoded = IO::decodeBmp(bmpBytes, sliceVoxels);
     if (!decoded) {
         co_return failAndCancel(fmt::format(
             "Slice {} ('{}') decode failed: {}", sliceIndex, bmpPath.string(), decoded.error()));
     }
 
-    CO_CORE_INFO("[{}] Finished loading slice {} ('{}')",
+    if (onSliceLoaded != nullptr && *onSliceLoaded) {
+        auto update = SliceLoadUpdate{
+            .volumeDimensions = volumeDimensions,
+            .sliceIndex = sliceIndex,
+            .slicePath = bmpPath,
+            .voxelsR8 = std::move(sliceVoxels),
+        };
+        auto callbackResult = (*onSliceLoaded)(std::move(update));
+        if (!callbackResult) {
+            co_return failAndCancel(fmt::format("Slice {} ('{}') callback failed: {}",
+                                                sliceIndex,
+                                                bmpPath.string(),
+                                                callbackResult.error()));
+        }
+    }
+
+    CO_CORE_INFO("[{}] Finished loading slice {}",
                  std::hash<std::thread::id>{}(std::this_thread::get_id()),
-                 sliceIndex,
-                 bmpPath.string());
+                 sliceIndex);
     co_return Result<void>{};
 }
 
-cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackRequest &request)
+cppcoro::task<Result<StreamedVolume>>
+DatasetLoader::streamBmpStack(const LoadStackRequest &request, SliceLoadedCallback onSliceLoaded)
 {
     auto scanResult = scanSlices(request);
     if (!scanResult) {
@@ -300,23 +310,18 @@ cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackR
     }
 
     const auto sliceVoxelCount64 = static_cast<uint64_t>(x) * static_cast<uint64_t>(y);
-    const auto totalVoxelCount64 = sliceVoxelCount64 * static_cast<uint64_t>(z);
-    if (sliceVoxelCount64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max()) ||
-        totalVoxelCount64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+    if (sliceVoxelCount64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
         co_return std::unexpected(
             fmt::format("Volume {}x{}x{} exceeds host memory addressable range", x, y, z));
     }
 
-    const auto sliceVoxelCount = static_cast<size_t>(sliceVoxelCount64);
-
-    LoadedVolume loaded{
+    auto streamed = StreamedVolume{
         .dimensions = glm::uvec3{x, y, static_cast<uint32_t>(z)},
-        .voxelsR8 = std::vector<std::byte>(static_cast<size_t>(totalVoxelCount64)),
         .orderedSlicePaths = {},
     };
-    loaded.orderedSlicePaths.reserve(orderedSlices.size());
+    streamed.orderedSlicePaths.reserve(orderedSlices.size());
     for (const auto &slice : orderedSlices) {
-        loaded.orderedSlicePaths.push_back(slice.path);
+        streamed.orderedSlicePaths.push_back(slice.path);
     }
 
     cppcoro::cancellation_source cancellationSource{};
@@ -337,15 +342,14 @@ cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackR
         tasks.reserve(batchEnd - batchStart);
 
         for (size_t i = batchStart; i < batchEnd; ++i) {
-            auto sliceSpan =
-                std::span<std::byte>{loaded.voxelsR8}.subspan(i * sliceVoxelCount, sliceVoxelCount);
             tasks.emplace_back(cppcoro::schedule_on(workerPool_,
                                                     loadSliceR8(orderedSlices[i].path,
-                                                                sliceSpan,
                                                                 glm::uvec2{x, y},
+                                                                streamed.dimensions,
                                                                 i,
                                                                 cancellationSource.token(),
-                                                                &cancellationSource)));
+                                                                &cancellationSource,
+                                                                &onSliceLoaded)));
         }
 
         auto completed = co_await cppcoro::when_all_ready(std::move(tasks));
@@ -358,6 +362,51 @@ cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackR
         }
     }
 
+    co_return streamed;
+}
+
+cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackRequest &request)
+{
+    auto loaded = LoadedVolume{};
+    auto streamResult =
+        co_await streamBmpStack(request, [&loaded](SliceLoadUpdate &&update) -> Result<void> {
+            if (loaded.dimensions == glm::uvec3{0u}) {
+                loaded.dimensions = update.volumeDimensions;
+                const auto voxelCount64 = static_cast<uint64_t>(loaded.dimensions.x) *
+                                          static_cast<uint64_t>(loaded.dimensions.y) *
+                                          static_cast<uint64_t>(loaded.dimensions.z);
+                if (voxelCount64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+                    return std::unexpected("Loaded volume exceeds host addressable range");
+                }
+                loaded.voxelsR8.resize(static_cast<size_t>(voxelCount64));
+            }
+
+            const auto sliceVoxelCount =
+                static_cast<size_t>(loaded.dimensions.x) * static_cast<size_t>(loaded.dimensions.y);
+            if (update.voxelsR8.size() != sliceVoxelCount) {
+                return std::unexpected(fmt::format("Slice {} has {} bytes, expected {} bytes",
+                                                   update.sliceIndex,
+                                                   update.voxelsR8.size(),
+                                                   sliceVoxelCount));
+            }
+            if (update.sliceIndex >= loaded.dimensions.z) {
+                return std::unexpected(fmt::format("Slice index {} out of bounds for {} slices",
+                                                   update.sliceIndex,
+                                                   loaded.dimensions.z));
+            }
+
+            auto dst = std::span<std::byte>{loaded.voxelsR8}.subspan(
+                update.sliceIndex * sliceVoxelCount, sliceVoxelCount);
+            std::copy(update.voxelsR8.begin(), update.voxelsR8.end(), dst.begin());
+            return Result<void>{};
+        });
+
+    if (!streamResult) {
+        co_return std::unexpected(std::move(streamResult.error()));
+    }
+
+    loaded.dimensions = streamResult->dimensions;
+    loaded.orderedSlicePaths = std::move(streamResult->orderedSlicePaths);
     co_return loaded;
 }
 

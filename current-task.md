@@ -92,3 +92,59 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
 - Repro context: debug-raycast toggle / startup paths after switching to eager declaration.
 - Likely cause: scratch textures were created in the parent task, while required work was performed by subtasks. If the parent task is not required by output resolution, those created resources are not pulled into required allocation, but required subtasks can still reference them.
 - Decision for now: revert to conditional subtask declaration/wiring (pre-refactor behavior) to restore stability; investigate a general framegraph fix separately.
+
+## Investigation: Direct Volume Writes (Host-Visible / BDA)
+
+### Current state (baseline)
+- `DatasetLoader` decodes all slices into one `std::vector<std::byte>` (`LoadedVolume::voxelsR8`).
+- `VolumeManagerSystem` receives that CPU vector and uploads whole-volume data via `AsyncUploader` to a sampled `Texture3D`.
+- `VolumeRenderSystem`/`raymarch.comp.slang` sample `gBindlessTexture3D[...]` by texture index.
+
+### Key constraints discovered
+- Buffer device address (BDA) applies to buffers, not sampled textures.
+- Moving to true "direct write while loading" with BDA means the renderer must read volume from a buffer (manual sampling path), not from `Texture3D`.
+- KDGpu exposes host-image-copy APIs (`Texture::hostLayoutTransition()` / `copyHostMemoryToTexture()`), but Cory currently does not request `hostImageCopy` in required device features.
+- Mapping a sampled 3D texture directly is API-visible in KDGpu, but portability for sampled 3D + host-visible allocations is weaker than buffer-based mapping.
+
+### Clean migration options
+1. Minimal churn, texture remains authoritative:
+   - Keep `Texture3D` sampling in shader.
+   - Stream slices incrementally into the texture (one z-slice region at a time) instead of full-volume CPU staging.
+   - Prefer host-image-copy when feature is enabled; otherwise use per-slice transfer uploads.
+   - Removes full-volume intermediate CPU container in manager path.
+
+2. Full BDA path (direct host-visible target, larger refactor):
+   - Allocate one host-visible buffer for full volume (R8), decode each slice directly into mapped buffer offset.
+   - Pass volume base address + dimensions to shader and implement manual 3D sampling (tri-linear in shader).
+   - Removes sampled `Texture3D` dependency for streamed volumes.
+
+### API cleanup targets (for full BDA path)
+- Remove `LoadedVolume::voxelsR8` as a required transfer artifact for manager integration.
+- Remove `VolumeManagerSystem::ReadResult::bytes` and `uploadBytesToVolume()` for streamed volume path.
+- Remove streamed-volume dependence on `AsyncUploader` (keep uploader for other systems).
+- Replace `VolumeComponent::textureView`-centric streamed contract with a buffer-address contract (while procedural path can stay texture-backed initially).
+
+### Recommended sequencing
+1. Introduce a sink-style `DatasetLoader` API (decode directly into caller-provided destination spans per slice).
+2. Add streamed-volume buffer contract (`deviceAddress + dimensions`) alongside existing texture contract.
+3. Switch raymarch shader to buffer sampling for streamed volumes.
+4. Remove old full-volume CPU-vector transfer path and texture upload path for streamed datasets.
+
+## Implemented: Slice-Reactive Partial Upload Path (Texture-backed)
+
+- Added a slice-progress API in `DatasetLoader`:
+  - `streamBmpStack(request, onSliceLoaded)` emits per-slice `SliceLoadUpdate` callbacks while decode is running.
+  - Existing `loadBmpStack()` now builds its full host volume on top of this streamed API for compatibility.
+- `VolumeManagerSystem` now reacts to per-slice updates:
+  - Receives slice payloads via callback queue from loader worker coroutines.
+  - Allocates the target 3D texture once dimensions are known (first slice update).
+  - Enqueues one partial upload per slice using existing `AsyncUploader` staging path:
+    - region upload writes depth=1 at `z = sliceIndex` into the final texture.
+  - Tracks progress (`expectedSlices`, `uploadedSlices`) and marks `FullReady` when all slices are uploaded and load completion is signaled.
+- Removed no-longer-needed full-volume upload path in manager:
+  - no longer waits for one giant `bytes` payload in `ReadResult`.
+  - no longer calls whole-volume `uploadBytesToVolume()` for streamed datasets.
+
+### Notes
+- This keeps the texture sampling render path intact (no BDA shader rewrite), while enabling true slice-reactive background uploads.
+- Memory pressure can still approach full-volume scale if decode outruns per-slice upload; bounded upload queueing is a future optimization.

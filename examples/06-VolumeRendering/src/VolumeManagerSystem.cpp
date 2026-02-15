@@ -80,6 +80,7 @@ struct alignas(16) VolumeGenerationParams {
 static_assert(std::is_trivially_copyable_v<VolumeGenerationParams>);
 
 constexpr size_t kManagerDrawDataBufferSize = 64u * 1024u;
+constexpr size_t kMaxSliceUploadsInFlight = 64u;
 
 [[nodiscard]] Gpu::TextureSubresourceRange colorSubresourceRange()
 {
@@ -124,6 +125,7 @@ void VolumeManagerSystem::tick(Cory::SceneGraph &graph, Cory::TickInfo tickInfo)
 
     shaderHotReloader_.processPendingReloads(tickInfo.ticks);
     ctx_->uploader().poll();
+    processSliceResults();
     processReadResults();
     processUploadCompletion(tickInfo.ticks);
     updateStreamedEntities(graph);
@@ -148,19 +150,34 @@ cppcoro::task<void> VolumeManagerSystem::loadAndQueueResult(std::string datasetI
                                                             VolumeLevel level,
                                                             Cory::LoadStackRequest request)
 {
+    const auto datasetKey = datasetId;
     auto result = ReadResult{
         .datasetId = std::move(datasetId),
         .level = level,
     };
 
     try {
-        auto stackResult = co_await datasetLoader_.loadBmpStack(request);
+        auto stackResult = co_await datasetLoader_.streamBmpStack(
+            request,
+            [this, datasetKey, level](Cory::SliceLoadUpdate &&update) {
+                auto sliceResult = SliceResult{
+                    .datasetId = datasetKey,
+                    .level = level,
+                    .dimensions = update.volumeDimensions,
+                    .sliceIndex = update.sliceIndex,
+                    .bytes = std::move(update.voxelsR8),
+                };
+                {
+                    std::scoped_lock lock(sliceResultMutex_);
+                    completedSliceReads_.push_back(std::move(sliceResult));
+                }
+                return Cory::Result<void>{};
+            });
         if (!stackResult) {
             result.error = std::move(stackResult.error());
         }
         else {
             result.dimensions = stackResult->dimensions;
-            result.bytes = std::move(stackResult->voxelsR8);
         }
     }
     catch (const std::exception &e) {
@@ -228,107 +245,229 @@ void VolumeManagerSystem::processReadResults()
                           dataset.error);
             continue;
         }
-        uploadBytesToVolume(dataset, result);
+
+        dataset.loadCompleted = true;
+        if (dataset.expectedSlices == 0u && result.dimensions.z > 0u) {
+            dataset.expectedSlices = result.dimensions.z;
+        }
+
+        if (!dataset.fullResident.has_value()) {
+            dataset.state = StreamState::Error;
+            dataset.error = fmt::format(
+                "Dataset '{}' load completed but no slice uploads were applied",
+                dataset.manifest.datasetId);
+            CO_CORE_ERROR("VolumeManager: {}", dataset.error);
+            continue;
+        }
+
+        if (dataset.expectedSlices > dataset.uploadedSlices && dataset.inFlightSliceUploads.empty() &&
+            dataset.pendingSliceUploads.empty()) {
+            dataset.state = StreamState::Error;
+            dataset.error = fmt::format(
+                "Dataset '{}' load completed with incomplete uploads: uploaded {} of {} slices",
+                dataset.manifest.datasetId,
+                dataset.uploadedSlices,
+                dataset.expectedSlices);
+            CO_CORE_ERROR("VolumeManager: {}", dataset.error);
+            continue;
+        }
+
+        if (dataset.expectedSlices > 0u && dataset.uploadedSlices == dataset.expectedSlices &&
+            dataset.inFlightSliceUploads.empty() && dataset.pendingSliceUploads.empty() &&
+            dataset.fullResident.has_value() && dataset.state != StreamState::FullReady) {
+            dataset.state = StreamState::FullReady;
+            CO_CORE_INFO("VolumeManager: full volume ready for '{}'", dataset.manifest.datasetId);
+        }
     }
 }
 
-void VolumeManagerSystem::uploadBytesToVolume(DatasetRuntime &dataset, const ReadResult &result)
+void VolumeManagerSystem::processSliceResults()
 {
-    CO_CORE_ASSERT(ctx_ != nullptr, "VolumeManager context is null");
-    const auto isPreview = result.level == VolumeLevel::Preview;
-    const auto levelName = isPreview ? "preview" : "full";
+    std::deque<SliceResult> results;
+    {
+        std::scoped_lock lock(sliceResultMutex_);
+        results.swap(completedSliceReads_);
+    }
 
-    const auto textureLabel =
-        fmt::format("VolumeManager {} texture ({})", dataset.manifest.datasetId, levelName);
-    auto texture = createTexture3D(textureLabel,
-                                   result.dimensions,
-                                   *ctx_,
-                                   Gpu::TextureUsageFlagBits::SampledBit |
-                                       Gpu::TextureUsageFlagBits::TransferDstBit);
-    auto view = createTexture3DView(textureLabel + " view", texture);
+    for (auto &result : results) {
+        auto it = datasets_.find(result.datasetId);
+        if (it == datasets_.end()) {
+            CO_CORE_WARN("VolumeManager: dropping slice {} for unknown dataset '{}'",
+                         result.sliceIndex,
+                         result.datasetId);
+            continue;
+        }
+        auto &dataset = it->second;
+        if (dataset.state == StreamState::Error) {
+            continue;
+        }
+        if (!result.error.empty()) {
+            dataset.state = StreamState::Error;
+            dataset.error = std::move(result.error);
+            CO_CORE_ERROR("VolumeManager: dataset '{}' failed slice read: {}",
+                          dataset.manifest.datasetId,
+                          dataset.error);
+            continue;
+        }
 
-    std::vector<Gpu::BufferTextureCopyRegion> regions;
-    regions.push_back(Gpu::BufferTextureCopyRegion{
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .textureSubResource =
-            {
-                .aspectMask = Gpu::TextureAspectFlagBits::ColorBit,
-                .mipLevel = 0,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-        .textureExtent =
-            Gpu::Extent3D{
-                .width = result.dimensions.x,
-                .height = result.dimensions.y,
-                .depth = result.dimensions.z,
-            },
-    });
-
-    auto ticket = ctx_->uploader().enqueueImageUpload(Cory::AsyncUploader::ImageUploadRequest{
-        .destinationTexture = texture.handle(),
-        .data = result.bytes.data(),
-        .byteSize = result.bytes.size(),
-        .regions = std::move(regions),
-        .oldLayout = Gpu::TextureLayout::Undefined,
-        .finalLayout = Gpu::TextureLayout::ShaderReadOnlyOptimal,
-        .finalStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
-        .finalMask = Gpu::AccessFlagBit::ShaderReadBit,
-    });
-
-    auto upload = InFlightUpload{
-        .volume =
-            ResidentVolume{
+        if (dataset.fullResident.has_value()) {
+            if (dataset.fullResident->dimensions != result.dimensions) {
+                dataset.state = StreamState::Error;
+                dataset.error = fmt::format(
+                    "Dataset '{}' reported inconsistent dimensions: existing {}x{}x{}, got {}x{}x{}",
+                    dataset.manifest.datasetId,
+                    dataset.fullResident->dimensions.x,
+                    dataset.fullResident->dimensions.y,
+                    dataset.fullResident->dimensions.z,
+                    result.dimensions.x,
+                    result.dimensions.y,
+                    result.dimensions.z);
+                CO_CORE_ERROR("VolumeManager: {}", dataset.error);
+                continue;
+            }
+        } else {
+            CO_CORE_ASSERT(ctx_ != nullptr, "VolumeManager context is null");
+            const auto textureLabel = fmt::format("VolumeManager {} texture (full)",
+                                                  dataset.manifest.datasetId);
+            auto texture =
+                createTexture3D(textureLabel,
+                                result.dimensions,
+                                *ctx_,
+                                Gpu::TextureUsageFlagBits::SampledBit |
+                                    Gpu::TextureUsageFlagBits::TransferDstBit);
+            auto view = createTexture3DView(textureLabel + " view", texture);
+            dataset.fullResident = ResidentVolume{
                 .texture = std::move(texture),
                 .view = std::move(view),
                 .dimensions = result.dimensions,
-            },
-        .ticket = std::move(ticket),
-    };
+            };
+            dataset.state = StreamState::FullUploading;
+        }
 
-    if (isPreview) {
-        dataset.previewUpload = std::move(upload);
-        dataset.state = StreamState::PreviewUploading;
-    }
-    else {
-        dataset.fullUpload = std::move(upload);
-        dataset.state = StreamState::FullUploading;
+        if (dataset.expectedSlices == 0u) {
+            dataset.expectedSlices = result.dimensions.z;
+        }
+        dataset.pendingSliceUploads.emplace_back(result.sliceIndex, std::move(result.bytes));
+        startNextSliceUpload(dataset);
     }
 }
 
 void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber)
 {
     for (auto &[datasetId, dataset] : datasets_) {
+        (void)frameNumber;
         if (dataset.state == StreamState::Error) {
             continue;
         }
 
-        if (dataset.previewUpload.has_value() && dataset.previewUpload->ticket.ready()) {
-            dataset.previewResident = std::move(dataset.previewUpload->volume);
-            dataset.previewUpload.reset();
-            dataset.state = StreamState::PreviewReady;
-            CO_CORE_INFO("VolumeManager: preview ready for '{}'", datasetId);
+        auto readyUploads = uint32_t{0u};
+        auto uploadIt = dataset.inFlightSliceUploads.begin();
+        while (uploadIt != dataset.inFlightSliceUploads.end()) {
+            if (uploadIt->ready()) {
+                uploadIt = dataset.inFlightSliceUploads.erase(uploadIt);
+                ++readyUploads;
+                continue;
+            }
+            ++uploadIt;
+        }
 
-            if (!dataset.fullQueued) {
-                enqueueRead(dataset, VolumeLevel::Full);
+        if (readyUploads > 0u) {
+            const auto wasUploaded = dataset.uploadedSlices;
+            dataset.uploadedSlices += readyUploads;
+            if (wasUploaded == 0u) {
+                CO_CORE_INFO("VolumeManager: first slice uploaded for '{}', partial volume now renderable",
+                             datasetId);
             }
         }
 
-        if (dataset.fullUpload.has_value() && dataset.fullUpload->ticket.ready()) {
-            dataset.fullResident = std::move(dataset.fullUpload->volume);
-            dataset.fullUpload.reset();
+        startNextSliceUpload(dataset);
+
+        if (dataset.loadCompleted && dataset.expectedSlices > 0u &&
+            dataset.uploadedSlices == dataset.expectedSlices &&
+            dataset.inFlightSliceUploads.empty() && dataset.pendingSliceUploads.empty() &&
+            dataset.fullResident.has_value() && dataset.state != StreamState::FullReady) {
             dataset.state = StreamState::FullReady;
             CO_CORE_INFO("VolumeManager: full volume ready for '{}'", datasetId);
-
-            if (dataset.previewResident.has_value()) {
-                retiredVolumes_.push_back(RetiredVolume{
-                    .volume = std::move(*dataset.previewResident),
-                    .retireFrame = frameNumber,
-                });
-                dataset.previewResident.reset();
-            }
         }
+    }
+}
+
+void VolumeManagerSystem::startNextSliceUpload(DatasetRuntime &dataset)
+{
+    if (dataset.pendingSliceUploads.empty()) {
+        return;
+    }
+    CO_CORE_ASSERT(ctx_ != nullptr, "VolumeManager context is null");
+    CO_CORE_ASSERT(dataset.fullResident.has_value(),
+                   "Slice upload requested before full resident texture was created");
+
+    while (dataset.inFlightSliceUploads.size() < kMaxSliceUploadsInFlight &&
+           !dataset.pendingSliceUploads.empty()) {
+        auto [sliceIndex, sliceBytes] = std::move(dataset.pendingSliceUploads.front());
+        dataset.pendingSliceUploads.pop_front();
+
+        const auto expectedSliceBytes = static_cast<size_t>(dataset.fullResident->dimensions.x) *
+                                        static_cast<size_t>(dataset.fullResident->dimensions.y);
+        if (sliceBytes.size() != expectedSliceBytes) {
+            dataset.state = StreamState::Error;
+            dataset.error = fmt::format("Dataset '{}' slice {} has {} bytes, expected {} bytes",
+                                        dataset.manifest.datasetId,
+                                        sliceIndex,
+                                        sliceBytes.size(),
+                                        expectedSliceBytes);
+            CO_CORE_ERROR("VolumeManager: {}", dataset.error);
+            return;
+        }
+        if (sliceIndex >= dataset.fullResident->dimensions.z) {
+            dataset.state = StreamState::Error;
+            dataset.error = fmt::format("Dataset '{}' slice index {} out of bounds (depth={})",
+                                        dataset.manifest.datasetId,
+                                        sliceIndex,
+                                        dataset.fullResident->dimensions.z);
+            CO_CORE_ERROR("VolumeManager: {}", dataset.error);
+            return;
+        }
+
+        std::vector<Gpu::BufferTextureCopyRegion> regions;
+        regions.push_back(Gpu::BufferTextureCopyRegion{
+            .bufferOffset = 0,
+            .bufferRowLength = 0,
+            .bufferTextureHeight = 0,
+            .textureSubResource =
+                {
+                    .aspectMask = Gpu::TextureAspectFlagBits::ColorBit,
+                    .mipLevel = 0,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+                },
+            .textureOffset =
+                Gpu::Offset3D{
+                    .x = 0,
+                    .y = 0,
+                    .z = static_cast<int32_t>(sliceIndex),
+                },
+            .textureExtent =
+                Gpu::Extent3D{
+                    .width = dataset.fullResident->dimensions.x,
+                    .height = dataset.fullResident->dimensions.y,
+                    .depth = 1,
+                },
+        });
+
+        auto ticket = ctx_->uploader().enqueueImageUpload(Cory::AsyncUploader::ImageUploadRequest{
+            .destinationTexture = dataset.fullResident->texture.handle(),
+            .data = sliceBytes.data(),
+            .byteSize = sliceBytes.size(),
+            .regions = std::move(regions),
+            .oldLayout = dataset.firstSliceSubmitted ? Gpu::TextureLayout::ShaderReadOnlyOptimal
+                                                     : Gpu::TextureLayout::Undefined,
+            .finalLayout = Gpu::TextureLayout::ShaderReadOnlyOptimal,
+            .finalStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
+            .finalMask = Gpu::AccessFlagBit::ShaderReadBit,
+        });
+        dataset.inFlightSliceUploads.push_back(std::move(ticket));
+        dataset.firstSliceSubmitted = true;
+        dataset.state = StreamState::FullUploading;
     }
 }
 
@@ -432,16 +571,17 @@ void VolumeManagerSystem::updateStreamedEntities(Cory::SceneGraph &graph)
             continue;
         }
         const auto &dataset = it->second;
+        const bool hasUploadedData = dataset.uploadedSlices > 0u;
 
         const auto *resident =
-            dataset.fullResident
+            (dataset.fullResident && hasUploadedData)
                 ? &(*dataset.fullResident)
                 : (dataset.previewResident ? &(*dataset.previewResident) : nullptr);
         if (resident != nullptr) {
             volume->textureView = resident->view.handle();
             volume->textureDimensions = resident->dimensions;
             volume->hasTexture = true;
-            volume->fullQuality = dataset.fullResident.has_value();
+            volume->fullQuality = dataset.state == StreamState::FullReady;
         }
         else {
             volume->hasTexture = false;

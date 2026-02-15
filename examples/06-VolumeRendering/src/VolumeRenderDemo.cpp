@@ -233,12 +233,12 @@ void VolumeRenderDemoApplication::setupScene()
             },
             VolumeComponent{
                 .size = dataset.volumeSize,
-                .raymarchStepSizeMultiplier = 2.0f,
+                .raymarchStepSizeMultiplier = 12.0f,
                 .transferFunction =
                     {
                         .densityMin = 0.05f,
-                        .densityMax = 0.92f,
-                        .opacityScale = 22.0f,
+                        .densityMax = 0.25f,
+                        .opacityScale = 32.0f,
                         .gamma = 1.0f,
                     },
             },
@@ -362,6 +362,13 @@ void VolumeRenderDemoApplication::drawImguiControls()
 {
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
+    if (ImGui::Begin("Profiling")) {
+        auto records = Cory::Profiler::GetRecords();
+
+        CoImGui::drawProfilerRecords(records);
+    }
+    ImGui::End();
+
     if (ImGui::Begin("Demo")) {
         if (ImGui::Button("Dump Framegraph")) {
             dumpNextFramegraph_ = true;
@@ -417,8 +424,8 @@ void VolumeRenderDemoApplication::drawImguiControls()
         const auto effectiveAlpha =
             std::clamp(1.0f - std::exp(-frameDeltaSeconds / temporalTauSeconds), 0.001f, 1.0f);
         CoImGui::Slider("Iterations", iterations, 1, 200);
-        CoImGui::Slider("Temporal EMA Tau (ms)", temporalTimeMs, 1.0f, 2000.0f);
-        CoImGui::Slider("Alpha Reject Threshold", alphaRejectThreshold, 0.0f, 0.25f);
+        CoImGui::Slider("Temporal EMA Tau (ms)", temporalTimeMs, 1.0f, 300.0f);
+        CoImGui::Slider("Alpha Reject Threshold", alphaRejectThreshold, 0.0f, 1.0f);
         CoImGui::Text(
             "Effective Alpha: {:.4f} (dt: {:.2f} ms)", effectiveAlpha, frameDeltaSeconds * 1000.0f);
         volumeRenderer_->temporalIterations = std::max(iterations, 1);
@@ -509,13 +516,6 @@ void VolumeRenderDemoApplication::drawImguiControls()
                 CoImGui::Text("{}: {}", datasetId, status);
             }
         }
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("Profiling")) {
-        auto records = Cory::Profiler::GetRecords();
-
-        CoImGui::drawProfilerRecords(records);
     }
     ImGui::End();
 }

@@ -61,10 +61,10 @@ class VolumeRenderSystem
 
     Cory::Property<bool> debugRasterize{false};
     Cory::Property<bool> debugRaycast{false};
-    Cory::Property<bool> temporalAccumulation{false};
+    Cory::Property<bool> temporalAccumulation{true};
     Cory::Property<int32_t> temporalIterations{1};
-    Cory::Property<float> temporalEmaTauMs{120.0f};
-    Cory::Property<float> alphaDeltaRejectThreshold{0.01f};
+    Cory::Property<float> temporalEmaTauMs{50.0f};
+    Cory::Property<float> alphaDeltaRejectThreshold{0.5f};
 
     /// Drops current temporal accumulation history and forces re-initialization next frame.
     void resetTemporalHistory();

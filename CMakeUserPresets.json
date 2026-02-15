@@ -3,10 +3,6 @@
     "vendor": {
         "conan": {}
     },
-    "include": [
-        "build\\debug\\CMakePresets.json",
-        "build\\release\\CMakePresets.json"
-    ],
     "configurePresets": [
         {
             "name": "codex",
@@ -20,8 +16,16 @@
                 "CMAKE_CXX_COMPILER": "clang++"
             },
             "toolchainFile": "/home/j/cory-work/build/codex/conan_toolchain.cmake",
-            "environment": {
-                
+            "environment": {}
+        },
+        {
+            "name": "codex-modules",
+            "displayName": "Codex WSL + C++20 modules",
+            "inherits": [
+                "codex"
+            ],
+            "cacheVariables": {
+                "CORY_ENABLE_MODULES": "ON"
             }
         }
     ],
@@ -30,16 +34,21 @@
             "name": "codex",
             "configurePreset": "codex",
             "jobs": 16
+        },
+        {
+            "name": "codex-modules",
+            "configurePreset": "codex-modules",
+            "jobs": 16
         }
     ],
     "testPresets": [
         {
             "name": "codex",
             "configurePreset": "codex"
+        },
+        {
+            "name": "codex-modules",
+            "configurePreset": "codex-modules"
         }
-=======
-        "build\\debug\\CMakePresets.json",
-        "build\\release\\CMakePresets.json"
->>>>>>> 6ebd8cd1 (Fix framegraph resolve handle bookkeeping)
     ]
 }

@@ -1,9 +1,11 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.28)
 
 set(PROJECT_NAME "Cory")
 set(PROJECT_TARGETS "coryTargets")
 
 project(${PROJECT_NAME} CXX)
+
+option(CORY_ENABLE_MODULES "Enable C++20 module file sets for Cory targets" ON)
 
 if (DEFINED ENV{VULKAN_SDK})
     set(_vulkan_sdk_dir $ENV{VULKAN_SDK})

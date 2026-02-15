@@ -136,6 +136,25 @@ I'm always interested in feedback on compatibility issues, but I can of course n
 That being said, to build and run the app, use the `cbt` tool from the repo root. It handles
 configuration, building, testing, running, and tool setup in a consistent way.
 
+### C++20 modules (CMake)
+
+Cory now exposes an initial C++20 module file set for CMake-based builds. The module workflow is
+enabled by default via `CORY_ENABLE_MODULES=ON`.
+
+- Minimum CMake version for module-aware builds is `3.28`.
+- `CMakeUserPresets.json` provides `codex-modules`, which inherits from `codex` and therefore
+  keeps using the Conan-generated toolchain (`/home/j/cory-work/build/codex/conan_toolchain.cmake`).
+
+Examples:
+
+```bash
+cmake --preset codex-modules
+cmake --build --preset codex-modules
+```
+
+If you need to fall back to a header-only/public-header include flow, configure with
+`-DCORY_ENABLE_MODULES=OFF`.
+
 ```bash
 # Configure once
 python3 -m cbt configure --profile codex --build-type Debug

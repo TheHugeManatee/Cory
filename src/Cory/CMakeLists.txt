@@ -151,6 +151,19 @@ set(CORY_SOURCES
         Renderer/SlangCompilerTools.hpp
 )
 
+set(CORY_MODULE_SOURCES
+        modules/base.cppm
+        modules/application.cppm
+        modules/framegraph.cppm
+        modules/imgui.cppm
+        modules/rendertasks.cppm
+        modules/renderer.cppm
+        modules/scenegraph.cppm
+        modules/systems.cppm
+        modules/cory.cppm
+)
+
+
 
 # Use ImGui GLFW backend from local imgui module's res/bindings folder
 set(IMGUI_BACKEND_DIR "${imgui_INCLUDE_DIR}/../res/bindings")
@@ -172,6 +185,15 @@ endforeach ()
 add_library(${TARGET_NAME} STATIC
         ${CORY_SOURCES}
 )
+
+if (CORY_ENABLE_MODULES)
+    target_sources(${TARGET_NAME}
+            PUBLIC
+            FILE_SET cxx_modules TYPE CXX_MODULES FILES
+            ${CORY_MODULE_SOURCES}
+    )
+    set_target_properties(${TARGET_NAME} PROPERTIES CXX_SCAN_FOR_MODULES ON)
+endif ()
 
 target_include_directories(${TARGET_NAME}
         PUBLIC
@@ -237,12 +259,22 @@ add_library(Cory::Cory ALIAS Cory)
 ###### INSTALLATION
 
 # Install in the desired folder
-install(TARGETS ${TARGET_NAME}
-        EXPORT ${PROJECT_TARGETS}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+if (CORY_ENABLE_MODULES)
+    install(TARGETS ${TARGET_NAME}
+            EXPORT ${PROJECT_TARGETS}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            FILE_SET cxx_modules DESTINATION ${CMAKE_INSTALL_LIBDIR}/cxx/modules
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+else ()
+    install(TARGETS ${TARGET_NAME}
+            EXPORT ${PROJECT_TARGETS}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif ()
 
 # Install includes
 install(FILES ${CORY_INCLUDES} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${TARGET_HEADER_SUBDIR})

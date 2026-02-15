@@ -10,6 +10,14 @@ find_package(glfw3 REQUIRED)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
+
+if (MSVC)
+    # Conan cppcoro currently exports /await for consumers on Windows, which forces
+    # the TS coroutine ABI and can mismatch the packaged cppcoro.lib coroutine ABI.
+    # Clear consumer compile options so all targets use the standard C++ coroutine ABI.
+    set_property(TARGET cppcoro::cppcoro PROPERTY INTERFACE_COMPILE_OPTIONS "")
+endif ()
+
 find_package(EnTT REQUIRED)
 find_package(glm REQUIRED)
 find_package(imgui REQUIRED)

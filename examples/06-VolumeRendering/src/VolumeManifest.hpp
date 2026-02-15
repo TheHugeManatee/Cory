@@ -13,6 +13,12 @@ struct VolumeBlobInfo {
     size_t byteSize{0};
 };
 
+struct VolumeBmpStackInfo {
+    std::filesystem::path directory{};
+    std::string pattern{"*.bmp"};
+    size_t maxConcurrency{0};
+};
+
 struct VolumeManifest {
     std::filesystem::path manifestPath{};
     std::string datasetId{};
@@ -20,6 +26,7 @@ struct VolumeManifest {
     glm::uvec3 sourceDimensions{0u};
     VolumeBlobInfo preview{};
     VolumeBlobInfo full{};
+    std::optional<VolumeBmpStackInfo> bmpStack{};
     std::optional<glm::uvec3> fullDownsampledFrom{};
     std::string normalization{};
 };

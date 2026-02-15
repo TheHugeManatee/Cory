@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.hpp"
+#include "DatasetLoader.hpp"
 #include "VolumeManifest.hpp"
 
 #include <Cory/Renderer/AsyncUploader.hpp>
@@ -115,9 +116,18 @@ class VolumeManagerSystem {
     };
 
     struct ReadRequest {
+        enum class Source : uint8_t {
+            RawBlob,
+            BmpStack,
+        };
+
         std::string datasetId{};
         VolumeLevel level{VolumeLevel::Preview};
+        Source source{Source::RawBlob};
         std::filesystem::path blobPath{};
+        std::filesystem::path stackDirectory{};
+        std::string stackPattern{"*.bmp"};
+        size_t stackMaxConcurrency{0};
         glm::uvec3 dimensions{0u};
         size_t expectedByteSize{0};
     };
@@ -171,4 +181,5 @@ class VolumeManagerSystem {
 
     bool stopWorker_{false};
     std::jthread worker_;
+    Cory::DatasetLoader datasetLoader_{};
 };

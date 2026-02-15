@@ -643,8 +643,6 @@ void ContextPrivate::receiveDebugUtilsMessage(
         validationMessageCallback()(info);
         return;
     }
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wswitch-default"
     switch (info.severity) {
     case DebugMessageSeverity::Verbose:
         CO_CORE_TRACE("Vulkan Validation: {}", pCallbackData->pMessage);
@@ -660,8 +658,9 @@ void ContextPrivate::receiveDebugUtilsMessage(
         CO_CORE_ERROR("Vulkan Validation: {}", pCallbackData->pMessage);
         BreakpointIfDebugging();
         break;
+    default:
+        break;
     }
-#pragma clang diagnostic pop
 }
 
 } // namespace Cory

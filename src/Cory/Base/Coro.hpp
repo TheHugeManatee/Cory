@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Cory/Base/Common.hpp>
+
 #include "Log.hpp"
 
 #include <cppcoro/coroutine.hpp>

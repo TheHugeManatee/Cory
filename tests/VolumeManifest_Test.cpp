@@ -89,3 +89,40 @@ TEST_CASE("VolumeManifest accepts non-zero preview and full dimensions", "[Volum
     CHECK(manifest.preview.dimensions == glm::uvec3{16u, 16u, 16u});
     CHECK(manifest.full.dimensions == glm::uvec3{32u, 32u, 32u});
 }
+
+TEST_CASE("VolumeManifest parses optional bmp_stack configuration", "[VolumeManifest]")
+{
+    const auto manifestText = "{\n"
+                              "  \"cory_volume_manifest_version\": 1,\n"
+                              "  \"dataset_id\": \"bmp_stack_dataset\",\n"
+                              "  \"voxel_format\": \"r8_unorm\",\n"
+                              "  \"endianness\": \"little\",\n"
+                              "  \"spacing_mm\": [1.0, 1.0, 1.0],\n"
+                              "  \"source_dimensions\": [16, 16, 16],\n"
+                              "  \"preview_blob\": \"preview.raw\",\n"
+                              "  \"preview_dimensions\": [16, 16, 16],\n"
+                              "  \"preview_byte_size\": 4096,\n"
+                              "  \"full_blob\": \"full.raw\",\n"
+                              "  \"full_dimensions\": [16, 16, 16],\n"
+                              "  \"full_byte_size\": 4096,\n"
+                              "  \"normalization\": \"none\",\n"
+                              "  \"bmp_stack\": {\n"
+                              "    \"directory\": \"stack\",\n"
+                              "    \"pattern\": \"slice_*.bmp\",\n"
+                              "    \"max_concurrency\": 8\n"
+                              "  }\n"
+                              "}\n";
+    const auto manifestPath = writeManifestFile(manifestText, "bmp_stack.cvol");
+
+    VolumeManifest manifest{};
+    std::string error{};
+    const bool ok = loadVolumeManifest(manifestPath, manifest, error);
+    fs::remove(manifestPath);
+
+    REQUIRE(ok);
+    CHECK(error.empty());
+    REQUIRE(manifest.bmpStack.has_value());
+    CHECK(manifest.bmpStack->directory.filename().string() == "stack");
+    CHECK(manifest.bmpStack->pattern == "slice_*.bmp");
+    CHECK(manifest.bmpStack->maxConcurrency == 8u);
+}

@@ -8,6 +8,8 @@
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
+#include <cppcoro/sync_wait.hpp>
+
 #include <KDGpu/command_recorder.h>
 #include <KDGpu/compute_pass_command_recorder.h>
 #include <KDGpu/texture.h>
@@ -191,16 +193,30 @@ void VolumeManagerSystem::workerLoop()
             .level = request.level,
             .dimensions = request.dimensions,
         };
-        std::string readError{};
-        result.bytes = readFileBytes(request.blobPath, readError);
-        if (!readError.empty()) {
-            result.error = std::move(readError);
-        } else if (!result.bytes.empty() && request.expectedByteSize != 0 &&
-                   request.expectedByteSize != result.bytes.size()) {
-            result.error = fmt::format("File '{}' size mismatch: expected {} bytes, got {} bytes",
-                                       request.blobPath.string(),
-                                       request.expectedByteSize,
-                                       result.bytes.size());
+        if (request.source == ReadRequest::Source::BmpStack) {
+            auto stackResult = cppcoro::sync_wait(datasetLoader_.loadBmpStack(Cory::LoadStackRequest{
+                .directory = request.stackDirectory,
+                .pattern = request.stackPattern,
+                .maxConcurrency = request.stackMaxConcurrency,
+            }));
+            if (!stackResult) {
+                result.error = std::move(stackResult.error());
+            } else {
+                result.dimensions = stackResult->dimensions;
+                result.bytes = std::move(stackResult->voxelsR8);
+            }
+        } else {
+            std::string readError{};
+            result.bytes = readFileBytes(request.blobPath, readError);
+            if (!readError.empty()) {
+                result.error = std::move(readError);
+            } else if (!result.bytes.empty() && request.expectedByteSize != 0 &&
+                       request.expectedByteSize != result.bytes.size()) {
+                result.error = fmt::format("File '{}' size mismatch: expected {} bytes, got {} bytes",
+                                           request.blobPath.string(),
+                                           request.expectedByteSize,
+                                           result.bytes.size());
+            }
         }
 
         {
@@ -213,17 +229,27 @@ void VolumeManagerSystem::workerLoop()
 void VolumeManagerSystem::enqueueRead(DatasetRuntime &dataset, VolumeLevel level)
 {
     const auto isPreview = level == VolumeLevel::Preview;
+    const auto loadFromBmpStack = !isPreview && dataset.manifest.bmpStack.has_value();
     const auto &blob = isPreview ? dataset.manifest.preview : dataset.manifest.full;
 
     {
         std::scoped_lock lock(requestMutex_);
-        pendingReads_.push_back(ReadRequest{
+        auto request = ReadRequest{
             .datasetId = dataset.manifest.datasetId,
             .level = level,
+            .source = loadFromBmpStack ? ReadRequest::Source::BmpStack : ReadRequest::Source::RawBlob,
             .blobPath = blob.path,
             .dimensions = blob.dimensions,
             .expectedByteSize = blob.byteSize,
-        });
+        };
+        if (loadFromBmpStack) {
+            request.stackDirectory = dataset.manifest.bmpStack->directory;
+            request.stackPattern = dataset.manifest.bmpStack->pattern;
+            request.stackMaxConcurrency = dataset.manifest.bmpStack->maxConcurrency;
+            request.dimensions = glm::uvec3{0u};
+            request.expectedByteSize = 0;
+        }
+        pendingReads_.push_back(std::move(request));
         if (isPreview) {
             dataset.previewQueued = true;
             dataset.state = StreamState::PendingPreviewRead;

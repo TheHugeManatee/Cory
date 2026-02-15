@@ -26,6 +26,7 @@ class CoryProjectConan(ConanFile):
         self.requires("range-v3/0.12.0")
         self.requires("spdlog/1.16.0")
         self.requires("efsw/1.4.1")
+        self.requires("mio/cci.20230303")
 
     def configure(self):
         # Need to set this env to create powershell scripts on Windows

@@ -300,10 +300,12 @@ void VolumeRenderDemoApplication::run()
     runMainLoop(
         frameSource,
         framesToRender_,
-        {.headless = headless_,
-         .pollPlatformEvents = true,
-         .processFileWatchEvents = true,
-         .clearDeferredShaderReleases = true},
+        {
+            .headless = headless_,
+            .pollPlatformEvents = true,
+            .processFileWatchEvents = true,
+            .clearDeferredShaderReleases = true,
+        },
         [this, &framegraphs](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
             auto tickInfo = clock_.tick();
             imguizmoSystem_->setEnabled(showImGuizmo.get());
@@ -497,8 +499,9 @@ void VolumeRenderDemoApplication::drawImguiControls()
             CoImGui::Text("No VolumeComponent found in scene.");
         }
 
-        const auto statuses = volumeManager_ != nullptr ? volumeManager_->datasetStatuses()
-                                                        : std::vector<std::pair<std::string, std::string>>{};
+        const auto statuses = volumeManager_ != nullptr
+                                  ? volumeManager_->datasetStatuses()
+                                  : std::vector<std::pair<std::string, std::string>>{};
         if (!statuses.empty()) {
             ImGui::Separator();
             CoImGui::Text("Dataset Streaming");

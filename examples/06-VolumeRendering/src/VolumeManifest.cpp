@@ -199,9 +199,64 @@ bool loadVolumeManifest(const std::filesystem::path &manifestPath,
         manifest.fullDownsampledFrom = downsampledFrom;
     }
 
+    if (auto it = root.find("bmp_stack"); it != root.end()) {
+        if (!it->is_object()) {
+            errorOut = fmt::format("Invalid bmp_stack in '{}': expected object", manifestPath.string());
+            return false;
+        }
+
+        auto stack = VolumeBmpStackInfo{};
+        auto stackDirectory = it->find("directory");
+        if (stackDirectory == it->end() || !stackDirectory->is_string()) {
+            errorOut =
+                fmt::format("Invalid bmp_stack.directory in '{}': expected string", manifestPath.string());
+            return false;
+        }
+        stack.directory = stackDirectory->get<std::string>();
+        if (stack.directory.empty()) {
+            errorOut =
+                fmt::format("Invalid bmp_stack.directory in '{}': must not be empty", manifestPath.string());
+            return false;
+        }
+
+        if (auto pattern = it->find("pattern"); pattern != it->end()) {
+            if (!pattern->is_string()) {
+                errorOut =
+                    fmt::format("Invalid bmp_stack.pattern in '{}': expected string", manifestPath.string());
+                return false;
+            }
+            stack.pattern = pattern->get<std::string>();
+            if (stack.pattern.empty()) {
+                errorOut = fmt::format("Invalid bmp_stack.pattern in '{}': must not be empty",
+                                       manifestPath.string());
+                return false;
+            }
+        }
+
+        if (auto maxConcurrency = it->find("max_concurrency"); maxConcurrency != it->end()) {
+            if (!maxConcurrency->is_number_unsigned()) {
+                errorOut = fmt::format("Invalid bmp_stack.max_concurrency in '{}': expected unsigned integer",
+                                       manifestPath.string());
+                return false;
+            }
+            const auto value = maxConcurrency->get<uint64_t>();
+            if (value > std::numeric_limits<size_t>::max()) {
+                errorOut = fmt::format("bmp_stack.max_concurrency too large in '{}'",
+                                       manifestPath.string());
+                return false;
+            }
+            stack.maxConcurrency = static_cast<size_t>(value);
+        }
+
+        manifest.bmpStack = std::move(stack);
+    }
+
     const auto baseDir = manifestPath.parent_path();
     manifest.preview.path = baseDir / manifest.preview.path;
     manifest.full.path = baseDir / manifest.full.path;
+    if (manifest.bmpStack.has_value()) {
+        manifest.bmpStack->directory = baseDir / manifest.bmpStack->directory;
+    }
 
     if (manifest.datasetId.empty()) {
         errorOut = fmt::format("dataset_id must not be empty in '{}'", manifestPath.string());

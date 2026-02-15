@@ -81,6 +81,33 @@ std::array<uint8_t, 4> rgbaAt(const std::vector<std::byte> &rgba, size_t pixelIn
     };
 }
 
+std::array<uint8_t, 4> rgbaAt(std::span<const std::byte> rgba, size_t pixelIndex)
+{
+    const auto offset = pixelIndex * 4U;
+    return {
+        static_cast<uint8_t>(rgba[offset + 0]),
+        static_cast<uint8_t>(rgba[offset + 1]),
+        static_cast<uint8_t>(rgba[offset + 2]),
+        static_cast<uint8_t>(rgba[offset + 3]),
+    };
+}
+
+auto decodeIntoOwned(std::span<const std::byte> bmpBytes) -> Cory::Result<Cory::IO::BmpImage>
+{
+    auto info = Cory::IO::queryBmpInfo(bmpBytes);
+    if (!info) return std::unexpected(info.error());
+
+    Cory::IO::BmpImage image{};
+    image.width = info->width;
+    image.height = info->height;
+    image.pixelsRgba8.resize(info->rgba8ByteSize);
+
+    auto decoded = Cory::IO::decodeBmp(bmpBytes, image.pixelsRgba8);
+    if (!decoded) return std::unexpected(decoded.error());
+
+    return image;
+}
+
 } // namespace
 
 TEST_CASE("BMP decoder loads 24-bit bottom-up images", "[Cory/IO]")
@@ -95,7 +122,7 @@ TEST_CASE("BMP decoder loads 24-bit bottom-up images", "[Cory/IO]")
     };
     const auto bmpBytes = makeBmp(2, 2, 24, pixelBytes);
 
-    auto decoded = Cory::IO::decodeBmp(bmpBytes);
+    auto decoded = decodeIntoOwned(bmpBytes);
     REQUIRE(decoded);
     CHECK(decoded->width == 2);
     CHECK(decoded->height == 2);
@@ -118,7 +145,7 @@ TEST_CASE("BMP decoder loads 32-bit top-down images", "[Cory/IO]")
     };
     const auto bmpBytes = makeBmp(1, -2, 32, pixelBytes);
 
-    auto decoded = Cory::IO::decodeBmp(bmpBytes);
+    auto decoded = decodeIntoOwned(bmpBytes);
     REQUIRE(decoded);
     CHECK(decoded->width == 1);
     CHECK(decoded->height == 2);
@@ -133,7 +160,8 @@ TEST_CASE("BMP decoder rejects unsupported format", "[Cory/IO]")
     const std::vector<uint8_t> pixelBytes{0, 1, 2, 3};
     const auto bmpBytes = makeBmp(1, 1, 8, pixelBytes);
 
-    const auto decoded = Cory::IO::decodeBmp(bmpBytes);
+    std::vector<std::byte> outRgba8(4);
+    const auto decoded = Cory::IO::decodeBmp(bmpBytes, outRgba8);
     REQUIRE_FALSE(decoded);
     CHECK(decoded.error().find("24-bit and 32-bit") != std::string::npos);
 }
@@ -146,7 +174,8 @@ TEST_CASE("BMP decoder rejects truncated pixel payload", "[Cory/IO]")
     };
     const auto bmpBytes = makeBmp(1, 1, 24, pixelBytes);
 
-    const auto decoded = Cory::IO::decodeBmp(bmpBytes);
+    std::vector<std::byte> outRgba8(4);
+    const auto decoded = Cory::IO::decodeBmp(bmpBytes, outRgba8);
     REQUIRE_FALSE(decoded);
     CHECK(decoded.error().find("truncated pixel data") != std::string::npos);
 }
@@ -174,6 +203,55 @@ TEST_CASE("BMP loader reads files from disk", "[Cory/IO]")
     CHECK(loaded->width == 1);
     CHECK(loaded->height == 1);
     CHECK(rgbaAt(loaded->pixelsRgba8, 0) == std::array<uint8_t, 4>{255, 0, 0, 255});
+}
+
+TEST_CASE("BMP size query reports required rgba8 byte size", "[Cory/IO]")
+{
+    const std::vector<uint8_t> pixelBytes{
+        // 2x2 image. BMP rows are BGR with 4-byte row alignment.
+        255, 0, 0, 255, 255, 255, 0, 0,
+        0, 0, 255, 0, 255, 0, 0, 0,
+    };
+    const auto bmpBytes = makeBmp(2, 2, 24, pixelBytes);
+
+    const auto info = Cory::IO::queryBmpInfo(bmpBytes);
+    REQUIRE(info);
+    CHECK(info->width == 2);
+    CHECK(info->height == 2);
+    CHECK(info->rgba8ByteSize == 2u * 2u * 4u);
+}
+
+TEST_CASE("BMP decoder writes directly into caller buffer", "[Cory/IO]")
+{
+    const std::vector<uint8_t> pixelBytes{
+        // 1x1 24-bit red pixel + row padding
+        0, 0, 255, 0,
+    };
+    const auto bmpBytes = makeBmp(1, 1, 24, pixelBytes);
+
+    std::vector<std::byte> outPixels(4);
+    const auto loaded = Cory::IO::decodeBmp(bmpBytes, outPixels);
+
+    REQUIRE(loaded);
+    CHECK(loaded->width == 1);
+    CHECK(loaded->height == 1);
+    CHECK(loaded->rgba8ByteSize == 4u);
+    CHECK(rgbaAt(std::span<const std::byte>{outPixels}, 0) == std::array<uint8_t, 4>{255, 0, 0, 255});
+}
+
+TEST_CASE("BMP decoder rejects output buffer size mismatch", "[Cory/IO]")
+{
+    const std::vector<uint8_t> pixelBytes{
+        // 1x1 24-bit red pixel + row padding
+        0, 0, 255, 0,
+    };
+    const auto bmpBytes = makeBmp(1, 1, 24, pixelBytes);
+
+    std::vector<std::byte> outPixels(3);
+    const auto loaded = Cory::IO::decodeBmp(bmpBytes, outPixels);
+
+    REQUIRE_FALSE(loaded);
+    CHECK(loaded.error().find("output buffer size mismatch") != std::string::npos);
 }
 
 TEST_CASE("BMP loader reads checked-in python-generated grayscale BMP", "[Cory/IO]")

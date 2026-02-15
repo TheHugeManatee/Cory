@@ -11,8 +11,11 @@
 
 #include <glm/vec2.hpp>
 
+#include <filesystem>
 #include <memory>
 #include <span>
+#include <string>
+#include <vector>
 
 namespace Cory {
 class ImGuizmoTransformSystem;
@@ -49,6 +52,12 @@ class VolumeRenderDemoApplication : public Cory::Application {
 
     class VolumeRenderSystem *volumeRenderer_{nullptr};
     Cory::ImGuizmoTransformSystem *imguizmoSystem_{nullptr};
+
+    struct CatalogDataset {
+        std::string datasetId{};
+        std::filesystem::path manifestPath{};
+    };
+    std::vector<CatalogDataset> catalogDatasets_{};
 
     void setupSystems();
     void setupScene();

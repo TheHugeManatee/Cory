@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.hpp"
+#include "VolumeStreaming.hpp"
 
 #include <Cory/Application/DynamicGeometry.hpp>
 #include <Cory/Base/Prop.hpp>
@@ -17,7 +18,10 @@
 #include <KDGpu/sampler.h>
 
 #include <cstdint>
+#include <filesystem>
+#include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace Cory {
@@ -31,10 +35,12 @@ struct alignas(16) InstanceData {
     glm::vec4 color{1.0f};
     glm::vec4 transferParams{0.0f};
     glm::vec4 raymarchParams{0.0f};
+    glm::uvec4 volumeMeta{0u}; // x=texture index, y/z/w=dimensions
 };
 
 static_assert(std::is_trivially_copyable_v<InstanceData>);
-static_assert(sizeof(InstanceData) == 3 * sizeof(glm::mat4) + 3 * sizeof(glm::vec4));
+static_assert(sizeof(InstanceData) ==
+              3 * sizeof(glm::mat4) + 3 * sizeof(glm::vec4) + sizeof(glm::uvec4));
 
 struct alignas(16) VolumeGenerationParams {
     glm::vec3 volumeSpacing{1.0f};
@@ -63,6 +69,8 @@ class VolumeRenderSystem
     Cory::Property<float> alphaDeltaRejectThreshold{0.01f};
 
     void resetTemporalHistory();
+    bool registerDatasetManifest(const std::filesystem::path &manifestPath);
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> datasetStatuses() const;
 
     void beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber);
 
@@ -92,19 +100,24 @@ class VolumeRenderSystem
     cubeRaycastTask(Cory::RenderTaskBuilder builder,
                     Cory::TransientTextureHandle colorTarget,
                     Cory::TransientTextureHandle depthTarget,
-                    Cory::TransientTextureHandle volumeTarget);
+                    Cory::TransientTextureHandle fallbackVolumeTarget,
+                    bool hasFallbackVolume);
 
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
                          Cory::TransientTextureHandle colorTarget,
-                         Cory::TransientTextureHandle depthTarget,
-                         Cory::TransientTextureHandle volumeTarget);
+                         Cory::TransientTextureHandle depthTarget);
 
     Cory::RenderTaskDeclaration<Cory::TransientTextureHandle>
     volumeGenerationTask(Cory::RenderTaskBuilder builder);
 
   private:
-    std::vector<InstanceData> renderState_;
+    struct RenderStateEntry {
+        InstanceData data{};
+        Gpu::TextureViewHandle textureView{};
+        bool hasTexture{false};
+    };
+    std::vector<RenderStateEntry> renderState_;
     Cory::Components::CameraComponent camera_;
 
     Cory::Mesh cube_;
@@ -122,6 +135,7 @@ class VolumeRenderSystem
                                          .volumeDimensions = glm::uvec3{128u, 128u, 128u},
                                          .time = 0.0f};
     float lastFrameDeltaSeconds_{1.0f / 60.0f};
+    VolumeStreaming volumeStreaming_;
 
     Cory::Context *ctx_{nullptr};
     struct TemporalHistoryBuffer {

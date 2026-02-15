@@ -12,6 +12,12 @@ add_executable(${TARGET_NAME}
 
         src/VolumeRenderSystem.cpp
         src/VolumeRenderSystem.hpp
+        src/VolumeManifest.cpp
+        src/VolumeManifest.hpp
+        src/VolumeCatalog.cpp
+        src/VolumeCatalog.hpp
+        src/VolumeStreaming.cpp
+        src/VolumeStreaming.hpp
         src/Common.hpp
 )
 

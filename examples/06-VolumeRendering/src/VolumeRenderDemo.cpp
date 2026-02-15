@@ -1,6 +1,8 @@
 #include "VolumeRenderDemo.hpp"
 
 #include "Common.hpp"
+#include "VolumeCatalog.hpp"
+#include "VolumeManifest.hpp"
 #include "VolumeRenderSystem.hpp"
 
 #include <Cory/Application/CameraLayer.hpp>
@@ -35,17 +37,42 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <vector>
 
 VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *> args)
 {
     CLI::App app{"VolumeRenderDemoApplication"};
     bool disableValidation{false};
+    std::string volumeCatalogPathString{};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
+    app.add_option("--volume-catalog",
+                   volumeCatalogPathString,
+                   "Path to .cvolcat file with volume dataset manifests");
     app.allow_config_extras(true);
     app.parse(gsl::narrow<int>(args.size()), args.data());
+
+    if (!volumeCatalogPathString.empty()) {
+        VolumeCatalog catalog{};
+        std::string error{};
+        const auto catalogPath = std::filesystem::path{volumeCatalogPathString};
+        if (!loadVolumeCatalog(catalogPath, catalog, error)) {
+            throw std::runtime_error(error);
+        }
+        for (const auto &entry : catalog.entries) {
+            VolumeManifest manifest{};
+            std::string manifestError{};
+            if (!loadVolumeManifest(entry.manifestPath, manifest, manifestError)) {
+                throw std::runtime_error(manifestError);
+            }
+            catalogDatasets_.push_back(CatalogDataset{
+                .datasetId = manifest.datasetId,
+                .manifestPath = entry.manifestPath,
+            });
+        }
+    }
 
     Cory::ResourceLocator::addSearchPath(VOLUMERENDERING_RESOURCE_DIR);
 
@@ -101,47 +128,77 @@ void VolumeRenderDemoApplication::setupScene()
                                           .nearPlane = 0.2f,
                                           .farPlane = 1000.0f});
 
-    sceneGraph_.createEntityWithComponents(
-        root,
-        "Main Volume",
-        Cory::Components::Transform{
-            .mode = Cory::Components::TransformMode::Local,
-            .position = {0.0f, 0.0f, 0.0f},
-            .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
-            .scale = {1.0f, 1.0f, 1.0f},
-        },
-        VolumeComponent{
-            .size = {5.0f, 5.0f, 5.0f},
-            .raymarchStepSizeMultiplier = 4.0f,
-            .transferFunction =
-                {
-                    .densityMin = 0.05f,
-                    .densityMax = 0.20f,
-                    .opacityScale = 30.0f,
-                    .gamma = 0.9f,
-                },
-        });
+    if (catalogDatasets_.empty()) {
+        sceneGraph_.createEntityWithComponents(
+            root,
+            "Main Volume",
+            Cory::Components::Transform{
+                .mode = Cory::Components::TransformMode::Local,
+                .position = {0.0f, 0.0f, 0.0f},
+                .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
+                .scale = {1.0f, 1.0f, 1.0f},
+            },
+            VolumeComponent{
+                .size = {5.0f, 5.0f, 5.0f},
+                .raymarchStepSizeMultiplier = 4.0f,
+                .transferFunction =
+                    {
+                        .densityMin = 0.05f,
+                        .densityMax = 0.20f,
+                        .opacityScale = 30.0f,
+                        .gamma = 0.9f,
+                    },
+            });
 
-    sceneGraph_.createEntityWithComponents(
-        root,
-        "Secondary Volume",
-        Cory::Components::Transform{
-            .mode = Cory::Components::TransformMode::Local,
-            .position = {5.0f, 2.0f, 0.0f},
-            .orientation = Cory::eulerYXZToQuaternion({30.0, 45.0, 0.0}),
-            .scale = {1.0f, 1.0f, 1.0f},
-        },
-        VolumeComponent{
-            .size = {2.0f, 4.0f, 2.0f},
-            .raymarchStepSizeMultiplier = 2.0f,
-            .transferFunction =
-                {
-                    .densityMin = 0.25f,
-                    .densityMax = 0.98f,
-                    .opacityScale = 14.0f,
-                    .gamma = 1.45f,
-                },
-        });
+        sceneGraph_.createEntityWithComponents(
+            root,
+            "Secondary Volume",
+            Cory::Components::Transform{
+                .mode = Cory::Components::TransformMode::Local,
+                .position = {5.0f, 2.0f, 0.0f},
+                .orientation = Cory::eulerYXZToQuaternion({30.0, 45.0, 0.0}),
+                .scale = {1.0f, 1.0f, 1.0f},
+            },
+            VolumeComponent{
+                .size = {2.0f, 4.0f, 2.0f},
+                .raymarchStepSizeMultiplier = 2.0f,
+                .transferFunction =
+                    {
+                        .densityMin = 0.25f,
+                        .densityMax = 0.98f,
+                        .opacityScale = 14.0f,
+                        .gamma = 1.45f,
+                    },
+            });
+        return;
+    }
+
+    constexpr float spacingX = 5.0f;
+    for (size_t i = 0; i < catalogDatasets_.size(); ++i) {
+        const auto &dataset = catalogDatasets_[i];
+        const auto x = static_cast<float>(i) * spacingX;
+        sceneGraph_.createEntityWithComponents(
+            root,
+            fmt::format("oVert {}", dataset.datasetId),
+            Cory::Components::Transform{
+                .mode = Cory::Components::TransformMode::Local,
+                .position = {x, 0.0f, 0.0f},
+                .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
+                .scale = {1.0f, 1.0f, 1.0f},
+            },
+            VolumeComponent{
+                .size = {4.0f, 4.0f, 4.0f},
+                .datasetId = dataset.datasetId,
+                .raymarchStepSizeMultiplier = 2.0f,
+                .transferFunction =
+                    {
+                        .densityMin = 0.05f,
+                        .densityMax = 0.92f,
+                        .opacityScale = 22.0f,
+                        .gamma = 1.0f,
+                    },
+            });
+    }
 }
 
 void VolumeRenderDemoApplication::setupSystems()
@@ -176,6 +233,9 @@ void VolumeRenderDemoApplication::setupSystems()
 
     // render system should go last to be aware of the latest state
     volumeRenderer_ = &systems_.emplace<VolumeRenderSystem>(ctx());
+    for (const auto &dataset : catalogDatasets_) {
+        volumeRenderer_->registerDatasetManifest(dataset.manifestPath);
+    }
 }
 
 VolumeRenderDemoApplication::~VolumeRenderDemoApplication()
@@ -350,6 +410,15 @@ void VolumeRenderDemoApplication::drawImguiControls()
         }
         if (!hasVolumeComponent) {
             CoImGui::Text("No VolumeComponent found in scene.");
+        }
+
+        const auto statuses = volumeRenderer_->datasetStatuses();
+        if (!statuses.empty()) {
+            ImGui::Separator();
+            CoImGui::Text("Dataset Streaming");
+            for (const auto &[datasetId, status] : statuses) {
+                CoImGui::Text("{}: {}", datasetId, status);
+            }
         }
     }
     ImGui::End();

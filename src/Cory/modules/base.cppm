@@ -1,7 +1,5 @@
 export module Cory.Base;
 
-export {
-#include <Cory/Base/Common.hpp>
-#include <Cory/Base/Time.hpp>
-#include <Cory/Base/Utils.hpp>
+export namespace Cory::Modules {
+inline constexpr bool enabled = true;
 }

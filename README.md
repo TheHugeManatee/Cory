@@ -32,6 +32,8 @@ As such, it uses features that are only supported in rather modern compilers.
     - [x] automatically figure out required image usage for a transient image
     - [x] extend transient resource system to buffers
     - [ ] split barriers
+    - [ ] simplify / make more efficient the ShaderBindGroup (currently flushes too often, should only have to flush
+      before submit?)
 - Window and event system
     - [x] basic mouse and kb event forwarding
     - [ ] better abstraction/encapsulation
@@ -69,7 +71,7 @@ As such, it uses features that are only supported in rather modern compilers.
 - Multithreading?!
     - Multithreaded framegraph recording?
     - Offload resource creation (shaders/pipelines) to another thread (pool)
-    - explicit sync with queues where necessary 
+    - explicit sync with queues where necessary
     - texture uploads etc.
 - C++ Modules (whenever cmake and compiler support actually catches up)
 
@@ -81,7 +83,8 @@ As such, it uses features that are only supported in rather modern compilers.
 
 ### Inspiration and Resources
 
-- Ideas around Engine structure and event handling basics from Hazel engine by TheCherno, greatly documented on his [Youtube
+- Ideas around Engine structure and event handling basics from Hazel engine by TheCherno, greatly documented on
+  his [Youtube
   Channel](https://www.youtube.com/user/TheChernoProject)
 - Alexander Overvoorde's excellent [Vulkan tutorial](https://vulkan-tutorial.com/)
 - Brendan Galea's [Vulkan Tutorial](https://www.youtube.com/watch?v=Y9U9IE0gVHA&list=PL8327DO66nu9qYVKLDmdLW_84-yE4auCR)

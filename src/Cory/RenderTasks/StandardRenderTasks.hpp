@@ -26,19 +26,16 @@ clearAttachments(RenderTaskBuilder builder,
                  Gpu::DepthStencilClearValue clearDepth = Gpu::DepthStencilClearValue{1.0f, 0});
 
 /**
- * @brief A render task that resolves the window color image to the swapchain image.
+ * @brief Copy one color image into another for downstream usage (e.g. presentation).
  *
- * This render task takes single- or multisampled image and schedules a resolve or blit operation
- * to copy its contents to the given target image.
- * If the input image is multisampled, it performs a resolve operation to convert it to a
- * single-sampled image suitable for presentation.
- * If the input image is already single-sampled, it performs a blit operation.
+ * This task supports same-extent color images and chooses the transfer operation automatically:
+ * - If sample counts are equal, a direct texture copy is scheduled.
+ * - If source is multisampled and target is single-sampled, a resolve is scheduled.
  *
- * The task output is the updated/written to target image, which can then be used further e.g. for
- * presentation.
+ * The task output is the written target image handle.
  */
-RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
-                                                      TransientTextureHandle sourceImage,
-                                                      TransientTextureHandle targetImage);
+RenderTaskDeclaration<TransientTextureHandle> copyToTarget(RenderTaskBuilder builder,
+                                                           TransientTextureHandle sourceImage,
+                                                           TransientTextureHandle targetImage);
 
 } // namespace Cory::StandardRenderTasks

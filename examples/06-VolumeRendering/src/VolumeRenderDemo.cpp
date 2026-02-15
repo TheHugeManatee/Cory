@@ -226,26 +226,26 @@ void VolumeRenderDemoApplication::defineRenderPasses(Cory::Framegraph &framegrap
 
     auto frameHandles = framegraph.importFrameContext(frameCtx);
 
-    auto volumeResult =
-        volumeRenderer_
-            ->volumeFrameTask(framegraph.declareTask("TASK_Volume"),
-                              framegraph,
-                              frameCtx,
-                              frameHandles.colorImage,
-                              frameHandles.depthImage)
-            .output();
+    auto volumeResult = volumeRenderer_
+                            ->volumeFrameTask(framegraph.declareTask("TASK_Volume"),
+                                              framegraph,
+                                              frameCtx,
+                                              frameHandles.colorImage,
+                                              frameHandles.depthImage)
+                            .output();
     auto colorForLayers = volumeResult.colorOut;
     auto depthForLayers = volumeResult.depthOut;
 
     auto layersOutput =
         layers().declareRenderTasks(framegraph, {.color = colorForLayers, .depth = depthForLayers});
 
-    auto resolvedSwapchain =
-        Cory::StandardRenderTasks::resolve(
-            framegraph.declareTask("TASK_Resolve"), layersOutput.color, frameHandles.swapchainImage)
+    auto copiedSwapchain =
+        Cory::StandardRenderTasks::copyToTarget(framegraph.declareTask("TASK_CopyToTarget"),
+                                                layersOutput.color,
+                                                frameHandles.swapchainImage)
             .output();
 
-    framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
+    framegraph.declareOutput(copiedSwapchain, Cory::Sync::AccessType::Present);
 }
 
 void VolumeRenderDemoApplication::drawImguiControls()
@@ -309,9 +309,8 @@ void VolumeRenderDemoApplication::drawImguiControls()
         CoImGui::Slider("Iterations", iterations, 1, 200);
         CoImGui::Slider("Temporal EMA Tau (ms)", temporalTimeMs, 1.0f, 2000.0f);
         CoImGui::Slider("Alpha Reject Threshold", alphaRejectThreshold, 0.0f, 0.25f);
-        CoImGui::Text("Effective Alpha: {:.4f} (dt: {:.2f} ms)",
-                      effectiveAlpha,
-                      frameDeltaSeconds * 1000.0f);
+        CoImGui::Text(
+            "Effective Alpha: {:.4f} (dt: {:.2f} ms)", effectiveAlpha, frameDeltaSeconds * 1000.0f);
         volumeRenderer_->temporalIterations = std::max(iterations, 1);
         volumeRenderer_->temporalEmaTauMs = std::max(temporalTimeMs, 1.0f);
         volumeRenderer_->alphaDeltaRejectThreshold = std::max(alphaRejectThreshold, 0.0f);

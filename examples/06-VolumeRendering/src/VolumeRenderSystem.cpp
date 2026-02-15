@@ -128,10 +128,9 @@ void VolumeRenderSystem::ensureTemporalHistoryTexture(const Cory::FrameContext &
         .name = "TEX_VolumeTemporalHistory",
         .size = glm::uvec3{extent, 1u},
         .format = format,
-        .usage = Gpu::TextureUsageFlagBits::StorageBit |
-                 Gpu::TextureUsageFlagBits::ColorAttachmentBit |
-                 Gpu::TextureUsageFlagBits::TransferSrcBit |
-                 Gpu::TextureUsageFlagBits::TransferDstBit,
+        .usage =
+            Gpu::TextureUsageFlagBits::StorageBit | Gpu::TextureUsageFlagBits::ColorAttachmentBit |
+            Gpu::TextureUsageFlagBits::TransferSrcBit | Gpu::TextureUsageFlagBits::TransferDstBit,
         .sampleCount = sampleCount,
         .textureType = Gpu::TextureType::TextureType2D,
     });
@@ -267,9 +266,8 @@ VolumeRenderSystem::volumeFrameTask(Cory::RenderTaskBuilder builder,
     const bool useRasterizePath = debugRasterize.get();
     const bool useDebugRaycastPath = !useRasterizePath && debugRaycast.get();
     if (useRasterizePath) {
-        const auto rasterization = rasterizationTask(
-                                       builder.subtask("Rasterization"), colorTarget, depthTarget)
-                                       .output();
+        const auto rasterization =
+            rasterizationTask(builder.subtask("Rasterization"), colorTarget, depthTarget).output();
         resetTemporalHistory();
         co_await builder.finishDeclaration(PassOutputs{
             .colorOut = rasterization.colorOut,
@@ -299,7 +297,8 @@ VolumeRenderSystem::volumeFrameTask(Cory::RenderTaskBuilder builder,
     }
 
     ensureTemporalHistoryTexture(frameCtx);
-    CO_CORE_ASSERT(temporalHistory_.resource.valid(), "Temporal history resource expected to be valid");
+    CO_CORE_ASSERT(temporalHistory_.resource.valid(),
+                   "Temporal history resource expected to be valid");
     auto temporalHistoryInput =
         framegraph.declareInput(Cory::TransientTextureHandle{temporalHistory_.resource});
     const auto raycastResult = cubeRaycastTask(builder.subtask("VolumeRaycast"),
@@ -313,8 +312,13 @@ VolumeRenderSystem::volumeFrameTask(Cory::RenderTaskBuilder builder,
     temporalHistory_.valid = true;
     temporalHistory_.forceTemporalReset = false;
 
+    const auto frameColorOut =
+        Cory::StandardRenderTasks::copyToTarget(
+            builder.subtask("CopyRaycastToFrameColor"), raycastResult, clearAttachments.color)
+            .output();
+
     co_await builder.finishDeclaration(PassOutputs{
-        .colorOut = raycastResult,
+        .colorOut = frameColorOut,
         .depthOut = clearAttachments.depth.value_or(depthTarget),
     });
 }
@@ -422,8 +426,8 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     const auto temporalTauSeconds = std::max(temporalEmaTauMs.get() * 0.001f, 1e-4f);
     const auto temporalAlpha =
         std::clamp(1.0f - std::exp(-lastFrameDeltaSeconds_ / temporalTauSeconds), 0.001f, 1.0f);
-    const bool applyTemporal =
-        temporalAccumulation.get() && temporalHistory_.valid && !temporalHistory_.forceTemporalReset;
+    const bool applyTemporal = temporalAccumulation.get() && temporalHistory_.valid &&
+                               !temporalHistory_.forceTemporalReset;
     drawData->temporalBlendFactor = applyTemporal ? temporalAlpha : 1.0f;
     drawData->iterations = static_cast<uint32_t>(std::max(temporalIterations.get(), 1));
     drawData->alphaDeltaRejectThreshold = std::max(alphaDeltaRejectThreshold.get(), 0.0f);

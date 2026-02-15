@@ -1,7 +1,7 @@
 #include "StandardRenderTasks.hpp"
 
-#include <Cory/Base/Log.hpp>
 #include <Cory/Base/GlmUtils.hpp>
+#include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 
 #include <KDGpu/command_recorder.h>
@@ -46,31 +46,39 @@ clearAttachments(RenderTaskBuilder builder,
     clearPass.end(std::move(recorder));
 }
 
-RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
-                                                      TransientTextureHandle sourceImage,
-                                                      TransientTextureHandle targetImage)
+RenderTaskDeclaration<TransientTextureHandle> copyToTarget(RenderTaskBuilder builder,
+                                                           TransientTextureHandle sourceImage,
+                                                           TransientTextureHandle targetImage)
 {
-    auto colorInfo = builder.read(sourceImage, RenderTaskBuilder::TextureReadPreset::TransferSrc);
-    auto [outputWriteHandle, swapchainInfo] =
+    auto sourceInfo = builder.read(sourceImage, RenderTaskBuilder::TextureReadPreset::TransferSrc);
+    auto [outputWriteHandle, targetInfo] =
         builder.write(targetImage, RenderTaskBuilder::TextureWritePreset::TransferDst);
 
     RenderInput renderApi = co_await builder.finishDeclaration(outputWriteHandle);
 
-    auto extent = Cory::glmu::to<Gpu::Extent3D>(swapchainInfo.size);
+    CO_CORE_ASSERT(sourceInfo.size == targetInfo.size,
+                   "copyToTarget source and target size mismatch: {}x{} vs {}x{}",
+                   sourceInfo.size.x,
+                   sourceInfo.size.y,
+                   targetInfo.size.x,
+                   targetInfo.size.y);
+
+    const auto extent = Cory::glmu::to<Gpu::Extent3D>(targetInfo.size);
 
     // Get the actual resources from the FG resource manager
-    auto windowImage = renderApi.resources->image(sourceImage);
-    auto swapchainImage = renderApi.resources->image(outputWriteHandle);
+    const auto srcImage = renderApi.resources->image(sourceImage);
+    const auto dstImage = renderApi.resources->image(outputWriteHandle);
 
-    // Depending on the MSAA state of the window image, either resolve or blit to the swapchain
-    if (colorInfo.sampleCount != Gpu::SampleCountFlagBits::Samples1Bit) {
-        CO_CORE_ASSERT(swapchainInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit,
-                       "Resolve destination must be single-sampled, got {}",
-                       static_cast<uint32_t>(swapchainInfo.sampleCount));
+    if (sourceInfo.sampleCount != targetInfo.sampleCount) {
+        CO_CORE_ASSERT(sourceInfo.sampleCount != Gpu::SampleCountFlagBits::Samples1Bit &&
+                           targetInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit,
+                       "Unsupported sample count conversion in copyToTarget: {} -> {}",
+                       static_cast<uint32_t>(sourceInfo.sampleCount),
+                       static_cast<uint32_t>(targetInfo.sampleCount));
         renderApi.cmd->resolveTexture(Gpu::TextureResolveOptions{
-            .srcTexture = windowImage,
+            .srcTexture = srcImage,
             .srcLayout = Gpu::TextureLayout::TransferSrcOptimal,
-            .dstTexture = swapchainImage,
+            .dstTexture = dstImage,
             .dstLayout = Gpu::TextureLayout::TransferDstOptimal,
             .regions = {Gpu::TextureResolveRegion{
                 .srcSubresource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
@@ -79,21 +87,18 @@ RenderTaskDeclaration<TransientTextureHandle> resolve(RenderTaskBuilder builder,
             }}});
     }
     else {
-        // Blit the rendered image to the swapchain image
-        renderApi.cmd->blitTexture(
-            {.srcTexture = windowImage,
+        renderApi.cmd->copyTextureToTexture(
+            {.srcTexture = srcImage,
              .srcLayout = Gpu::TextureLayout::TransferSrcOptimal,
-             .dstTexture = swapchainImage,
+             .dstTexture = dstImage,
              .dstLayout = Gpu::TextureLayout::TransferDstOptimal,
-             .regions = {Gpu::TextureBlitRegion{
+             .regions = {Gpu::TextureCopyRegion{
                  .srcSubresource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
-                 .srcOffset = {},
-                 .srcExtent = extent,
+                 .srcOffset = {0, 0, 0},
                  .dstSubresource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
                  .dstOffset = {0, 0, 0},
-                 .dstExtent = extent,
-             }},
-             .scalingFilter = Gpu::FilterMode::Linear});
+                 .extent = extent,
+             }}});
     }
 }
 } // namespace Cory::StandardRenderTasks

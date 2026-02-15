@@ -238,12 +238,13 @@ void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto resolvedSwapchain =
-        Cory::StandardRenderTasks::resolve(
-            framegraph.declareTask("TASK_Resolve"), layersOutput.color, frameHandles.swapchainImage)
+    auto copiedSwapchain =
+        Cory::StandardRenderTasks::copyToTarget(framegraph.declareTask("TASK_CopyToTarget"),
+                                                layersOutput.color,
+                                                frameHandles.swapchainImage)
             .output();
 
-    framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
+    framegraph.declareOutput(copiedSwapchain, Cory::Sync::AccessType::Present);
 }
 
 void SceneGraphDemoApplication::drawImguiControls()

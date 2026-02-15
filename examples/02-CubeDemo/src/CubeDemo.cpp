@@ -236,12 +236,12 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto resolvedSwapchain =
-        Cory::StandardRenderTasks::resolve(
-            framegraph.declareTask("TASK_Resolve"), layersOutput.color, swapchainImage)
+    auto copiedSwapchain =
+        Cory::StandardRenderTasks::copyToTarget(
+            framegraph.declareTask("TASK_CopyToTarget"), layersOutput.color, swapchainImage)
             .output();
 
-    framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
+    framegraph.declareOutput(copiedSwapchain, Cory::Sync::AccessType::Present);
 }
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>

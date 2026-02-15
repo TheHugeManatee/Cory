@@ -69,15 +69,15 @@ bool loadVolumeManifest(const std::filesystem::path &manifestPath,
     Json root;
     try {
         in >> root;
-    } catch (const nlohmann::json::parse_error &e) {
-        errorOut = fmt::format(
-            "Invalid JSON manifest '{}': {}", manifestPath.string(), e.what());
+    }
+    catch (const nlohmann::json::parse_error &e) {
+        errorOut = fmt::format("Invalid JSON manifest '{}': {}", manifestPath.string(), e.what());
         return false;
     }
 
     if (!root.is_object()) {
-        errorOut = fmt::format("Invalid manifest '{}': root must be a JSON object",
-                               manifestPath.string());
+        errorOut =
+            fmt::format("Invalid manifest '{}': root must be a JSON object", manifestPath.string());
         return false;
     }
 
@@ -112,13 +112,12 @@ bool loadVolumeManifest(const std::filesystem::path &manifestPath,
     }
 
     if (!version->is_number_integer() || version->get<int>() != 1) {
-        errorOut = fmt::format("Unsupported cory_volume_manifest_version in '{}'",
-                               manifestPath.string());
+        errorOut =
+            fmt::format("Unsupported cory_volume_manifest_version in '{}'", manifestPath.string());
         return false;
     }
     if (!voxelFormat->is_string() || voxelFormat->get<std::string>() != "r8_unorm") {
-        errorOut = fmt::format(
-            "Unsupported voxel_format in '{}'", manifestPath.string());
+        errorOut = fmt::format("Unsupported voxel_format in '{}'", manifestPath.string());
         return false;
     }
     if (!endianness->is_string() || endianness->get<std::string>() != "little") {
@@ -201,28 +200,29 @@ bool loadVolumeManifest(const std::filesystem::path &manifestPath,
 
     if (auto it = root.find("bmp_stack"); it != root.end()) {
         if (!it->is_object()) {
-            errorOut = fmt::format("Invalid bmp_stack in '{}': expected object", manifestPath.string());
+            errorOut =
+                fmt::format("Invalid bmp_stack in '{}': expected object", manifestPath.string());
             return false;
         }
 
         auto stack = VolumeBmpStackInfo{};
         auto stackDirectory = it->find("directory");
         if (stackDirectory == it->end() || !stackDirectory->is_string()) {
-            errorOut =
-                fmt::format("Invalid bmp_stack.directory in '{}': expected string", manifestPath.string());
+            errorOut = fmt::format("Invalid bmp_stack.directory in '{}': expected string",
+                                   manifestPath.string());
             return false;
         }
         stack.directory = stackDirectory->get<std::string>();
         if (stack.directory.empty()) {
-            errorOut =
-                fmt::format("Invalid bmp_stack.directory in '{}': must not be empty", manifestPath.string());
+            errorOut = fmt::format("Invalid bmp_stack.directory in '{}': must not be empty",
+                                   manifestPath.string());
             return false;
         }
 
         if (auto pattern = it->find("pattern"); pattern != it->end()) {
             if (!pattern->is_string()) {
-                errorOut =
-                    fmt::format("Invalid bmp_stack.pattern in '{}': expected string", manifestPath.string());
+                errorOut = fmt::format("Invalid bmp_stack.pattern in '{}': expected string",
+                                       manifestPath.string());
                 return false;
             }
             stack.pattern = pattern->get<std::string>();
@@ -235,8 +235,9 @@ bool loadVolumeManifest(const std::filesystem::path &manifestPath,
 
         if (auto maxConcurrency = it->find("max_concurrency"); maxConcurrency != it->end()) {
             if (!maxConcurrency->is_number_unsigned()) {
-                errorOut = fmt::format("Invalid bmp_stack.max_concurrency in '{}': expected unsigned integer",
-                                       manifestPath.string());
+                errorOut = fmt::format(
+                    "Invalid bmp_stack.max_concurrency in '{}': expected unsigned integer",
+                    manifestPath.string());
                 return false;
             }
             const auto value = maxConcurrency->get<uint64_t>();

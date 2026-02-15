@@ -181,8 +181,7 @@ Cory::EagerJob DynamicPipelineApplication::loadShaders()
     }
     vertexShader_ = vertexShaderHandle;
 
-    fragmentShaderCode_ =
-        Cory::ShaderSource{*fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
+    fragmentShaderCode_ = Cory::ShaderSource{*fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
     fragmentShaderEditorSource_ = fragmentShaderCode_->source();
 
     auto fragmentShaderHandle = ctx().shaders().createShader(

@@ -1,5 +1,6 @@
 #include <Cory/IO/Bmp.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <limits>
 
@@ -14,10 +15,11 @@ struct ParsedBmpInfo {
     uint32_t width{};
     uint32_t height{};
     uint32_t pixelDataOffset{};
+    uint32_t colorTableOffset{};
+    uint32_t colorTableEntryCount{};
     uint64_t rowStride{};
-    uint64_t bytesPerPixel{};
     bool topDown{};
-    size_t rgba8ByteSize{};
+    size_t r8ByteSize{};
 };
 
 [[nodiscard]] auto readU16(std::span<const std::byte> bytes, size_t offset) -> uint16_t
@@ -44,7 +46,8 @@ struct ParsedBmpInfo {
     return std::unexpected(std::string{message});
 }
 
-[[nodiscard]] Result<ParsedBmpInfo> parseBmpInfo(std::span<const std::byte> bytes, size_t backingSizeBytes)
+[[nodiscard]] Result<ParsedBmpInfo> parseBmpInfo(std::span<const std::byte> bytes,
+                                                 size_t backingSizeBytes)
 {
     if (bytes.size() < minBmpSize) return fail("BMP decode failed: file is too small");
 
@@ -68,6 +71,7 @@ struct ParsedBmpInfo {
     const auto planes = readU16(bytes, 26);
     const auto bitCount = readU16(bytes, 28);
     const auto compression = readU32(bytes, 30);
+    const auto colorsUsed = readU32(bytes, 46);
 
     if (widthSigned <= 0) return fail("BMP decode failed: invalid width");
     if (heightSigned == 0) return fail("BMP decode failed: invalid height");
@@ -76,21 +80,36 @@ struct ParsedBmpInfo {
     }
     if (planes != 1) return fail("BMP decode failed: invalid planes");
     if (compression != 0) return fail("BMP decode failed: compressed BMP is unsupported");
-    if (bitCount != 24 && bitCount != 32) {
-        return fail("BMP decode failed: only 24-bit and 32-bit BMP are supported");
+    if (bitCount != 8) {
+        return fail("BMP decode failed: only 8-bit grayscale BMP is supported");
     }
 
     const auto width = static_cast<uint32_t>(widthSigned);
     const auto topDown = heightSigned < 0;
     const auto height = static_cast<uint32_t>(topDown ? -heightSigned : heightSigned);
-    const auto bytesPerPixel = static_cast<uint64_t>(bitCount / 8);
+    constexpr auto bytesPerPixel = uint64_t{1};
     const auto rowSizeRaw = static_cast<uint64_t>(width) * bytesPerPixel;
     const auto rowStride = (rowSizeRaw + 3ULL) & ~3ULL;
     const auto pixelArraySize = rowStride * static_cast<uint64_t>(height);
+    const auto colorTableOffset = static_cast<uint32_t>(requiredHeaderBytes);
 
     if (pixelDataOffset > backingSizeBytes) {
         return fail("BMP decode failed: invalid pixel data offset");
     }
+    if (pixelDataOffset < colorTableOffset) {
+        return fail("BMP decode failed: invalid color table/pixel data layout");
+    }
+
+    const auto colorTableSizeBytes = static_cast<size_t>(pixelDataOffset - colorTableOffset);
+    if ((colorTableSizeBytes % 4u) != 0u) {
+        return fail("BMP decode failed: malformed color table");
+    }
+    const auto colorTableEntriesFromOffset = static_cast<uint32_t>(colorTableSizeBytes / 4u);
+    const auto declaredColorEntries = colorsUsed == 0u ? 256u : colorsUsed;
+    const auto colorTableEntryCount =
+        colorTableEntriesFromOffset == 0u
+            ? 0u
+            : std::min(colorTableEntriesFromOffset, declaredColorEntries);
 
     if (pixelArraySize > std::numeric_limits<size_t>::max() ||
         static_cast<size_t>(pixelArraySize) > backingSizeBytes - pixelDataOffset) {
@@ -98,7 +117,7 @@ struct ParsedBmpInfo {
     }
 
     const auto pixelCount = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
-    if (pixelCount > std::numeric_limits<size_t>::max() / 4ULL) {
+    if (pixelCount > std::numeric_limits<size_t>::max()) {
         return fail("BMP decode failed: image is too large");
     }
 
@@ -106,10 +125,11 @@ struct ParsedBmpInfo {
     info.width = width;
     info.height = height;
     info.pixelDataOffset = pixelDataOffset;
+    info.colorTableOffset = colorTableOffset;
+    info.colorTableEntryCount = colorTableEntryCount;
     info.rowStride = rowStride;
-    info.bytesPerPixel = bytesPerPixel;
     info.topDown = topDown;
-    info.rgba8ByteSize = static_cast<size_t>(pixelCount) * 4U;
+    info.r8ByteSize = static_cast<size_t>(pixelCount);
     return info;
 }
 
@@ -118,7 +138,7 @@ struct ParsedBmpInfo {
     return BmpInfo{
         .width = info.width,
         .height = info.height,
-        .rgba8ByteSize = info.rgba8ByteSize,
+        .r8ByteSize = info.r8ByteSize,
     };
 }
 
@@ -131,31 +151,40 @@ Result<BmpInfo> queryBmpInfo(std::span<const std::byte> bytes)
     return toPublicInfo(*parsed);
 }
 
-Result<BmpInfo> decodeBmp(std::span<const std::byte> bytes, std::span<std::byte> outputRgba8)
+Result<BmpInfo> decodeBmp(std::span<const std::byte> bytes, std::span<std::byte> outputR8)
 {
     auto parsed = parseBmpInfo(bytes, bytes.size());
     if (!parsed) return std::unexpected(std::move(parsed.error()));
 
-    if (outputRgba8.size() != parsed->rgba8ByteSize) {
+    if (outputR8.size() != parsed->r8ByteSize) {
         return std::unexpected("BMP decode failed: output buffer size mismatch");
     }
 
     const auto *src = reinterpret_cast<const uint8_t *>(bytes.data());
-    auto *dst = reinterpret_cast<uint8_t *>(outputRgba8.data());
+    auto *dst = reinterpret_cast<uint8_t *>(outputR8.data());
     for (uint32_t y = 0; y < parsed->height; ++y) {
         const auto srcY = parsed->topDown ? y : (parsed->height - 1U - y);
-        const auto srcRowOffset =
-            static_cast<size_t>(parsed->pixelDataOffset) + static_cast<size_t>(srcY * parsed->rowStride);
-        const auto dstRowOffset = static_cast<size_t>(y) * static_cast<size_t>(parsed->width) * 4U;
+        const auto srcRowOffset = static_cast<size_t>(parsed->pixelDataOffset) +
+                                  static_cast<size_t>(srcY * parsed->rowStride);
+        const auto dstRowOffset = static_cast<size_t>(y) * static_cast<size_t>(parsed->width);
 
         for (uint32_t x = 0; x < parsed->width; ++x) {
-            const auto srcOffset =
-                srcRowOffset + static_cast<size_t>(x) * static_cast<size_t>(parsed->bytesPerPixel);
-            const auto dstOffset = dstRowOffset + static_cast<size_t>(x) * 4U;
-            dst[dstOffset + 0] = src[srcOffset + 2];
-            dst[dstOffset + 1] = src[srcOffset + 1];
-            dst[dstOffset + 2] = src[srcOffset + 0];
-            dst[dstOffset + 3] = (parsed->bytesPerPixel == 4) ? src[srcOffset + 3] : 255U;
+            const auto srcIndexOffset = srcRowOffset + static_cast<size_t>(x);
+            const auto dstOffset = dstRowOffset + static_cast<size_t>(x);
+            const auto paletteIndex = src[srcIndexOffset];
+            if (parsed->colorTableEntryCount == 0u) {
+                dst[dstOffset] = paletteIndex;
+                continue;
+            }
+
+            if (paletteIndex >= parsed->colorTableEntryCount) {
+                return std::unexpected("BMP decode failed: palette index out of bounds");
+            }
+
+            const auto paletteOffset = static_cast<size_t>(parsed->colorTableOffset) +
+                                       static_cast<size_t>(paletteIndex) * 4u;
+            // Color table entries are BGRA. Grayscale inputs have B==G==R; use R channel.
+            dst[dstOffset] = src[paletteOffset + 2u];
         }
     }
 
@@ -186,9 +215,9 @@ Result<BmpImage> loadBmp(const std::filesystem::path &path)
     BmpImage image{};
     image.width = info->width;
     image.height = info->height;
-    image.pixelsRgba8.resize(info->rgba8ByteSize);
+    image.pixelsR8.resize(info->r8ByteSize);
 
-    auto decoded = decodeBmp(bytes, image.pixelsRgba8);
+    auto decoded = decodeBmp(bytes, image.pixelsR8);
     if (!decoded) return std::unexpected(std::move(decoded.error()));
 
     return image;

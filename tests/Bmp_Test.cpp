@@ -2,12 +2,12 @@
 
 #include <Cory/IO/Bmp.hpp>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace {
@@ -31,14 +31,17 @@ void appendLe32(std::vector<std::byte> &out, uint32_t value)
     appendU8(out, static_cast<uint8_t>((value >> 24U) & 0xFFU));
 }
 
-std::vector<std::byte> makeBmp(int32_t width,
-                               int32_t height,
-                               uint16_t bitsPerPixel,
-                               std::span<const uint8_t> pixelBytes,
-                               uint32_t compression = 0)
+std::vector<std::byte> makeGrayBmp8(int32_t width,
+                                    int32_t height,
+                                    std::span<const uint8_t> pixelIndices,
+                                    bool withPalette = true)
 {
-    const auto imageSize = static_cast<uint32_t>(pixelBytes.size());
-    const auto pixelOffset = 14U + 40U;
+    const auto absHeight = static_cast<uint32_t>(height < 0 ? -height : height);
+    const auto widthU = static_cast<uint32_t>(width);
+    const auto rowStride = (widthU + 3u) & ~3u;
+    const auto imageSize = rowStride * absHeight;
+    const auto paletteSize = withPalette ? 256u * 4u : 0u;
+    const auto pixelOffset = 14u + 40u + paletteSize;
     const auto fileSize = pixelOffset + imageSize;
 
     std::vector<std::byte> bytes;
@@ -55,138 +58,125 @@ std::vector<std::byte> makeBmp(int32_t width,
     appendLe32(bytes, static_cast<uint32_t>(width));
     appendLe32(bytes, static_cast<uint32_t>(height));
     appendLe16(bytes, 1);
-    appendLe16(bytes, bitsPerPixel);
-    appendLe32(bytes, compression);
+    appendLe16(bytes, 8);
+    appendLe32(bytes, 0);
     appendLe32(bytes, imageSize);
     appendLe32(bytes, 0);
     appendLe32(bytes, 0);
-    appendLe32(bytes, 0);
+    appendLe32(bytes, withPalette ? 256u : 0u);
     appendLe32(bytes, 0);
 
-    for (auto value : pixelBytes) {
-        appendU8(bytes, value);
+    if (withPalette) {
+        for (uint32_t i = 0; i < 256u; ++i) {
+            appendU8(bytes, static_cast<uint8_t>(i));
+            appendU8(bytes, static_cast<uint8_t>(i));
+            appendU8(bytes, static_cast<uint8_t>(i));
+            appendU8(bytes, 0);
+        }
+    }
+
+    const auto expectedPixels = static_cast<size_t>(widthU) * static_cast<size_t>(absHeight);
+    REQUIRE(pixelIndices.size() == expectedPixels);
+
+    for (uint32_t y = 0; y < absHeight; ++y) {
+        const auto srcY = height < 0 ? y : (absHeight - 1u - y);
+        const auto rowStart = static_cast<size_t>(srcY) * static_cast<size_t>(widthU);
+        for (uint32_t x = 0; x < widthU; ++x) {
+            appendU8(bytes, pixelIndices[rowStart + x]);
+        }
+        for (uint32_t pad = widthU; pad < rowStride; ++pad) {
+            appendU8(bytes, 0);
+        }
     }
 
     return bytes;
 }
 
-std::array<uint8_t, 4> rgbaAt(const std::vector<std::byte> &rgba, size_t pixelIndex)
+uint8_t grayAt(std::span<const std::byte> pixels, size_t pixelIndex)
 {
-    const auto offset = pixelIndex * 4U;
-    return {
-        static_cast<uint8_t>(rgba[offset + 0]),
-        static_cast<uint8_t>(rgba[offset + 1]),
-        static_cast<uint8_t>(rgba[offset + 2]),
-        static_cast<uint8_t>(rgba[offset + 3]),
-    };
-}
-
-std::array<uint8_t, 4> rgbaAt(std::span<const std::byte> rgba, size_t pixelIndex)
-{
-    const auto offset = pixelIndex * 4U;
-    return {
-        static_cast<uint8_t>(rgba[offset + 0]),
-        static_cast<uint8_t>(rgba[offset + 1]),
-        static_cast<uint8_t>(rgba[offset + 2]),
-        static_cast<uint8_t>(rgba[offset + 3]),
-    };
-}
-
-auto decodeIntoOwned(std::span<const std::byte> bmpBytes) -> Cory::Result<Cory::IO::BmpImage>
-{
-    auto info = Cory::IO::queryBmpInfo(bmpBytes);
-    if (!info) return std::unexpected(info.error());
-
-    Cory::IO::BmpImage image{};
-    image.width = info->width;
-    image.height = info->height;
-    image.pixelsRgba8.resize(info->rgba8ByteSize);
-
-    auto decoded = Cory::IO::decodeBmp(bmpBytes, image.pixelsRgba8);
-    if (!decoded) return std::unexpected(decoded.error());
-
-    return image;
+    return static_cast<uint8_t>(pixels[pixelIndex]);
 }
 
 } // namespace
 
-TEST_CASE("BMP decoder loads 24-bit bottom-up images", "[Cory/IO]")
+TEST_CASE("BMP decoder loads 8-bit grayscale bottom-up images", "[Cory/IO]")
 {
-    // 2x2 image. BMP rows are BGR with 4-byte row alignment.
-    // Stored bottom-up: bottom row first, top row second.
-    const std::vector<uint8_t> pixelBytes{
-        // Bottom row: blue, white + row padding
-        255, 0, 0, 255, 255, 255, 0, 0,
-        // Top row: red, green + row padding
-        0, 0, 255, 0, 255, 0, 0, 0,
+    const std::vector<uint8_t> pixelIndices{
+        10,
+        20,
+        30,
+        40,
     };
-    const auto bmpBytes = makeBmp(2, 2, 24, pixelBytes);
+    const auto bmpBytes = makeGrayBmp8(2, 2, pixelIndices, true);
 
-    auto decoded = decodeIntoOwned(bmpBytes);
+    auto info = Cory::IO::queryBmpInfo(bmpBytes);
+    REQUIRE(info);
+    CHECK(info->width == 2u);
+    CHECK(info->height == 2u);
+    CHECK(info->r8ByteSize == 4u);
+
+    std::vector<std::byte> outR8(info->r8ByteSize);
+    auto decoded = Cory::IO::decodeBmp(bmpBytes, outR8);
     REQUIRE(decoded);
-    CHECK(decoded->width == 2);
-    CHECK(decoded->height == 2);
-    REQUIRE(decoded->pixelsRgba8.size() == 16);
 
-    CHECK(rgbaAt(decoded->pixelsRgba8, 0) == std::array<uint8_t, 4>{255, 0, 0, 255});
-    CHECK(rgbaAt(decoded->pixelsRgba8, 1) == std::array<uint8_t, 4>{0, 255, 0, 255});
-    CHECK(rgbaAt(decoded->pixelsRgba8, 2) == std::array<uint8_t, 4>{0, 0, 255, 255});
-    CHECK(rgbaAt(decoded->pixelsRgba8, 3) == std::array<uint8_t, 4>{255, 255, 255, 255});
+    CHECK(grayAt(outR8, 0u) == 10u);
+    CHECK(grayAt(outR8, 1u) == 20u);
+    CHECK(grayAt(outR8, 2u) == 30u);
+    CHECK(grayAt(outR8, 3u) == 40u);
 }
 
-TEST_CASE("BMP decoder loads 32-bit top-down images", "[Cory/IO]")
+TEST_CASE("BMP decoder loads 8-bit grayscale top-down images", "[Cory/IO]")
 {
-    // Height < 0 means top-down storage.
-    const std::vector<uint8_t> pixelBytes{
-        // Top row pixel: RGBA(10,20,30,40) encoded as BGRA
-        30, 20, 10, 40,
-        // Bottom row pixel: RGBA(50,60,70,80) encoded as BGRA
-        70, 60, 50, 80,
+    const std::vector<uint8_t> pixelIndices{
+        50,
+        80,
     };
-    const auto bmpBytes = makeBmp(1, -2, 32, pixelBytes);
+    const auto bmpBytes = makeGrayBmp8(1, -2, pixelIndices, true);
 
-    auto decoded = decodeIntoOwned(bmpBytes);
+    std::vector<std::byte> outR8(2);
+    auto decoded = Cory::IO::decodeBmp(bmpBytes, outR8);
     REQUIRE(decoded);
-    CHECK(decoded->width == 1);
-    CHECK(decoded->height == 2);
-    REQUIRE(decoded->pixelsRgba8.size() == 8);
 
-    CHECK(rgbaAt(decoded->pixelsRgba8, 0) == std::array<uint8_t, 4>{10, 20, 30, 40});
-    CHECK(rgbaAt(decoded->pixelsRgba8, 1) == std::array<uint8_t, 4>{50, 60, 70, 80});
+    CHECK(grayAt(outR8, 0u) == 50u);
+    CHECK(grayAt(outR8, 1u) == 80u);
 }
 
 TEST_CASE("BMP decoder rejects unsupported format", "[Cory/IO]")
 {
-    const std::vector<uint8_t> pixelBytes{0, 1, 2, 3};
-    const auto bmpBytes = makeBmp(1, 1, 8, pixelBytes);
+    const std::vector<uint8_t> pixelBytes{0, 0, 255, 0};
+    // 24-bit image payload for 1x1 + padding
+    std::vector<std::byte> bytes;
+    bytes.reserve(14 + 40 + pixelBytes.size());
+    appendU8(bytes, 'B');
+    appendU8(bytes, 'M');
+    appendLe32(bytes, 14u + 40u + 4u);
+    appendLe16(bytes, 0);
+    appendLe16(bytes, 0);
+    appendLe32(bytes, 14u + 40u);
+    appendLe32(bytes, 40);
+    appendLe32(bytes, 1u);
+    appendLe32(bytes, 1u);
+    appendLe16(bytes, 1u);
+    appendLe16(bytes, 24u);
+    appendLe32(bytes, 0u);
+    appendLe32(bytes, 4u);
+    appendLe32(bytes, 0u);
+    appendLe32(bytes, 0u);
+    appendLe32(bytes, 0u);
+    appendLe32(bytes, 0u);
+    for (auto v : pixelBytes)
+        appendU8(bytes, v);
 
-    std::vector<std::byte> outRgba8(4);
-    const auto decoded = Cory::IO::decodeBmp(bmpBytes, outRgba8);
+    std::vector<std::byte> outR8(1);
+    const auto decoded = Cory::IO::decodeBmp(bytes, outR8);
     REQUIRE_FALSE(decoded);
-    CHECK(decoded.error().find("24-bit and 32-bit") != std::string::npos);
-}
-
-TEST_CASE("BMP decoder rejects truncated pixel payload", "[Cory/IO]")
-{
-    const std::vector<uint8_t> pixelBytes{
-        // 1x1 24-bit requires 4 bytes because of row padding; supply only 3.
-        0, 0, 255,
-    };
-    const auto bmpBytes = makeBmp(1, 1, 24, pixelBytes);
-
-    std::vector<std::byte> outRgba8(4);
-    const auto decoded = Cory::IO::decodeBmp(bmpBytes, outRgba8);
-    REQUIRE_FALSE(decoded);
-    CHECK(decoded.error().find("truncated pixel data") != std::string::npos);
+    CHECK(decoded.error().find("8-bit grayscale") != std::string::npos);
 }
 
 TEST_CASE("BMP loader reads files from disk", "[Cory/IO]")
 {
-    const std::vector<uint8_t> pixelBytes{
-        // 1x1 24-bit red pixel + row padding
-        0, 0, 255, 0,
-    };
-    const auto bmpBytes = makeBmp(1, 1, 24, pixelBytes);
+    const std::vector<uint8_t> pixelIndices{77};
+    const auto bmpBytes = makeGrayBmp8(1, 1, pixelIndices, true);
 
     const auto path = std::filesystem::temp_directory_path() / "cory_bmp_loader_test.bmp";
     {
@@ -200,77 +190,20 @@ TEST_CASE("BMP loader reads files from disk", "[Cory/IO]")
     std::filesystem::remove(path);
 
     REQUIRE(loaded);
-    CHECK(loaded->width == 1);
-    CHECK(loaded->height == 1);
-    CHECK(rgbaAt(loaded->pixelsRgba8, 0) == std::array<uint8_t, 4>{255, 0, 0, 255});
-}
-
-TEST_CASE("BMP size query reports required rgba8 byte size", "[Cory/IO]")
-{
-    const std::vector<uint8_t> pixelBytes{
-        // 2x2 image. BMP rows are BGR with 4-byte row alignment.
-        255, 0, 0, 255, 255, 255, 0, 0,
-        0, 0, 255, 0, 255, 0, 0, 0,
-    };
-    const auto bmpBytes = makeBmp(2, 2, 24, pixelBytes);
-
-    const auto info = Cory::IO::queryBmpInfo(bmpBytes);
-    REQUIRE(info);
-    CHECK(info->width == 2);
-    CHECK(info->height == 2);
-    CHECK(info->rgba8ByteSize == 2u * 2u * 4u);
-}
-
-TEST_CASE("BMP decoder writes directly into caller buffer", "[Cory/IO]")
-{
-    const std::vector<uint8_t> pixelBytes{
-        // 1x1 24-bit red pixel + row padding
-        0, 0, 255, 0,
-    };
-    const auto bmpBytes = makeBmp(1, 1, 24, pixelBytes);
-
-    std::vector<std::byte> outPixels(4);
-    const auto loaded = Cory::IO::decodeBmp(bmpBytes, outPixels);
-
-    REQUIRE(loaded);
-    CHECK(loaded->width == 1);
-    CHECK(loaded->height == 1);
-    CHECK(loaded->rgba8ByteSize == 4u);
-    CHECK(rgbaAt(std::span<const std::byte>{outPixels}, 0) == std::array<uint8_t, 4>{255, 0, 0, 255});
+    CHECK(loaded->width == 1u);
+    CHECK(loaded->height == 1u);
+    REQUIRE(loaded->pixelsR8.size() == 1u);
+    CHECK(grayAt(loaded->pixelsR8, 0u) == 77u);
 }
 
 TEST_CASE("BMP decoder rejects output buffer size mismatch", "[Cory/IO]")
 {
-    const std::vector<uint8_t> pixelBytes{
-        // 1x1 24-bit red pixel + row padding
-        0, 0, 255, 0,
-    };
-    const auto bmpBytes = makeBmp(1, 1, 24, pixelBytes);
+    const std::vector<uint8_t> pixelIndices{12};
+    const auto bmpBytes = makeGrayBmp8(1, 1, pixelIndices, true);
 
-    std::vector<std::byte> outPixels(3);
+    std::vector<std::byte> outPixels(2);
     const auto loaded = Cory::IO::decodeBmp(bmpBytes, outPixels);
 
     REQUIRE_FALSE(loaded);
     CHECK(loaded.error().find("output buffer size mismatch") != std::string::npos);
-}
-
-TEST_CASE("BMP loader reads checked-in python-generated grayscale BMP", "[Cory/IO]")
-{
-    const auto testDataPath = std::filesystem::path{__FILE__}.parent_path() / "data" /
-                              "gray16x16_uncompressed_24bpp.bmp";
-    const auto loaded = Cory::IO::loadBmp(testDataPath);
-
-    REQUIRE(loaded);
-    CHECK(loaded->width == 16);
-    CHECK(loaded->height == 16);
-    REQUIRE(loaded->pixelsRgba8.size() == 16u * 16u * 4u);
-
-    // top-left pixel
-    CHECK(rgbaAt(loaded->pixelsRgba8, 0) == std::array<uint8_t, 4>{0, 0, 0, 255});
-    // center-ish pixel (x=8,y=8 => 136)
-    CHECK(rgbaAt(loaded->pixelsRgba8, 8u + 8u * 16u) ==
-          std::array<uint8_t, 4>{136, 136, 136, 255});
-    // bottom-right pixel (255)
-    CHECK(rgbaAt(loaded->pixelsRgba8, 15u + 15u * 16u) ==
-          std::array<uint8_t, 4>{255, 255, 255, 255});
 }

@@ -38,8 +38,7 @@ Result<std::filesystem::path> ResourceLocator::Locate(std::filesystem::path reso
             return absolute(combined);
         }
     }
-    return std::unexpected{
-        fmt::format("Resource could not be found: {}", resourcePath.string())};
+    return std::unexpected{fmt::format("Resource could not be found: {}", resourcePath.string())};
 }
 
 } // namespace Cory

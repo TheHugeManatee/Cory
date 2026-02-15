@@ -406,10 +406,8 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
             continue;
         }
         auto instance = entry.data;
-        instance.volumeMeta.x =
-            renderApi.bindingContext->bindTexture3D(entry.textureView,
-                                                    Gpu::TextureLayout::ShaderReadOnlyOptimal,
-                                                    volumeSampler_.handle());
+        instance.volumeMeta.x = renderApi.bindingContext->bindTexture3D(
+            entry.textureView, Gpu::TextureLayout::ShaderReadOnlyOptimal, volumeSampler_.handle());
         packedInstances.push_back(instance);
     }
 
@@ -417,11 +415,11 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->volumeDimensions =
-        instanceCount > 0 ? glm::uvec3{packedInstances.front().volumeMeta.y,
-                                       packedInstances.front().volumeMeta.z,
-                                       packedInstances.front().volumeMeta.w}
-                          : glm::uvec3{1u, 1u, 1u};
+    drawData->volumeDimensions = instanceCount > 0
+                                     ? glm::uvec3{packedInstances.front().volumeMeta.y,
+                                                  packedInstances.front().volumeMeta.z,
+                                                  packedInstances.front().volumeMeta.w}
+                                     : glm::uvec3{1u, 1u, 1u};
     drawData->time = currentFrameTimeSeconds_;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = kInvalidVolumeTextureIndex;
@@ -443,7 +441,8 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
         std::memcpy(alloc.cpu,
                     packedInstances.data(),
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-    } else {
+    }
+    else {
         *alloc.cpu = InstanceData{};
     }
     drawData->instances = alloc.gpu;
@@ -509,11 +508,11 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->volumeDimensions =
-        instanceCount > 0 ? glm::uvec3{packedInstances.front().volumeMeta.y,
-                                       packedInstances.front().volumeMeta.z,
-                                       packedInstances.front().volumeMeta.w}
-                          : glm::uvec3{1u, 1u, 1u};
+    drawData->volumeDimensions = instanceCount > 0
+                                     ? glm::uvec3{packedInstances.front().volumeMeta.y,
+                                                  packedInstances.front().volumeMeta.z,
+                                                  packedInstances.front().volumeMeta.w}
+                                     : glm::uvec3{1u, 1u, 1u};
     drawData->time = currentFrameTimeSeconds_;
     drawData->instanceCount = instanceCount;
     drawData->volumeTextureIndex = 0;

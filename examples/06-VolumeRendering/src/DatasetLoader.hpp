@@ -46,14 +46,16 @@ class DatasetLoader {
         std::filesystem::path path{};
     };
 
-    [[nodiscard]] static Result<std::vector<OrderedSlice>> scanSlices(const LoadStackRequest &request);
+    [[nodiscard]] static Result<std::vector<OrderedSlice>>
+    scanSlices(const LoadStackRequest &request);
 
-    [[nodiscard]] cppcoro::task<Result<void>> loadSliceR8(const std::filesystem::path &bmpPath,
-                                                          std::span<std::byte> targetBuffer,
-                                                          glm::uvec2 expectedDimensions,
-                                                          size_t sliceIndex,
-                                                          cppcoro::cancellation_token cancellationToken,
-                                                          cppcoro::cancellation_source *cancellationSource);
+    [[nodiscard]] cppcoro::task<Result<void>>
+    loadSliceR8(const std::filesystem::path &bmpPath,
+                std::span<std::byte> targetBuffer,
+                glm::uvec2 expectedDimensions,
+                size_t sliceIndex,
+                cppcoro::cancellation_token cancellationToken,
+                cppcoro::cancellation_source *cancellationSource);
 
     size_t workerCount_{1u};
     cppcoro::static_thread_pool workerPool_;

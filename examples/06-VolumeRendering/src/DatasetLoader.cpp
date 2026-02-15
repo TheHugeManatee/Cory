@@ -9,9 +9,11 @@
 #include <fmt/format.h>
 #include <mio/mmap.hpp>
 
+#include <Cory/Base/Log.hpp>
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <optional>
 
@@ -20,7 +22,9 @@ namespace {
 
 [[nodiscard]] bool wildcardMatch(std::string_view pattern, std::string_view text)
 {
-    auto lower = [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); };
+    auto lower = [](char c) {
+        return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    };
 
     size_t patternIndex = 0;
     size_t textIndex = 0;
@@ -29,7 +33,8 @@ namespace {
 
     while (textIndex < text.size()) {
         if (patternIndex < pattern.size() &&
-            (pattern[patternIndex] == '?' || lower(pattern[patternIndex]) == lower(text[textIndex]))) {
+            (pattern[patternIndex] == '?' ||
+             lower(pattern[patternIndex]) == lower(text[textIndex]))) {
             ++patternIndex;
             ++textIndex;
             continue;
@@ -75,7 +80,8 @@ namespace {
 
     try {
         return static_cast<uint64_t>(std::stoull(stem.substr(firstDigit)));
-    } catch (...) {
+    }
+    catch (...) {
         return std::nullopt;
     }
 }
@@ -85,17 +91,16 @@ namespace {
     std::error_code ec;
     auto bmpFile = mio::make_mmap_source(bmpPath.string(), ec);
     if (ec) {
-        return std::unexpected(
-            fmt::format("Failed to memory-map first slice '{}' ({})", bmpPath.string(), ec.message()));
+        return std::unexpected(fmt::format(
+            "Failed to memory-map first slice '{}' ({})", bmpPath.string(), ec.message()));
     }
 
     std::span bmpBytes{reinterpret_cast<const std::byte *>(bmpFile.data()), bmpFile.size()};
     auto bmpInfo = IO::queryBmpInfo(bmpBytes);
     if (!bmpInfo) {
-        return std::unexpected(
-            fmt::format("Failed to query BMP info from first slice '{}' ({})",
-                        bmpPath.string(),
-                        bmpInfo.error()));
+        return std::unexpected(fmt::format("Failed to query BMP info from first slice '{}' ({})",
+                                           bmpPath.string(),
+                                           bmpInfo.error()));
     }
 
     return bmpInfo;
@@ -111,7 +116,8 @@ DatasetLoader::DatasetLoader(size_t workerCount)
 
 DatasetLoader::~DatasetLoader() = default;
 
-Result<std::vector<DatasetLoader::OrderedSlice>> DatasetLoader::scanSlices(const LoadStackRequest &request)
+Result<std::vector<DatasetLoader::OrderedSlice>>
+DatasetLoader::scanSlices(const LoadStackRequest &request)
 {
     if (request.directory.empty()) {
         return std::unexpected("Dataset directory is empty");
@@ -144,9 +150,8 @@ Result<std::vector<DatasetLoader::OrderedSlice>> DatasetLoader::scanSlices(const
 
         const auto sliceIndex = parseTrailingIndex(entry.path());
         if (!sliceIndex.has_value()) {
-            return std::unexpected(
-                fmt::format("Matched file '{}' has no trailing numeric slice index",
-                            entry.path().string()));
+            return std::unexpected(fmt::format(
+                "Matched file '{}' has no trailing numeric slice index", entry.path().string()));
         }
 
         orderedSlices.push_back(OrderedSlice{
@@ -156,16 +161,13 @@ Result<std::vector<DatasetLoader::OrderedSlice>> DatasetLoader::scanSlices(const
     }
 
     if (ec) {
-        return std::unexpected(
-            fmt::format("Failed while scanning directory '{}' ({})",
-                        request.directory.string(),
-                        ec.message()));
+        return std::unexpected(fmt::format(
+            "Failed while scanning directory '{}' ({})", request.directory.string(), ec.message()));
     }
 
     if (orderedSlices.empty()) {
-        return std::unexpected(fmt::format("No files matching '{}' found in '{}'",
-                                           request.pattern,
-                                           request.directory.string()));
+        return std::unexpected(fmt::format(
+            "No files matching '{}' found in '{}'", request.pattern, request.directory.string()));
     }
 
     std::sort(orderedSlices.begin(),
@@ -181,31 +183,32 @@ Result<std::vector<DatasetLoader::OrderedSlice>> DatasetLoader::scanSlices(const
         const auto prev = orderedSlices[i - 1].index;
         const auto current = orderedSlices[i].index;
         if (current == prev) {
-            return std::unexpected(
-                fmt::format("Duplicate slice index {} for '{}' and '{}'",
-                            current,
-                            orderedSlices[i - 1].path.string(),
-                            orderedSlices[i].path.string()));
+            return std::unexpected(fmt::format("Duplicate slice index {} for '{}' and '{}'",
+                                               current,
+                                               orderedSlices[i - 1].path.string(),
+                                               orderedSlices[i].path.string()));
         }
 
         if (current != prev + 1u) {
-            return std::unexpected(fmt::format("Slice index gap: expected {} after {}, found {} ('{}')",
-                                               prev + 1u,
-                                               prev,
-                                               current,
-                                               orderedSlices[i].path.string()));
+            return std::unexpected(
+                fmt::format("Slice index gap: expected {} after {}, found {} ('{}')",
+                            prev + 1u,
+                            prev,
+                            current,
+                            orderedSlices[i].path.string()));
         }
     }
 
     return orderedSlices;
 }
 
-cppcoro::task<Result<void>> DatasetLoader::loadSliceR8(const std::filesystem::path &bmpPath,
-                                                       std::span<std::byte> targetBuffer,
-                                                       glm::uvec2 expectedDimensions,
-                                                       size_t sliceIndex,
-                                                       cppcoro::cancellation_token cancellationToken,
-                                                       cppcoro::cancellation_source *cancellationSource)
+cppcoro::task<Result<void>>
+DatasetLoader::loadSliceR8(const std::filesystem::path &bmpPath,
+                           std::span<std::byte> targetBuffer,
+                           glm::uvec2 expectedDimensions,
+                           size_t sliceIndex,
+                           cppcoro::cancellation_token cancellationToken,
+                           cppcoro::cancellation_source *cancellationSource)
 {
     auto failAndCancel = [&](std::string message) -> Result<void> {
         if (cancellationSource != nullptr) {
@@ -222,10 +225,8 @@ cppcoro::task<Result<void>> DatasetLoader::loadSliceR8(const std::filesystem::pa
     std::error_code ec;
     auto bmpFile = mio::make_mmap_source(bmpPath.string(), ec);
     if (ec) {
-        co_return failAndCancel(fmt::format("Slice {} ('{}') mmap failed: {}",
-                                            sliceIndex,
-                                            bmpPath.string(),
-                                            ec.message()));
+        co_return failAndCancel(fmt::format(
+            "Slice {} ('{}') mmap failed: {}", sliceIndex, bmpPath.string(), ec.message()));
     }
 
     std::span bmpBytes{reinterpret_cast<const std::byte *>(bmpFile.data()), bmpFile.size()};
@@ -249,55 +250,27 @@ cppcoro::task<Result<void>> DatasetLoader::loadSliceR8(const std::filesystem::pa
                         bmpInfo->height));
     }
 
-    const auto expectedVoxels = static_cast<size_t>(expectedDimensions.x) *
-                                static_cast<size_t>(expectedDimensions.y);
+    const auto expectedVoxels =
+        static_cast<size_t>(expectedDimensions.x) * static_cast<size_t>(expectedDimensions.y);
     if (targetBuffer.size() != expectedVoxels) {
-        co_return failAndCancel(fmt::format(
-            "Slice {} ('{}') target buffer mismatch: expected {} bytes, got {} bytes",
-            sliceIndex,
-            bmpPath.string(),
-            expectedVoxels,
-            targetBuffer.size()));
+        co_return failAndCancel(
+            fmt::format("Slice {} ('{}') target buffer mismatch: expected {} bytes, got {} bytes",
+                        sliceIndex,
+                        bmpPath.string(),
+                        expectedVoxels,
+                        targetBuffer.size()));
     }
 
-    std::vector<std::byte> rgba8;
-    rgba8.resize(bmpInfo->rgba8ByteSize);
-
-    auto decoded = IO::decodeBmp(bmpBytes, rgba8);
+    auto decoded = IO::decodeBmp(bmpBytes, targetBuffer);
     if (!decoded) {
-        co_return failAndCancel(fmt::format("Slice {} ('{}') decode failed: {}",
-                                            sliceIndex,
-                                            bmpPath.string(),
-                                            decoded.error()));
+        co_return failAndCancel(fmt::format(
+            "Slice {} ('{}') decode failed: {}", sliceIndex, bmpPath.string(), decoded.error()));
     }
 
-    for (size_t pixel = 0; pixel < expectedVoxels; ++pixel) {
-        if ((pixel & 4095u) == 0u && cancellationToken.is_cancellation_requested()) {
-            co_return std::unexpected(
-                fmt::format("Slice {} ('{}') cancelled during conversion",
-                            sliceIndex,
-                            bmpPath.string()));
-        }
-
-        const auto rgbaOffset = pixel * 4u;
-        const auto r = static_cast<uint8_t>(rgba8[rgbaOffset + 0u]);
-        const auto g = static_cast<uint8_t>(rgba8[rgbaOffset + 1u]);
-        const auto b = static_cast<uint8_t>(rgba8[rgbaOffset + 2u]);
-
-        if (r != g || r != b) {
-            co_return failAndCancel(
-                fmt::format("Slice {} ('{}') is not grayscale-compatible at pixel {} (r={}, g={}, b={})",
-                            sliceIndex,
-                            bmpPath.string(),
-                            pixel,
-                            r,
-                            g,
-                            b));
-        }
-
-        targetBuffer[pixel] = static_cast<std::byte>(r);
-    }
-
+    CO_CORE_INFO("[{}] Finished loading slice {} ('{}')",
+                 std::hash<std::thread::id>{}(std::this_thread::get_id()),
+                 sliceIndex,
+                 bmpPath.string());
     co_return Result<void>{};
 }
 
@@ -330,10 +303,8 @@ cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackR
     const auto totalVoxelCount64 = sliceVoxelCount64 * static_cast<uint64_t>(z);
     if (sliceVoxelCount64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max()) ||
         totalVoxelCount64 > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
-        co_return std::unexpected(fmt::format("Volume {}x{}x{} exceeds host memory addressable range",
-                                              x,
-                                              y,
-                                              z));
+        co_return std::unexpected(
+            fmt::format("Volume {}x{}x{} exceeds host memory addressable range", x, y, z));
     }
 
     const auto sliceVoxelCount = static_cast<size_t>(sliceVoxelCount64);
@@ -350,10 +321,13 @@ cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackR
 
     cppcoro::cancellation_source cancellationSource{};
 
-    const auto requestedConcurrency = request.maxConcurrency == 0 ? workerCount_ : request.maxConcurrency;
-    const auto effectiveConcurrency = std::max<size_t>(1u, std::min(workerCount_, requestedConcurrency));
+    const auto requestedConcurrency =
+        request.maxConcurrency == 0 ? workerCount_ : request.maxConcurrency;
+    const auto effectiveConcurrency =
+        std::max<size_t>(1u, std::min(workerCount_, requestedConcurrency));
 
-    for (size_t batchStart = 0; batchStart < orderedSlices.size(); batchStart += effectiveConcurrency) {
+    for (size_t batchStart = 0; batchStart < orderedSlices.size();
+         batchStart += effectiveConcurrency) {
         if (cancellationSource.is_cancellation_requested()) {
             co_return std::unexpected("Volume load cancelled");
         }
@@ -363,16 +337,15 @@ cppcoro::task<Result<LoadedVolume>> DatasetLoader::loadBmpStack(const LoadStackR
         tasks.reserve(batchEnd - batchStart);
 
         for (size_t i = batchStart; i < batchEnd; ++i) {
-            auto sliceSpan = std::span<std::byte>{loaded.voxelsR8}.subspan(i * sliceVoxelCount,
-                                                                           sliceVoxelCount);
-            tasks.emplace_back(cppcoro::schedule_on(
-                workerPool_,
-                loadSliceR8(orderedSlices[i].path,
-                            sliceSpan,
-                            glm::uvec2{x, y},
-                            i,
-                            cancellationSource.token(),
-                            &cancellationSource)));
+            auto sliceSpan =
+                std::span<std::byte>{loaded.voxelsR8}.subspan(i * sliceVoxelCount, sliceVoxelCount);
+            tasks.emplace_back(cppcoro::schedule_on(workerPool_,
+                                                    loadSliceR8(orderedSlices[i].path,
+                                                                sliceSpan,
+                                                                glm::uvec2{x, y},
+                                                                i,
+                                                                cancellationSource.token(),
+                                                                &cancellationSource)));
         }
 
         auto completed = co_await cppcoro::when_all_ready(std::move(tasks));

@@ -34,11 +34,12 @@ void appendLe32(std::vector<std::byte> &out, uint32_t value)
     appendU8(out, static_cast<uint8_t>((value >> 24U) & 0xFFU));
 }
 
-std::vector<std::byte> makeSolidGrayBmp24(uint32_t width, uint32_t height, uint8_t grayValue)
+std::vector<std::byte> makeSolidGrayBmp8(uint32_t width, uint32_t height, uint8_t grayValue)
 {
-    const auto rowStride = ((width * 3u) + 3u) & ~3u;
+    const auto rowStride = (width + 3u) & ~3u;
     const auto imageSize = rowStride * height;
-    const auto pixelOffset = 14u + 40u;
+    const auto paletteSize = 256u * 4u;
+    const auto pixelOffset = 14u + 40u + paletteSize;
     const auto fileSize = pixelOffset + imageSize;
 
     std::vector<std::byte> bytes;
@@ -55,21 +56,26 @@ std::vector<std::byte> makeSolidGrayBmp24(uint32_t width, uint32_t height, uint8
     appendLe32(bytes, width);
     appendLe32(bytes, height);
     appendLe16(bytes, 1);
-    appendLe16(bytes, 24);
+    appendLe16(bytes, 8);
     appendLe32(bytes, 0);
     appendLe32(bytes, imageSize);
     appendLe32(bytes, 0);
     appendLe32(bytes, 0);
+    appendLe32(bytes, 256);
     appendLe32(bytes, 0);
-    appendLe32(bytes, 0);
+
+    for (uint32_t i = 0; i < 256u; ++i) {
+        appendU8(bytes, static_cast<uint8_t>(i));
+        appendU8(bytes, static_cast<uint8_t>(i));
+        appendU8(bytes, static_cast<uint8_t>(i));
+        appendU8(bytes, 0);
+    }
 
     for (uint32_t y = 0; y < height; ++y) {
         for (uint32_t x = 0; x < width; ++x) {
             appendU8(bytes, grayValue);
-            appendU8(bytes, grayValue);
-            appendU8(bytes, grayValue);
         }
-        for (uint32_t pad = width * 3u; pad < rowStride; ++pad) {
+        for (uint32_t pad = width; pad < rowStride; ++pad) {
             appendU8(bytes, 0);
         }
     }
@@ -81,7 +87,8 @@ void writeBytes(const std::filesystem::path &path, const std::vector<std::byte> 
 {
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     REQUIRE(file.is_open());
-    file.write(reinterpret_cast<const char *>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    file.write(reinterpret_cast<const char *>(bytes.data()),
+               static_cast<std::streamsize>(bytes.size()));
     REQUIRE(file.good());
 }
 
@@ -117,9 +124,9 @@ std::byte voxelAt(const Cory::LoadedVolume &volume, uint32_t x, uint32_t y, uint
 TEST_CASE("DatasetLoader loads contiguous BMP stack into packed r8 volume", "[DatasetLoader]")
 {
     TempDir temp;
-    writeBytes(temp.path / "scan_12.bmp", makeSolidGrayBmp24(2, 2, 12));
-    writeBytes(temp.path / "scan_10.bmp", makeSolidGrayBmp24(2, 2, 10));
-    writeBytes(temp.path / "scan_11.bmp", makeSolidGrayBmp24(2, 2, 11));
+    writeBytes(temp.path / "scan_12.bmp", makeSolidGrayBmp8(2, 2, 12));
+    writeBytes(temp.path / "scan_10.bmp", makeSolidGrayBmp8(2, 2, 10));
+    writeBytes(temp.path / "scan_11.bmp", makeSolidGrayBmp8(2, 2, 11));
 
     Cory::DatasetLoader loader{4};
     auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
@@ -158,9 +165,9 @@ TEST_CASE("DatasetLoader rejects empty match set", "[DatasetLoader]")
 TEST_CASE("DatasetLoader rejects non-contiguous numeric suffixes", "[DatasetLoader]")
 {
     TempDir temp;
-    writeBytes(temp.path / "slice_0.bmp", makeSolidGrayBmp24(2, 2, 10));
-    writeBytes(temp.path / "slice_1.bmp", makeSolidGrayBmp24(2, 2, 20));
-    writeBytes(temp.path / "slice_3.bmp", makeSolidGrayBmp24(2, 2, 30));
+    writeBytes(temp.path / "slice_0.bmp", makeSolidGrayBmp8(2, 2, 10));
+    writeBytes(temp.path / "slice_1.bmp", makeSolidGrayBmp8(2, 2, 20));
+    writeBytes(temp.path / "slice_3.bmp", makeSolidGrayBmp8(2, 2, 30));
 
     Cory::DatasetLoader loader{3};
     auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
@@ -175,8 +182,8 @@ TEST_CASE("DatasetLoader rejects non-contiguous numeric suffixes", "[DatasetLoad
 TEST_CASE("DatasetLoader rejects stack with inconsistent dimensions", "[DatasetLoader]")
 {
     TempDir temp;
-    writeBytes(temp.path / "slice_0.bmp", makeSolidGrayBmp24(2, 2, 10));
-    writeBytes(temp.path / "slice_1.bmp", makeSolidGrayBmp24(3, 2, 20));
+    writeBytes(temp.path / "slice_0.bmp", makeSolidGrayBmp8(2, 2, 10));
+    writeBytes(temp.path / "slice_1.bmp", makeSolidGrayBmp8(3, 2, 20));
 
     Cory::DatasetLoader loader{2};
     auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
@@ -192,7 +199,7 @@ TEST_CASE("DatasetLoader rejects stack with inconsistent dimensions", "[DatasetL
 TEST_CASE("DatasetLoader rejects corrupt BMP in matched set", "[DatasetLoader]")
 {
     TempDir temp;
-    writeBytes(temp.path / "slice_0.bmp", makeSolidGrayBmp24(2, 2, 10));
+    writeBytes(temp.path / "slice_0.bmp", makeSolidGrayBmp8(2, 2, 10));
     writeBytes(temp.path / "slice_1.bmp", std::vector<std::byte>{std::byte{0x00}, std::byte{0x01}});
 
     Cory::DatasetLoader loader{2};
@@ -208,9 +215,9 @@ TEST_CASE("DatasetLoader rejects corrupt BMP in matched set", "[DatasetLoader]")
 TEST_CASE("DatasetLoader ordering is deterministic from numeric suffix", "[DatasetLoader]")
 {
     TempDir temp;
-    writeBytes(temp.path / "foo_101.bmp", makeSolidGrayBmp24(1, 1, 41));
-    writeBytes(temp.path / "foo_100.bmp", makeSolidGrayBmp24(1, 1, 40));
-    writeBytes(temp.path / "foo_102.bmp", makeSolidGrayBmp24(1, 1, 42));
+    writeBytes(temp.path / "foo_101.bmp", makeSolidGrayBmp8(1, 1, 41));
+    writeBytes(temp.path / "foo_100.bmp", makeSolidGrayBmp8(1, 1, 40));
+    writeBytes(temp.path / "foo_102.bmp", makeSolidGrayBmp8(1, 1, 42));
 
     Cory::DatasetLoader loader{1};
     auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
@@ -235,7 +242,7 @@ TEST_CASE("DatasetLoader fails large parallel load when one slice is corrupt", "
             continue;
         }
 
-        writeBytes(filename, makeSolidGrayBmp24(8, 8, static_cast<uint8_t>(i)));
+        writeBytes(filename, makeSolidGrayBmp8(8, 8, static_cast<uint8_t>(i)));
     }
 
     Cory::DatasetLoader loader{8};

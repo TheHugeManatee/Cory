@@ -124,29 +124,29 @@ class CoryResourceFileSystem final : public ISlangFileSystem, public SlangObject
     SLANG_NO_THROW SlangResult SLANG_MCALL loadFile(const char *path, ISlangBlob **outBlob) override
     {
         CO_CORE_TRACE("Slang requested included shader file: {}", path);
-        try {
-            auto fullPath = std::filesystem::path{path};
-            if (fullPath.is_absolute() && !std::filesystem::exists(fullPath)) {
-                fullPath = ResourceLocator::Locate(fullPath.filename(), ResourceType::Shader);
-            }
-            else {
-                fullPath = ResourceLocator::Locate(fullPath, ResourceType::Shader);
-            }
-
-            if (!std::filesystem::exists(fullPath)) {
-                return SLANG_E_NOT_FOUND;
-            }
-
-            std::ifstream f(fullPath, std::ios::binary);
-            std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
-                                      std::istreambuf_iterator<char>());
-
-            *outBlob = new MemoryBlob(std::move(data));
-            return SLANG_OK;
-        }
-        catch (...) {
+        auto fullPath = std::filesystem::path{path};
+        const auto resolvedPath =
+            (fullPath.is_absolute() && !std::filesystem::exists(fullPath))
+                ? ResourceLocator::Locate(fullPath.filename(), ResourceType::Shader)
+                : ResourceLocator::Locate(fullPath, ResourceType::Shader);
+        if (!resolvedPath.has_value()) {
             return SLANG_E_NOT_FOUND;
         }
+        fullPath = *resolvedPath;
+
+        if (!std::filesystem::exists(fullPath)) {
+            return SLANG_E_NOT_FOUND;
+        }
+
+        std::ifstream f(fullPath, std::ios::binary);
+        if (!f) {
+            return SLANG_E_NOT_FOUND;
+        }
+        std::vector<uint8_t> data((std::istreambuf_iterator<char>(f)),
+                                  std::istreambuf_iterator<char>());
+
+        *outBlob = new MemoryBlob(std::move(data));
+        return SLANG_OK;
     }
 };
 

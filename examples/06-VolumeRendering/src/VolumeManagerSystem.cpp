@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <stdexcept>
 #include <utility>
 
 namespace {
@@ -125,9 +126,14 @@ VolumeManagerSystem::VolumeManagerSystem(Cory::Context &ctx)
     : ctx_{&ctx}
     , worker_{[this]() { workerLoop(); }}
 {
+    const auto createVolumePath = Cory::ResourceLocator::Locate("create_volume.comp.slang");
+    if (!createVolumePath.has_value()) {
+        throw std::runtime_error(createVolumePath.error());
+    }
+
     shaderHotReloader_.initialize(ctx);
     shaderHotReloader_.addShader({
-        .path = Cory::ResourceLocator::Locate("create_volume.comp.slang"),
+        .path = *createVolumePath,
         .stage = Gpu::ShaderStageFlagBits::ComputeBit,
         .label = "create_volume.comp.slang",
         .shaderHandle = &createVolumeShader_,

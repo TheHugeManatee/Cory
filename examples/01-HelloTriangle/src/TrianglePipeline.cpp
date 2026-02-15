@@ -55,7 +55,11 @@ void TrianglePipeline::createGraphicsPipeline(Gpu::Format colorFormat,
     auto &device = data_->ctx->device();
 
     CO_APP_TRACE("Starting shader compilation for {} and {}", vertFile.string(), fragFile.string());
-    const auto vertexFile = Cory::ResourceLocator::Locate(vertFile);
+    const auto vertexFileResult = Cory::ResourceLocator::Locate(vertFile);
+    if (!vertexFileResult.has_value()) {
+        throw std::runtime_error(vertexFileResult.error());
+    }
+    const auto &vertexFile = vertexFileResult.value();
 
     const auto vertexShaderSource =
         Cory::ShaderSource{vertexFile, Gpu::ShaderStageFlagBits::VertexBit};
@@ -68,7 +72,11 @@ void TrianglePipeline::createGraphicsPipeline(Gpu::Format colorFormat,
     }
     auto vertexShader = device.createShaderModule(std::move(vertexResult).value().spirv);
 
-    const auto fragmentFile = Cory::ResourceLocator::Locate(fragFile);
+    const auto fragmentFileResult = Cory::ResourceLocator::Locate(fragFile);
+    if (!fragmentFileResult.has_value()) {
+        throw std::runtime_error(fragmentFileResult.error());
+    }
+    const auto &fragmentFile = fragmentFileResult.value();
     const auto fragmentShaderSource =
         Cory::ShaderSource{fragmentFile, Gpu::ShaderStageFlagBits::FragmentBit};
     auto fragmentResult = Cory::Shader::CompileToSpv(fragmentShaderSource, false);

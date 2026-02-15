@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <cstring>
 #include <limits>
+#include <stdexcept>
 
 struct DrawData {
     glm::mat4 projection;
@@ -57,27 +58,44 @@ VolumeRenderSystem::VolumeRenderSystem(Cory::Context &ctx)
     // Create mesh using Cory::DynamicGeometry, as in 02-CubeDemo
     cube_ = Cory::DynamicGeometry::createCube(ctx);
 
+    const auto cubeVertexPath = Cory::ResourceLocator::Locate("cube.vert.slang");
+    if (!cubeVertexPath.has_value()) {
+        throw std::runtime_error(cubeVertexPath.error());
+    }
+    const auto cubeFragmentPath = Cory::ResourceLocator::Locate("cube.frag.slang");
+    if (!cubeFragmentPath.has_value()) {
+        throw std::runtime_error(cubeFragmentPath.error());
+    }
+    const auto raymarchPath = Cory::ResourceLocator::Locate("raymarch.comp.slang");
+    if (!raymarchPath.has_value()) {
+        throw std::runtime_error(raymarchPath.error());
+    }
+    const auto debugRaycastPath = Cory::ResourceLocator::Locate("raycast_boxes_debug.comp.slang");
+    if (!debugRaycastPath.has_value()) {
+        throw std::runtime_error(debugRaycastPath.error());
+    }
+
     shaderHotReloader_.initialize(ctx);
     shaderHotReloader_.addShader({
-        .path = Cory::ResourceLocator::Locate("cube.vert.slang"),
+        .path = *cubeVertexPath,
         .stage = Gpu::ShaderStageFlagBits::VertexBit,
         .label = "cube.vert.slang",
         .shaderHandle = &vertexShader_,
     });
     shaderHotReloader_.addShader({
-        .path = Cory::ResourceLocator::Locate("cube.frag.slang"),
+        .path = *cubeFragmentPath,
         .stage = Gpu::ShaderStageFlagBits::FragmentBit,
         .label = "cube.frag.slang",
         .shaderHandle = &fragmentShader_,
     });
     shaderHotReloader_.addShader({
-        .path = Cory::ResourceLocator::Locate("raymarch.comp.slang"),
+        .path = *raymarchPath,
         .stage = Gpu::ShaderStageFlagBits::ComputeBit,
         .label = "raymarch.comp.slang",
         .shaderHandle = &raycastShader_,
     });
     shaderHotReloader_.addShader({
-        .path = Cory::ResourceLocator::Locate("raycast_boxes_debug.comp.slang"),
+        .path = *debugRaycastPath,
         .stage = Gpu::ShaderStageFlagBits::ComputeBit,
         .label = "raycast_boxes_debug.comp.slang",
         .shaderHandle = &raycastDebugShader_,

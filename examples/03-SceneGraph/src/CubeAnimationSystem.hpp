@@ -38,7 +38,7 @@ class CubeAnimationSystem : public Cory::BasicSystem<CubeAnimationSystem,
                                                      AnimationComponent,
                                                      Cory::Components::Transform> {
   public:
-    void beforeUpdate(Cory::SceneGraph &sg);
+    void beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber);
 
     void update(Cory::SceneGraph &sg,
                 Cory::TickInfo tick,

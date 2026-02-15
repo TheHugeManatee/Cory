@@ -2,12 +2,11 @@
 
 #include <Cory/Base/Common.hpp>
 #include <Cory/Base/Log.hpp>
-
-#include <fmt/format.h>
+#include <Cory/Renderer/Common.hpp>
 
 #include <any>
 #include <array>
-#include <memory>
+#include <cstddef>
 
 namespace Cory {
 
@@ -43,9 +42,9 @@ template <size_t MAX_CHAIN_SIZE = 10> class PNextChain : NoCopy {
         return next;
     }
 
-    [[nodiscard]] void *head() const { return head_; };
+    [[nodiscard]] void *head() const { return head_; }
 
-    [[nodiscard]] size_t size() const { return current_; };
+    [[nodiscard]] size_t size() const { return current_; }
 
   private:
     std::array<std::any, MAX_CHAIN_SIZE> data_;

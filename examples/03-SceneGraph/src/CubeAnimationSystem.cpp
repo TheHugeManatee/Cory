@@ -1,11 +1,15 @@
 #include "CubeAnimationSystem.hpp"
 
+#include <Cory/Base/Math.hpp>
 #include <Cory/Base/Random.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 
 #include <glm/gtx/transform.hpp>
 
-void CubeAnimationSystem::beforeUpdate(Cory::SceneGraph &sg) {}
+void CubeAnimationSystem::beforeUpdate([[maybe_unused]] Cory::SceneGraph &sg,
+                                       [[maybe_unused]] uint64_t frameNumber)
+{
+}
 
 void CubeAnimationSystem::update(Cory::SceneGraph &sg,
                                  Cory::TickInfo tick,
@@ -55,13 +59,14 @@ void CubeAnimationSystem::animate(AnimationComponent &d,
 {
     float i = d.entityIndex;
     const float angle = ad_.r0 + ad_.rt * t + ad_.ri * i + ad_.rti * i * t;
-    const float scale = ad_.s0 + ad_.st * t + ad_.si * i;
+    // const float scale = ad_.s0 + ad_.st * t + ad_.si * i;
 
     const float tsf = ad_.tsf / 2.0f + ad_.tsf * sin(t / 10.0f);
     const glm::vec3 translation{sin(i * tsf) * i * ad_.tsi, cos(i * tsf) * i * ad_.tsi, i * ad_.ti};
 
     // transform.position = ad_.translation + translation;
-    transform.rotation = ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f};
+    const glm::vec3 rotation = ad_.rotation + glm::vec3{0.0f, angle, angle / 2.0f};
+    transform.orientation = Cory::eulerYXZToQuaternion(rotation);
     // transform.scale = glm::vec3{scale};
 
     const float colorFreq = 1.0f / (ad_.cf0 + ad_.cfi * i);

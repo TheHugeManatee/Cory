@@ -105,6 +105,8 @@ set(CORY_SOURCES
         RenderTasks/StandardRenderTasks.hpp
         Renderer/Common.cpp
         Renderer/Common.hpp
+        Renderer/AsyncUploader.cpp
+        Renderer/AsyncUploader.hpp
         Renderer/Context.cpp
         Renderer/Context.hpp
         Renderer/DescriptorSets.cpp
@@ -115,6 +117,7 @@ set(CORY_SOURCES
         Renderer/FrameResourceLifetimeHelper.hpp
         Renderer/HeadlessFrameSource.cpp
         Renderer/HeadlessFrameSource.hpp
+        Renderer/FrameSource.hpp
         Renderer/Gpu.cpp
         Renderer/Gpu.hpp
         Renderer/GpuBumpAllocator.cpp
@@ -127,6 +130,8 @@ set(CORY_SOURCES
         Renderer/RadixSorter.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
+        Renderer/ShaderHotReloader.cpp
+        Renderer/ShaderHotReloader.hpp
         Renderer/ShaderManager.cpp
         Renderer/ShaderManager.hpp
         Renderer/SingleShotCommandRecorder.cpp
@@ -143,12 +148,15 @@ set(CORY_SOURCES
         SceneGraph/System.cpp
         SceneGraph/System.hpp
         Systems/CommonComponents.hpp
+        Systems/ImGuizmoTransformSystem.cpp
+        Systems/ImGuizmoTransformSystem.hpp
         Systems/SystemCoordinator.cpp
         Systems/SystemCoordinator.hpp
         Systems/TransformSystem.cpp
         Systems/TransformSystem.hpp
         Renderer/SlangCompilerTools.cpp
         Renderer/SlangCompilerTools.hpp
+        Base/Prop.hpp
 )
 
 

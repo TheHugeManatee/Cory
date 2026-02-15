@@ -8,7 +8,7 @@ namespace Cory {
 class TransformSystem : public BasicSystem<TransformSystem, Components::Transform> {
   public:
     using BasicSystem<TransformSystem, Components::Transform>::BasicSystem;
-    void beforeUpdate(SceneGraph &graph);
+    void beforeUpdate(SceneGraph &graph, uint64_t frameNumber);
     void
     update(SceneGraph &graph, TickInfo tickInfo, Entity entity, Components::Transform &transform);
     void afterUpdate(SceneGraph &graph);

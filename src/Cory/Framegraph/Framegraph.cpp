@@ -22,7 +22,9 @@
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <deque>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -35,10 +37,15 @@ struct FramegraphPrivate {
                       uint32_t instanceIndex)
         : ctx{&ctx_param}
         , resources{&resources_param}
-        , shaderBindingContext{
-              ctx->device(), resources_param, ctx->descriptors(), instanceIndex, 200 * 1024 * 1024}
+        , shaderBindingContext{ctx->device(),
+                               resources_param,
+                               ctx->descriptors(),
+                               instanceIndex,
+                               initialDrawDataBufferSize}
     {
     }
+
+    static constexpr size_t initialDrawDataBufferSize = 200 * 1024 * 1024;
 
     Context *ctx;
     FramegraphResourceManager *resources;
@@ -53,10 +60,48 @@ struct FramegraphPrivate {
     std::unordered_map<TransientTextureHandle, Sync::AccessType> outputFinalAccesses;
     uint64_t lastFrameNumber{};
     bool hasRecordedFrame{};
+    size_t lastDrawDataUsage{};
+    size_t lowUtilizationStreak{};
 };
 
 namespace {
 using InternalTaskHandle = SlotMapHandle;
+
+constexpr size_t kMinDrawDataBufferSize = 16 * 1024 * 1024;
+constexpr size_t kMaxDrawDataBufferSize = 512 * 1024 * 1024;
+constexpr size_t kLowUtilizationFramesBeforeShrink = 120;
+constexpr double kGrowUsageRatio = 0.85;
+constexpr double kShrinkUsageRatio = 0.20;
+
+size_t clampAndAlignDrawDataSize(size_t value)
+{
+    constexpr size_t kAlignment = 256 * 1024;
+    value = std::clamp(value, kMinDrawDataBufferSize, kMaxDrawDataBufferSize);
+    return ((value + kAlignment - 1) / kAlignment) * kAlignment;
+}
+
+size_t
+computeTargetDrawDataBufferSize(size_t currentSize, size_t usedSize, size_t lowUtilizationStreak)
+{
+    if (currentSize == 0) {
+        return FramegraphPrivate::initialDrawDataBufferSize;
+    }
+
+    const auto usedRatio = static_cast<double>(usedSize) / static_cast<double>(currentSize);
+    if (usedRatio >= kGrowUsageRatio) {
+        const auto paddedUsage = std::max(usedSize + (usedSize / 2), currentSize * 2);
+        return clampAndAlignDrawDataSize(paddedUsage);
+    }
+
+    if (usedRatio <= kShrinkUsageRatio &&
+        lowUtilizationStreak >= kLowUtilizationFramesBeforeShrink) {
+        const auto paddedUsage = std::max(usedSize * 4, kMinDrawDataBufferSize);
+        const auto halved = currentSize / 2;
+        return clampAndAlignDrawDataSize(std::min(halved, paddedUsage));
+    }
+
+    return currentSize;
+}
 
 struct ResolveLookups {
     std::unordered_map<TransientTextureHandle, InternalTaskHandle> textureToTask;
@@ -284,6 +329,15 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
                          const ResolveLookups &lookups,
                          const RequiredSets &required)
 {
+    struct TaskNameMinHeapCmp {
+        const FramegraphPrivate *data{};
+        bool operator()(InternalTaskHandle lhs, InternalTaskHandle rhs) const
+        {
+            // std::priority_queue is a max-heap by default; invert comparison to pop smallest name.
+            return data->renderTasks[lhs].name > data->renderTasks[rhs].name;
+        }
+    };
+
     TaskOrder order;
     for (const auto &task : required.requiredTasks) {
         order.indegree.emplace(task, 0u);
@@ -315,24 +369,18 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
         }
     }
 
-    std::vector<InternalTaskHandle> ready;
-    ready.reserve(required.requiredTasks.size());
+    std::priority_queue<InternalTaskHandle, std::vector<InternalTaskHandle>, TaskNameMinHeapCmp>
+        ready{TaskNameMinHeapCmp{&data}};
     for (const auto &[task, degree] : order.indegree) {
         if (degree == 0) {
-            ready.push_back(task);
+            ready.push(task);
         }
     }
-    auto sortReady = [&]() {
-        std::sort(ready.begin(), ready.end(), [&](InternalTaskHandle a, InternalTaskHandle b) {
-            return data.renderTasks[a].name < data.renderTasks[b].name;
-        });
-    };
-    sortReady();
 
     order.tasks.reserve(required.requiredTasks.size());
     while (!ready.empty()) {
-        auto next = ready.front();
-        ready.erase(ready.begin());
+        auto next = ready.top();
+        ready.pop();
         order.tasks.push_back(next);
         auto it = order.adjacency.find(next);
         if (it == order.adjacency.end()) {
@@ -344,10 +392,9 @@ TaskOrder buildTaskOrder(const FramegraphPrivate &data,
                 deg -= 1;
             }
             if (deg == 0) {
-                ready.push_back(dest);
+                ready.push(dest);
             }
         }
-        sortReady();
     }
 
     return order;
@@ -442,7 +489,7 @@ Framegraph::~Framegraph()
 Framegraph::Framegraph(Framegraph &&) noexcept = default;
 Framegraph &Framegraph::operator=(Framegraph &&) noexcept = default;
 
-void Framegraph::finalizeOutputs(ExecutionInfo executionInfo)
+void Framegraph::finalizeOutputs(ExecutionInfo &executionInfo)
 {
     // After all passes, ensure outputs are transitioned to their requested final access
     std::vector<Sync::ImageBarrier> outputBarriers;
@@ -481,6 +528,10 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
     data_->resources->setCurrentFrameNumber(frameCtx.frameNumber);
     data_->lastFrameNumber = frameCtx.frameNumber;
     data_->hasRecordedFrame = true;
+
+    // Flush all binding updates (e.g. image bindings)
+    data_->shaderBindingContext.flush();
+
     auto executionInfo = compile();
 
     const Cory::ScopeTimer s2{"Framegraph/Execute/Record"};
@@ -500,13 +551,39 @@ ExecutionInfo Framegraph::record(FrameContext &frameCtx)
                                                transitions.bufferTransitions.end());
     }
 
+    data_->lastDrawDataUsage = data_->shaderBindingContext.drawDataBytesUsed();
     finalizeOutputs(executionInfo);
     return executionInfo;
 }
 
 void Framegraph::resetForNextFrame(uint64_t frameNumber)
 {
-    data_->shaderBindingContext.reset();
+    const auto currentDrawDataBufferSize = data_->shaderBindingContext.drawDataBufferSize();
+    if (data_->hasRecordedFrame) {
+        if (data_->lastDrawDataUsage <= (currentDrawDataBufferSize * kShrinkUsageRatio)) {
+            data_->lowUtilizationStreak += 1;
+        }
+        else {
+            data_->lowUtilizationStreak = 0;
+        }
+    }
+
+    const auto targetDrawDataBufferSize = computeTargetDrawDataBufferSize(
+        currentDrawDataBufferSize, data_->lastDrawDataUsage, data_->lowUtilizationStreak);
+    if (targetDrawDataBufferSize != currentDrawDataBufferSize) {
+        CO_CORE_INFO("Framegraph: resizing per-draw upload buffer from {} MB to {} MB (used {} "
+                     "MB, low-utilization streak {})",
+                     currentDrawDataBufferSize / (1024 * 1024),
+                     targetDrawDataBufferSize / (1024 * 1024),
+                     data_->lastDrawDataUsage / (1024 * 1024),
+                     data_->lowUtilizationStreak);
+        data_->shaderBindingContext.resizeDrawDataBuffer(targetDrawDataBufferSize);
+        data_->lowUtilizationStreak = 0;
+    }
+    else {
+        data_->shaderBindingContext.reset();
+    }
+
     if (data_->hasRecordedFrame) {
         data_->resources->clearFrame(data_->lastFrameNumber);
         data_->hasRecordedFrame = false;
@@ -626,7 +703,9 @@ Framegraph::FrameContextHandles Framegraph::importFrameContext(const FrameContex
             .name = "TEX_SwapCh_Present",
             .size = size,
             .format = frameCtx.colorFormat,
-            .sampleCount = frameCtx.sampleCount,
+            // Presentable swapchain images are single-sampled; only offscreen color/depth
+            // carry the configured MSAA sample count.
+            .sampleCount = Gpu::SampleCountFlagBits::Samples1Bit,
         },
         Cory::Sync::AccessType::None,
         *frameCtx.swapchainImage,
@@ -640,6 +719,14 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
                                                 const Texture &image,
                                                 const TextureView &imageView)
 {
+    return declareInput(std::move(info), lastWriteAccess, image.handle(), imageView.handle());
+}
+
+TransientTextureHandle Framegraph::declareInput(TextureInfo info,
+                                                Sync::AccessType lastWriteAccess,
+                                                Gpu::TextureHandle image,
+                                                Gpu::TextureViewHandle imageView)
+{
     auto handle =
         data_->resources->registerExternal(std::move(info), lastWriteAccess, image, imageView);
 
@@ -647,6 +734,12 @@ TransientTextureHandle Framegraph::declareInput(TextureInfo info,
 
     data_->externalInputs.push_back(thandle);
     return thandle;
+}
+
+TransientTextureHandle Framegraph::declareInput(TransientTextureHandle handle)
+{
+    data_->externalInputs.push_back(handle);
+    return handle;
 }
 
 std::pair<TextureInfo, TextureState> Framegraph::declareOutput(TransientTextureHandle handle,
@@ -668,10 +761,10 @@ ExecutionInfo Framegraph::compile()
     return std::move(execInfo);
 }
 
-std::string Framegraph::dump(const ExecutionInfo &executionInfo)
+void Framegraph::dump(const ExecutionInfo &executionInfo, std::filesystem::path outputPath) const
 {
     const FramegraphVisualizer visualizer(*this);
-    return visualizer.generateDotGraph(executionInfo);
+    visualizer.writeGraphHtml(executionInfo, outputPath);
 }
 
 RenderTaskHandle Framegraph::finishTaskDeclaration(RenderTaskInfo &&info)

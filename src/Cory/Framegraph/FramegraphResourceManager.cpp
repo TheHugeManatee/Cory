@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <gsl/narrow>
+#include <span>
 #include <vector>
 
 namespace Cory {
@@ -83,6 +84,11 @@ FramegraphResourceManager::FramegraphResourceManager(FramegraphResourceManager &
 FramegraphResourceManager &
 FramegraphResourceManager::operator=(FramegraphResourceManager &&) noexcept = default;
 
+void FramegraphResourceManager::setContext(Context &ctx)
+{
+    data_->ctx_ = &ctx;
+}
+
 void FramegraphResourceManager::setCurrentFrameNumber(uint64_t frameNumber)
 {
     data_->currentFrameNumber = frameNumber;
@@ -95,12 +101,6 @@ uint64_t FramegraphResourceManager::currentFrameNumber() const
 
 FramegraphTextureHandle FramegraphResourceManager::declareTexture(TextureInfo info)
 {
-    CO_CORE_DEBUG("Declaring '{}' of {} ({}, {} samples)",
-                  info.name,
-                  info.size,
-                  info.format,
-                  info.sampleCount);
-
     auto handle = data_->textureResources_.emplace(
         TextureResource{.info = info,
                         .state = TextureState{.lastAccess = Sync::AccessType::None,
@@ -133,13 +133,16 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
     TextureResource &res = data_->textureResources_[handle];
     Gpu::DeviceHandle deviceHandle = data_->ctx_->device();
     auto &resources = data_->ctx_->resources();
-    CO_CORE_DEBUG("Allocating '{}' of {} ({})", res.info.name, res.info.size, res.info.format);
 
     auto extent = Gpu::Extent3D{
         .width = gsl::narrow<uint32_t>(res.info.size.x),
         .height = gsl::narrow<uint32_t>(res.info.size.y),
         .depth = gsl::narrow<uint32_t>(res.info.size.z),
     };
+    const auto textureType = res.info.textureType;
+    const auto viewType = textureType == Gpu::TextureType::TextureType3D
+                              ? Gpu::ViewType::ViewType3D
+                              : Gpu::ViewType::ViewType2D;
 
     const auto usage = res.info.usage;
 
@@ -147,7 +150,7 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
     res.image = resources.createTexture(
         deviceHandle,
         Gpu::TextureOptions{.label = fmt::format("{} (IMG)", res.info.name),
-                            .type = Gpu::TextureType::TextureType2D,
+                            .type = textureType,
                             .format = res.info.format,
                             .extent = extent,
                             .mipLevels = 1,
@@ -163,13 +166,21 @@ void FramegraphResourceManager::allocate(FramegraphTextureHandle handle)
                             .createFlags = {}});
 
     // Create the view
+    const auto aspectMask = flagsForFormat(res.info.format);
     res.view = resources.createTextureView(
         deviceHandle,
         res.image,
         Gpu::TextureViewOptions{.label = fmt::format("{} (VIEW)", res.info.name),
-                                .viewType = Gpu::ViewType::ViewType2D,
+                                .viewType = viewType,
                                 .format = res.info.format,
-                                .range = {},
+                                .range =
+                                    {
+                                        .aspectMask = aspectMask,
+                                        .baseMipLevel = 0,
+                                        .levelCount = 1,
+                                        .baseArrayLayer = 0,
+                                        .layerCount = 1,
+                                    },
                                 .yCbCrConversion = {}});
 
     res.state.status = TextureMemoryStatus::Allocated;
@@ -204,7 +215,10 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
     auto &state = resource.state;
 
     auto *texture = data_->ctx_->resources().getTexture(image(handle));
-    CO_CORE_DEBUG_ASSERT(texture != nullptr, "Texture resource is null");
+    CO_CORE_DEBUG_ASSERT(texture != nullptr,
+                         "Texture resource '{}' is null (Memory Status = {}')",
+                         resource.info.name,
+                         magic_enum::enum_name(state.status));
     VkImage vkImageHandle = texture->image;
     const VkBool32 discard = (contentsMode == ImageContents::Discard) ? VK_TRUE : VK_FALSE;
     Sync::ImageBarrier barrier{.prevAccesses{state.lastAccess},
@@ -212,9 +226,8 @@ Sync::ImageBarrier FramegraphResourceManager::synchronizeTexture(FramegraphTextu
                                .prevLayout = Sync::ImageLayout::Optimal,
                                .nextLayout = Sync::ImageLayout::Optimal,
                                .discardContents = discard,
-                               // todo: probably problematic once we actually use more queues
-                               .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                               .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                               .srcQueueFamilyIndex = data_->ctx_->graphicsQueueFamilyIndex(),
+                               .dstQueueFamilyIndex = data_->ctx_->graphicsQueueFamilyIndex(),
                                .image = vkImageHandle,
                                .subresourceRange = {
                                    .aspectMask = aspectMask.toInt(),
@@ -448,11 +461,14 @@ FramegraphBufferView FramegraphResourceManager::bufferView(FramegraphBufferHandl
     if (res.arena == BufferResource::Arena::HostMapped) {
         CO_CORE_ASSERT(data_->hostBuffer != nullptr, "Host buffer was not allocated");
         const auto baseAllocation = data_->hostBuffer->allocation();
+        auto hostRange =
+            std::span{baseAllocation.cpu, gsl::narrow_cast<size_t>(baseAllocation.size)};
+        auto hostSubRange = hostRange.subspan(gsl::narrow_cast<size_t>(res.offset));
         return FramegraphBufferView{
             .deviceAddress = baseAllocation.gpu + res.offset,
             .offset = res.offset,
             .size = res.info.size,
-            .cpu = baseAllocation.cpu + res.offset,
+            .cpu = hostSubRange.data(),
             .hostVisible = true,
         };
     }

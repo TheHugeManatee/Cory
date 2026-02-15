@@ -9,6 +9,7 @@
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Swapchain.hpp>
 
+#include <ImGuizmo.h>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/zip.hpp>
 
@@ -85,15 +86,24 @@ bool ImGuiLayer::onEvent(Event event)
             [](auto event) { return false; },
             [this](const SwapchainResizedEvent &event) {
                 data_->windowSize = event.size;
-
-                // data_->imguiRenderer->updateScale(1.0f);
+                data_->imguiRenderer->cleanup();
+                data_->imguiRenderer->initialize(1.0f,
+                                                 data_->window->samples(),
+                                                 data_->window->colorFormat(),
+                                                 data_->window->depthFormat());
                 return false;
             },
             // we just need to prevent lower layers from using the events, actual processing
             // happens in the onUpdate() method
-            [](const ScrollEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
-            [](const MouseButtonEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
-            [](const MouseMovedEvent &event) { return ImGui::GetIO().WantCaptureMouse; },
+            [](const ScrollEvent &event) {
+                return ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+            },
+            [](const MouseButtonEvent &event) {
+                return ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+            },
+            [](const MouseMovedEvent &event) {
+                return ImGui::GetIO().WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+            },
         },
         event);
 }
@@ -108,6 +118,8 @@ void ImGuiLayer::onUpdate(const LogicUpdateContext &updateCtx)
         ImVec2{static_cast<float>(data_->windowSize.x), static_cast<float>(data_->windowSize.y)};
 
     ImGui::NewFrame();
+    ImGuizmo::SetImGuiContext(data_->context);
+    ImGuizmo::BeginFrame();
 }
 
 RenderTaskDeclaration<LayerPassOutputs> ImGuiLayer::renderTask(RenderTaskBuilder builder,

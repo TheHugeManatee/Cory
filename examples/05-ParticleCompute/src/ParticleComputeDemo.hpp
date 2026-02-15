@@ -11,10 +11,6 @@
 #include <memory>
 #include <span>
 
-namespace Cory {
-class HeadlessFrameSource;
-}
-
 class ParticleComputeDemoApplication : public Cory::Application {
   public:
     explicit ParticleComputeDemoApplication(std::span<const char *> args);

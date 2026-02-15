@@ -160,6 +160,10 @@ template <typename StoredType_> class SlotMap : NoCopy {
     uint32_t findNextAliveIndex(uint32_t start = 0) const;
 
   private:
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+#endif
     static StoredType *storagePtr(Chunk &chunk, uint32_t elementIndex)
     {
         auto *base = reinterpret_cast<StoredType *>(chunk.storage.data());
@@ -170,6 +174,9 @@ template <typename StoredType_> class SlotMap : NoCopy {
         auto *base = reinterpret_cast<const StoredType *>(chunk.storage.data());
         return std::launder(base + elementIndex);
     }
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
     std::allocator<Chunk> alloc_;
     std::vector<Chunk *> chunkTable_;

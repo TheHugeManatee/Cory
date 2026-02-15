@@ -85,7 +85,7 @@ struct fmt::formatter<glm::vec<L, ElementType>> : public fmt::formatter<ElementT
 
         *out = ')';
         ctx.advance_to(out);
-        return out;
+        return ctx.out();
     }
 };
 

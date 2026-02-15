@@ -50,6 +50,7 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
                 .resourceType = resourceType,
                 .shaderStages = options.shaderStages,
                 .flags = resourceBindingFlags,
+                .immutableSamplers = {},
             };
         };
 
@@ -83,6 +84,9 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
                     makeBinding(ImageBindPoint::StorageImage3D,
                                 gsl::narrow_cast<uint32_t>(MAX_IMAGES),
                                 Gpu::ResourceBindingType::StorageImage),
+                    makeBinding(ImageBindPoint::StorageImage2DMS,
+                                gsl::narrow_cast<uint32_t>(MAX_IMAGES),
+                                Gpu::ResourceBindingType::StorageImage),
                 },
             .flags = bindGroupLayoutFlags,
         });
@@ -100,7 +104,7 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
         .textureSamplerCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
         .textureCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
         .samplerCount = gsl::narrow<uint16_t>(MAX_SAMPLERS),
-        .imageCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT),
+        .imageCount = gsl::narrow<uint16_t>(MAX_IMAGES * MAX_FRAMES_IN_FLIGHT * 2), // 2D + 2DMS
         .inputAttachmentCount = 0,
         .accelerationStructureCount = 0,
         .maxBindGroupCount = gsl::narrow<uint16_t>(MAX_FRAMES_IN_FLIGHT *
@@ -110,7 +114,7 @@ void DescriptorSets::init(Gpu::Device &device, DescriptorSetOptions options)
     });
 
     for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
-        for (gsl::index i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
             data_->bindGroups[type][i] = device.createBindGroup(Gpu::BindGroupOptions{
                 .label = fmt::format("{} Descriptor Set Frame {}", type, i),
                 .layout = data_->layouts[type],
@@ -129,7 +133,7 @@ const std::vector<Gpu::BindGroupLayoutHandle> &DescriptorSets::layouts() const n
 Gpu::BindGroup &DescriptorSets::get(DescriptorSetType type, gsl::index frameInFlightIndex)
 {
     CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
-    return data_->bindGroups[type][frameInFlightIndex];
+    return data_->bindGroups[type][gsl::narrow_cast<size_t>(frameInFlightIndex)];
 }
 
 DescriptorSets &DescriptorSets::write(ImageBindPoint bindPoint,
@@ -149,10 +153,12 @@ DescriptorSets &DescriptorSets::write(ImageBindPoint bindPoint,
         return *this;
     }
 
-    auto &writes = data_->pendingWrites[DescriptorSetType::BindlessTextures][instanceIndex];
+    auto &writes = data_->pendingWrites[DescriptorSetType::BindlessTextures]
+                                       [gsl::narrow_cast<size_t>(instanceIndex)];
 
-    const bool isStorageImage =
-        bindPoint == ImageBindPoint::StorageImage2D || bindPoint == ImageBindPoint::StorageImage3D;
+    const bool isStorageImage = bindPoint == ImageBindPoint::StorageImage2D ||
+                                bindPoint == ImageBindPoint::StorageImage3D ||
+                                bindPoint == ImageBindPoint::StorageImage2DMS;
     if (isStorageImage) {
         writes.emplace_back(Gpu::BindGroupEntry{
             .binding = bindPoint,
@@ -179,7 +185,8 @@ DescriptorSets &DescriptorSets::write(gsl::index instanceIndex,
     CO_CORE_DEBUG_ASSERT(data_ != nullptr, "DescriptorSets not initialized, or moved-from");
     CO_CORE_ASSERT(samplerIndex < MAX_SAMPLERS, "Texture index out of range");
 
-    auto &writes = data_->pendingWrites[DescriptorSetType::BindlessTextures][instanceIndex];
+    auto &writes = data_->pendingWrites[DescriptorSetType::BindlessTextures]
+                                       [gsl::narrow_cast<size_t>(instanceIndex)];
     writes.emplace_back(Gpu::BindGroupEntry{
         .binding = ImageBindPoint::Samplers,
         .resource = Gpu::SamplerBinding{.sampler = sampler},
@@ -203,10 +210,10 @@ DescriptorSets &DescriptorSets::flush(gsl::index instanceIndex)
     gsl::index writeCount = 0;
 
     for (DescriptorSetType set : magic_enum::enum_values<DescriptorSetType>()) {
-        auto &writes = data_->pendingWrites[set][instanceIndex];
+        auto &writes = data_->pendingWrites[set][gsl::narrow_cast<size_t>(instanceIndex)];
 
-        auto vulkanBindGroup =
-            resources.getBindGroup(data_->bindGroups[set][instanceIndex].handle());
+        auto vulkanBindGroup = resources.getBindGroup(
+            data_->bindGroups[set][gsl::narrow_cast<size_t>(instanceIndex)].handle());
 
         for (const auto &write : writes) {
             vulkanBindGroup->fillWriteBindGroupData(writeStorage[writeCount], write);
@@ -236,7 +243,8 @@ DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
     CO_CORE_ASSERT(data_ != nullptr, "DescriptorSets not initialized");
 
     for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
-        cmd.setBindGroup(static_cast<uint32_t>(type), data_->bindGroups[type][frameInFlightIndex]);
+        cmd.setBindGroup(static_cast<uint32_t>(type),
+                         data_->bindGroups[type][gsl::narrow_cast<size_t>(frameInFlightIndex)]);
     }
     return *this;
 }
@@ -249,7 +257,7 @@ DescriptorSets &DescriptorSets::bind(Gpu::RenderPassCommandRecorder &cmd,
 
     for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
         cmd.setBindGroup(static_cast<uint32_t>(type),
-                         data_->bindGroups[type][frameInFlightIndex],
+                         data_->bindGroups[type][gsl::narrow_cast<size_t>(frameInFlightIndex)],
                          pipelineLayout);
     }
     return *this;
@@ -261,7 +269,8 @@ DescriptorSets &DescriptorSets::bind(Gpu::ComputePassCommandRecorder &cmd,
     CO_CORE_ASSERT(data_ != nullptr, "DescriptorSets not initialized");
 
     for (DescriptorSetType type : magic_enum::enum_values<DescriptorSetType>()) {
-        cmd.setBindGroup(static_cast<uint32_t>(type), data_->bindGroups[type][frameInFlightIndex]);
+        cmd.setBindGroup(static_cast<uint32_t>(type),
+                         data_->bindGroups[type][gsl::narrow_cast<size_t>(frameInFlightIndex)]);
     }
     return *this;
 }

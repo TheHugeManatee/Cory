@@ -13,18 +13,17 @@
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Base/Time.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
-#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
-#include <GLFW/glfw3.h>
 #include <imgui.h>
 
 #include <gsl/gsl>
@@ -70,8 +69,9 @@ SceneGraphDemoApplication::SceneGraphDemoApplication(std::span<const char *> arg
     setupScene();
     setupSystems();
 
-    const auto viewportDimensions =
-        headless_ ? glm::i32vec2(headlessFrames_->extent()) : window_->dimensions();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    const auto viewportDimensions = glm::i32vec2(frameSource.extent());
     Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                           .viewportDimensions = viewportDimensions};
     cameraLayer_ = &layers().addLayer<Cory::CameraLayer>(layerAttachInfo);
@@ -128,7 +128,6 @@ void SceneGraphDemoApplication::setupScene()
                                                   },
                                                   Cory::Components::Transform{
                                                       .position = pos,
-                                                      .rotation = glm::vec3{0.0f, 0.0f, 0.0f},
                                                       .scale = scale,
                                                   });
             entities.push_back(child);
@@ -173,7 +172,10 @@ void SceneGraphDemoApplication::setupSystems()
     using Cory::Components::CameraComponent;
     // set up a system to update the camera from the camera manipulator
     systems_.emplace<Cory::CallbackSystem<CameraComponent>>(
-        [this](Cory::SceneGraph &sg, Cory::TickInfo tick, Cory::Entity e, CameraComponent &c) {
+        [this]([[maybe_unused]] Cory::SceneGraph &sg,
+               [[maybe_unused]] Cory::TickInfo tick,
+               [[maybe_unused]] Cory::Entity e,
+               CameraComponent &c) {
             c.position = cameraLayer_->position();
             c.direction = cameraLayer_->focus() - c.position;
             c.viewMatrix = cameraLayer_->worldToViewMatrix();
@@ -193,65 +195,34 @@ SceneGraphDemoApplication::~SceneGraphDemoApplication()
 
 void SceneGraphDemoApplication::run()
 {
-    Cory::FramegraphResourceManager framegraphResources{ctx()};
-    // one framegraph for each frame in flight
-    std::vector<Cory::Framegraph> framegraphs;
-    uint32_t idx = 0;
-    std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
-        return Cory::Framegraph(ctx(), framegraphResources, idx++);
-    });
+    auto framegraphs = createFramegraphs();
 
-    auto time = Cory::AppClock::now();
-    auto runFrame = [&](Cory::FrameContext &frameCtx) {
-        if (!headless_) {
-            processEvents(0);
-        }
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    runMainLoop(
+        frameSource,
+        framesToRender_,
+        {.headless = headless_},
+        [this, &framegraphs](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
+            auto tickInfo = clock_.tick();
+            systems_.tick(sceneGraph_, tickInfo);
 
-        // Update time
-        auto previousFrameTime = std::exchange(time, Cory::AppClock::now());
-        auto delta = time - previousFrameTime;
+            auto recordedFrame = recordFramegraph(
+                framegraphs,
+                frameCtx,
+                [this](Cory::Framegraph &fg, const Cory::FrameContext &currentFrame) {
+                    defineRenderPasses(fg, currentFrame);
+                });
 
-        if (!headless_) {
-            // Update layers
-            layers().update(Cory::LogicUpdateContext{
-                .simulationTime = std::chrono::duration(time.time_since_epoch()).count(),
-                .deltaTime = delta.count(),
-            });
-        }
-
-        if (!headless_) {
-            drawImguiControls();
-        }
-        // tick the components
-        auto tickInfo = clock_.tick();
-        systems_.tick(sceneGraph_, tickInfo);
-
-        Cory::Framegraph &fg = framegraphs[frameCtx.inFlightIndex];
-        // retire old resources from the last time this framegraph was
-        // used - our frame synchronization ensures that the resources
-        // are no longer in use
-        fg.resetForNextFrame(frameCtx.frameNumber);
-
-        defineRenderPasses(fg, frameCtx);
-
-        auto execInfo = fg.record(frameCtx);
-
-        if (dumpNextFramegraph_) {
-            CO_APP_INFO(fg.dump(execInfo));
-            dumpNextFramegraph_ = false;
-        }
-    };
-
-    auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
-    for (auto &frameCtx : frames) {
-        runFrame(frameCtx);
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
-        }
-    }
-
-    // wait until last frame is finished rendering
-    ctx().device().waitUntilIdle();
+            if (dumpNextFramegraph_) {
+                dumpFramegraph(recordedFrame.framegraph,
+                               recordedFrame.executionInfo,
+                               "SceneGraphDemo",
+                               frameCtx.frameNumber);
+                dumpNextFramegraph_ = false;
+            }
+        },
+        [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
 }
 
 void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
@@ -267,12 +238,13 @@ void SceneGraphDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto resolvedSwapchain =
-        Cory::StandardRenderTasks::resolve(
-            framegraph.declareTask("TASK_Resolve"), layersOutput.color, frameHandles.swapchainImage)
+    auto copiedSwapchain =
+        Cory::StandardRenderTasks::copyToTarget(framegraph.declareTask("TASK_CopyToTarget"),
+                                                layersOutput.color,
+                                                frameHandles.swapchainImage)
             .output();
 
-    framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
+    framegraph.declareOutput(copiedSwapchain, Cory::Sync::AccessType::Present);
 }
 
 void SceneGraphDemoApplication::drawImguiControls()
@@ -299,9 +271,9 @@ void SceneGraphDemoApplication::drawImguiControls()
         glm::vec3 up = cameraLayer_->up();
         glm::mat4 mat = glm::transpose(cameraLayer_->worldToViewMatrix());
 
-        bool changed = CoImGui::Input("position", position, "%.3f");
-        changed = CoImGui::Input("center", center, "%.3f") || changed;
-        changed = CoImGui::Input("up", up, "%.3f") || changed;
+        [[maybe_unused]] const bool changed = CoImGui::Input("position", position, "%.3f") ||
+                                              CoImGui::Input("center", center, "%.3f") ||
+                                              CoImGui::Input("up", up, "%.3f");
 
         // if (changed) { camera_.lookAt(position, center, up); }
         if (ImGui::CollapsingHeader("View Matrix")) {

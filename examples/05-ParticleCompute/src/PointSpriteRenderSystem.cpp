@@ -58,10 +58,7 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
                               uint32_t instanceCount)
 {
     auto [writtenSortKeys, sortKeysInfo] =
-        builder.write(sortKeys,
-                      Gpu::BufferUsageFlagBits::StorageBufferBit |
-                          Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
-                      Cory::Sync::AccessType::ComputeShaderWrite);
+        builder.write(sortKeys, Cory::RenderTaskBuilder::BufferWritePreset::ComputeStorage);
     (void)sortKeysInfo;
     auto predicatePass = builder.declareComputePass(Cory::ComputePassDeclaration{
         .name = "PASS_PointSpriteSortPreprocess",
@@ -104,7 +101,6 @@ pointSpriteSortPreprocessTask(Cory::RenderTaskBuilder builder,
         Cory::BufferDeviceAddress globals;
     } pc{instanceCount, 0u, globals.gpu};
 
-    renderApi.bindingContext->flush();
     renderApi.bindingContext->push(pc);
     pass.dispatchCompute({Cory::divideRoundUp(instanceCount, 256u), 1, 1});
     predicatePass.end(std::move(pass));
@@ -137,7 +133,8 @@ PointSpriteRenderSystem::~PointSpriteRenderSystem()
     }
 }
 
-void PointSpriteRenderSystem::beforeUpdate(Cory::SceneGraph &sg)
+void PointSpriteRenderSystem::beforeUpdate(Cory::SceneGraph &sg,
+                                           [[maybe_unused]] uint64_t frameNumber)
 {
     renderState_.clear();
     // update the camera's state
@@ -238,9 +235,8 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
         instanceCount);
 
     sortOutput = sorter_.sort(builder, predicateTask.output(), instanceCount);
-    auto sortedIndicesInfo = builder.read(sortOutput.indices,
-                                          Gpu::BufferUsageFlagBits::StorageBufferBit,
-                                          Sync::AccessType::VertexShaderReadOther);
+    auto sortedIndicesInfo =
+        builder.read(sortOutput.indices, Cory::RenderTaskBuilder::BufferReadPreset::VertexStorage);
 
     /// ^^^^     DECLARATION      ^^^^
     RenderInput renderApi =
@@ -268,7 +264,6 @@ PointSpriteRenderSystem::spriteRenderTask(Cory::RenderTaskBuilder builder,
     globals->sortIndices = renderApi.resources->deviceAddress(sortOutput.indices);
 
     auto passRecorder = spritePass.begin(renderApi);
-    renderApi.bindingContext->flush();
     renderApi.bindingContext->push(globals.gpu);
 
     passRecorder.draw(Gpu::DrawCommand{

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cory Build Tool (CBT)"
+  short_description: "Run Cory build and test workflows via cbt."
+  icon_small: "./assets/icon-small.svg"
+  icon_large: "./assets/icon-large.svg"
+  brand_color: "#0F766E"
+  default_prompt: "Use $cbt to pick and run the correct Cory build, test, run, and tooling commands."

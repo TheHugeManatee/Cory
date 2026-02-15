@@ -1,11 +1,13 @@
 #include "DescriptorSets.hpp"
 
+#include <Cory/Renderer/AsyncUploader.hpp>
 #include <Cory/Renderer/Context.hpp>
 
 #include <Cory/Base/Debugger.hpp>
 #include <Cory/Base/FileWatchManager.hpp>
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 #include <Cory/Renderer/VulkanUtils.hpp>
@@ -15,7 +17,13 @@
 #include <KDGpuKDGui/view.h>
 #include <KDGui/gui_application.h>
 
+#include <algorithm>
+#include <limits>
+#include <optional>
+#include <span>
 #include <stdexcept>
+#include <utility>
+#include <vector>
 
 #if defined(_WIN32)
 #include <vulkan/vulkan_win32.h>
@@ -24,6 +32,75 @@
 #endif
 
 namespace Cory {
+
+namespace {
+
+struct QueueFamilySelection {
+    uint32_t graphicsComputeFamily{0};
+    std::optional<uint32_t> transferFamily{};
+};
+
+std::optional<uint32_t> findQueueFamilyWithFlags(const Gpu::Adapter &adapter,
+                                                 Gpu::QueueFlags requiredFlags,
+                                                 const Gpu::Surface *surface = nullptr)
+{
+    auto queueTypes = adapter.queueTypes();
+    for (uint32_t i = 0; i < queueTypes.size(); ++i) {
+        const bool supportsRequiredFlags = queueTypes[i].supportsFeature(requiredFlags);
+        if (!supportsRequiredFlags) {
+            continue;
+        }
+        const bool requiresPresentation = surface != nullptr;
+        const bool supportsPresentation =
+            !requiresPresentation || adapter.supportsPresentation(*surface, i);
+        if (supportsPresentation) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
+std::vector<Gpu::QueueRequest> buildQueueRequests(const QueueFamilySelection &selection)
+{
+    std::vector<Gpu::QueueRequest> requests;
+    requests.push_back(Gpu::QueueRequest{
+        .queueTypeIndex = selection.graphicsComputeFamily, .count = 1, .priorities = {1.0f}});
+    if (selection.transferFamily && *selection.transferFamily != selection.graphicsComputeFamily) {
+        requests.push_back(Gpu::QueueRequest{
+            .queueTypeIndex = *selection.transferFamily, .count = 1, .priorities = {0.8f}});
+    }
+    return requests;
+}
+
+Gpu::Queue *findQueueByTypeIndex(std::span<Gpu::Queue> queues, uint32_t queueTypeIndex)
+{
+    for (auto &queue : queues) {
+        if (queue.queueTypeIndex() == queueTypeIndex) {
+            return &queue;
+        }
+    }
+    return nullptr;
+}
+
+Function<void(const DebugMessageInfo &)> &validationMessageCallback()
+{
+    static auto *callback = new Function<void(const DebugMessageInfo &)>{};
+    return *callback;
+}
+
+uint32_t makeApiVersion(uint32_t variant, uint32_t major, uint32_t minor, uint32_t patch)
+{
+#if !defined(_WIN32)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+    return KDGPU_MAKE_API_VERSION(variant, major, minor, patch);
+#if !defined(_WIN32)
+#pragma clang diagnostic pop
+#endif
+}
+
+} // namespace
 
 struct ContextPrivate {
     std::string name;
@@ -37,13 +114,18 @@ struct ContextPrivate {
     Gpu::Surface surface;
     Gpu::Adapter *adapter;
     Gpu::Device device;
-    Gpu::Queue queue;
+    Gpu::Queue *graphicsQueue{nullptr};
+    Gpu::Queue *computeQueue{nullptr};
+    Gpu::Queue *transferQueue{nullptr};
+    uint32_t graphicsQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
+    uint32_t computeQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
+    uint32_t transferQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
+    std::unique_ptr<AsyncUploader> uploader;
 
     ShaderManager shaders;
     DescriptorSets descriptorSets;
     std::unique_ptr<PipelineCache> pipelineCache;
-
-    inline static Function<void(const DebugMessageInfo &)> validationMessageCallback;
+    std::unique_ptr<FramegraphResourceManager> framegraphResources;
 
     static void receiveDebugUtilsMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                          VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -62,8 +144,8 @@ Context::Context(ContextCreationInfo creationInfo)
     //  - enable dynamic_rendering feature via VkPhysicalDeviceDynamicRenderingFeatures
     Gpu::InstanceOptions instanceOptions = {
         .applicationName = app_name,
-        .applicationVersion = KDGPU_MAKE_API_VERSION(0, 1, 0, 0),
-        .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
+        .applicationVersion = makeApiVersion(0, 1, 0, 0),
+        .apiVersion = makeApiVersion(0, 1, 3, 0),
         .layers = {},
         .extensions = {
             VK_KHR_SURFACE_EXTENSION_NAME,
@@ -82,16 +164,29 @@ Context::Context(ContextCreationInfo creationInfo)
     }
     data_->instance = data_->api.createInstance(instanceOptions);
     data_->shaders.setContext(*this);
+    data_->framegraphResources = std::make_unique<FramegraphResourceManager>(*this);
 }
 
 Context::Context(Context &&rhs) noexcept
 {
     std::swap(rhs.data_, data_);
+    if (data_ && data_->framegraphResources) {
+        data_->framegraphResources->setContext(*this);
+    }
+    if (rhs.data_ && rhs.data_->framegraphResources) {
+        rhs.data_->framegraphResources->setContext(rhs);
+    }
 }
 Context &Context::operator=(Context &&rhs) noexcept
 {
     if (this != &rhs) {
         std::swap(rhs.data_, data_);
+        if (data_ && data_->framegraphResources) {
+            data_->framegraphResources->setContext(*this);
+        }
+        if (rhs.data_ && rhs.data_->framegraphResources) {
+            rhs.data_->framegraphResources->setContext(rhs);
+        }
     }
     return *this;
 }
@@ -132,7 +227,7 @@ Gpu::Fence Context::createFence(std::string_view name, FenceCreateMode mode)
 
 void Context::onVulkanDebugMessageReceived(Function<void(const DebugMessageInfo &)> callback)
 {
-    ContextPrivate::validationMessageCallback = std::move(callback);
+    validationMessageCallback() = std::move(callback);
 }
 
 bool Context::isHeadless() const
@@ -163,23 +258,35 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
         return {};
     }
 
-    auto queueTypes = selectedAdapter->queueTypes();
-    const bool hasGraphicsAndCompute = queueTypes[0].supportsFeature(
-        QueueFlags(QueueFlagBits::GraphicsBit) | QueueFlags(QueueFlagBits::ComputeBit));
-    CO_CORE_TRACE("Queue family 0 graphics and compute support: {}", hasGraphicsAndCompute);
+    const auto graphicsComputeFamily = findQueueFamilyWithFlags(
+        *selectedAdapter,
+        QueueFlags(QueueFlagBits::GraphicsBit) | QueueFlags(QueueFlagBits::ComputeBit),
+        &surface);
+    if (!graphicsComputeFamily.has_value()) {
+        CO_CORE_FATAL("Selected adapter has no queue family supporting "
+                      "graphics+compute+presentation. Aborting.");
+        return {};
+    }
+    CO_CORE_TRACE("Selected graphics queue family: {}", *graphicsComputeFamily);
+
+    const auto transferFamily =
+        findQueueFamilyWithFlags(*selectedAdapter, QueueFlags(QueueFlagBits::TransferBit), nullptr);
+    if (transferFamily.has_value()) {
+        CO_CORE_TRACE("Selected transfer queue family: {}", *transferFamily);
+    }
 
     // We are now able to query the adapter for swapchain properties and presentation support
     // with the window surface
     const auto swapchainProperties = selectedAdapter->swapchainProperties(surface);
     CO_CORE_TRACE("Supported swapchain present modes ({}):",
                   swapchainProperties.presentModes.size());
-    for (const auto &mode : swapchainProperties.presentModes) {
+    for ([[maybe_unused]] const auto &mode : swapchainProperties.presentModes) {
         CO_CORE_TRACE("||  - {}", presentModeToString(mode));
     }
 
     const bool supportsPresentation =
-        selectedAdapter->supportsPresentation(surface, 0); // Query about the 1st queue type
-    CO_CORE_TRACE("Queue family 0 supports presentation: {}", supportsPresentation);
+        selectedAdapter->supportsPresentation(surface, *graphicsComputeFamily);
+    CO_CORE_TRACE("Selected graphics queue family supports presentation: {}", supportsPresentation);
 
     const auto adapterExtensions = selectedAdapter->extensions();
     CO_CORE_TRACE("Supported adapter extensions ({}):", adapterExtensions.size());
@@ -187,31 +294,36 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
         CO_CORE_TRACE("||  - {} Version {}", extension.name, extension.version);
     }
 
-    if (!supportsPresentation || !hasGraphicsAndCompute) {
-        CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
+    if (!supportsPresentation) {
+        CO_CORE_FATAL("Selected graphics queue family does not support presentation. Aborting.");
         return {};
     }
+
+    data_->graphicsQueueTypeIndex = *graphicsComputeFamily;
+    data_->computeQueueTypeIndex = *graphicsComputeFamily;
+    data_->transferQueueTypeIndex = transferFamily.value_or(*graphicsComputeFamily);
     CO_CORE_TRACE("Feature support: ");
-    const bool supportsMultiView = selectedAdapter->features().multiView;
+    [[maybe_unused]] const bool supportsMultiView = selectedAdapter->features().multiView;
     CO_CORE_TRACE("|| - multiview: {}", supportsMultiView);
 
-    const bool supportsUBOIndexing =
+    [[maybe_unused]] const bool supportsUBOIndexing =
         selectedAdapter->features().shaderUniformBufferArrayNonUniformIndexing &&
         selectedAdapter->features().bindGroupBindingUniformBufferUpdateAfterBind;
     CO_CORE_TRACE("|| - Uniform Bind Group Dynamic Indexing: {}", supportsUBOIndexing);
 
-    const bool supportsAccelerationStructures = selectedAdapter->features().accelerationStructures;
+    [[maybe_unused]] const bool supportsAccelerationStructures =
+        selectedAdapter->features().accelerationStructures;
     CO_CORE_TRACE("|| - acceleration structures: {}", supportsAccelerationStructures);
 
-    const bool supportsRayTracing = selectedAdapter->features().rayTracingPipeline;
+    [[maybe_unused]] const bool supportsRayTracing = selectedAdapter->features().rayTracingPipeline;
     CO_CORE_TRACE("|| - raytracing: {}", supportsRayTracing);
 
-    const bool supportsMeshShader = selectedAdapter->features().meshShader;
-    const bool supportsTaskShader = selectedAdapter->features().taskShader;
+    [[maybe_unused]] const bool supportsMeshShader = selectedAdapter->features().meshShader;
+    [[maybe_unused]] const bool supportsTaskShader = selectedAdapter->features().taskShader;
     CO_CORE_TRACE("|| - meshShader: {}", supportsMeshShader);
     CO_CORE_TRACE("|| - taskShader: {}", supportsTaskShader);
 
-    const bool supportsHostToImageCopy = selectedAdapter->features().hostImageCopy;
+    [[maybe_unused]] const bool supportsHostToImageCopy = selectedAdapter->features().hostImageCopy;
     CO_CORE_TRACE("|| - host to image copy: {}", supportsHostToImageCopy);
 
     // Now we can create a device from the selected adapter that we can then use to interact
@@ -219,14 +331,17 @@ Gpu::AdapterAndDevice Context::createDefaultDevice(const Gpu::Surface &surface,
 
     auto device = selectedAdapter->createDevice(DeviceOptions{
         .label = "Main Device",
-        .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
+        .apiVersion = makeApiVersion(0, 1, 3, 0),
         .layers = {},
         .extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
                        VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
                        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
                        VK_EXT_SHADER_OBJECT_EXTENSION_NAME},
-        .queues = {},
+        .queues = buildQueueRequests(QueueFamilySelection{
+            .graphicsComputeFamily = data_->graphicsQueueTypeIndex,
+            .transferFamily = transferFamily,
+        }),
         .requestedFeatures =
             features == DeviceFeatures::All ? selectedAdapter->features() : getRequiredFeatures(),
         .adapterGroup = {},
@@ -280,12 +395,22 @@ void Context::setupDeviceFromSurface(const Gpu::Surface &surface)
         CO_CORE_ERROR("Device has no queues!");
         throw std::runtime_error("Device has no queues!");
     }
-    data_->queue = data_->device.queues()[0];
+    auto queues = data_->device.queues();
+    auto *graphics = findQueueByTypeIndex(queues, data_->graphicsQueueTypeIndex);
+    CO_CORE_ASSERT(graphics != nullptr,
+                   "Failed to resolve graphics queue from selected queue family");
+    data_->graphicsQueue = graphics;
+    data_->computeQueue = graphics;
+    data_->transferQueue = graphics;
+    if (auto *transfer = findQueueByTypeIndex(queues, data_->transferQueueTypeIndex)) {
+        data_->transferQueue = transfer;
+    }
 
     data_->isHeadless = false;
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+    data_->uploader = std::make_unique<AsyncUploader>(*this);
 
     setupDescriptors();
 }
@@ -316,27 +441,39 @@ void Context::setupHeadlessDevice()
 
     CO_CORE_INFO("Selected adapter: {}", selectedAdapter->properties().deviceName);
 
-    auto queueTypes = selectedAdapter->queueTypes();
-    const bool hasGraphicsAndCompute =
-        queueTypes[0].supportsFeature(Gpu::QueueFlags(Gpu::QueueFlagBits::GraphicsBit) |
-                                      Gpu::QueueFlags(Gpu::QueueFlagBits::ComputeBit));
-    CO_CORE_INFO("Queue family 0 graphics and compute support: {}", hasGraphicsAndCompute);
-
-    if (!hasGraphicsAndCompute) {
-        CO_CORE_FATAL("Selected adapter queue family 0 does not meet requirements. Aborting.");
+    const auto graphicsComputeFamily =
+        findQueueFamilyWithFlags(*selectedAdapter,
+                                 Gpu::QueueFlags(Gpu::QueueFlagBits::GraphicsBit) |
+                                     Gpu::QueueFlags(Gpu::QueueFlagBits::ComputeBit),
+                                 nullptr);
+    if (!graphicsComputeFamily.has_value()) {
+        CO_CORE_FATAL(
+            "Selected adapter has no queue family supporting graphics+compute. Aborting.");
         return;
     }
+    CO_CORE_INFO("Selected graphics queue family: {}", *graphicsComputeFamily);
+    const auto transferFamily = findQueueFamilyWithFlags(
+        *selectedAdapter, Gpu::QueueFlags(Gpu::QueueFlagBits::TransferBit), nullptr);
+    if (transferFamily.has_value()) {
+        CO_CORE_INFO("Selected transfer queue family: {}", *transferFamily);
+    }
+    data_->graphicsQueueTypeIndex = *graphicsComputeFamily;
+    data_->computeQueueTypeIndex = *graphicsComputeFamily;
+    data_->transferQueueTypeIndex = transferFamily.value_or(*graphicsComputeFamily);
 
     // Create device
     auto device = selectedAdapter->createDevice(Gpu::DeviceOptions{
         .label = "Headless Device",
-        .apiVersion = KDGPU_MAKE_API_VERSION(0, 1, 3, 0),
+        .apiVersion = makeApiVersion(0, 1, 3, 0),
         .layers = {},
         .extensions = {VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
                        VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME,
                        VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
                        VK_EXT_SHADER_OBJECT_EXTENSION_NAME},
-        .queues = {},
+        .queues = buildQueueRequests(QueueFamilySelection{
+            .graphicsComputeFamily = data_->graphicsQueueTypeIndex,
+            .transferFamily = transferFamily,
+        }),
         .requestedFeatures = getRequiredFeatures(),
         .adapterGroup = {},
     });
@@ -344,12 +481,22 @@ void Context::setupHeadlessDevice()
     data_->adapter = selectedAdapter;
     data_->device = std::move(device);
     CO_CORE_ASSERT(!data_->device.queues().empty(), "Device has no queues!");
-    data_->queue = data_->device.queues()[0];
+    auto queues = data_->device.queues();
+    auto *graphics = findQueueByTypeIndex(queues, data_->graphicsQueueTypeIndex);
+    CO_CORE_ASSERT(graphics != nullptr,
+                   "Failed to resolve graphics queue from selected queue family");
+    data_->graphicsQueue = graphics;
+    data_->computeQueue = graphics;
+    data_->transferQueue = graphics;
+    if (auto *transfer = findQueueByTypeIndex(queues, data_->transferQueueTypeIndex)) {
+        data_->transferQueue = transfer;
+    }
 
     data_->isHeadless = true;
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
+    data_->uploader = std::make_unique<AsyncUploader>(*this);
 
     setupDescriptors();
 }
@@ -383,7 +530,35 @@ Gpu::Device &Context::device()
 
 Gpu::Queue &Context::graphicsQueue()
 {
-    return data_->queue;
+    CO_CORE_ASSERT(data_->graphicsQueue != nullptr, "Graphics queue is not initialized");
+    return *data_->graphicsQueue;
+}
+
+Gpu::Queue &Context::computeQueue()
+{
+    CO_CORE_ASSERT(data_->computeQueue != nullptr, "Compute queue is not initialized");
+    return *data_->computeQueue;
+}
+
+Gpu::Queue &Context::transferQueue()
+{
+    CO_CORE_ASSERT(data_->transferQueue != nullptr, "Transfer queue is not initialized");
+    return *data_->transferQueue;
+}
+
+uint32_t Context::graphicsQueueFamilyIndex() const noexcept
+{
+    return data_->graphicsQueueTypeIndex;
+}
+
+uint32_t Context::computeQueueFamilyIndex() const noexcept
+{
+    return data_->computeQueueTypeIndex;
+}
+
+uint32_t Context::transferQueueFamilyIndex() const noexcept
+{
+    return data_->transferQueueTypeIndex;
 }
 
 Gpu::VulkanResourceManager &Context::resources()
@@ -418,6 +593,27 @@ const DescriptorSets &Context::descriptors() const
 {
     return data_->descriptorSets;
 }
+
+AsyncUploader &Context::uploader()
+{
+    CO_CORE_ASSERT(data_->uploader != nullptr, "Uploader is not initialized");
+    return *data_->uploader;
+}
+
+FramegraphResourceManager &Context::framegraphResources()
+{
+    CO_CORE_ASSERT(data_->framegraphResources != nullptr,
+                   "FramegraphResourceManager is not initialized");
+    return *data_->framegraphResources;
+}
+
+const FramegraphResourceManager &Context::framegraphResources() const
+{
+    CO_CORE_ASSERT(data_->framegraphResources != nullptr,
+                   "FramegraphResourceManager is not initialized");
+    return *data_->framegraphResources;
+}
+
 FileWatchManager &Context::fileWatchManager()
 {
     return data_->fileWatchManager;
@@ -443,10 +639,12 @@ void ContextPrivate::receiveDebugUtilsMessage(
         return;
     }
 
-    if (validationMessageCallback) {
-        validationMessageCallback(info);
+    if (validationMessageCallback()) {
+        validationMessageCallback()(info);
         return;
     }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch-default"
     switch (info.severity) {
     case DebugMessageSeverity::Verbose:
         CO_CORE_TRACE("Vulkan Validation: {}", pCallbackData->pMessage);
@@ -463,6 +661,7 @@ void ContextPrivate::receiveDebugUtilsMessage(
         BreakpointIfDebugging();
         break;
     }
+#pragma clang diagnostic pop
 }
 
 } // namespace Cory

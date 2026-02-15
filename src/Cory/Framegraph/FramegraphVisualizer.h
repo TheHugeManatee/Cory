@@ -4,6 +4,7 @@
 
 #include <Cory/Framegraph/Framegraph.hpp>
 
+#include <filesystem>
 #include <string>
 
 namespace Cory {
@@ -18,6 +19,8 @@ class FramegraphVisualizer {
     }
 
     [[nodiscard]] std::string generateDotGraph(const ExecutionInfo &executionInfo) const;
+
+    void writeGraphHtml(const ExecutionInfo &executionInfo, std::filesystem::path outputPath) const;
 
   private:
     friend struct Index;

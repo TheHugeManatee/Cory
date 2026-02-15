@@ -11,14 +11,10 @@
 #include <memory>
 #include <span>
 
-namespace Cory {
-class HeadlessFrameSource;
-}
-
 class SceneGraphDemoApplication : public Cory::Application {
   public:
     SceneGraphDemoApplication(std::span<const char *> args);
-    ~SceneGraphDemoApplication();
+    ~SceneGraphDemoApplication() override;
 
     void run() override;
 

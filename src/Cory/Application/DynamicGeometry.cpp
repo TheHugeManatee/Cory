@@ -1,5 +1,6 @@
 #include <Cory/Application/DynamicGeometry.hpp>
 
+#include <Cory/Renderer/AsyncUploader.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <KDGpu/buffer_options.h>
 
@@ -97,8 +98,6 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
                                            std::span<const uint32_t> indexData)
 {
     auto &device = ctx.device();
-    Gpu::UploadStagingBuffer vertex_staging_buffer;
-    Gpu::UploadStagingBuffer index_staging_buffer;
     Mesh mesh{
         .vertexCount = gsl::narrow_cast<uint32_t>(vertexData.size()),
         .indexCount = gsl::narrow_cast<uint32_t>(indexData.size()),
@@ -115,14 +114,14 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
 
         mesh.vertexBuffer = device.createBuffer(bufferOptions);
 
-        const Gpu::BufferUploadOptions uploadOptions = {
-            .destinationBuffer = mesh.vertexBuffer,
+        const auto uploadOptions = AsyncUploader::BufferUploadRequest{
+            .destinationBuffer = mesh.vertexBuffer.handle(),
+            .data = vertexData.data(),
+            .byteSize = dataByteSize,
             .dstStages = Gpu::PipelineStageFlagBit::VertexAttributeInputBit,
             .dstMask = Gpu::AccessFlagBit::VertexAttributeReadBit,
-            .data = vertexData.data(),
-            .byteSize = dataByteSize};
-
-        vertex_staging_buffer = ctx.graphicsQueue().uploadBufferData(uploadOptions);
+        };
+        ctx.uploader().enqueueBufferUpload(uploadOptions);
     }
     // Create a buffer to hold the geometry index data
     {
@@ -134,18 +133,15 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
                                                       Gpu::BufferUsageFlagBits::TransferDstBit,
                                                   .memoryUsage = Gpu::MemoryUsage::GpuOnly};
         mesh.indexBuffer = device.createBuffer(bufferOptions);
-        const Gpu::BufferUploadOptions uploadOptions = {
-            .destinationBuffer = mesh.indexBuffer,
+        const auto uploadOptions = AsyncUploader::BufferUploadRequest{
+            .destinationBuffer = mesh.indexBuffer.handle(),
+            .data = indexData.data(),
+            .byteSize = dataByteSize,
             .dstStages = Gpu::PipelineStageFlagBit::IndexInputBit,
             .dstMask = Gpu::AccessFlagBit::IndexReadBit,
-            .data = indexData.data(),
-            .byteSize = dataByteSize};
-        index_staging_buffer = ctx.graphicsQueue().uploadBufferData(uploadOptions);
+        };
+        ctx.uploader().enqueueBufferUpload(uploadOptions);
     }
-
-    // Ensure upload is finished.
-    vertex_staging_buffer.fence.wait();
-    index_staging_buffer.fence.wait();
 
     return mesh;
 }

@@ -203,3 +203,47 @@ TEST_CASE("FileWatchManager: sentinel is emitted even without file activity")
     CHECK(consumer.takeEvents() == std::vector{FileWatchEventType::WatchEnded});
     CHECK(consumer.waitUntilFinished());
 }
+
+TEST_CASE("FileWatchManager: can watch multiple files in the same directory")
+{
+    using namespace std::chrono_literals;
+    const auto fileAPath = testDirectory() / "test_filewatch_multi_a.txt";
+    const auto fileBPath = testDirectory() / "test_filewatch_multi_b.txt";
+    if (fs::exists(fileAPath)) fs::remove(fileAPath);
+    if (fs::exists(fileBPath)) fs::remove(fileBPath);
+
+    FileWatchManager mgr;
+    const auto handleA = mgr.watch({fileAPath.string()});
+    const auto handleB = mgr.watch({fileBPath.string()});
+    REQUIRE(handleA);
+    REQUIRE(handleB);
+
+    AwaitableConsumer consumerA{mgr, handleA};
+    AwaitableConsumer consumerB{mgr, handleB};
+
+    createTestFile(fileAPath);
+    REQUIRE(consumerA.waitForEvents(2));
+    CHECK(compressModifiedEvents(consumerA.takeEvents()) ==
+          std::vector{FileWatchEventType::Created, FileWatchEventType::Modified});
+
+    std::this_thread::sleep_for(50ms);
+    mgr.processPendingEvents();
+    CHECK(consumerB.takeEvents().empty());
+
+    createTestFile(fileBPath);
+    REQUIRE(consumerB.waitForEvents(2));
+    CHECK(compressModifiedEvents(consumerB.takeEvents()) ==
+          std::vector{FileWatchEventType::Created, FileWatchEventType::Modified});
+
+    CHECK(mgr.unwatch(handleA));
+    CHECK(mgr.unwatch(handleB));
+    REQUIRE(consumerA.waitForEvents(1));
+    REQUIRE(consumerB.waitForEvents(1));
+    CHECK(consumerA.takeEvents() == std::vector{FileWatchEventType::WatchEnded});
+    CHECK(consumerB.takeEvents() == std::vector{FileWatchEventType::WatchEnded});
+    CHECK(consumerA.waitUntilFinished());
+    CHECK(consumerB.waitUntilFinished());
+
+    if (fs::exists(fileAPath)) fs::remove(fileAPath);
+    if (fs::exists(fileBPath)) fs::remove(fileBPath);
+}

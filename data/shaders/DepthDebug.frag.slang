@@ -1,3 +1,5 @@
+import CoryBindings;
+
 struct Globals {
     float2 center;
     float2 size;
@@ -6,8 +8,6 @@ struct Globals {
 };
 
 [[vk::push_constant]] Globals* globals;
-
-[[vk::binding(0, 1)]] Sampler2DMS<float4> textures[];
 
 struct PSIn {
     float4 pos : SV_Position;
@@ -32,7 +32,8 @@ float4 main(PSIn input)
         discard;
     }
 
-    float4 texColor = textures[globals->textureIndex].Load(int2(input.pos.xy), input.sampleID);
+    float4 texColor =
+        gBindlessTexture2DMS[globals->textureIndex].Load(int2(input.pos.xy), input.sampleID);
 
     float depthNorm = (texColor.r - globals.window.x) / (globals.window.y - globals.window.x);
 

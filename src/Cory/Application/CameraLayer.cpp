@@ -40,7 +40,7 @@ CameraLayer::~CameraLayer()
     CO_CORE_ASSERT(!state_, "CameraLayer was not detached before it was destroyed!");
 }
 
-void CameraLayer::onAttach(Context &ctx, LayerAttachInfo info)
+void CameraLayer::onAttach([[maybe_unused]] Context &ctx, [[maybe_unused]] LayerAttachInfo info)
 {
     CO_CORE_ASSERT(state_ == nullptr, "Layer was already attached!");
 
@@ -51,7 +51,7 @@ void CameraLayer::onAttach(Context &ctx, LayerAttachInfo info)
     update();
 }
 
-void CameraLayer::onDetach(Context &ctx)
+void CameraLayer::onDetach([[maybe_unused]] Context &ctx)
 {
     // might have had an exception during attach, or moved-from
     if (!state_) return;
@@ -62,7 +62,7 @@ void CameraLayer::onDetach(Context &ctx)
 bool CameraLayer::onEvent(Event event)
 {
     return std::visit(lambda_visitor{
-                          [](auto event) { return false; },
+                          [](auto) { return false; },
                           [this](const ScrollEvent &event) { return mouseScroll(event); },
                           [this](const MouseMovedEvent &event) { return mouseMove(event); },
                           [this](const MouseButtonEvent &event) { return mouseButton(event); },
@@ -70,7 +70,7 @@ bool CameraLayer::onEvent(Event event)
                       event);
 }
 
-void CameraLayer::onUpdate(const LogicUpdateContext &updateContext)
+void CameraLayer::onUpdate([[maybe_unused]] const LogicUpdateContext &updateContext)
 {
     update();
 
@@ -120,22 +120,22 @@ bool CameraLayer::mouseMove(const MouseMovedEvent &event)
 {
     using Mode = State::Mode;
 
-    Mode &mode = state_->mode;
-    mode = Mode::None;
+    Mode &currentMode = state_->mode;
+    currentMode = Mode::None;
     if (event.button == MouseButton::Left)
-        mode = event.modifiers.is_set(ModifierFlagBits::Shift) ? Mode::Look : Mode::Orbit;
+        currentMode = event.modifiers.is_set(ModifierFlagBits::Shift) ? Mode::Look : Mode::Orbit;
     else if (event.button == MouseButton::Right) {
-        mode = Mode::Pan;
+        currentMode = Mode::Pan;
     }
     else if (event.button == MouseButton::Middle) {
-        mode = Mode::Roll;
+        currentMode = Mode::Roll;
     }
 
     glm::vec2 mouseDelta = event.position - state_->lastMousePosition;
     state_->lastMousePosition = event.position;
 
     std::optional<glm::mat4> newViewToWorld{};
-    switch (mode) {
+    switch (currentMode) {
     case Mode::None:
         return false;
     case Mode::Look: {
@@ -176,6 +176,8 @@ bool CameraLayer::mouseMove(const MouseMovedEvent &event)
         newViewToWorld = rotate(viewToWorldMatrix(), rotationAngle, localForward);
         break;
     }
+    default:
+        std::unreachable();
     }
     if (newViewToWorld) {
         const auto &newV2W = *newViewToWorld;

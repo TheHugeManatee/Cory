@@ -170,7 +170,7 @@ void World::processTick(SimulationClock::TickInfo tickInfo)
     // get all coroutines that are waiting for the next tick and resume them
     auto scheduledFromTicks = waitingForFutureTicks_.dequeueUntil(lastTick_.ticks);
     auto scheduledFromTimepoint = waitingForTimePoint_.dequeueUntil(lastTick_.now);
-    for (auto h : ranges::view::concat(scheduledFromTicks, scheduledFromTimepoint)) {
+    for (auto h : ranges::views::concat(scheduledFromTicks, scheduledFromTimepoint)) {
         if (h.done()) {
             CO_CORE_WARN("Coroutine is already done!");
         }
@@ -188,7 +188,7 @@ void World::end()
 {
     auto waitingTicks = waitingForFutureTicks_.dequeueAll();
     auto waitingTime = waitingForTimePoint_.dequeueAll();
-    for (auto h : ranges::view::concat(waitingTicks, waitingTime)) {
+    for (auto h : ranges::views::concat(waitingTicks, waitingTime)) {
         h.destroy();
     }
 }

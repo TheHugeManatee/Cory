@@ -17,6 +17,7 @@
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
+#include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
@@ -26,7 +27,6 @@
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
-#include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -34,7 +34,6 @@
 #include <gsl/narrow>
 #include <imgui.h>
 
-#include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/ShaderBindingContext.hpp>
 #include <algorithm>
 #include <chrono>
@@ -123,13 +122,14 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.parse(argc, argv);
+    const std::vector<const char *> appArgs{argv, argv + argc};
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
 
     init(Cory::ContextCreationInfo{.validation = disableValidation_
                                                      ? Cory::ValidationLayers::Disabled
                                                      : Cory::ValidationLayers::Enabled,
-                                   .args = std::span{argv, gsl::narrow<std::size_t>(argc)}});
+                                   .args = std::span{appArgs}});
 
     // determine msaa sample count to use - for simplicity, we use either 8 or one sample
     // const auto &limits = ctx().physicalDevice().limits;
@@ -197,65 +197,31 @@ CubeDemoApplication::~CubeDemoApplication()
 
 void CubeDemoApplication::run()
 {
-    Cory::FramegraphResourceManager framegraphResources{ctx()};
-    // one framegraph for each frame in flight
-    std::vector<Cory::Framegraph> framegraphs;
-    uint32_t idx = 0;
-    std::generate_n(std::back_inserter(framegraphs), Cory::MAX_FRAMES_IN_FLIGHT, [&]() {
-        return Cory::Framegraph(ctx(), framegraphResources, idx++);
-    });
+    auto framegraphs = createFramegraphs();
 
-    auto time = getElapsedTimeSeconds();
+    auto &frameSource = headless_ ? static_cast<Cory::FrameSource &>(*headlessFrames_)
+                                  : static_cast<Cory::FrameSource &>(*window_);
+    runMainLoop(
+        frameSource,
+        framesToRender_,
+        {.headless = headless_, .pollPlatformEvents = true},
+        [this, &framegraphs](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
+            auto recordedFrame = recordFramegraph(
+                framegraphs,
+                frameCtx,
+                [this](Cory::Framegraph &fg, const Cory::FrameContext &currentFrame) {
+                    defineRenderPasses(fg, currentFrame);
+                });
 
-    auto runFrame = [&](Cory::FrameContext &frameCtx) {
-        // Process KDGui events
-        if (!headless_) {
-            processEvents(0);
-            glfwPollEvents();
-        }
-
-        // Update time
-        auto previousFrameTime = std::exchange(time, getElapsedTimeSeconds());
-        auto delta = time - previousFrameTime;
-
-        if (!headless_) {
-            // Update layers
-            layers().update(Cory::LogicUpdateContext{
-                .simulationTime = time,
-                .deltaTime = delta,
-            });
-        }
-
-        if (!headless_) {
-            drawImguiControls();
-        }
-
-        Cory::Framegraph &fg = framegraphs[frameCtx.inFlightIndex];
-        // retire old resources from the last time this framegraph was
-        // used - our frame synchronization ensures that the resources
-        // are no longer in use
-        fg.resetForNextFrame(frameCtx.frameNumber);
-
-        defineRenderPasses(fg, frameCtx);
-
-        auto execInfo = fg.record(frameCtx);
-
-        if (dumpNextFramegraph_) {
-            CO_APP_INFO(fg.dump(execInfo));
-            dumpNextFramegraph_ = false;
-        }
-    };
-
-    auto frames = headless_ ? headlessFrames_->frames() : window_->frames();
-    for (auto &frameCtx : frames) {
-        runFrame(frameCtx);
-        if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
-            break;
-        }
-    }
-
-    // wait until last frame is finished rendering
-    ctx().device().waitUntilIdle();
+            if (dumpNextFramegraph_) {
+                dumpFramegraph(recordedFrame.framegraph,
+                               recordedFrame.executionInfo,
+                               "CubeDemo",
+                               frameCtx.frameNumber);
+                dumpNextFramegraph_ = false;
+            }
+        },
+        [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
 }
 
 void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
@@ -270,12 +236,12 @@ void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,
     auto layersOutput = layers().declareRenderTasks(
         framegraph, {.color = mainPass.output().colorOut, .depth = mainPass.output().depthOut});
 
-    auto resolvedSwapchain =
-        Cory::StandardRenderTasks::resolve(
-            framegraph.declareTask("TASK_Resolve"), layersOutput.color, swapchainImage)
+    auto copiedSwapchain =
+        Cory::StandardRenderTasks::copyToTarget(
+            framegraph.declareTask("TASK_CopyToTarget"), layersOutput.color, swapchainImage)
             .output();
 
-    framegraph.declareOutput(resolvedSwapchain, Cory::Sync::AccessType::Present);
+    framegraph.declareOutput(copiedSwapchain, Cory::Sync::AccessType::Present);
 }
 
 Cory::RenderTaskDeclaration<CubeDemoApplication::PassOutputs>
@@ -284,7 +250,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                                     Cory::TransientTextureHandle depthTarget)
 {
 
-    Gpu::ColorClearValue clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    Gpu::ColorClearValue clearColor{{0.0f, 0.0f, 0.0f, 1.0f}};
     Gpu::DepthStencilClearValue clearDepthStencil = {1.0f, 0};
 
     const auto &colorInfo = builder.textureInfo(colorTarget);
@@ -299,6 +265,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                 .load = Gpu::AttachmentLoadOperation::Clear,
                 .store = Gpu::AttachmentStoreOperation::Store,
                 .clearColor = clearColor,
+                .blend = std::nullopt,
             },
         }},
         .depthAttachment =
@@ -308,6 +275,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
                 .store = Gpu::AttachmentStoreOperation::Store,
                 .clearDepthStencil = clearDepthStencil,
             },
+        .stencilAttachment = {},
         .vertexOptions = vertexOptions(),
         .dynamicStates = {.cullMode = Cory::CullMode::None},
     });
@@ -333,8 +301,7 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     CO_CORE_ASSERT(instanceCount > 0, "No instances to render!");
 
     auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
-    std::memcpy(
-        alloc.cpu, instanceData_.data(), static_cast<size_t>(instanceCount) * sizeof(InstanceData));
+    std::copy_n(instanceData_.begin(), instanceCount, alloc.cpu);
 
     // update the per-frame data
     auto data = renderApi.bindingContext->alloc<CubeUBO>();
@@ -348,8 +315,6 @@ CubeDemoApplication::cubeRenderTask(Cory::RenderTaskBuilder builder,
     // bind the mesh buffers
     passRecorder.setVertexBuffer(0, mesh_->vertexBuffer);
     passRecorder.setIndexBuffer(mesh_->indexBuffer);
-
-    renderApi.bindingContext->flush();
 
     // draw all instances in a single call
     passRecorder.drawIndexed(Gpu::DrawIndexedCommand{

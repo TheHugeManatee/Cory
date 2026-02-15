@@ -6,6 +6,7 @@
 
 #include <cppcoro/generator.hpp>
 
+#include <filesystem>
 #include <string_view>
 
 namespace Cory {
@@ -78,6 +79,11 @@ class Framegraph : NoCopy {
                                                       Sync::AccessType lastWriteAccess,
                                                       const Texture &image,
                                                       const TextureView &imageView);
+    [[nodiscard]] TransientTextureHandle declareInput(TextureInfo info,
+                                                      Sync::AccessType lastWriteAccess,
+                                                      Gpu::TextureHandle image,
+                                                      Gpu::TextureViewHandle imageView);
+    [[nodiscard]] TransientTextureHandle declareInput(TransientTextureHandle handle);
 
     /// @brief declare an external resource dependency for the framegraph
     /// @param finalAccess The desired final access type for the output resource
@@ -102,7 +108,7 @@ class Framegraph : NoCopy {
     [[nodiscard]] cppcoro::generator<std::pair<RenderTaskHandle, const RenderTaskInfo &>>
     renderTasks() const;
 
-    [[nodiscard]] std::string dump(const ExecutionInfo &info);
+    void dump(const ExecutionInfo &info, std::filesystem::path outputPath) const;
 
   protected:
     RenderTaskHandle finishTaskDeclaration(RenderTaskInfo &&info);
@@ -136,7 +142,7 @@ class Framegraph : NoCopy {
     [[nodiscard]] PassTransitions executePass(CommandRecorder &cmd, RenderTaskHandle handle);
 
     /// Ensure that all output resources are transitioned to their final access states
-    void finalizeOutputs(ExecutionInfo executionInfo);
+    void finalizeOutputs(ExecutionInfo &executionInfo);
 
   private:                    /* members */
     friend RenderTaskBuilder; // convenience so it can call finishTaskDeclaration

@@ -38,6 +38,8 @@ class Swapchain;
 class DescriptorSets;
 class MappedCoherentDeviceBuffer;
 class GpuBumpAllocator;
+class HeadlessFrameSource;
+class FrameSource;
 
 class SlangCompiler;
 using SpirvByteCode = std::vector<uint32_t>;

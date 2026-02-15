@@ -17,8 +17,25 @@ void ResourceLocator::addSearchPath(std::filesystem::path path)
 std::filesystem::path ResourceLocator::Locate(std::filesystem::path resourcePath,
                                               [[maybe_unused]] ResourceType type)
 {
+    auto combinePaths = [](const std::filesystem::path &base,
+                           ResourceType type,
+                           const std::filesystem::path &resource) {
+        switch (type) {
+        case ResourceType::Shader:
+            return base / "shaders" / resource;
+        case ResourceType::Model:
+            return base / "models" / resource;
+        case ResourceType::Texture:
+            return base / "textures" / resource;
+        case ResourceType::Any:
+            [[fallthrough]];
+        default:
+            return base / resource;
+        }
+    };
+
     for (const auto &searchPath : searchPaths()) {
-        auto combined = searchPath / resourcePath;
+        auto combined = combinePaths(searchPath, type, resourcePath);
         if (exists(combined)) {
             return absolute(combined);
         }

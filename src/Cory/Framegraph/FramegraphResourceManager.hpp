@@ -37,6 +37,7 @@ class FramegraphResourceManager : NoCopy {
 
     explicit FramegraphResourceManager(FramegraphResourceManager &&) noexcept;
     FramegraphResourceManager &operator=(FramegraphResourceManager &&) noexcept;
+    void setContext(Context &ctx);
 
     void setCurrentFrameNumber(uint64_t frameNumber);
     [[nodiscard]] uint64_t currentFrameNumber() const;

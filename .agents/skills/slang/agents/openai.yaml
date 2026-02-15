@@ -1,0 +1,7 @@
+interface:
+  display_name: "Slang Shader Craft"
+  short_description: "Author and tune idiomatic Slang shaders."
+  icon_small: "./assets/slang-logo-small.svg"
+  icon_large: "./assets/slang-logo.svg"
+  brand_color: "#EA580C"
+  default_prompt: "Use $slang-code-craft to write or refactor a Slang shader module, then validate with ./cbt slang."

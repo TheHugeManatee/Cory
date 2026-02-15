@@ -15,6 +15,8 @@
 #include <range/v3/view/indices.hpp>
 #include <range/v3/view/transform.hpp>
 
+#include <magic_enum/magic_enum.hpp>
+
 #include <array>
 #include <optional>
 
@@ -39,6 +41,33 @@ Gpu::Format selectDepthFormat(const Gpu::Adapter &adapter)
         }
     }
     return Gpu::Format::D24_UNORM_S8_UINT;
+}
+
+Gpu::SampleCountFlagBits clampSampleCountToSupported(const Gpu::Adapter &adapter,
+                                                     Gpu::SampleCountFlagBits requested)
+{
+    const auto &limits = adapter.properties().limits;
+    const auto supportedMask = static_cast<uint32_t>(limits.framebufferColorSampleCounts.toInt() &
+                                                     limits.framebufferDepthSampleCounts.toInt());
+
+    constexpr std::array preferred = {
+        Gpu::SampleCountFlagBits::Samples64Bit,
+        Gpu::SampleCountFlagBits::Samples32Bit,
+        Gpu::SampleCountFlagBits::Samples16Bit,
+        Gpu::SampleCountFlagBits::Samples8Bit,
+        Gpu::SampleCountFlagBits::Samples4Bit,
+        Gpu::SampleCountFlagBits::Samples2Bit,
+        Gpu::SampleCountFlagBits::Samples1Bit,
+    };
+
+    const auto requestedBits = static_cast<uint32_t>(requested);
+    for (const auto sample : preferred) {
+        const auto sampleBits = static_cast<uint32_t>(sample);
+        if (sampleBits <= requestedBits && (supportedMask & sampleBits) != 0U) {
+            return sample;
+        }
+    }
+    return Gpu::SampleCountFlagBits::Samples1Bit;
 }
 
 } // namespace
@@ -73,7 +102,14 @@ HeadlessFrameSource::HeadlessFrameSource(Context &context, HeadlessFrameSourceCr
     data_->ctx = &context;
     data_->label = std::move(createInfo.label);
     data_->extent = createInfo.size;
-    data_->sampleCount = createInfo.samples;
+    data_->sampleCount =
+        clampSampleCountToSupported(*context.device().adapter(), createInfo.samples);
+    if (data_->sampleCount != createInfo.samples) {
+        CO_CORE_WARN("Headless frame source '{}' requested sample count {}, clamped to {}",
+                     data_->label,
+                     magic_enum::enum_name(createInfo.samples),
+                     magic_enum::enum_name(data_->sampleCount));
+    }
     data_->colorFormat = createInfo.colorFormat;
     data_->depthFormat = selectDepthFormat(*context.device().adapter());
     data_->imageCount = std::max<size_t>(1, createInfo.imageCount);
@@ -102,72 +138,75 @@ HeadlessFrameSource::HeadlessFrameSource(Context &context, HeadlessFrameSourceCr
                          Gpu::TextureUsageFlagBits::TransferSrcBit |
                          Gpu::TextureUsageFlagBits::SampledBit,
                 .memoryUsage = Gpu::MemoryUsage::GpuOnly,
+                .createFlags = {},
             });
         }) |
         ranges::to<std::vector>;
 
-    data_->swapchainViews = ranges::views::enumerate(data_->swapchainImages) |
-                            ranges::views::transform([extent](auto it) {
-                                auto [idx, image] = it;
-                                return image.createView(Gpu::TextureViewOptions{
-                                    .label =
-                                        fmt::format("TEX_HeadlessSwap[{}] {} (VIEW)", idx, extent),
-                                });
-                            }) |
-                            ranges::to<std::vector>;
+    data_->swapchainViews =
+        ranges::views::enumerate(data_->swapchainImages) |
+        ranges::views::transform([extent](auto it) {
+            auto [idx, image] = it;
+            return image.createView(Gpu::TextureViewOptions{
+                .label = fmt::format("TEX_HeadlessSwap[{}] {} (VIEW)", idx, extent),
+            });
+        }) |
+        ranges::to<std::vector>;
 
-    data_->colorImages = ranges::views::indices(MAX_FRAMES_IN_FLIGHT) |
-                         ranges::views::transform([&](auto idx) {
-                             return device.createTexture(Gpu::TextureOptions{
-                                 .label = fmt::format("TEX_HeadlessColor[{}] {} (IMG)", idx, extent),
-                                 .type = Gpu::TextureType::TextureType2D,
-                                 .format = data_->colorFormat,
-                                 .extent = {extent.x, extent.y, 1},
-                                 .mipLevels = 1,
-                                 .samples = data_->sampleCount,
-                                 .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit |
-                                          Gpu::TextureUsageFlagBits::TransferSrcBit |
-                                          Gpu::TextureUsageFlagBits::SampledBit,
-                                 .memoryUsage = Gpu::MemoryUsage::GpuOnly,
-                             });
-                         }) |
-                         ranges::to<std::vector>;
+    data_->colorImages =
+        ranges::views::indices(MAX_FRAMES_IN_FLIGHT) | ranges::views::transform([&](auto idx) {
+            return device.createTexture(Gpu::TextureOptions{
+                .label = fmt::format("TEX_HeadlessColor[{}] {} (IMG)", idx, extent),
+                .type = Gpu::TextureType::TextureType2D,
+                .format = data_->colorFormat,
+                .extent = {extent.x, extent.y, 1},
+                .mipLevels = 1,
+                .samples = data_->sampleCount,
+                .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit |
+                         Gpu::TextureUsageFlagBits::TransferSrcBit |
+                         Gpu::TextureUsageFlagBits::TransferDstBit |
+                         Gpu::TextureUsageFlagBits::SampledBit |
+                         Gpu::TextureUsageFlagBits::StorageBit,
+                .memoryUsage = Gpu::MemoryUsage::GpuOnly,
+                .createFlags = {},
+            });
+        }) |
+        ranges::to<std::vector>;
 
-    data_->colorImageViews = ranges::views::enumerate(data_->colorImages) |
-                             ranges::views::transform([extent](auto it) {
-                                 auto [idx, image] = it;
-                                 return image.createView(Gpu::TextureViewOptions{
-                                     .label = fmt::format(
-                                         "TEX_HeadlessColor[{}] {} (VIEW)", idx, extent),
-                                 });
-                             }) |
-                             ranges::to<std::vector>;
+    data_->colorImageViews =
+        ranges::views::enumerate(data_->colorImages) | ranges::views::transform([extent](auto it) {
+            auto [idx, image] = it;
+            return image.createView(Gpu::TextureViewOptions{
+                .label = fmt::format("TEX_HeadlessColor[{}] {} (VIEW)", idx, extent),
+            });
+        }) |
+        ranges::to<std::vector>;
 
-    data_->depthImages = ranges::views::indices(MAX_FRAMES_IN_FLIGHT) |
-                         ranges::views::transform([&](auto idx) {
-                             return device.createTexture(Gpu::TextureOptions{
-                                 .label = fmt::format("TEX_HeadlessDepth[{}] {} (IMG)", idx, extent),
-                                 .type = Gpu::TextureType::TextureType2D,
-                                 .format = data_->depthFormat,
-                                 .extent = {extent.x, extent.y, 1},
-                                 .mipLevels = 1,
-                                 .samples = data_->sampleCount,
-                                 .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
-                                          Gpu::TextureUsageFlagBits::SampledBit,
-                                 .memoryUsage = Gpu::MemoryUsage::GpuOnly,
-                             });
-                         }) |
-                         ranges::to<std::vector>;
+    data_->depthImages =
+        ranges::views::indices(MAX_FRAMES_IN_FLIGHT) | ranges::views::transform([&](auto idx) {
+            return device.createTexture(Gpu::TextureOptions{
+                .label = fmt::format("TEX_HeadlessDepth[{}] {} (IMG)", idx, extent),
+                .type = Gpu::TextureType::TextureType2D,
+                .format = data_->depthFormat,
+                .extent = {extent.x, extent.y, 1},
+                .mipLevels = 1,
+                .samples = data_->sampleCount,
+                .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit |
+                         Gpu::TextureUsageFlagBits::SampledBit,
+                .memoryUsage = Gpu::MemoryUsage::GpuOnly,
+                .createFlags = {},
+            });
+        }) |
+        ranges::to<std::vector>;
 
-    data_->depthImageViews = ranges::views::enumerate(data_->depthImages) |
-                             ranges::views::transform([extent](auto it) {
-                                 auto [idx, image] = it;
-                                 return image.createView(Gpu::TextureViewOptions{
-                                     .label = fmt::format(
-                                         "TEX_HeadlessDepth[{}] {} (VIEW)", idx, extent),
-                                 });
-                             }) |
-                             ranges::to<std::vector>;
+    data_->depthImageViews =
+        ranges::views::enumerate(data_->depthImages) | ranges::views::transform([extent](auto it) {
+            auto [idx, image] = it;
+            return image.createView(Gpu::TextureViewOptions{
+                .label = fmt::format("TEX_HeadlessDepth[{}] {} (VIEW)", idx, extent),
+            });
+        }) |
+        ranges::to<std::vector>;
 
     data_->resourceDeleter =
         std::make_unique<KDGpuUtils::ResourceDeleter>(&context.device(), MAX_FRAMES_IN_FLIGHT);
@@ -212,7 +251,8 @@ cppcoro::generator<FrameContext> HeadlessFrameSource::frameGenerator()
             static_cast<uint32_t>(data_->frameNumber % data_->swapchainImages.size());
 
         auto recorder = data_->ctx->device().createCommandRecorder(Gpu::CommandRecorderOptions{
-            .label = fmt::format("CMD-Headless-Frame{:03}-[{}]", data_->frameNumber, nextFrameIndex),
+            .label =
+                fmt::format("CMD-Headless-Frame{:03}-[{}]", data_->frameNumber, nextFrameIndex),
             .queue = data_->ctx->graphicsQueue().handle(),
             .level = Gpu::CommandBufferLevel::Primary,
         });
@@ -255,6 +295,8 @@ void HeadlessFrameSource::submit(FrameContext &frameCtx)
 
     Gpu::SubmitOptions submitOptions{
         .commandBuffers = {commandBuffer},
+        .waitSemaphores = {},
+        .signalSemaphores = {},
         .signalFence = *frameCtx.inFlight,
     };
     data_->ctx->graphicsQueue().submit(submitOptions);

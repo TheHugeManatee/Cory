@@ -27,6 +27,7 @@ add_library(Cory_TestLib OBJECT
         FramegraphResourceManager_Test.cpp
         CoroutinePlayground.cpp
         ShaderManager_Test.cpp
+        ShaderHotReloader_Test.cpp
         TestUtils.cpp
         TestUtils.hpp
         FmtUtils_Test.cpp
@@ -51,6 +52,8 @@ add_library(Cory_TestLib OBJECT
         RadixSort_Test.cpp
         ShaderBindingContext_Test.cpp
         MappedCoherentDeviceBuffer_Test.cpp
+        AsyncUploader_Test.cpp
+        ApiPass_Test.cpp
 )
 
 target_include_directories(Cory_TestLib PRIVATE ${CMAKE_SOURCE_DIR}/examples/05-ParticleCompute/src)

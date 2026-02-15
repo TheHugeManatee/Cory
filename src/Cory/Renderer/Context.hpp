@@ -8,11 +8,16 @@
 #include <KDGpu/instance.h>
 #include <KDGpu/surface.h>
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace Cory {
+
+class AsyncUploader;
+class FramegraphResourceManager;
 
 struct DebugMessageInfo {
     DebugMessageSeverity severity;
@@ -25,7 +30,7 @@ enum class ValidationLayers { Enabled, Disabled };
 enum class DeviceFeatures { RequiredOnly, All };
 struct ContextCreationInfo {
     ValidationLayers validation{ValidationLayers::Enabled};
-    std::span<const char *> args;
+    std::span<const char *const> args;
 };
 
 /**
@@ -64,6 +69,11 @@ class Context : NoCopy {
     Gpu::Device &device();
 
     Gpu::Queue &graphicsQueue();
+    Gpu::Queue &computeQueue();
+    Gpu::Queue &transferQueue();
+    [[nodiscard]] uint32_t graphicsQueueFamilyIndex() const noexcept;
+    [[nodiscard]] uint32_t computeQueueFamilyIndex() const noexcept;
+    [[nodiscard]] uint32_t transferQueueFamilyIndex() const noexcept;
 
     Gpu::VulkanResourceManager &resources();
     const Gpu::VulkanResourceManager &resources() const;
@@ -75,6 +85,10 @@ class Context : NoCopy {
 
     DescriptorSets &descriptors();
     const DescriptorSets &descriptors() const;
+
+    AsyncUploader &uploader();
+    FramegraphResourceManager &framegraphResources();
+    const FramegraphResourceManager &framegraphResources() const;
 
     FileWatchManager &fileWatchManager();
     const FileWatchManager &fileWatchManager() const;

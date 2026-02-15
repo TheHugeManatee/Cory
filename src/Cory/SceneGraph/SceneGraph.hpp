@@ -58,6 +58,10 @@ class SceneGraph : NoCopy {
     template <Component... Components>
     std::tuple<Components &...> addComponents(Entity entity, Components &&...components);
 
+    template <Component... Components>
+    std::tuple<Entity, Components &...>
+    createEntityWithComponents(Entity parent, std::string name, Components &&...components);
+
     /// access a component. may return nullptr if the entity does not have the component
     template <typename Component> Component *getComponent(Entity entity);
     template <typename Component> const Component *getComponent(Entity entity) const;
@@ -102,7 +106,17 @@ Cmp &SceneGraph::addComponent(Entity entity, CmpArgs &&...args)
 template <Component... Cmps>
 std::tuple<Cmps &...> SceneGraph::addComponents(Entity entity, Cmps &&...components)
 {
-    return {(registry().emplace<Cmps>(entity, std::forward<Cmps>(components)))...};
+    return std::tuple<Cmps &...>{
+        (registry().emplace<Cmps>(entity, std::forward<Cmps>(components)))...};
+}
+
+template <Component... Cmps>
+std::tuple<Entity, Cmps &...>
+SceneGraph::createEntityWithComponents(Entity parent, std::string name, Cmps &&...components)
+{
+    Entity e = createEntity(parent, name);
+    return std::tuple<Entity, Cmps &...>{
+        e, (registry().emplace<Cmps>(e, std::forward<Cmps>(components)))...};
 }
 
 template <typename Component> Component *SceneGraph::getComponent(Entity entity)

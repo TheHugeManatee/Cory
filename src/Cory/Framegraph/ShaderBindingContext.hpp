@@ -11,6 +11,8 @@
 
 #include <cstdint>
 #include <span>
+#include <unordered_map>
+#include <utility>
 #include <variant>
 
 namespace Cory {
@@ -33,6 +35,23 @@ namespace Cory {
  */
 class ShaderBindingContext : NoCopy, NoMove {
   public:
+    class ScopedBinding : NoCopy {
+      public:
+        ScopedBinding() = default;
+        ScopedBinding(ShaderBindingContext &context, bool autoFlushOnExit);
+        ~ScopedBinding();
+
+        ScopedBinding(ScopedBinding &&rhs) noexcept;
+        ScopedBinding &operator=(ScopedBinding &&rhs) noexcept;
+
+        void flush();
+        void release();
+
+      private:
+        ShaderBindingContext *context_{nullptr};
+        bool autoFlushOnExit_{true};
+    };
+
     explicit ShaderBindingContext(Gpu::Device &device,
                                   FramegraphResourceManager &resources,
                                   DescriptorSets &descriptorSets,
@@ -50,6 +69,10 @@ class ShaderBindingContext : NoCopy, NoMove {
 
     [[nodiscard]] TextureHeapIndex bindStorageImage2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
     [[nodiscard]] TextureHeapIndex bindStorageImage2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage2DMS(TransientTextureHandle textureHandle,
+                                                        Gpu::TextureLayout layout);
+    [[nodiscard]] TextureHeapIndex bindStorageImage2DMS(Gpu::TextureViewHandle view,
+                                                        Gpu::TextureLayout layout);
 
     [[nodiscard]] TextureHeapIndex bindStorageImage3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
     [[nodiscard]] TextureHeapIndex bindStorageImage3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
@@ -60,6 +83,13 @@ class ShaderBindingContext : NoCopy, NoMove {
     void bind(Gpu::RenderPassCommandRecorder &cmd);
     void bind(Gpu::RenderPassCommandRecorder &cmd, Gpu::PipelineLayoutHandle pipelineLayout);
     void bind(Gpu::ComputePassCommandRecorder &cmd);
+    [[nodiscard]] ScopedBinding scoped(Gpu::RenderPassCommandRecorder &cmd,
+                                       bool autoFlushOnExit = true);
+    [[nodiscard]] ScopedBinding scoped(Gpu::RenderPassCommandRecorder &cmd,
+                                       Gpu::PipelineLayoutHandle pipelineLayout,
+                                       bool autoFlushOnExit = true);
+    [[nodiscard]] ScopedBinding scoped(Gpu::ComputePassCommandRecorder &cmd,
+                                       bool autoFlushOnExit = true);
     void unbind();
 
     /// Allocate a temp allocation in the per-draw data buffer
@@ -74,7 +104,7 @@ class ShaderBindingContext : NoCopy, NoMove {
     void push(const T &data)
         requires(sizeof(T) <= MAX_PUSH_CONSTANT_SIZE)
     {
-        push(std::span{reinterpret_cast<const std::byte *>(&data), sizeof(data)});
+        push(std::as_bytes(std::span{&data, size_t{1}}));
     }
     /// Push raw push constant data - usually the templated version should be preferred
     void push(std::span<const std::byte> data);
@@ -82,10 +112,38 @@ class ShaderBindingContext : NoCopy, NoMove {
     /// Flush all writes to the bindings
     void flush();
 
+    [[nodiscard]] size_t drawDataBytesUsed() const { return allocator_.usedBytes(); }
+    [[nodiscard]] size_t drawDataBufferSize() const { return allocator_.capacityBytes(); }
+    void resizeDrawDataBuffer(size_t drawDataBufferSize);
+
     /// Reset the binding context for a new frame
     void reset();
 
   private:
+    struct TextureBindingKey {
+        ImageBindPoint bindPoint{ImageBindPoint::Texture2D};
+        Gpu::TextureViewHandle view{};
+        Gpu::TextureLayout layout{Gpu::TextureLayout::Undefined};
+        Gpu::TextureSamplerHandle sampler{};
+        bool operator==(const TextureBindingKey &) const = default;
+    };
+    struct TextureBindingKeyHasher {
+        std::size_t operator()(const TextureBindingKey &key) const noexcept
+        {
+            return hashCompose(key.bindPoint.value, key.view, key.layout, key.sampler);
+        }
+    };
+    struct SamplerBindingKey {
+        Gpu::TextureSamplerHandle sampler{};
+        bool operator==(const SamplerBindingKey &) const = default;
+    };
+    struct SamplerBindingKeyHasher {
+        std::size_t operator()(const SamplerBindingKey &key) const noexcept
+        {
+            return hashCompose(0, key.sampler);
+        }
+    };
+
     TextureHeapIndex &nextTextureIndex(ImageBindPoint bindPoint);
 
     TextureHeapIndex bindTexture(ImageBindPoint bindPoint,
@@ -111,6 +169,12 @@ class ShaderBindingContext : NoCopy, NoMove {
     TextureHeapIndex nextTexture3DIndex_{0};
     TextureHeapIndex nextStorageImage2DIndex_{0};
     TextureHeapIndex nextStorageImage3DIndex_{0};
+    TextureHeapIndex nextStorageImage2DMSIndex_{0};
     SamplerHeapIndex nextSamplerIndex_{0};
+
+    std::unordered_map<TextureBindingKey, TextureHeapIndex, TextureBindingKeyHasher>
+        textureBindingCache_;
+    std::unordered_map<SamplerBindingKey, SamplerHeapIndex, SamplerBindingKeyHasher>
+        samplerBindingCache_;
 };
 } // namespace Cory

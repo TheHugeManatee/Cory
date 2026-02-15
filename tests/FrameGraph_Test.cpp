@@ -586,7 +586,6 @@ TEST_CASE("Framegraph API", "[Cory/Framegraph]")
     auto g = graph.record(frameCtx);
     CHECK(!g.buffers.empty());
     CHECK(!g.bufferTransitions.empty());
-    CO_APP_INFO(graph.dump(g));
 }
 
 TEST_CASE("Framegraph allocates temp resources for scheduled tasks", "[Cory/Framegraph]")

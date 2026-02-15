@@ -23,7 +23,64 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
+#include <algorithm>
+#include <array>
+
 namespace Cory {
+
+namespace {
+std::vector<Gpu::SampleCountFlagBits> querySupportedSampleCounts(Context &ctx)
+{
+    static constexpr std::array<Gpu::SampleCountFlagBits, 7> kAllSamples{
+        Gpu::SampleCountFlagBits::Samples1Bit,
+        Gpu::SampleCountFlagBits::Samples2Bit,
+        Gpu::SampleCountFlagBits::Samples4Bit,
+        Gpu::SampleCountFlagBits::Samples8Bit,
+        Gpu::SampleCountFlagBits::Samples16Bit,
+        Gpu::SampleCountFlagBits::Samples32Bit,
+        Gpu::SampleCountFlagBits::Samples64Bit,
+    };
+
+    const auto limits = ctx.device().adapter()->properties().limits;
+    const auto supportedMask = static_cast<uint32_t>(limits.framebufferColorSampleCounts.toInt() &
+                                                     limits.framebufferDepthSampleCounts.toInt());
+
+    auto supported = std::vector<Gpu::SampleCountFlagBits>{};
+    supported.reserve(kAllSamples.size());
+    for (const auto sample : kAllSamples) {
+        if ((supportedMask & static_cast<uint32_t>(sample)) != 0u) {
+            supported.push_back(sample);
+        }
+    }
+    if (supported.empty()) {
+        supported.push_back(Gpu::SampleCountFlagBits::Samples1Bit);
+    }
+    return supported;
+}
+
+Gpu::SampleCountFlagBits
+clampSampleCountToSupported(Gpu::SampleCountFlagBits requested,
+                            std::span<const Gpu::SampleCountFlagBits> supportedSampleCounts)
+{
+    if (supportedSampleCounts.empty()) {
+        return Gpu::SampleCountFlagBits::Samples1Bit;
+    }
+
+    const auto requestedMask = static_cast<uint32_t>(requested);
+    if (std::ranges::find(supportedSampleCounts, requested) != supportedSampleCounts.end()) {
+        return requested;
+    }
+
+    // Prefer the largest supported sample count that does not exceed the request.
+    auto clamped = supportedSampleCounts.front();
+    for (const auto sample : supportedSampleCounts) {
+        if (static_cast<uint32_t>(sample) <= requestedMask) {
+            clamped = sample;
+        }
+    }
+    return clamped;
+}
+} // namespace
 
 struct WindowPrivate {
     Context *ctx;
@@ -32,23 +89,53 @@ struct WindowPrivate {
                                                    // destroyed separately from the Gpu::Surface
     Gpu::Surface surface{};
     std::unique_ptr<Swapchain> swapchain;
+    std::vector<Gpu::SampleCountFlagBits> supportedSampleCounts{};
+    bool swapchainRecreatePending{false};
+    bool updatingSamples{false};
 
     LapTimer fpsCounter{std::chrono::milliseconds{2000}};
 
-    void recreateSwapchain();
+    void recreateSwapchain(const std::string &title,
+                           const glm::i32vec2 &dimensions,
+                           KDBindings::Signal<SwapchainResizedEvent> &onSwapchainResized,
+                           Gpu::SampleCountFlagBits samples);
 };
 
+void WindowPrivate::recreateSwapchain(const std::string &title,
+                                      const glm::i32vec2 &dimensions,
+                                      KDBindings::Signal<SwapchainResizedEvent> &onSwapchainResized,
+                                      Gpu::SampleCountFlagBits samples)
+{
+    if (dimensions.x == 0 || dimensions.y == 0) {
+        return;
+    }
+
+    ctx->device().waitUntilIdle();
+    swapchain.reset();
+    CO_CORE_INFO("Recreating swapchain for window {} with size {} and {}x MSAA",
+                 title,
+                 dimensions,
+                 static_cast<uint32_t>(samples));
+    swapchain = std::make_unique<Swapchain>(*ctx,
+                                            surface,
+                                            SwapchainCreateInfo{
+                                                .label = title,
+                                                .size = dimensions,
+                                                .samples = samples,
+                                            });
+    onSwapchainResized.emit(SwapchainResizedEvent{.size{dimensions}});
+    swapchainRecreatePending = false;
+}
+
 Window::Window(Context &context,
-               glm::i32vec2 dimensions,
+               glm::i32vec2 requestedDimensions,
                std::string windowName,
                int32_t sampleCount)
     : data_{std::make_unique<WindowPrivate>()}
 {
     data_->ctx = &context;
     this->title = std::move(windowName);
-    this->dimensions = dimensions;
-
-    samples = static_cast<Gpu::SampleCountFlagBits>(sampleCount);
+    dimensions = requestedDimensions;
 
     glfwInit();
 
@@ -81,23 +168,47 @@ Window::Window(Context &context,
         context.graphicsApi().createSurfaceFromExistingVkSurface(instance_handle, surfaceHandle);
     context.setupDeviceFromSurface(data_->surface);
 
+    data_->supportedSampleCounts = querySupportedSampleCounts(context);
+    const auto requestedSamples = static_cast<Gpu::SampleCountFlagBits>(sampleCount);
+    const auto initialSamples =
+        clampSampleCountToSupported(requestedSamples, data_->supportedSampleCounts);
+    if (initialSamples != requestedSamples) {
+        CO_CORE_WARN("Requested {}x MSAA is not supported, clamping to {}x",
+                     static_cast<uint32_t>(requestedSamples),
+                     static_cast<uint32_t>(initialSamples));
+    }
+    samples = initialSamples;
+
     data_->swapchain = std::make_unique<Swapchain>(context,
                                                    data_->surface,
                                                    SwapchainCreateInfo{
                                                        .label = title(),
-                                                       .size = dimensions,
+                                                       .size = requestedDimensions,
                                                        .samples = samples(),
                                                    });
 
     samples.valueChanged()
         .connect([this]() {
-            CO_CORE_INFO("Samples changed to {}", samples());
-            CO_CORE_FATAL("Changing sample count dynamically is not implemented yet!");
-            // createColorAndDepthResources();
+            if (data_->updatingSamples) {
+                return;
+            }
+
+            const auto requested = samples();
+            const auto clamped =
+                clampSampleCountToSupported(requested, data_->supportedSampleCounts);
+            if (clamped != requested) {
+                data_->updatingSamples = true;
+                samples = clamped;
+                data_->updatingSamples = false;
+            }
+
+            CO_CORE_INFO("Samples changed to {}", static_cast<uint32_t>(samples()));
+            data_->swapchainRecreatePending = true;
         })
         .release();
 
-    title.valueChanged().connect([this](const std::string_view newTitle) { updateTitle(); });
+    title.valueChanged().connect(
+        [this]([[maybe_unused]] const std::string_view newTitle) { updateTitle(); });
 }
 
 Window::~Window()
@@ -124,47 +235,36 @@ FrameContext Window::nextSwapchainImage()
 FrameContext Window::acquireFrameContext()
 {
     while (true) {
-        auto nextImageResult = data_->swapchain->nextImage();
         auto dims = dimensions();
+        glfwGetFramebufferSize(data_->window.get(), &dims.x, &dims.y);
+        dimensions = dims;
+
+        if (dims.x == 0 || dims.y == 0) {
+            // Minimized/zero-sized surfaces cannot acquire or recreate swapchains.
+            glfwWaitEventsTimeout(0.05);
+            continue;
+        }
+
+        if (data_->swapchainRecreatePending) {
+            data_->recreateSwapchain(title(), dims, onSwapchainResized, samples());
+        }
+
+        auto nextImageResult = data_->swapchain->nextImage();
         if (!nextImageResult.has_value()) {
             auto error = nextImageResult.error();
             if (error == SwapchainError::Unknown) {
                 throw std::runtime_error(fmt::format(
                     "Failed to acquire next swapchain image for window '{}': {}", title(), error));
             }
-        }
-        if (!nextImageResult.has_value() || (dims.x == 0 || dims.y == 0)) {
 
-            // wait until the surface dimensions are non-zero - this might happen
-            // while the app is minimized or the window has been resized to zero height
-            // or width, in which case we don't render anything
-            // do {
-            //     glfwPollEvents();
-            //     // VkSurfaceCapabilitiesKHR capabilities{};
-            //     // data_->ctx->instance()->GetPhysicalDeviceSurfaceCapabilitiesKHR(
-            //     //     data_->ctx->physicalDevice(), surface_, &capabilities);
-            //     // size = {capabilities.currentExtent.width, capabilities.currentExtent.height};
-            //     std::this_thread::yield();
-            // } while (dimensions().x == 0 || dimensions().y == 0);
-
-            glfwGetWindowSize(data_->window.get(), &dims.x, &dims.y);
+            glfwGetFramebufferSize(data_->window.get(), &dims.x, &dims.y);
             dimensions = dims;
+            if (dims.x == 0 || dims.y == 0) {
+                glfwWaitEventsTimeout(0.05);
+                continue;
+            }
 
-            // Hard sync to make sure no commands are in flight before recreating the swapchain
-            data_->ctx->device().waitUntilIdle();
-            // recreate the necessary resized resources and notify client code via
-            // the onSwaphcainResized callback
-            data_->swapchain.reset();
-            CO_CORE_INFO("Recreating swapchain for window {} with size {}", title(), dims);
-            data_->swapchain = std::make_unique<Swapchain>(*data_->ctx,
-                                                           data_->surface,
-                                                           SwapchainCreateInfo{
-                                                               .label = title(),
-                                                               .size = dims,
-                                                               .samples = samples(),
-                                                           });
-            onSwapchainResized.emit(SwapchainResizedEvent{.size{dims}});
-
+            data_->recreateSwapchain(title(), dims, onSwapchainResized, samples());
             continue;
         }
 
@@ -172,14 +272,13 @@ FrameContext Window::acquireFrameContext()
         CO_CORE_TRACE("Acquired swapchain image {} for frame {}",
                       frameCtx.swapchainImageIndex,
                       frameCtx.frameNumber);
-        return std::move(frameCtx);
+        return frameCtx;
     }
 }
 
 void Window::submitAndPresent(FrameContext &frameCtx)
 {
     CO_CORE_TRACE("Submitting frame {}", frameCtx.frameNumber);
-
     data_->swapchain->present(frameCtx);
 
     if (data_->fpsCounter.lap()) {
@@ -194,12 +293,40 @@ Gpu::Format Window::depthFormat() const noexcept
 {
     return data_->swapchain->depthFormat();
 }
+glm::u32vec2 Window::extent() const noexcept
+{
+    return data_->swapchain->extent();
+}
+
+Gpu::SampleCountFlagBits Window::sampleCount() const noexcept
+{
+    return samples();
+}
+
+std::span<const Gpu::SampleCountFlagBits> Window::supportedSampleCounts() const noexcept
+{
+    return data_->supportedSampleCounts;
+}
+
+void Window::requestSampleCount(Gpu::SampleCountFlagBits requestedSampleCount)
+{
+    const auto clamped =
+        clampSampleCountToSupported(requestedSampleCount, data_->supportedSampleCounts);
+    if (samples() != clamped) {
+        samples = clamped;
+    }
+}
+
+size_t Window::size() const noexcept
+{
+    return data_->swapchain->size();
+}
 
 cppcoro::generator<FrameContext> Window::frameGenerator()
 {
     while (!shouldClose()) {
         auto frameCtx = acquireFrameContext();
-        co_yield std::move(frameCtx);
+        co_yield frameCtx;
     }
 }
 
@@ -224,45 +351,52 @@ void Window::createWindow()
     auto dims = dimensions();
     auto windowHandle = glfwCreateWindow(dims.x, dims.y, title().c_str(), nullptr, nullptr);
 
-    std::shared_ptr<GLFWwindow> window(windowHandle, [=](auto *ptr) {
+    std::shared_ptr<GLFWwindow> glfwWindow(windowHandle, [=](auto *ptr) {
         CO_CORE_TRACE("Destroying GLFW context");
         glfwDestroyWindow(ptr);
         glfwTerminate();
     });
-    glfwSetWindowUserPointer(window.get(), this);
-    glfwSetCursorPosCallback(window.get(), [](GLFWwindow *window, double mouseX, double mouseY) {
-        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
-        self.onMouseMoved.emit({.position = {mouseX, mouseY},
-                                .button = GLFWUtils::getMouseButtonState(window),
-                                .modifiers = GLFWUtils::getModifierState(window)});
-    });
+    glfwSetWindowUserPointer(glfwWindow.get(), this);
+    glfwSetCursorPosCallback(
+        glfwWindow.get(), [](GLFWwindow *windowHandle, double mouseX, double mouseY) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
+            self.onMouseMoved.emit({.position = {mouseX, mouseY},
+                                    .button = GLFWUtils::getMouseButtonState(windowHandle),
+                                    .modifiers = GLFWUtils::getModifierState(windowHandle)});
+        });
     glfwSetMouseButtonCallback(
-        window.get(), [](GLFWwindow *window, int button, int action, int mods) {
-            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+        glfwWindow.get(),
+        [](GLFWwindow *windowHandle,
+           [[maybe_unused]] int button,
+           int action,
+           [[maybe_unused]] int mods) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
             double mouseX, mouseY;
-            glfwGetCursorPos(window, &mouseX, &mouseY);
+            glfwGetCursorPos(windowHandle, &mouseX, &mouseY);
             self.onMouseButton.emit(MouseButtonEvent{
                 .position = glm::vec2{mouseX, mouseY},
-                .button = GLFWUtils::getMouseButtonState(window),
+                .button = GLFWUtils::getMouseButtonState(windowHandle),
                 .action = action == GLFW_PRESS ? ButtonAction::Press : ButtonAction::Release,
-                .modifiers = GLFWUtils::getModifierState(window)});
+                .modifiers = GLFWUtils::getModifierState(windowHandle)});
         });
-    glfwSetScrollCallback(window.get(), [](GLFWwindow *window, double xOffset, double yOffset) {
-        Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
-        double mouseX, mouseY;
-        glfwGetCursorPos(window, &mouseX, &mouseY);
-        self.onMouseScrolled.emit({.position = {mouseX, mouseY},
-                                   .scrollDelta = {xOffset, yOffset},
-                                   .modifiers = GLFWUtils::getModifierState(window)});
-    });
+    glfwSetScrollCallback(
+        glfwWindow.get(), [](GLFWwindow *windowHandle, double xOffset, double yOffset) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
+            double mouseX, mouseY;
+            glfwGetCursorPos(windowHandle, &mouseX, &mouseY);
+            self.onMouseScrolled.emit({.position = {mouseX, mouseY},
+                                       .scrollDelta = {xOffset, yOffset},
+                                       .modifiers = GLFWUtils::getModifierState(windowHandle)});
+        });
     glfwSetKeyCallback(
-        window.get(), [](GLFWwindow *window, int key, int scancode, int action, int mods) {
-            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(window));
+        glfwWindow.get(),
+        [](GLFWwindow *windowHandle, int key, int scancode, int action, int mods) {
+            Window &self = *reinterpret_cast<Window *>(glfwGetWindowUserPointer(windowHandle));
             self.onKeyCallback.emit(
                 KeyEvent{.key = key, .scanCode = scancode, .action = action, .modifiers = mods});
         });
 
-    data_->window = std::move(window);
+    data_->window = std::move(glfwWindow);
 }
 
 void Window::updateTitle()

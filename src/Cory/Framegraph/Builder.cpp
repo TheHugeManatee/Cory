@@ -28,6 +28,130 @@ bool shouldReadAttachment(Gpu::AttachmentLoadOperation loadOp)
 {
     return loadOp == Gpu::AttachmentLoadOperation::Load;
 }
+
+struct TextureAccessPreset {
+    Gpu::TextureUsageFlags usage;
+    Sync::AccessType access;
+};
+
+struct BufferAccessPreset {
+    Gpu::BufferUsageFlags usage;
+    Sync::AccessType access;
+};
+
+TextureAccessPreset toTextureReadPreset(RenderTaskBuilder::TextureReadPreset preset)
+{
+    switch (preset) {
+    case RenderTaskBuilder::TextureReadPreset::TransferSrc:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::TransferSrcBit,
+            .access = Sync::AccessType::TransferRead,
+        };
+    case RenderTaskBuilder::TextureReadPreset::ComputeSampled:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::SampledBit,
+            .access = Sync::AccessType::ComputeShaderReadOther,
+        };
+    case RenderTaskBuilder::TextureReadPreset::FragmentSampled:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::SampledBit,
+            .access = Sync::AccessType::FragmentShaderReadSampledImageOrUniformTexelBuffer,
+        };
+    }
+    CO_CORE_ASSERT(false, "Unhandled texture read preset {}", static_cast<int>(preset));
+}
+
+TextureAccessPreset toTextureWritePreset(RenderTaskBuilder::TextureWritePreset preset)
+{
+    switch (preset) {
+    case RenderTaskBuilder::TextureWritePreset::TransferDst:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::TransferDstBit,
+            .access = Sync::AccessType::TransferWrite,
+        };
+    case RenderTaskBuilder::TextureWritePreset::ColorAttachment:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+            .access = Sync::AccessType::ColorAttachmentWrite,
+        };
+    case RenderTaskBuilder::TextureWritePreset::DepthStencilAttachment:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+            .access = Sync::AccessType::DepthStencilAttachmentWrite,
+        };
+    case RenderTaskBuilder::TextureWritePreset::ComputeStorage:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::StorageBit,
+            .access = Sync::AccessType::ComputeShaderWrite,
+        };
+    }
+    CO_CORE_ASSERT(false, "Unhandled texture write preset {}", static_cast<int>(preset));
+}
+
+TextureAccessPreset toTextureReadWritePreset(RenderTaskBuilder::TextureReadWritePreset preset)
+{
+    switch (preset) {
+    case RenderTaskBuilder::TextureReadWritePreset::GeneralStorage:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::StorageBit,
+            .access = Sync::AccessType::General,
+        };
+    case RenderTaskBuilder::TextureReadWritePreset::ColorAttachment:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::ColorAttachmentBit,
+            .access = Sync::AccessType::ColorAttachmentReadWrite,
+        };
+    case RenderTaskBuilder::TextureReadWritePreset::DepthStencilAttachment:
+        return {
+            .usage = Gpu::TextureUsageFlagBits::DepthStencilAttachmentBit,
+            .access = Sync::AccessType::DepthStencilAttachmentReadWrite,
+        };
+    }
+    CO_CORE_ASSERT(false, "Unhandled texture readWrite preset {}", static_cast<int>(preset));
+}
+
+BufferAccessPreset toBufferReadPreset(RenderTaskBuilder::BufferReadPreset preset)
+{
+    switch (preset) {
+    case RenderTaskBuilder::BufferReadPreset::ComputeStorage:
+        return {
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
+            .access = Sync::AccessType::ComputeShaderReadOther,
+        };
+    case RenderTaskBuilder::BufferReadPreset::VertexStorage:
+        return {
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit,
+            .access = Sync::AccessType::VertexShaderReadOther,
+        };
+    }
+    CO_CORE_ASSERT(false, "Unhandled buffer read preset {}", static_cast<int>(preset));
+}
+
+BufferAccessPreset toBufferWritePreset(RenderTaskBuilder::BufferWritePreset preset)
+{
+    switch (preset) {
+    case RenderTaskBuilder::BufferWritePreset::ComputeStorage:
+        return {
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+            .access = Sync::AccessType::ComputeShaderWrite,
+        };
+    }
+    CO_CORE_ASSERT(false, "Unhandled buffer write preset {}", static_cast<int>(preset));
+}
+
+BufferAccessPreset toBufferReadWritePreset(RenderTaskBuilder::BufferReadWritePreset preset)
+{
+    switch (preset) {
+    case RenderTaskBuilder::BufferReadWritePreset::ComputeStorage:
+        return {
+            .usage = Gpu::BufferUsageFlagBits::StorageBufferBit |
+                     Gpu::BufferUsageFlagBits::ShaderDeviceAddressBit,
+            .access = Sync::AccessType::General,
+        };
+    }
+    CO_CORE_ASSERT(false, "Unhandled buffer readWrite preset {}", static_cast<int>(preset));
+}
 } // namespace
 
 RenderTaskBuilder::RenderTaskBuilder(Context &ctx,
@@ -46,9 +170,14 @@ TransientTextureHandle RenderTaskBuilder::create(std::string name,
                                                  glm::u32vec3 size,
                                                  TextureFormat format,
                                                  Gpu::TextureUsageFlags usage,
-                                                 Sync::AccessType writeAccess)
+                                                 Sync::AccessType writeAccess,
+                                                 Gpu::TextureType textureType)
 {
-    const TextureInfo info{.name = std::move(name), .size = size, .format = format};
+    const TextureInfo info{.name = std::move(name),
+                           .size = size,
+                           .format = format,
+                           .usage = usage,
+                           .textureType = textureType};
 
     auto handle = TransientTextureHandle{framegraph_.resources().declareTexture(info)};
 
@@ -92,6 +221,12 @@ TextureInfo RenderTaskBuilder::read(TransientTextureHandle handle,
     return framegraph_.resources().info(handle.texture());
 }
 
+TextureInfo RenderTaskBuilder::read(TransientTextureHandle handle, TextureReadPreset preset)
+{
+    const auto p = toTextureReadPreset(preset);
+    return read(handle, p.usage, p.access);
+}
+
 BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle,
                                    Gpu::BufferUsageFlags usage,
                                    Sync::AccessType readAccess)
@@ -102,6 +237,12 @@ BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle,
                                          .usage = usage,
                                          .access = readAccess});
     return framegraph_.resources().info(handle.buffer());
+}
+
+BufferInfo RenderTaskBuilder::read(TransientBufferHandle handle, BufferReadPreset preset)
+{
+    const auto p = toBufferReadPreset(preset);
+    return read(handle, p.usage, p.access);
 }
 
 std::pair<TransientTextureHandle, TextureInfo> RenderTaskBuilder::write(
@@ -119,6 +260,13 @@ std::pair<TransientTextureHandle, TextureInfo> RenderTaskBuilder::write(
     return {outputHandle, framegraph_.resources().info(outputHandle.texture())};
 }
 
+std::pair<TransientTextureHandle, TextureInfo>
+RenderTaskBuilder::write(TransientTextureHandle handle, TextureWritePreset preset)
+{
+    const auto p = toTextureWritePreset(preset);
+    return write(handle, p.usage, p.access);
+}
+
 std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::write(TransientBufferHandle handle,
                                                                       Gpu::BufferUsageFlags usage,
                                                                       Sync::AccessType writeAccess)
@@ -132,6 +280,13 @@ std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::write(TransientB
     });
 
     return {outputHandle, framegraph_.resources().info(outputHandle.buffer())};
+}
+
+std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::write(TransientBufferHandle handle,
+                                                                      BufferWritePreset preset)
+{
+    const auto p = toBufferWritePreset(preset);
+    return write(handle, p.usage, p.access);
 }
 
 std::pair<TransientTextureHandle, TextureInfo> RenderTaskBuilder::readWrite(
@@ -157,6 +312,13 @@ std::pair<TransientTextureHandle, TextureInfo> RenderTaskBuilder::readWrite(
     return {outputHandle, framegraph_.resources().info(handle.texture())};
 }
 
+std::pair<TransientTextureHandle, TextureInfo>
+RenderTaskBuilder::readWrite(TransientTextureHandle handle, TextureReadWritePreset preset)
+{
+    const auto p = toTextureReadWritePreset(preset);
+    return readWrite(handle, p.usage, p.access);
+}
+
 std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::readWrite(
     TransientBufferHandle handle, Gpu::BufferUsageFlags usage, Sync::AccessType readWriteAccess)
 {
@@ -177,6 +339,13 @@ std::pair<TransientBufferHandle, BufferInfo> RenderTaskBuilder::readWrite(
     });
 
     return {outputHandle, framegraph_.resources().info(handle.buffer())};
+}
+
+std::pair<TransientBufferHandle, BufferInfo>
+RenderTaskBuilder::readWrite(TransientBufferHandle handle, BufferReadWritePreset preset)
+{
+    const auto p = toBufferReadWritePreset(preset);
+    return readWrite(handle, p.usage, p.access);
 }
 
 TransientRenderPass RenderTaskBuilder::declareRenderPass(RenderPassDeclaration passDeclaration)

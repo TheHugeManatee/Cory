@@ -123,10 +123,16 @@ class CoryResourceFileSystem final : public ISlangFileSystem, public SlangObject
     // ISlangFileSystem
     SLANG_NO_THROW SlangResult SLANG_MCALL loadFile(const char *path, ISlangBlob **outBlob) override
     {
-        CO_CORE_DEBUG("Slang requested included shader file: {}", path);
+        CO_CORE_TRACE("Slang requested included shader file: {}", path);
         try {
-            auto fullPath =
-                ResourceLocator::Locate(std::filesystem::path{path}, ResourceType::Shader);
+            auto fullPath = std::filesystem::path{path};
+            if (fullPath.is_absolute() && !std::filesystem::exists(fullPath)) {
+                fullPath = ResourceLocator::Locate(fullPath.filename(), ResourceType::Shader);
+            }
+            else {
+                fullPath = ResourceLocator::Locate(fullPath, ResourceType::Shader);
+            }
+
             if (!std::filesystem::exists(fullPath)) {
                 return SLANG_E_NOT_FOUND;
             }

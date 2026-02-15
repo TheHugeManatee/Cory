@@ -48,10 +48,14 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
             outputsProvided_ = true;
         }
 
+        void mark_handed_off() { handedOff_ = true; }
+        [[nodiscard]] bool handed_off() const { return handedOff_; }
+
         // todo: this could easily be a std::variant
         RenderTaskOutput output_;
         std::exception_ptr exception_{nullptr};
         bool outputsProvided_{false};
+        bool handedOff_{false};
     };
 
     using Handle = cppcoro::coroutine_handle<promise_type>;
@@ -67,9 +71,11 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
     }
     ~RenderTaskDeclaration()
     {
-        // todo: if a coroutine never calls builder.finishDeclaration(), its coroutine handle will
-        // leak! :/
-        // if (coroHandle_) { coroHandle_.destroy(); }
+        // Once outputs were yielded, ownership may be transferred to an external
+        // awaiter/scheduler. Conservatively destroy only before first yield.
+        if (coroHandle_ && !coroHandle_.promise().outputsProvided_) {
+            coroHandle_.destroy();
+        }
     }
 
     const RenderTaskOutput &output()

@@ -8,6 +8,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
 
     SECTION("Compiling a simple compute shader")
     {
+        // language=hlsl
         Cory::ShaderSource source{R"(
             RWStructuredBuffer<float> result;
             [shader("compute")]
@@ -29,6 +30,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
     }
     SECTION("Compiling an invalid compute shader")
     {
+        // language=hlsl
         Cory::ShaderSource source{R"(
             RWStructuredBuffer<float> result;
             [shader("compute")]
@@ -47,6 +49,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
     }
     SECTION("Compiling a compute shader that requires a file that does not exist")
     {
+        // language=hlsl
         Cory::ShaderSource source{R"(
             #include "NonExistentFile";
 
@@ -68,6 +71,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
 
     SECTION("Reflecting a pointer push constant")
     {
+        // language=hlsl
         Cory::ShaderSource source{R"(
             struct Globals { float4x4 m; };
             [[vk::push_constant]] Globals* globals;
@@ -89,6 +93,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
 
     SECTION("Reflecting a struct push constant")
     {
+        // language=hlsl
         Cory::ShaderSource source{R"(
             struct Push { float4 color; float2 uv; };
             [[vk::push_constant]] Push pc;
@@ -110,6 +115,7 @@ TEST_CASE("Shader Compilation", "[Cory/Renderer]")
 
     SECTION("No push constant yields empty reflection")
     {
+        // language=hlsl
         Cory::ShaderSource source{R"(
             RWStructuredBuffer<float> result;
             [shader("compute")]

@@ -25,6 +25,12 @@ inline float availableWidth()
     return ::ImGui::GetContentRegionAvail().x;
 }
 
+inline void Label(std::string_view label)
+{
+    const auto labelText = std::string{label};
+    ::ImGui::TextUnformatted(labelText.c_str());
+}
+
 } // namespace detail
 
 template <typename... Args> void Text(fmt::format_string<Args...> fmtString, Args... args)
@@ -38,7 +44,7 @@ template <typename ValueType, typename... Arguments>
     requires std::same_as<ValueType, float> || std::same_as<ValueType, int32_t>
 auto Slider(std::string_view label, ValueType &value, Arguments... args)
 {
-    ::ImGui::Text("%s", label.data()); // NOLINT
+    detail::Label(label);
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (std::same_as<ValueType, float>) {
@@ -53,7 +59,7 @@ auto Slider(std::string_view label, ValueType &value, Arguments... args)
 template <glm::length_t L, typename T, typename... Arguments>
 auto Slider(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 {
-    ::ImGui::Text("%s", label.data()); // NOLINT
+    detail::Label(label);
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (L == 2) {
@@ -101,7 +107,7 @@ template <typename ValueType, typename... Arguments>
              std::same_as<ValueType, int32_t>
 auto Input(std::string_view label, ValueType &value, Arguments... args)
 {
-    ::ImGui::Text("%s", label.data()); // NOLINT
+    detail::Label(label);
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (std::same_as<ValueType, double>) {
@@ -119,7 +125,7 @@ auto Input(std::string_view label, ValueType &value, Arguments... args)
 template <glm::length_t L, typename T, typename... Arguments>
 auto Input(std::string_view label, glm::vec<L, T> &value, Arguments... args)
 {
-    ::ImGui::Text("%s", label.data()); // NOLINT
+    detail::Label(label);
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
     const std::string internalLabel = fmt::format("##{}", label);
     if constexpr (L == 2) {
@@ -165,7 +171,7 @@ template <typename E>
     requires std::is_enum_v<E>
 bool ComboBox(std::string_view label, E &value, ImGuiComboFlags flags = 0)
 {
-    ::ImGui::Text("%s", label.data()); // NOLINT
+    detail::Label(label);
     ::ImGui::SameLine(detail::availableWidth() / 3.0f);
 
     // Pass in the preview value visible before opening the combo (it could technically be different
@@ -214,6 +220,16 @@ bool ComboBox(std::string_view label, KDGpu::Flags<E> &flags)
         wasChanged = true;
     }
     return wasChanged;
+}
+
+inline bool CheckBox(const char *str, KDBindings::Property<bool> &property)
+{
+    bool v = property.get();
+    if (ImGui::Checkbox(str, &v)) {
+        property.set(v);
+        return true;
+    }
+    return false;
 }
 
 template <typename E>

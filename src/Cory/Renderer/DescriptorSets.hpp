@@ -27,6 +27,7 @@ struct ImageBindPoint {
         StorageImage2D = 2,
         StorageImage3D = 3,
         Samplers = 4,
+        StorageImage2DMS = 5,
     };
 };
 

@@ -1,33 +1,5 @@
 ---
-Checks: "*,
-        -abseil-*,
-        -altera-*,
-        -android-*,
-        -fuchsia-*,
-        -google-*,
-        -llvm*,
-        -modernize-use-trailing-return-type,
-        -zircon-*,
-        -readability-static-accessed-through-instance,
-        -readability-avoid-const-params-in-decls,
-        -readability-identifier-length,
-        -readability-redundant-access-specifiers,
-        -readability-uppercase-literal-suffix,
-        -readability-magic-numbers,
-        -cppcoreguidelines-avoid-magic-numbers,
-        -cppcoreguidelines-non-private-member-variables-in-classes,
-        -misc-non-private-member-variables-in-classes,
-        -hicpp-uppercase-literal-suffix,
-"
+Checks: "clang-analyzer-*"
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle:     none
-
-CheckOptions:
-  - key: hicpp-signed-bitwise.IgnorePositiveIntegerLiterals
-    value: True
-
-
-
-
-

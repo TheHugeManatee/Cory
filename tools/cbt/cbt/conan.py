@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import json
 
 from .util import run, write_text, read_text
 
@@ -81,6 +82,7 @@ def install(
     profile_build: str,
     build_type: str,
     quiet: bool,
+    preset_name: str | None = None,
 ) -> None:
     cmd = [
         conan,
@@ -97,3 +99,34 @@ def install(
         profile_build,
     ]
     run(cmd, quiet=quiet)
+    # If Conan or CMake emitted a CMakePresets.json in the build dir, patch its
+    # configure/build/test preset names so that they match the `cbt` profile name
+    # (preset_name). This ensures the generated presets are aligned with the
+    # cbt profile, which helps editors and automation that consume the presets.
+    if preset_name:
+        try:
+            presets_path = build_dir / "CMakePresets.json"
+            if presets_path.exists():
+                try:
+                    data = json.loads(presets_path.read_text(encoding="utf-8"))
+                except Exception:
+                    data = None
+                if isinstance(data, dict):
+                    # Update top-level configure preset name (first entry)
+                    cfgs = data.get("configurePresets")
+                    if isinstance(cfgs, list) and len(cfgs) > 0:
+                        cfgs[0]["name"] = preset_name
+                    # Ensure buildPresets and testPresets reference the new configurePreset
+                    for list_key in ("buildPresets", "testPresets"):
+                        items = data.get(list_key)
+                        if isinstance(items, list):
+                            for it in items:
+                                # set configurePreset and normalize the preset name
+                                it["configurePreset"] = preset_name
+                                # also set the preset's own name to be the profile for simplicity
+                                it["name"] = preset_name
+                    # Write the patched presets back
+                    presets_path.write_text(json.dumps(data, indent=4, sort_keys=False), encoding="utf-8")
+        except Exception:
+            # Do not fail the install if patching fails; log could be added later.
+            pass

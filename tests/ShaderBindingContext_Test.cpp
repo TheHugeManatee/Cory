@@ -82,7 +82,7 @@ TEST_CASE("Shader binding context: Texture 2D allocation", "[ShaderBindingContex
     TextureHeapIndex index2 =
         bindingContext.bindTexture2D(view, Gpu::TextureLayout::ShaderReadOnlyOptimal, sampler);
 
-    CHECK(index2 > index1);
+    CHECK(index2 == index1);
 
     bindingContext.reset();
 
@@ -128,13 +128,13 @@ TEST_CASE("Shader binding context: Texture 3D and storage image allocation",
         bindingContext.bindTexture3D(view3d, Gpu::TextureLayout::ShaderReadOnlyOptimal, sampler);
     const TextureHeapIndex t2 =
         bindingContext.bindTexture3D(view3d, Gpu::TextureLayout::ShaderReadOnlyOptimal, sampler);
-    CHECK(t2 > t1);
+    CHECK(t2 == t1);
 
     const TextureHeapIndex s1 =
         bindingContext.bindStorageImage3D(view3d, Gpu::TextureLayout::General);
     const TextureHeapIndex s2 =
         bindingContext.bindStorageImage3D(view3d, Gpu::TextureLayout::General);
-    CHECK(s2 > s1);
+    CHECK(s2 == s1);
 
     bindingContext.reset();
 
@@ -177,5 +177,5 @@ TEST_CASE("Shader binding context: Sampler allocation", "[ShaderBindingContext]"
 
     const SamplerHeapIndex s1 = bindingContext.bindSampler(sampler.handle());
     const SamplerHeapIndex s2 = bindingContext.bindSampler(sampler.handle());
-    CHECK(s2 > s1);
+    CHECK(s2 == s1);
 }

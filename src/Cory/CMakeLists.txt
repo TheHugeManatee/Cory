@@ -12,10 +12,13 @@ find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
 
 if (MSVC)
-    # Conan cppcoro currently exports /await for consumers on Windows, which forces
-    # the TS coroutine ABI and can mismatch the packaged cppcoro.lib coroutine ABI.
-    # Clear consumer compile options so all targets use the standard C++ coroutine ABI.
-    set_property(TARGET cppcoro::cppcoro PROPERTY INTERFACE_COMPILE_OPTIONS "")
+    # Conan currently provides cppcoro binaries with mismatched coroutine ABIs between
+    # Release and Debug on Windows for this workspace:
+    # - Release cppcoro.lib exports std::experimental::coroutine_handle (needs /await)
+    # - Debug cppcoro.lib exports std::coroutine_handle (must not use /await)
+    # Match consumer compile options per config to avoid _COROUTINE_ABI linker mismatches.
+    set_property(TARGET cppcoro::cppcoro PROPERTY INTERFACE_COMPILE_OPTIONS
+            "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Release>>:/await>")
 endif ()
 
 find_package(EnTT REQUIRED)

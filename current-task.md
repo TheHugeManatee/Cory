@@ -40,6 +40,7 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
 ## Sidetracks
 
 - Async parallel data loading
+- Windows Release cppcoro coroutine ABI mismatch
 
 # Current Status 
 - Added initial oVert volume import pipeline (ADR-06):
@@ -76,6 +77,13 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
     and a unit test that validates exact grayscale pixel values loaded in C++.
 - Changedthe ResourceLocator::Locate interface to replace throwing exceptions with returning a Cory::Result
 - Introduced async parallel dataset loading via `DatasetLoader` class
+- Windows Release (`clion-release`) linker fix for cppcoro ABI mismatch:
+  - Replaced the previous blanket override with a config-specific MSVC override on `cppcoro::cppcoro`:
+    - `Release`: keep `/await` (package exports `std::experimental::coroutine_handle` ABI).
+    - `Debug`: clear `/await` (package exports `std::coroutine_handle` ABI).
+  - Verified both profiles by building `Cory_Tests`:
+    - `./cbt build --profile clion-release --target Cory_Tests`
+    - `./cbt build --profile clion-debug --target Cory_Tests`
 
 ## Open Investigation: Eager Task Declaration + Virtual Textures
 

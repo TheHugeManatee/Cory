@@ -277,9 +277,6 @@ DatasetLoader::loadSliceR8(const std::filesystem::path &bmpPath,
         }
     }
 
-    CO_CORE_INFO("[{}] Finished loading slice {}",
-                 std::hash<std::thread::id>{}(std::this_thread::get_id()),
-                 sliceIndex);
     co_return Result<void>{};
 }
 

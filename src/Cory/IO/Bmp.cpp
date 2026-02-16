@@ -1,5 +1,7 @@
 #include <Cory/IO/Bmp.hpp>
 
+#include <gsl/narrow>
+
 #include <algorithm>
 #include <fstream>
 #include <limits>
@@ -162,29 +164,66 @@ Result<BmpInfo> decodeBmp(std::span<const std::byte> bytes, std::span<std::byte>
 
     const auto *src = reinterpret_cast<const uint8_t *>(bytes.data());
     auto *dst = reinterpret_cast<uint8_t *>(outputR8.data());
-    for (uint32_t y = 0; y < parsed->height; ++y) {
-        const auto srcY = parsed->topDown ? y : (parsed->height - 1U - y);
-        const auto srcRowOffset = static_cast<size_t>(parsed->pixelDataOffset) +
-                                  static_cast<size_t>(srcY * parsed->rowStride);
-        const auto dstRowOffset = static_cast<size_t>(y) * static_cast<size_t>(parsed->width);
 
-        for (uint32_t x = 0; x < parsed->width; ++x) {
-            const auto srcIndexOffset = srcRowOffset + static_cast<size_t>(x);
-            const auto dstOffset = dstRowOffset + static_cast<size_t>(x);
-            const auto paletteIndex = src[srcIndexOffset];
-            if (parsed->colorTableEntryCount == 0u) {
-                dst[dstOffset] = paletteIndex;
-                continue;
-            }
+    // Conversions up front - assuming everything fits into uint32_t
+    const auto parsedData = *parsed; // Avoid repeated struct member access in the inner loop
+    const auto rowStride = gsl::narrow<uint32_t>(parsedData.rowStride);
+    const auto pixelDataOffset = gsl::narrow<uint32_t>(parsedData.pixelDataOffset);
+    std::array<uint8_t, 256> grayscalePalette{};
+    bool palletteIsIdentity = true;
 
-            if (paletteIndex >= parsed->colorTableEntryCount) {
-                return std::unexpected("BMP decode failed: palette index out of bounds");
-            }
+    if (parsedData.colorTableEntryCount == 0u) {
+        // No color table means the palette is the identity mapping (grayscale)
+        for (uint32_t i = 0; i < 256u; ++i) {
+            grayscalePalette[i] = static_cast<uint8_t>(i);
+        }
+    }
+    else {
+        // Pre-extract the grayscale values from the color table for a faster lookup in the inner
+        // loop
+        for (uint32_t i = 0; i < parsedData.colorTableEntryCount; ++i) {
+            const auto paletteOffset =
+                static_cast<size_t>(parsedData.colorTableOffset) + static_cast<size_t>(i) * 4u;
 
-            const auto paletteOffset = static_cast<size_t>(parsed->colorTableOffset) +
-                                       static_cast<size_t>(paletteIndex) * 4u;
             // Color table entries are BGRA. Grayscale inputs have B==G==R; use R channel.
-            dst[dstOffset] = src[paletteOffset + 2u];
+            grayscalePalette[i] = src[paletteOffset + 2u];
+            if (grayscalePalette[i] != i) {
+                palletteIsIdentity = false;
+            }
+        }
+    }
+
+    // If the palette is the identity mapping, we can skip the lookup and just copy the bytes
+    if (palletteIsIdentity) {
+        if (parsedData.topDown == true) {
+            // If the image is top-down, we can copy the rows in order without needing to reverse
+            // them
+            std::copy_n(src + pixelDataOffset, parsedData.height * rowStride, dst);
+            return toPublicInfo(*parsed);
+        }
+
+        for (uint32_t y = 0; y < parsedData.height; ++y) {
+            const auto srcY = parsedData.topDown ? y : (parsedData.height - 1u - y);
+            const auto srcRowOffset = pixelDataOffset + srcY * rowStride;
+            const auto dstRowOffset = y * parsedData.width;
+
+            std::copy_n(src + srcRowOffset, parsedData.width, dst + dstRowOffset);
+        }
+        return toPublicInfo(*parsed);
+    }
+
+    // Slow path: palette is not the identity mapping, so we have to do a lookup for each pixel
+    for (uint32_t y = 0; y < parsedData.height; ++y) {
+        const auto srcY = parsedData.topDown ? y : (parsedData.height - 1u - y);
+        const auto srcRowOffset = pixelDataOffset + srcY * rowStride;
+        const auto dstRowOffset = y * parsedData.width;
+
+        for (uint32_t x = 0; x < parsedData.width; ++x) {
+            const auto srcIndexOffset = srcRowOffset + x;
+            const auto dstOffset = dstRowOffset + x;
+            const auto paletteIndex = src[srcIndexOffset];
+
+            dst[dstOffset] = grayscalePalette[paletteIndex];
         }
     }
 

@@ -18,6 +18,7 @@
 
 #include <fmt/format.h>
 
+#include <Cory/Base/Profiling.hpp>
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -119,18 +120,19 @@ VolumeManagerSystem::~VolumeManagerSystem()
 
 void VolumeManagerSystem::tick(Cory::SceneGraph &graph, Cory::TickInfo tickInfo)
 {
+    Cory::ScopeTimer timer("VolumeManagerSystem::tick");
     if (ctx_ == nullptr) {
         return;
     }
+    const auto currentTime = tickInfo.realNow.time_since_epoch().count();
 
     shaderHotReloader_.processPendingReloads(tickInfo.ticks);
     ctx_->uploader().poll();
     processSliceResults();
     processReadResults();
-    processUploadCompletion(tickInfo.ticks);
-    updateStreamedEntities(graph);
-    const auto timeSeconds = static_cast<float>(tickInfo.now.time_since_epoch().count());
-    updateProceduralEntities(graph, tickInfo.ticks, timeSeconds);
+    processUploadCompletion(tickInfo.ticks, currentTime);
+    updateStreamedEntities(graph, currentTime);
+    updateProceduralEntities(graph, tickInfo.ticks, currentTime);
     retireOldVolumes(tickInfo.ticks);
 }
 
@@ -158,8 +160,7 @@ cppcoro::task<void> VolumeManagerSystem::loadAndQueueResult(std::string datasetI
 
     try {
         auto stackResult = co_await datasetLoader_.streamBmpStack(
-            request,
-            [this, datasetKey, level](Cory::SliceLoadUpdate &&update) {
+            request, [this, datasetKey, level](Cory::SliceLoadUpdate &&update) {
                 auto sliceResult = SliceResult{
                     .datasetId = datasetKey,
                     .level = level,
@@ -225,7 +226,7 @@ void VolumeManagerSystem::enqueueRead(DatasetRuntime &dataset, VolumeLevel level
 
 void VolumeManagerSystem::processReadResults()
 {
-    std::deque<ReadResult> results;
+    std::vector<ReadResult> results;
     {
         std::scoped_lock lock(resultMutex_);
         results.swap(completedReads_);
@@ -253,15 +254,15 @@ void VolumeManagerSystem::processReadResults()
 
         if (!dataset.fullResident.has_value()) {
             dataset.state = StreamState::Error;
-            dataset.error = fmt::format(
-                "Dataset '{}' load completed but no slice uploads were applied",
-                dataset.manifest.datasetId);
+            dataset.error =
+                fmt::format("Dataset '{}' load completed but no slice uploads were applied",
+                            dataset.manifest.datasetId);
             CO_CORE_ERROR("VolumeManager: {}", dataset.error);
             continue;
         }
 
-        if (dataset.expectedSlices > dataset.uploadedSlices && dataset.inFlightSliceUploads.empty() &&
-            dataset.pendingSliceUploads.empty()) {
+        if (dataset.expectedSlices > dataset.uploadedSlices &&
+            dataset.inFlightSliceUploads.empty() && dataset.pendingSliceUploads.empty()) {
             dataset.state = StreamState::Error;
             dataset.error = fmt::format(
                 "Dataset '{}' load completed with incomplete uploads: uploaded {} of {} slices",
@@ -283,7 +284,8 @@ void VolumeManagerSystem::processReadResults()
 
 void VolumeManagerSystem::processSliceResults()
 {
-    std::deque<SliceResult> results;
+    std::vector<SliceResult> results;
+    results.reserve(1024);
     {
         std::scoped_lock lock(sliceResultMutex_);
         results.swap(completedSliceReads_);
@@ -313,28 +315,28 @@ void VolumeManagerSystem::processSliceResults()
         if (dataset.fullResident.has_value()) {
             if (dataset.fullResident->dimensions != result.dimensions) {
                 dataset.state = StreamState::Error;
-                dataset.error = fmt::format(
-                    "Dataset '{}' reported inconsistent dimensions: existing {}x{}x{}, got {}x{}x{}",
-                    dataset.manifest.datasetId,
-                    dataset.fullResident->dimensions.x,
-                    dataset.fullResident->dimensions.y,
-                    dataset.fullResident->dimensions.z,
-                    result.dimensions.x,
-                    result.dimensions.y,
-                    result.dimensions.z);
+                dataset.error = fmt::format("Dataset '{}' reported inconsistent dimensions: "
+                                            "existing {}x{}x{}, got {}x{}x{}",
+                                            dataset.manifest.datasetId,
+                                            dataset.fullResident->dimensions.x,
+                                            dataset.fullResident->dimensions.y,
+                                            dataset.fullResident->dimensions.z,
+                                            result.dimensions.x,
+                                            result.dimensions.y,
+                                            result.dimensions.z);
                 CO_CORE_ERROR("VolumeManager: {}", dataset.error);
                 continue;
             }
-        } else {
+        }
+        else {
             CO_CORE_ASSERT(ctx_ != nullptr, "VolumeManager context is null");
-            const auto textureLabel = fmt::format("VolumeManager {} texture (full)",
-                                                  dataset.manifest.datasetId);
-            auto texture =
-                createTexture3D(textureLabel,
-                                result.dimensions,
-                                *ctx_,
-                                Gpu::TextureUsageFlagBits::SampledBit |
-                                    Gpu::TextureUsageFlagBits::TransferDstBit);
+            const auto textureLabel =
+                fmt::format("VolumeManager {} texture (full)", dataset.manifest.datasetId);
+            auto texture = createTexture3D(textureLabel,
+                                           result.dimensions,
+                                           *ctx_,
+                                           Gpu::TextureUsageFlagBits::SampledBit |
+                                               Gpu::TextureUsageFlagBits::TransferDstBit);
             auto view = createTexture3DView(textureLabel + " view", texture);
             dataset.fullResident = ResidentVolume{
                 .texture = std::move(texture),
@@ -352,7 +354,7 @@ void VolumeManagerSystem::processSliceResults()
     }
 }
 
-void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber)
+void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber, double currentTime)
 {
     for (auto &[datasetId, dataset] : datasets_) {
         (void)frameNumber;
@@ -375,8 +377,9 @@ void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber)
             const auto wasUploaded = dataset.uploadedSlices;
             dataset.uploadedSlices += readyUploads;
             if (wasUploaded == 0u) {
-                CO_CORE_INFO("VolumeManager: first slice uploaded for '{}', partial volume now renderable",
-                             datasetId);
+                CO_CORE_INFO(
+                    "VolumeManager: first slice uploaded for '{}', partial volume now renderable",
+                    datasetId);
             }
         }
 
@@ -387,7 +390,10 @@ void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber)
             dataset.inFlightSliceUploads.empty() && dataset.pendingSliceUploads.empty() &&
             dataset.fullResident.has_value() && dataset.state != StreamState::FullReady) {
             dataset.state = StreamState::FullReady;
-            CO_CORE_INFO("VolumeManager: full volume ready for '{}'", datasetId);
+            const auto loadingTime = currentTime - dataset.loadingStartedTimeSeconds;
+            CO_CORE_INFO("VolumeManager: full volume ready for '{}'. Total loading time: {:.3}s",
+                         datasetId,
+                         loadingTime);
         }
     }
 }
@@ -506,7 +512,8 @@ std::string VolumeManagerSystem::stateToString(StreamState state)
     return "Unknown";
 }
 
-void VolumeManagerSystem::ensureDatasetRegistered(const StreamedVolume &streamedVolume)
+void VolumeManagerSystem::ensureDatasetRegistered(const StreamedVolume &streamedVolume,
+                                                  double currentTime)
 {
     if (streamedVolume.datasetId.empty() || datasets_.contains(streamedVolume.datasetId)) {
         return;
@@ -532,7 +539,10 @@ void VolumeManagerSystem::ensureDatasetRegistered(const StreamedVolume &streamed
     }
     manifest.datasetId = streamedVolume.datasetId;
     auto [it, inserted] = datasets_.emplace(streamedVolume.datasetId,
-                                            DatasetRuntime{.manifest = std::move(manifest)});
+                                            DatasetRuntime{
+                                                .manifest = std::move(manifest),
+                                                .loadingStartedTimeSeconds = currentTime,
+                                            });
     if (!inserted) {
         return;
     }
@@ -550,14 +560,14 @@ void VolumeManagerSystem::ensureDatasetRegistered(const StreamedVolume &streamed
     enqueueRead(it->second, VolumeLevel::Full);
 }
 
-void VolumeManagerSystem::updateStreamedEntities(Cory::SceneGraph &graph)
+void VolumeManagerSystem::updateStreamedEntities(Cory::SceneGraph &graph, double currentTime)
 {
     for (auto entity : graph.depthFirstTraversal()) {
         auto *streamed = graph.getComponent<StreamedVolume>(entity);
         if (streamed == nullptr) {
             continue;
         }
-        ensureDatasetRegistered(*streamed);
+        ensureDatasetRegistered(*streamed, currentTime);
 
         auto *volume = graph.getComponent<VolumeComponent>(entity);
         if (volume == nullptr) {

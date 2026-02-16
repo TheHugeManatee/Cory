@@ -53,6 +53,11 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] [shader specialization constants](https://blogs.igalia.com/itoral/2018/03/20/improving-shader-performance-with-vulkans-specialization-constants/)
 - Debug drawing utilities
     - [ ] Simple, immediate-mode debug drawing system for lines, shapes, text etc.
+- Parallel BMP Stack loading for large volumetric data sets (oVert)
+    - [x] Implement a simple BMP loader uncompressed grayscale bmp
+    - [x] Use a thread pool to load multiple BMP files in parallel
+    - [x] Integrate loaded textures into the renderer and display them
+    - [ ] Figure out how to further optimize loader performance parallel performance (currently not saturating disk IO)
 
 - [x] Basic coroutine-based framegraph **concept/API draft**
 - [x] ImGui integration

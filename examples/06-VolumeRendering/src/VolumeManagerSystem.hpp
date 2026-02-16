@@ -105,6 +105,7 @@ class VolumeManagerSystem {
         bool firstSliceSubmitted{false};
         std::deque<std::pair<size_t, std::vector<std::byte>>> pendingSliceUploads{};
         std::deque<Cory::AsyncUploader::UploadTicket> inFlightSliceUploads{};
+        double loadingStartedTimeSeconds{0.0};
     };
 
     /// Runtime state for one procedural entity (`ProceduralVolume`).
@@ -140,15 +141,15 @@ class VolumeManagerSystem {
     loadAndQueueResult(std::string datasetId, VolumeLevel level, Cory::LoadStackRequest request);
     void processSliceResults();
     void processReadResults();
-    void processUploadCompletion(uint64_t frameNumber);
+    void processUploadCompletion(uint64_t frameNumber, double currentTime);
     void retireOldVolumes(uint64_t frameNumber);
     void startNextSliceUpload(DatasetRuntime &dataset);
     static std::string stateToString(StreamState state);
 
     /// Ensures `datasets_` contains runtime state for this `StreamedVolume`.
-    void ensureDatasetRegistered(const StreamedVolume &streamedVolume);
+    void ensureDatasetRegistered(const StreamedVolume &streamedVolume, double currentTime);
     /// Applies streamed dataset runtime textures onto entity `VolumeComponent`.
-    void updateStreamedEntities(Cory::SceneGraph &graph);
+    void updateStreamedEntities(Cory::SceneGraph &graph, double currentTime);
     /// Generates/updates procedural textures and applies them onto `VolumeComponent`.
     void updateProceduralEntities(Cory::SceneGraph &graph, uint64_t frameNumber, float timeSeconds);
     void enqueueProceduralGeneration(Cory::Entity entity,
@@ -163,9 +164,9 @@ class VolumeManagerSystem {
     std::unordered_map<Cory::Entity, ProceduralRuntime> proceduralVolumes_{};
 
     std::mutex resultMutex_{};
-    std::deque<ReadResult> completedReads_{};
+    std::vector<ReadResult> completedReads_{};
     std::mutex sliceResultMutex_{};
-    std::deque<SliceResult> completedSliceReads_{};
+    std::vector<SliceResult> completedSliceReads_{};
 
     std::vector<RetiredVolume> retiredVolumes_{};
 

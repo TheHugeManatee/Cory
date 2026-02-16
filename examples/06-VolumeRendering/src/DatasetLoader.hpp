@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Result.hpp>
+#include <Cory/Renderer/AsyncUploader.hpp>
 
 #include <cppcoro/cancellation_source.hpp>
 #include <cppcoro/cancellation_token.hpp>
@@ -39,6 +40,13 @@ struct SliceLoadUpdate {
     std::vector<std::byte> voxelsR8{};
 };
 
+struct StagedSliceLoadUpdate {
+    glm::uvec3 volumeDimensions{0u};
+    size_t sliceIndex{};
+    std::filesystem::path slicePath{};
+    AsyncUploader::ImageStagingSlot stagingSlot{};
+};
+
 struct LoadStackRequest {
     std::filesystem::path directory{};
     std::string pattern{"*.bmp"};
@@ -46,6 +54,7 @@ struct LoadStackRequest {
 };
 
 using SliceLoadedCallback = std::function<Result<void>(SliceLoadUpdate &&update)>;
+using StagedSliceLoadedCallback = std::function<Result<void>(StagedSliceLoadUpdate &&update)>;
 
 /// Async dataset loading
 class DatasetLoader {
@@ -56,6 +65,10 @@ class DatasetLoader {
     [[nodiscard]] cppcoro::task<Result<LoadedVolume>> loadBmpStack(const LoadStackRequest &request);
     [[nodiscard]] cppcoro::task<Result<StreamedVolume>>
     streamBmpStack(const LoadStackRequest &request, SliceLoadedCallback onSliceLoaded);
+    [[nodiscard]] cppcoro::task<Result<StreamedVolume>>
+    streamBmpStackToUploader(const LoadStackRequest &request,
+                             AsyncUploader &uploader,
+                             StagedSliceLoadedCallback onSliceLoaded);
 
   private:
     struct OrderedSlice {
@@ -74,6 +87,15 @@ class DatasetLoader {
                 cppcoro::cancellation_token cancellationToken,
                 cppcoro::cancellation_source *cancellationSource,
                 SliceLoadedCallback *onSliceLoaded);
+    [[nodiscard]] cppcoro::task<Result<void>>
+    loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
+                         glm::uvec2 expectedDimensions,
+                         glm::uvec3 volumeDimensions,
+                         size_t sliceIndex,
+                         cppcoro::cancellation_token cancellationToken,
+                         cppcoro::cancellation_source *cancellationSource,
+                         AsyncUploader *uploader,
+                         StagedSliceLoadedCallback *onSliceLoaded);
 
     size_t workerCount_{1u};
     cppcoro::static_thread_pool workerPool_;

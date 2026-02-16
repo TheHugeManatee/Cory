@@ -274,6 +274,8 @@ void HelloTriangleApplication::createGeometry()
     auto &device = ctx().device();
 
     mesh_ = std::make_unique<Mesh>();
+    auto vertexUploadTicket = Cory::AsyncUploader::UploadTicket{};
+    auto indexUploadTicket = Cory::AsyncUploader::UploadTicket{};
 
     // Create a buffer to hold triangle vertex data
     {
@@ -309,7 +311,7 @@ void HelloTriangleApplication::createGeometry()
             .dstMask = KDGpu::AccessFlagBit::VertexAttributeReadBit,
         };
 
-        ctx().uploader().enqueueBufferUpload(uploadOptions);
+        vertexUploadTicket = ctx().uploader().enqueueBufferUpload(uploadOptions);
     }
     // Create a buffer to hold the geometry index data
     {
@@ -329,8 +331,10 @@ void HelloTriangleApplication::createGeometry()
             .dstStages = KDGpu::PipelineStageFlagBit::IndexInputBit,
             .dstMask = KDGpu::AccessFlagBit::IndexReadBit,
         };
-        ctx().uploader().enqueueBufferUpload(uploadOptions);
+        indexUploadTicket = ctx().uploader().enqueueBufferUpload(uploadOptions);
     }
+    vertexUploadTicket.wait();
+    indexUploadTicket.wait();
 }
 
 void HelloTriangleApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx,

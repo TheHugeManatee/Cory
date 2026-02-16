@@ -152,6 +152,7 @@ cppcoro::task<void> VolumeManagerSystem::loadAndQueueResult(std::string datasetI
                                                             VolumeLevel level,
                                                             Cory::LoadStackRequest request)
 {
+    CO_CORE_ASSERT(ctx_ != nullptr, "VolumeManager context is null");
     const auto datasetKey = datasetId;
     auto result = ReadResult{
         .datasetId = std::move(datasetId),
@@ -159,14 +160,16 @@ cppcoro::task<void> VolumeManagerSystem::loadAndQueueResult(std::string datasetI
     };
 
     try {
-        auto stackResult = co_await datasetLoader_.streamBmpStack(
-            request, [this, datasetKey, level](Cory::SliceLoadUpdate &&update) {
+        auto stackResult = co_await datasetLoader_.streamBmpStackToUploader(
+            request,
+            ctx_->uploader(),
+            [this, datasetKey, level](Cory::StagedSliceLoadUpdate &&update) {
                 auto sliceResult = SliceResult{
                     .datasetId = datasetKey,
                     .level = level,
                     .dimensions = update.volumeDimensions,
                     .sliceIndex = update.sliceIndex,
-                    .bytes = std::move(update.voxelsR8),
+                    .stagingSlot = std::move(update.stagingSlot),
                 };
                 {
                     std::scoped_lock lock(sliceResultMutex_);
@@ -294,6 +297,9 @@ void VolumeManagerSystem::processSliceResults()
     for (auto &result : results) {
         auto it = datasets_.find(result.datasetId);
         if (it == datasets_.end()) {
+            if (ctx_ != nullptr && result.stagingSlot.valid()) {
+                ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+            }
             CO_CORE_WARN("VolumeManager: dropping slice {} for unknown dataset '{}'",
                          result.sliceIndex,
                          result.datasetId);
@@ -301,9 +307,15 @@ void VolumeManagerSystem::processSliceResults()
         }
         auto &dataset = it->second;
         if (dataset.state == StreamState::Error) {
+            if (ctx_ != nullptr && result.stagingSlot.valid()) {
+                ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+            }
             continue;
         }
         if (!result.error.empty()) {
+            if (ctx_ != nullptr && result.stagingSlot.valid()) {
+                ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+            }
             dataset.state = StreamState::Error;
             dataset.error = std::move(result.error);
             CO_CORE_ERROR("VolumeManager: dataset '{}' failed slice read: {}",
@@ -325,6 +337,9 @@ void VolumeManagerSystem::processSliceResults()
                                             result.dimensions.y,
                                             result.dimensions.z);
                 CO_CORE_ERROR("VolumeManager: {}", dataset.error);
+                if (ctx_ != nullptr && result.stagingSlot.valid()) {
+                    ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+                }
                 continue;
             }
         }
@@ -349,7 +364,10 @@ void VolumeManagerSystem::processSliceResults()
         if (dataset.expectedSlices == 0u) {
             dataset.expectedSlices = result.dimensions.z;
         }
-        dataset.pendingSliceUploads.emplace_back(result.sliceIndex, std::move(result.bytes));
+        dataset.pendingSliceUploads.push_back(DatasetRuntime::PendingSliceUpload{
+            .sliceIndex = result.sliceIndex,
+            .stagingSlot = std::move(result.stagingSlot),
+        });
         startNextSliceUpload(dataset);
     }
 }
@@ -409,18 +427,21 @@ void VolumeManagerSystem::startNextSliceUpload(DatasetRuntime &dataset)
 
     while (dataset.inFlightSliceUploads.size() < kMaxSliceUploadsInFlight &&
            !dataset.pendingSliceUploads.empty()) {
-        auto [sliceIndex, sliceBytes] = std::move(dataset.pendingSliceUploads.front());
+        auto pending = std::move(dataset.pendingSliceUploads.front());
         dataset.pendingSliceUploads.pop_front();
+        auto sliceIndex = pending.sliceIndex;
+        auto stagingSlot = std::move(pending.stagingSlot);
 
         const auto expectedSliceBytes = static_cast<size_t>(dataset.fullResident->dimensions.x) *
                                         static_cast<size_t>(dataset.fullResident->dimensions.y);
-        if (sliceBytes.size() != expectedSliceBytes) {
+        if (stagingSlot.byteSize != expectedSliceBytes) {
             dataset.state = StreamState::Error;
             dataset.error = fmt::format("Dataset '{}' slice {} has {} bytes, expected {} bytes",
                                         dataset.manifest.datasetId,
                                         sliceIndex,
-                                        sliceBytes.size(),
+                                        stagingSlot.byteSize,
                                         expectedSliceBytes);
+            ctx_->uploader().recycleImageStaging(std::move(stagingSlot));
             CO_CORE_ERROR("VolumeManager: {}", dataset.error);
             return;
         }
@@ -430,6 +451,7 @@ void VolumeManagerSystem::startNextSliceUpload(DatasetRuntime &dataset)
                                         dataset.manifest.datasetId,
                                         sliceIndex,
                                         dataset.fullResident->dimensions.z);
+            ctx_->uploader().recycleImageStaging(std::move(stagingSlot));
             CO_CORE_ERROR("VolumeManager: {}", dataset.error);
             return;
         }
@@ -460,17 +482,18 @@ void VolumeManagerSystem::startNextSliceUpload(DatasetRuntime &dataset)
                 },
         });
 
-        auto ticket = ctx_->uploader().enqueueImageUpload(Cory::AsyncUploader::ImageUploadRequest{
+        auto ticket = ctx_->uploader().enqueueStagedImageUpload(Cory::AsyncUploader::ImageUploadRequest{
             .destinationTexture = dataset.fullResident->texture.handle(),
-            .data = sliceBytes.data(),
-            .byteSize = sliceBytes.size(),
+            .data = nullptr,
+            .byteSize = stagingSlot.byteSize,
             .regions = std::move(regions),
             .oldLayout = dataset.firstSliceSubmitted ? Gpu::TextureLayout::ShaderReadOnlyOptimal
                                                      : Gpu::TextureLayout::Undefined,
             .finalLayout = Gpu::TextureLayout::ShaderReadOnlyOptimal,
             .finalStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
             .finalMask = Gpu::AccessFlagBit::ShaderReadBit,
-        });
+        },
+                                                             std::move(stagingSlot));
         dataset.inFlightSliceUploads.push_back(std::move(ticket));
         dataset.firstSliceSubmitted = true;
         dataset.state = StreamState::FullUploading;

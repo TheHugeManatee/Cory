@@ -103,7 +103,11 @@ class VolumeManagerSystem {
         uint32_t uploadedSlices{0u};
         bool loadCompleted{false};
         bool firstSliceSubmitted{false};
-        std::deque<std::pair<size_t, std::vector<std::byte>>> pendingSliceUploads{};
+        struct PendingSliceUpload {
+            size_t sliceIndex{0u};
+            Cory::AsyncUploader::ImageStagingSlot stagingSlot{};
+        };
+        std::deque<PendingSliceUpload> pendingSliceUploads{};
         std::deque<Cory::AsyncUploader::UploadTicket> inFlightSliceUploads{};
         double loadingStartedTimeSeconds{0.0};
     };
@@ -127,7 +131,7 @@ class VolumeManagerSystem {
         VolumeLevel level{VolumeLevel::Preview};
         glm::uvec3 dimensions{0u};
         size_t sliceIndex{0u};
-        std::vector<std::byte> bytes{};
+        Cory::AsyncUploader::ImageStagingSlot stagingSlot{};
         std::string error{};
     };
 

@@ -1,12 +1,15 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
+#include <Cory/Base/Result.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
+#include <KDGpu/buffer.h>
 #include <KDGpu/command_recorder.h>
 
 #include <cppcoro/coroutine.hpp>
+#include <cppcoro/task.hpp>
 
 #include <cstdint>
 #include <limits>
@@ -91,6 +94,13 @@ class AsyncUploader : NoCopy {
         std::span<const ImageUploadRequest> imageUploads{};
     };
 
+    struct ImageStagingSlot {
+        Gpu::Buffer buffer{};
+        Gpu::DeviceSize byteSize{0};
+
+        [[nodiscard]] bool valid() const noexcept { return buffer.isValid(); }
+    };
+
     /**
      * Handle for upload completion and staging-resource reclamation.
      *
@@ -155,16 +165,25 @@ class AsyncUploader : NoCopy {
 
     /// Enqueue one image upload request and return its completion ticket.
     UploadTicket enqueueImageUpload(const ImageUploadRequest &request);
+    /// Enqueue one image upload from a pre-filled staging slot.
+    UploadTicket enqueueStagedImageUpload(const ImageUploadRequest &request,
+                                          ImageStagingSlot &&stagingSlot);
 
     /// Enqueue mixed buffer/image batch and return one ticket per enqueued upload.
     std::vector<UploadTicket> enqueueUploads(const UploadBatchRequest &request);
+
+    /// Acquire/reuse a staging slot that can be mapped/written by caller code.
+    [[nodiscard]] cppcoro::task<Result<ImageStagingSlot>>
+    acquireImageStaging(Gpu::DeviceSize byteSize);
+    /// Return an unused staging slot to the uploader pool.
+    void recycleImageStaging(ImageStagingSlot &&stagingSlot);
 
     /**
      * Poll in-flight uploads and reclaim resources for completed uploads.
      *
      * Typical usage:
      * - call periodically from the main/render thread to keep staging pool compact.
-     * - enqueue methods call poll() internally before allocating new staging buffers.
+     * - required for fire-and-forget uploads where tickets are not explicitly consumed.
      */
     void poll();
 
@@ -179,6 +198,9 @@ class AsyncUploader : NoCopy {
                                                              uint32_t graphicsQueueFamily) noexcept;
 
   private:
+    UploadTicket enqueueImageUploadWithRecord(const ImageUploadRequest &request,
+                                              std::shared_ptr<UploadTicket::UploadRecord> record);
+
     struct Private;
     std::unique_ptr<Private> data_;
 };

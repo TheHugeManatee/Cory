@@ -170,7 +170,7 @@ auto ticket = ctx.uploader().enqueueBufferUpload(Cory::AsyncUploader::BufferUplo
 ### Performance
 - Throughput improves by removing per-upload immediate waits.
 - Staging pool reuse reduces allocation cost for repeated upload workloads.
-- `poll()` should be called periodically to reclaim completed upload resources early.
+- Enqueue paths do not poll implicitly; callers must either consume tickets (`ready()/wait()/co_await`) or call `poll()` periodically to reclaim completed upload resources.
 
 ### Coroutines
 - `co_await UploadTicket` is supported for API consistency.
@@ -196,3 +196,40 @@ Possible next steps (not part of current behavior):
 - framegraph-visible upload dependency integration,
 - optional dedicated upload worker thread or scheduler integration,
 - transfer command coalescing for very high upload counts.
+
+## Extension Plan: Staging-Slot Decode Pipeline (In Progress)
+### Motivation
+Volume stack loading currently decodes each BMP slice into a transient CPU `std::vector<std::byte>`
+and then copies into uploader staging memory. For large stacks this creates allocator pressure and
+an extra CPU copy in the hot path.
+
+### Decision
+Introduce a staging-slot workflow in `AsyncUploader` and use it for streamed volume loading:
+- worker coroutines acquire reusable uploader staging slots,
+- worker coroutines decode BMP bytes directly into mapped staging memory,
+- render-thread-side system submits pre-filled staging slots for GPU copy.
+
+This removes per-slice temporary vector allocation from the streamed loading path and eliminates
+the extra copy from decode buffer to staging buffer.
+
+### API Direction
+Planned/introduced uploader APIs:
+- `acquireImageStaging(byteSize) -> task<Result<ImageStagingSlot>>`
+- `recycleImageStaging(ImageStagingSlot&&)`
+- `enqueueStagedImageUpload(ImageUploadRequest, ImageStagingSlot&&) -> UploadTicket`
+
+`ImageStagingSlot` is a move-only staging ownership token carrying:
+- staging buffer,
+- byte capacity/size metadata.
+
+### Thread-Boundary Contract
+- `acquireImageStaging()` is safe from loader worker threads.
+- BMP I/O + decode always run on worker threads.
+- `enqueueStagedImageUpload()` is called by `VolumeManagerSystem` during tick (render/main thread),
+  preserving command submission locality and existing queue usage policy.
+- Upload completion and staging reclamation remain fence/ticket-driven.
+
+### Rollout Notes
+- Keep existing `enqueueImageUpload(data=...)` for existing call sites.
+- Migrate only volume streamed path first (`DatasetLoader` + `VolumeManagerSystem`).
+- Follow-up work can add bounded async backpressure and explicit scheduler handoff APIs if needed.

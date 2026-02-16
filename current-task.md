@@ -148,3 +148,21 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
 ### Notes
 - This keeps the texture sampling render path intact (no BDA shader rewrite), while enabling true slice-reactive background uploads.
 - Memory pressure can still approach full-volume scale if decode outruns per-slice upload; bounded upload queueing is a future optimization.
+
+## Implemented: Direct Decode-To-Staging Slice Path
+
+- Extended `AsyncUploader` with staging-slot APIs:
+  - `acquireImageStaging(byteSize)` (coroutine-friendly slot acquisition)
+  - `enqueueStagedImageUpload(request, slot)` (submit pre-filled staging)
+  - `recycleImageStaging(slot)` (return unused slots to pool)
+- Added `DatasetLoader::streamBmpStackToUploader(...)`:
+  - Worker coroutines map BMP and decode directly into uploader staging slot memory.
+  - Eliminates per-slice transient `std::vector<std::byte>` allocation/copy for streamed path.
+- Updated `VolumeManagerSystem` streamed ingestion:
+  - Receives staging-slot slice updates.
+  - Submits partial texture uploads via `enqueueStagedImageUpload`.
+  - Recycles slots on dropped/error slice paths.
+
+### Remaining follow-up
+- Add explicit async backpressure/scheduler handoff inside uploader acquire path
+  (current acquire is coroutine-shaped and thread-safe, but non-blocking/immediate).

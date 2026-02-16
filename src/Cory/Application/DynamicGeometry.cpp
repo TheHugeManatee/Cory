@@ -102,6 +102,8 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
         .vertexCount = gsl::narrow_cast<uint32_t>(vertexData.size()),
         .indexCount = gsl::narrow_cast<uint32_t>(indexData.size()),
     };
+    auto vertexUploadTicket = AsyncUploader::UploadTicket{};
+    auto indexUploadTicket = AsyncUploader::UploadTicket{};
 
     {
         const Gpu::DeviceSize dataByteSize = vertexData.size() * sizeof(Mesh::Vertex);
@@ -121,7 +123,7 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
             .dstStages = Gpu::PipelineStageFlagBit::VertexAttributeInputBit,
             .dstMask = Gpu::AccessFlagBit::VertexAttributeReadBit,
         };
-        ctx.uploader().enqueueBufferUpload(uploadOptions);
+        vertexUploadTicket = ctx.uploader().enqueueBufferUpload(uploadOptions);
     }
     // Create a buffer to hold the geometry index data
     {
@@ -140,8 +142,10 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
             .dstStages = Gpu::PipelineStageFlagBit::IndexInputBit,
             .dstMask = Gpu::AccessFlagBit::IndexReadBit,
         };
-        ctx.uploader().enqueueBufferUpload(uploadOptions);
+        indexUploadTicket = ctx.uploader().enqueueBufferUpload(uploadOptions);
     }
+    vertexUploadTicket.wait();
+    indexUploadTicket.wait();
 
     return mesh;
 }

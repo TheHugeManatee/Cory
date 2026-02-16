@@ -238,8 +238,6 @@ AsyncUploader::UploadTicket AsyncUploader::enqueueBufferUpload(const BufferUploa
     CO_CORE_ASSERT(request.data != nullptr || request.byteSize == 0,
                    "AsyncUploader: non-zero upload byte size requires non-null source data.");
 
-    poll();
-
     auto &ctx = *data_->ctx;
     auto &uploadQueue = selectUploadQueue(ctx);
     const auto uploadQueueFamily = uploadQueue.queueTypeIndex();
@@ -250,8 +248,7 @@ AsyncUploader::UploadTicket AsyncUploader::enqueueBufferUpload(const BufferUploa
     const bool queueFamilyTransfer =
         needsQueueFamilyTransfer(uploadQueueFamily, consumerQueueFamily);
 
-    std::shared_ptr<UploadTicket::UploadRecord> record =
-        std::make_shared<UploadTicket::UploadRecord>();
+    auto record = std::make_shared<UploadTicket::UploadRecord>();
     {
         std::scoped_lock lock(data_->sharedState->mutex);
         record->stagingBuffer = acquireStagingBuffer(*data_->sharedState, ctx, request.byteSize);
@@ -360,12 +357,48 @@ AsyncUploader::enqueueBufferUploads(std::span<const BufferUploadRequest> request
 
 AsyncUploader::UploadTicket AsyncUploader::enqueueImageUpload(const ImageUploadRequest &request)
 {
-    CO_CORE_ASSERT(request.destinationTexture.isValid(),
-                   "AsyncUploader: destination texture must be valid.");
     CO_CORE_ASSERT(request.data != nullptr || request.byteSize == 0,
                    "AsyncUploader: non-zero upload byte size requires non-null source data.");
 
-    poll();
+    std::shared_ptr<UploadTicket::UploadRecord> record =
+        std::make_shared<UploadTicket::UploadRecord>();
+    {
+        std::scoped_lock lock(data_->sharedState->mutex);
+        record->stagingBuffer =
+            acquireStagingBuffer(*data_->sharedState, *data_->ctx, request.byteSize);
+    }
+    record->stagingByteSize = request.byteSize;
+
+    if (request.byteSize > 0) {
+        copyDataToStagingBuffer(record->stagingBuffer, request.data, request.byteSize);
+    }
+
+    return enqueueImageUploadWithRecord(request, std::move(record));
+}
+
+AsyncUploader::UploadTicket
+AsyncUploader::enqueueStagedImageUpload(const ImageUploadRequest &request,
+                                        ImageStagingSlot &&stagingSlot)
+{
+    CO_CORE_ASSERT(stagingSlot.valid(), "AsyncUploader: staging slot must contain a valid buffer.");
+    CO_CORE_ASSERT(request.byteSize <= stagingSlot.byteSize,
+                   "AsyncUploader: request byte size exceeds staging slot capacity.");
+
+    std::shared_ptr<UploadTicket::UploadRecord> record =
+        std::make_shared<UploadTicket::UploadRecord>();
+    record->stagingBuffer = std::move(stagingSlot.buffer);
+    record->stagingByteSize = stagingSlot.byteSize;
+    return enqueueImageUploadWithRecord(request, std::move(record));
+}
+
+AsyncUploader::UploadTicket
+AsyncUploader::enqueueImageUploadWithRecord(const ImageUploadRequest &request,
+                                            std::shared_ptr<UploadTicket::UploadRecord> record)
+{
+    CO_CORE_ASSERT(request.destinationTexture.isValid(),
+                   "AsyncUploader: destination texture must be valid.");
+    CO_CORE_ASSERT(record != nullptr && record->stagingBuffer.isValid(),
+                   "AsyncUploader: image upload requires a valid staging buffer.");
 
     auto &ctx = *data_->ctx;
     auto &uploadQueue = selectUploadQueue(ctx);
@@ -376,18 +409,6 @@ AsyncUploader::UploadTicket AsyncUploader::enqueueImageUpload(const ImageUploadR
 
     const bool queueFamilyTransfer =
         needsQueueFamilyTransfer(uploadQueueFamily, consumerQueueFamily);
-
-    std::shared_ptr<UploadTicket::UploadRecord> record =
-        std::make_shared<UploadTicket::UploadRecord>();
-    {
-        std::scoped_lock lock(data_->sharedState->mutex);
-        record->stagingBuffer = acquireStagingBuffer(*data_->sharedState, ctx, request.byteSize);
-    }
-    record->stagingByteSize = request.byteSize;
-
-    if (request.byteSize > 0) {
-        copyDataToStagingBuffer(record->stagingBuffer, request.data, request.byteSize);
-    }
 
     const auto range = request.range.aspectMask == Gpu::TextureAspectFlagBits::None
                            ? createRangeFromRegions(request.regions)
@@ -508,6 +529,31 @@ AsyncUploader::enqueueUploads(const UploadBatchRequest &request)
     }
 
     return tickets;
+}
+
+cppcoro::task<Result<AsyncUploader::ImageStagingSlot>>
+AsyncUploader::acquireImageStaging(Gpu::DeviceSize byteSize)
+{
+    auto slot = ImageStagingSlot{};
+    {
+        std::scoped_lock lock(data_->sharedState->mutex);
+        slot.buffer = acquireStagingBuffer(*data_->sharedState, *data_->ctx, byteSize);
+    }
+    slot.byteSize = byteSize;
+    co_return slot;
+}
+
+void AsyncUploader::recycleImageStaging(ImageStagingSlot &&stagingSlot)
+{
+    if (!stagingSlot.valid()) {
+        return;
+    }
+
+    std::scoped_lock lock(data_->sharedState->mutex);
+    data_->sharedState->stagingPool.push_back(UploadTicket::SharedState::StagingBufferEntry{
+        .buffer = std::move(stagingSlot.buffer),
+        .byteSize = stagingSlot.byteSize,
+    });
 }
 
 void AsyncUploader::poll()

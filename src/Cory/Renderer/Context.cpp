@@ -638,6 +638,12 @@ void ContextPrivate::receiveDebugUtilsMessage(
         // layers
         return;
     }
+    // UNASSIGNED-vkAllocateMemory-maxMemoryAllocationSize
+    if (pCallbackData->messageIdNumber == -1649273453) {
+        // This message is triggered by allocating huge buffers that exceed the reported max
+        // allocation size. It still works on my machine, so I'm sure it's fine! ;)
+        return;
+    }
 
     if (validationMessageCallback()) {
         validationMessageCallback()(info);

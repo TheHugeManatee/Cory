@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cstring>
 #include <limits>
 #include <mutex>
 #include <optional>
@@ -222,22 +221,43 @@ Gpu::Buffer acquireStagingBuffer(AsyncUploader::UploadTicket::SharedState &state
                            .memoryUsage = Gpu::MemoryUsage::CpuOnly});
 }
 
-void copyDataToStagingBuffer(Gpu::Buffer &stagingBuffer, const void *data, Gpu::DeviceSize byteSize)
-{
-    auto *mapped = stagingBuffer.map();
-    std::memcpy(mapped, data, static_cast<size_t>(byteSize));
-    stagingBuffer.unmap();
-}
-
 } // namespace
 
-AsyncUploader::UploadTicket AsyncUploader::enqueueBufferUpload(const BufferUploadRequest &request)
+AsyncUploader::UploadTicket
+AsyncUploader::enqueueStagedBufferUpload(const BufferUploadRequest &request,
+                                         StagingSlot &&stagingSlot)
 {
     CO_CORE_ASSERT(request.destinationBuffer.isValid(),
                    "AsyncUploader: destination buffer must be valid.");
-    CO_CORE_ASSERT(request.data != nullptr || request.byteSize == 0,
-                   "AsyncUploader: non-zero upload byte size requires non-null source data.");
+    CO_CORE_ASSERT(stagingSlot.valid(), "AsyncUploader: staging slot must contain a valid buffer.");
+    CO_CORE_ASSERT(request.byteSize <= stagingSlot.byteSize,
+                   "AsyncUploader: request byte size exceeds staging slot capacity.");
 
+    auto record = std::make_shared<UploadTicket::UploadRecord>();
+    record->stagingBuffer = std::move(stagingSlot.buffer);
+    record->stagingByteSize = stagingSlot.byteSize;
+    return enqueueBufferUploadWithRecord(request, std::move(record));
+}
+
+AsyncUploader::UploadTicket
+AsyncUploader::enqueueStagedImageUpload(const ImageUploadRequest &request,
+                                        StagingSlot &&stagingSlot)
+{
+    CO_CORE_ASSERT(stagingSlot.valid(), "AsyncUploader: staging slot must contain a valid buffer.");
+    CO_CORE_ASSERT(request.byteSize <= stagingSlot.byteSize,
+                   "AsyncUploader: request byte size exceeds staging slot capacity.");
+
+    std::shared_ptr<UploadTicket::UploadRecord> record =
+        std::make_shared<UploadTicket::UploadRecord>();
+    record->stagingBuffer = std::move(stagingSlot.buffer);
+    record->stagingByteSize = stagingSlot.byteSize;
+    return enqueueImageUploadWithRecord(request, std::move(record));
+}
+
+AsyncUploader::UploadTicket
+AsyncUploader::enqueueBufferUploadWithRecord(const BufferUploadRequest &request,
+                                             std::shared_ptr<UploadTicket::UploadRecord> record)
+{
     auto &ctx = *data_->ctx;
     auto &uploadQueue = selectUploadQueue(ctx);
     const auto uploadQueueFamily = uploadQueue.queueTypeIndex();
@@ -248,17 +268,6 @@ AsyncUploader::UploadTicket AsyncUploader::enqueueBufferUpload(const BufferUploa
     const bool queueFamilyTransfer =
         needsQueueFamilyTransfer(uploadQueueFamily, consumerQueueFamily);
 
-    auto record = std::make_shared<UploadTicket::UploadRecord>();
-    {
-        std::scoped_lock lock(data_->sharedState->mutex);
-        record->stagingBuffer = acquireStagingBuffer(*data_->sharedState, ctx, request.byteSize);
-    }
-    record->stagingByteSize = request.byteSize;
-
-    if (request.byteSize > 0) {
-        copyDataToStagingBuffer(record->stagingBuffer, request.data, request.byteSize);
-    }
-
     auto uploadRecorder = ctx.device().createCommandRecorder(
         Gpu::CommandRecorderOptions{.queue = uploadQueue.handle()});
     uploadRecorder.copyBuffer(Gpu::BufferCopy{.src = record->stagingBuffer,
@@ -268,8 +277,6 @@ AsyncUploader::UploadTicket AsyncUploader::enqueueBufferUpload(const BufferUploa
                                               .byteSize = request.byteSize});
 
     if (queueFamilyTransfer) {
-        // Release ownership on the upload queue. Actual consumer visibility/access is established
-        // by the acquire barrier recorded on the consumer queue.
         uploadRecorder.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
             .srcStages = Gpu::PipelineStageFlagBit::TransferBit,
             .srcMask = Gpu::AccessFlagBit::TransferWriteBit,
@@ -307,7 +314,6 @@ AsyncUploader::UploadTicket AsyncUploader::enqueueBufferUpload(const BufferUploa
 
         auto acquireRecorder = ctx.device().createCommandRecorder(
             Gpu::CommandRecorderOptions{.queue = consumerQueue.handle()});
-        // Acquire ownership and establish destination access scope on the consumer queue.
         acquireRecorder.bufferMemoryBarrier(Gpu::BufferMemoryBarrierOptions{
             .srcStages = Gpu::PipelineStageFlagBit::TopOfPipeBit,
             .srcMask = Gpu::AccessFlagBit::None,
@@ -342,53 +348,6 @@ AsyncUploader::UploadTicket AsyncUploader::enqueueBufferUpload(const BufferUploa
     }
 
     return UploadTicket{data_->sharedState, std::move(record)};
-}
-
-std::vector<AsyncUploader::UploadTicket>
-AsyncUploader::enqueueBufferUploads(std::span<const BufferUploadRequest> requests)
-{
-    std::vector<UploadTicket> tickets;
-    tickets.reserve(requests.size());
-    for (const auto &request : requests) {
-        tickets.push_back(enqueueBufferUpload(request));
-    }
-    return tickets;
-}
-
-AsyncUploader::UploadTicket AsyncUploader::enqueueImageUpload(const ImageUploadRequest &request)
-{
-    CO_CORE_ASSERT(request.data != nullptr || request.byteSize == 0,
-                   "AsyncUploader: non-zero upload byte size requires non-null source data.");
-
-    std::shared_ptr<UploadTicket::UploadRecord> record =
-        std::make_shared<UploadTicket::UploadRecord>();
-    {
-        std::scoped_lock lock(data_->sharedState->mutex);
-        record->stagingBuffer =
-            acquireStagingBuffer(*data_->sharedState, *data_->ctx, request.byteSize);
-    }
-    record->stagingByteSize = request.byteSize;
-
-    if (request.byteSize > 0) {
-        copyDataToStagingBuffer(record->stagingBuffer, request.data, request.byteSize);
-    }
-
-    return enqueueImageUploadWithRecord(request, std::move(record));
-}
-
-AsyncUploader::UploadTicket
-AsyncUploader::enqueueStagedImageUpload(const ImageUploadRequest &request,
-                                        ImageStagingSlot &&stagingSlot)
-{
-    CO_CORE_ASSERT(stagingSlot.valid(), "AsyncUploader: staging slot must contain a valid buffer.");
-    CO_CORE_ASSERT(request.byteSize <= stagingSlot.byteSize,
-                   "AsyncUploader: request byte size exceeds staging slot capacity.");
-
-    std::shared_ptr<UploadTicket::UploadRecord> record =
-        std::make_shared<UploadTicket::UploadRecord>();
-    record->stagingBuffer = std::move(stagingSlot.buffer);
-    record->stagingByteSize = stagingSlot.byteSize;
-    return enqueueImageUploadWithRecord(request, std::move(record));
 }
 
 AsyncUploader::UploadTicket
@@ -514,27 +473,9 @@ AsyncUploader::enqueueImageUploadWithRecord(const ImageUploadRequest &request,
     return UploadTicket{data_->sharedState, std::move(record)};
 }
 
-std::vector<AsyncUploader::UploadTicket>
-AsyncUploader::enqueueUploads(const UploadBatchRequest &request)
+cppcoro::task<Result<StagingSlot>> AsyncUploader::acquireStaging(Gpu::DeviceSize byteSize)
 {
-    std::vector<UploadTicket> tickets;
-    tickets.reserve(request.bufferUploads.size() + request.imageUploads.size());
-
-    for (const auto &bufferUpload : request.bufferUploads) {
-        tickets.push_back(enqueueBufferUpload(bufferUpload));
-    }
-
-    for (const auto &imageUpload : request.imageUploads) {
-        tickets.push_back(enqueueImageUpload(imageUpload));
-    }
-
-    return tickets;
-}
-
-cppcoro::task<Result<AsyncUploader::ImageStagingSlot>>
-AsyncUploader::acquireImageStaging(Gpu::DeviceSize byteSize)
-{
-    auto slot = ImageStagingSlot{};
+    auto slot = StagingSlot{};
     {
         std::scoped_lock lock(data_->sharedState->mutex);
         slot.buffer = acquireStagingBuffer(*data_->sharedState, *data_->ctx, byteSize);
@@ -543,17 +484,42 @@ AsyncUploader::acquireImageStaging(Gpu::DeviceSize byteSize)
     co_return slot;
 }
 
-void AsyncUploader::recycleImageStaging(ImageStagingSlot &&stagingSlot)
+void AsyncUploader::recycleStaging(StagingSlot &&stagingSlot)
 {
-    if (!stagingSlot.valid()) {
+    if (!validStaging(stagingSlot)) {
         return;
     }
+    CO_CORE_ASSERT(stagingSlot.userData == nullptr,
+                   "AsyncUploader::recycleStaging received unexpected userData payload");
 
     std::scoped_lock lock(data_->sharedState->mutex);
     data_->sharedState->stagingPool.push_back(UploadTicket::SharedState::StagingBufferEntry{
         .buffer = std::move(stagingSlot.buffer),
         .byteSize = stagingSlot.byteSize,
     });
+}
+
+std::byte *AsyncUploader::mapStaging(StagingSlot &stagingSlot)
+{
+    CO_CORE_ASSERT(stagingSlot.buffer.isValid(),
+                   "AsyncUploader::mapStaging requires a valid buffer");
+    CO_CORE_ASSERT(stagingSlot.userData == nullptr,
+                   "AsyncUploader::mapStaging received unexpected userData payload");
+    return reinterpret_cast<std::byte *>(stagingSlot.buffer.map());
+}
+
+void AsyncUploader::unmapStaging(StagingSlot &stagingSlot)
+{
+    CO_CORE_ASSERT(stagingSlot.buffer.isValid(),
+                   "AsyncUploader::unmapStaging requires a valid buffer");
+    CO_CORE_ASSERT(stagingSlot.userData == nullptr,
+                   "AsyncUploader::unmapStaging received unexpected userData payload");
+    stagingSlot.buffer.unmap();
+}
+
+bool AsyncUploader::validStaging(const StagingSlot &stagingSlot) const
+{
+    return stagingSlot.buffer.isValid();
 }
 
 void AsyncUploader::poll()

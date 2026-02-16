@@ -1,7 +1,8 @@
 #pragma once
 
+#include <Cory/Base/Function.hpp>
 #include <Cory/Base/Result.hpp>
-#include <Cory/Renderer/AsyncUploader.hpp>
+#include <Cory/Renderer/StagingUploader.hpp>
 
 #include <cppcoro/cancellation_source.hpp>
 #include <cppcoro/cancellation_token.hpp>
@@ -12,10 +13,7 @@
 #include <glm/vec3.hpp>
 
 #include <cstddef>
-#include <cstdint>
 #include <filesystem>
-#include <functional>
-#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -44,7 +42,7 @@ struct StagedSliceLoadUpdate {
     glm::uvec3 volumeDimensions{0u};
     size_t sliceIndex{};
     std::filesystem::path slicePath{};
-    AsyncUploader::ImageStagingSlot stagingSlot{};
+    StagingSlot stagingSlot{};
 };
 
 struct LoadStackRequest {
@@ -53,21 +51,19 @@ struct LoadStackRequest {
     size_t maxConcurrency{0};
 };
 
-using SliceLoadedCallback = std::function<Result<void>(SliceLoadUpdate &&update)>;
-using StagedSliceLoadedCallback = std::function<Result<void>(StagedSliceLoadUpdate &&update)>;
+using SliceLoadedCallback = Function<Result<void>(SliceLoadUpdate &&update)>;
+using StagedSliceLoadedCallback = Function<Result<void>(StagedSliceLoadUpdate &&update)>;
 
-/// Async dataset loading
+/// Async dataset loading directly to an AsyncUploader
+/// Uses a thread pool to load and convert slices in parallel.
 class DatasetLoader {
   public:
     explicit DatasetLoader(size_t workerCount = std::thread::hardware_concurrency());
     ~DatasetLoader();
 
-    [[nodiscard]] cppcoro::task<Result<LoadedVolume>> loadBmpStack(const LoadStackRequest &request);
-    [[nodiscard]] cppcoro::task<Result<StreamedVolume>>
-    streamBmpStack(const LoadStackRequest &request, SliceLoadedCallback onSliceLoaded);
     [[nodiscard]] cppcoro::task<Result<StreamedVolume>>
     streamBmpStackToUploader(const LoadStackRequest &request,
-                             AsyncUploader &uploader,
+                             IStagingUploader &uploader,
                              StagedSliceLoadedCallback onSliceLoaded);
 
   private:
@@ -80,21 +76,13 @@ class DatasetLoader {
     scanSlices(const LoadStackRequest &request);
 
     [[nodiscard]] cppcoro::task<Result<void>>
-    loadSliceR8(const std::filesystem::path &bmpPath,
-                glm::uvec2 expectedDimensions,
-                glm::uvec3 volumeDimensions,
-                size_t sliceIndex,
-                cppcoro::cancellation_token cancellationToken,
-                cppcoro::cancellation_source *cancellationSource,
-                SliceLoadedCallback *onSliceLoaded);
-    [[nodiscard]] cppcoro::task<Result<void>>
     loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
                          glm::uvec2 expectedDimensions,
                          glm::uvec3 volumeDimensions,
                          size_t sliceIndex,
                          cppcoro::cancellation_token cancellationToken,
                          cppcoro::cancellation_source *cancellationSource,
-                         AsyncUploader *uploader,
+                         IStagingUploader *uploader,
                          StagedSliceLoadedCallback *onSliceLoaded);
 
     size_t workerCount_{1u};

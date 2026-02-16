@@ -4,6 +4,7 @@
 #include <Cory/Base/Result.hpp>
 #include <Cory/Renderer/Common.hpp>
 #include <Cory/Renderer/Gpu.hpp>
+#include <Cory/Renderer/StagingUploader.hpp>
 
 #include <KDGpu/buffer.h>
 #include <KDGpu/command_recorder.h>
@@ -33,7 +34,7 @@ class Context;
  * - This service does not integrate upload dependencies into framegraph scheduling.
  * - Callers are responsible for sequencing GPU usage against ticket completion.
  */
-class AsyncUploader : NoCopy {
+class AsyncUploader : NoCopy, public IStagingUploader {
   public:
     /// Sentinel value used to request "default consumer family" (graphics queue family).
     static constexpr uint32_t DefaultQueueFamily = std::numeric_limits<uint32_t>::max();
@@ -43,7 +44,7 @@ class AsyncUploader : NoCopy {
      *
      * Requirements:
      * - destinationBuffer must be a valid GPU buffer handle.
-     * - data must point to at least byteSize bytes (unless byteSize is 0).
+     * - caller-provided staging slot must contain at least byteSize bytes.
      * - dstStages/dstMask describe the first intended consumer access after upload completion.
      *
      * Queue-family handoff:
@@ -52,7 +53,6 @@ class AsyncUploader : NoCopy {
      */
     struct BufferUploadRequest {
         Gpu::Handle<Gpu::Buffer_t> destinationBuffer;
-        const void *data{nullptr};
         Gpu::DeviceSize byteSize{0};
         Gpu::DeviceSize dstOffset{0};
         Gpu::PipelineStageFlags dstStages;
@@ -69,6 +69,7 @@ class AsyncUploader : NoCopy {
      *
      * Copy region model:
      * - regions describe staged buffer-to-texture copy regions.
+     * - caller-provided staging slot must contain at least byteSize bytes.
      * - range is optional; if not set (aspectMask == None), it is inferred from regions.
      *
      * Queue-family handoff:
@@ -77,7 +78,6 @@ class AsyncUploader : NoCopy {
      */
     struct ImageUploadRequest {
         Gpu::Handle<Gpu::Texture_t> destinationTexture;
-        const void *data{nullptr};
         Gpu::DeviceSize byteSize{0};
         std::vector<Gpu::BufferTextureCopyRegion> regions;
         Gpu::TextureSubresourceRange range{};
@@ -86,19 +86,6 @@ class AsyncUploader : NoCopy {
         Gpu::PipelineStageFlags finalStages{Gpu::PipelineStageFlagBit::AllGraphicsBit};
         Gpu::AccessFlags finalMask{Gpu::AccessFlagBit::ShaderReadBit};
         uint32_t consumerQueueFamilyIndex{DefaultQueueFamily};
-    };
-
-    /// Convenience wrapper for mixed buffer/image submission batches.
-    struct UploadBatchRequest {
-        std::span<const BufferUploadRequest> bufferUploads{};
-        std::span<const ImageUploadRequest> imageUploads{};
-    };
-
-    struct ImageStagingSlot {
-        Gpu::Buffer buffer{};
-        Gpu::DeviceSize byteSize{0};
-
-        [[nodiscard]] bool valid() const noexcept { return buffer.isValid(); }
     };
 
     /**
@@ -158,25 +145,24 @@ class AsyncUploader : NoCopy {
     AsyncUploader(AsyncUploader &&) noexcept;
     AsyncUploader &operator=(AsyncUploader &&) noexcept;
 
-    /// Enqueue one buffer upload request and return its completion ticket.
-    UploadTicket enqueueBufferUpload(const BufferUploadRequest &request);
-    /// Enqueue multiple buffer uploads and return one ticket per request.
-    std::vector<UploadTicket> enqueueBufferUploads(std::span<const BufferUploadRequest> requests);
-
-    /// Enqueue one image upload request and return its completion ticket.
-    UploadTicket enqueueImageUpload(const ImageUploadRequest &request);
+    /// Enqueue one buffer upload from a pre-filled staging slot.
+    UploadTicket enqueueStagedBufferUpload(const BufferUploadRequest &request,
+                                           StagingSlot &&stagingSlot);
     /// Enqueue one image upload from a pre-filled staging slot.
     UploadTicket enqueueStagedImageUpload(const ImageUploadRequest &request,
-                                          ImageStagingSlot &&stagingSlot);
-
-    /// Enqueue mixed buffer/image batch and return one ticket per enqueued upload.
-    std::vector<UploadTicket> enqueueUploads(const UploadBatchRequest &request);
+                                          StagingSlot &&stagingSlot);
 
     /// Acquire/reuse a staging slot that can be mapped/written by caller code.
-    [[nodiscard]] cppcoro::task<Result<ImageStagingSlot>>
-    acquireImageStaging(Gpu::DeviceSize byteSize);
+    [[nodiscard]] cppcoro::task<Result<StagingSlot>>
+    acquireStaging(Gpu::DeviceSize byteSize) override;
     /// Return an unused staging slot to the uploader pool.
-    void recycleImageStaging(ImageStagingSlot &&stagingSlot);
+    void recycleStaging(StagingSlot &&stagingSlot) override;
+    /// Map staging memory for CPU writes.
+    [[nodiscard]] std::byte *mapStaging(StagingSlot &stagingSlot) override;
+    /// Unmap staging memory.
+    void unmapStaging(StagingSlot &stagingSlot) override;
+    /// Check whether a staging slot is usable.
+    [[nodiscard]] bool validStaging(const StagingSlot &stagingSlot) const override;
 
     /**
      * Poll in-flight uploads and reclaim resources for completed uploads.
@@ -198,6 +184,8 @@ class AsyncUploader : NoCopy {
                                                              uint32_t graphicsQueueFamily) noexcept;
 
   private:
+    UploadTicket enqueueBufferUploadWithRecord(const BufferUploadRequest &request,
+                                               std::shared_ptr<UploadTicket::UploadRecord> record);
     UploadTicket enqueueImageUploadWithRecord(const ImageUploadRequest &request,
                                               std::shared_ptr<UploadTicket::UploadRecord> record);
 

@@ -105,7 +105,7 @@ class VolumeManagerSystem {
         bool firstSliceSubmitted{false};
         struct PendingSliceUpload {
             size_t sliceIndex{0u};
-            Cory::AsyncUploader::ImageStagingSlot stagingSlot{};
+            Cory::StagingSlot stagingSlot{};
         };
         std::deque<PendingSliceUpload> pendingSliceUploads{};
         std::deque<Cory::AsyncUploader::UploadTicket> inFlightSliceUploads{};
@@ -131,7 +131,7 @@ class VolumeManagerSystem {
         VolumeLevel level{VolumeLevel::Preview};
         glm::uvec3 dimensions{0u};
         size_t sliceIndex{0u};
-        Cory::AsyncUploader::ImageStagingSlot stagingSlot{};
+        Cory::StagingSlot stagingSlot{};
         std::string error{};
     };
 
@@ -144,7 +144,7 @@ class VolumeManagerSystem {
     [[nodiscard]] cppcoro::task<void>
     loadAndQueueResult(std::string datasetId, VolumeLevel level, Cory::LoadStackRequest request);
     void processSliceResults();
-    void processReadResults();
+    void processReadResults(double currentTime);
     void processUploadCompletion(uint64_t frameNumber, double currentTime);
     void retireOldVolumes(uint64_t frameNumber);
     void startNextSliceUpload(DatasetRuntime &dataset);

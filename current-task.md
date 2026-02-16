@@ -152,9 +152,10 @@ Full Monte Carlo Volume Raycasting (optional, stretch goal)
 ## Implemented: Direct Decode-To-Staging Slice Path
 
 - Extended `AsyncUploader` with staging-slot APIs:
-  - `acquireImageStaging(byteSize)` (coroutine-friendly slot acquisition)
+  - `acquireStaging(byteSize)` (coroutine-friendly slot acquisition)
+  - `enqueueStagedBufferUpload(request, slot)` (submit pre-filled buffer staging)
   - `enqueueStagedImageUpload(request, slot)` (submit pre-filled staging)
-  - `recycleImageStaging(slot)` (return unused slots to pool)
+  - `recycleStaging(slot)` (return unused slots to pool)
 - Added `DatasetLoader::streamBmpStackToUploader(...)`:
   - Worker coroutines map BMP and decode directly into uploader staging slot memory.
   - Eliminates per-slice transient `std::vector<std::byte>` allocation/copy for streamed path.

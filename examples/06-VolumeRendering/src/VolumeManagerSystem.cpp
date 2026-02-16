@@ -129,7 +129,7 @@ void VolumeManagerSystem::tick(Cory::SceneGraph &graph, Cory::TickInfo tickInfo)
     shaderHotReloader_.processPendingReloads(tickInfo.ticks);
     ctx_->uploader().poll();
     processSliceResults();
-    processReadResults();
+    processReadResults(currentTime);
     processUploadCompletion(tickInfo.ticks, currentTime);
     updateStreamedEntities(graph, currentTime);
     updateProceduralEntities(graph, tickInfo.ticks, currentTime);
@@ -227,7 +227,7 @@ void VolumeManagerSystem::enqueueRead(DatasetRuntime &dataset, VolumeLevel level
     }
 }
 
-void VolumeManagerSystem::processReadResults()
+void VolumeManagerSystem::processReadResults(double currentTime)
 {
     std::vector<ReadResult> results;
     {
@@ -280,7 +280,21 @@ void VolumeManagerSystem::processReadResults()
             dataset.inFlightSliceUploads.empty() && dataset.pendingSliceUploads.empty() &&
             dataset.fullResident.has_value() && dataset.state != StreamState::FullReady) {
             dataset.state = StreamState::FullReady;
-            CO_CORE_INFO("VolumeManager: full volume ready for '{}'", dataset.manifest.datasetId);
+            const auto loadingTime =
+                std::max(currentTime - dataset.loadingStartedTimeSeconds, 1e-6);
+            const auto dimensions = dataset.fullResident->dimensions;
+            const auto totalBytes = static_cast<double>(dimensions.x) *
+                                    static_cast<double>(dimensions.y) *
+                                    static_cast<double>(dimensions.z);
+            const auto totalMiB = totalBytes / (1024.0 * 1024.0);
+            const auto throughputMiBps = totalMiB / loadingTime;
+            CO_CORE_INFO("VolumeManager: full volume ready for '{}'. slices={} size={:.2f} MiB "
+                         "rate={:.2f} MiB/s time={:.3f}s",
+                         dataset.manifest.datasetId,
+                         dataset.expectedSlices,
+                         totalMiB,
+                         throughputMiBps,
+                         loadingTime);
         }
     }
 }
@@ -298,7 +312,7 @@ void VolumeManagerSystem::processSliceResults()
         auto it = datasets_.find(result.datasetId);
         if (it == datasets_.end()) {
             if (ctx_ != nullptr && result.stagingSlot.valid()) {
-                ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+                ctx_->uploader().recycleStaging(std::move(result.stagingSlot));
             }
             CO_CORE_WARN("VolumeManager: dropping slice {} for unknown dataset '{}'",
                          result.sliceIndex,
@@ -308,13 +322,13 @@ void VolumeManagerSystem::processSliceResults()
         auto &dataset = it->second;
         if (dataset.state == StreamState::Error) {
             if (ctx_ != nullptr && result.stagingSlot.valid()) {
-                ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+                ctx_->uploader().recycleStaging(std::move(result.stagingSlot));
             }
             continue;
         }
         if (!result.error.empty()) {
             if (ctx_ != nullptr && result.stagingSlot.valid()) {
-                ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+                ctx_->uploader().recycleStaging(std::move(result.stagingSlot));
             }
             dataset.state = StreamState::Error;
             dataset.error = std::move(result.error);
@@ -338,7 +352,7 @@ void VolumeManagerSystem::processSliceResults()
                                             result.dimensions.z);
                 CO_CORE_ERROR("VolumeManager: {}", dataset.error);
                 if (ctx_ != nullptr && result.stagingSlot.valid()) {
-                    ctx_->uploader().recycleImageStaging(std::move(result.stagingSlot));
+                    ctx_->uploader().recycleStaging(std::move(result.stagingSlot));
                 }
                 continue;
             }
@@ -408,9 +422,20 @@ void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber, double c
             dataset.inFlightSliceUploads.empty() && dataset.pendingSliceUploads.empty() &&
             dataset.fullResident.has_value() && dataset.state != StreamState::FullReady) {
             dataset.state = StreamState::FullReady;
-            const auto loadingTime = currentTime - dataset.loadingStartedTimeSeconds;
-            CO_CORE_INFO("VolumeManager: full volume ready for '{}'. Total loading time: {:.3}s",
+            const auto loadingTime =
+                std::max(currentTime - dataset.loadingStartedTimeSeconds, 1e-6);
+            const auto dimensions = dataset.fullResident->dimensions;
+            const auto totalBytes = static_cast<double>(dimensions.x) *
+                                    static_cast<double>(dimensions.y) *
+                                    static_cast<double>(dimensions.z);
+            const auto totalMiB = totalBytes / (1024.0 * 1024.0);
+            const auto throughputMiBps = totalMiB / loadingTime;
+            CO_CORE_INFO("VolumeManager: loading of '{}' finished. slices={} size={:.2f} MiB "
+                         "rate={:.2f} MiB/s time={:.3f}s",
                          datasetId,
+                         dataset.expectedSlices,
+                         totalMiB,
+                         throughputMiBps,
                          loadingTime);
         }
     }
@@ -441,7 +466,7 @@ void VolumeManagerSystem::startNextSliceUpload(DatasetRuntime &dataset)
                                         sliceIndex,
                                         stagingSlot.byteSize,
                                         expectedSliceBytes);
-            ctx_->uploader().recycleImageStaging(std::move(stagingSlot));
+            ctx_->uploader().recycleStaging(std::move(stagingSlot));
             CO_CORE_ERROR("VolumeManager: {}", dataset.error);
             return;
         }
@@ -451,7 +476,7 @@ void VolumeManagerSystem::startNextSliceUpload(DatasetRuntime &dataset)
                                         dataset.manifest.datasetId,
                                         sliceIndex,
                                         dataset.fullResident->dimensions.z);
-            ctx_->uploader().recycleImageStaging(std::move(stagingSlot));
+            ctx_->uploader().recycleStaging(std::move(stagingSlot));
             CO_CORE_ERROR("VolumeManager: {}", dataset.error);
             return;
         }
@@ -482,18 +507,18 @@ void VolumeManagerSystem::startNextSliceUpload(DatasetRuntime &dataset)
                 },
         });
 
-        auto ticket = ctx_->uploader().enqueueStagedImageUpload(Cory::AsyncUploader::ImageUploadRequest{
-            .destinationTexture = dataset.fullResident->texture.handle(),
-            .data = nullptr,
-            .byteSize = stagingSlot.byteSize,
-            .regions = std::move(regions),
-            .oldLayout = dataset.firstSliceSubmitted ? Gpu::TextureLayout::ShaderReadOnlyOptimal
-                                                     : Gpu::TextureLayout::Undefined,
-            .finalLayout = Gpu::TextureLayout::ShaderReadOnlyOptimal,
-            .finalStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
-            .finalMask = Gpu::AccessFlagBit::ShaderReadBit,
-        },
-                                                             std::move(stagingSlot));
+        auto ticket = ctx_->uploader().enqueueStagedImageUpload(
+            Cory::AsyncUploader::ImageUploadRequest{
+                .destinationTexture = dataset.fullResident->texture.handle(),
+                .byteSize = stagingSlot.byteSize,
+                .regions = std::move(regions),
+                .oldLayout = dataset.firstSliceSubmitted ? Gpu::TextureLayout::ShaderReadOnlyOptimal
+                                                         : Gpu::TextureLayout::Undefined,
+                .finalLayout = Gpu::TextureLayout::ShaderReadOnlyOptimal,
+                .finalStages = Gpu::PipelineStageFlagBit::ComputeShaderBit,
+                .finalMask = Gpu::AccessFlagBit::ShaderReadBit,
+            },
+            std::move(stagingSlot));
         dataset.inFlightSliceUploads.push_back(std::move(ticket));
         dataset.firstSliceSubmitted = true;
         dataset.state = StreamState::FullUploading;

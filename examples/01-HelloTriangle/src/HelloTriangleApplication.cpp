@@ -22,6 +22,7 @@
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
+#include <cppcoro/sync_wait.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
@@ -31,6 +32,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstring>
 
 struct PushConstants {
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
@@ -305,13 +307,22 @@ void HelloTriangleApplication::createGeometry()
 
         const auto uploadOptions = Cory::AsyncUploader::BufferUploadRequest{
             .destinationBuffer = mesh_->vertexBuffer.handle(),
-            .data = vertexData.data(),
             .byteSize = dataByteSize,
             .dstStages = KDGpu::PipelineStageFlagBit::VertexAttributeInputBit,
             .dstMask = KDGpu::AccessFlagBit::VertexAttributeReadBit,
         };
 
-        vertexUploadTicket = ctx().uploader().enqueueBufferUpload(uploadOptions);
+        auto stagingResult = cppcoro::sync_wait(ctx().uploader().acquireStaging(dataByteSize));
+        CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
+        auto stagingSlot = std::move(*stagingResult);
+        if (dataByteSize > 0) {
+            auto *mapped = stagingSlot.buffer.map();
+            std::memcpy(mapped, vertexData.data(), static_cast<size_t>(dataByteSize));
+            stagingSlot.buffer.unmap();
+        }
+
+        vertexUploadTicket =
+            ctx().uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));
     }
     // Create a buffer to hold the geometry index data
     {
@@ -326,12 +337,20 @@ void HelloTriangleApplication::createGeometry()
         mesh_->indexBuffer = device.createBuffer(bufferOptions);
         const auto uploadOptions = Cory::AsyncUploader::BufferUploadRequest{
             .destinationBuffer = mesh_->indexBuffer.handle(),
-            .data = indexData.data(),
             .byteSize = dataByteSize,
             .dstStages = KDGpu::PipelineStageFlagBit::IndexInputBit,
             .dstMask = KDGpu::AccessFlagBit::IndexReadBit,
         };
-        indexUploadTicket = ctx().uploader().enqueueBufferUpload(uploadOptions);
+        auto stagingResult = cppcoro::sync_wait(ctx().uploader().acquireStaging(dataByteSize));
+        CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
+        auto stagingSlot = std::move(*stagingResult);
+        if (dataByteSize > 0) {
+            auto *mapped = stagingSlot.buffer.map();
+            std::memcpy(mapped, indexData.data(), static_cast<size_t>(dataByteSize));
+            stagingSlot.buffer.unmap();
+        }
+        indexUploadTicket =
+            ctx().uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));
     }
     vertexUploadTicket.wait();
     indexUploadTicket.wait();

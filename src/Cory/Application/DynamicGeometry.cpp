@@ -1,14 +1,18 @@
 #include <Cory/Application/DynamicGeometry.hpp>
 
+#include <Cory/Base/Log.hpp>
 #include <Cory/Renderer/AsyncUploader.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <KDGpu/buffer_options.h>
+
+#include <cppcoro/sync_wait.hpp>
 
 #include <glm/trigonometric.hpp> // for glm::radians
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <cstring>
 #include <gsl/narrow>
 
 namespace Cory {
@@ -118,12 +122,20 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
 
         const auto uploadOptions = AsyncUploader::BufferUploadRequest{
             .destinationBuffer = mesh.vertexBuffer.handle(),
-            .data = vertexData.data(),
             .byteSize = dataByteSize,
             .dstStages = Gpu::PipelineStageFlagBit::VertexAttributeInputBit,
             .dstMask = Gpu::AccessFlagBit::VertexAttributeReadBit,
         };
-        vertexUploadTicket = ctx.uploader().enqueueBufferUpload(uploadOptions);
+        auto stagingResult = cppcoro::sync_wait(ctx.uploader().acquireStaging(dataByteSize));
+        CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
+        auto stagingSlot = std::move(*stagingResult);
+        if (dataByteSize > 0) {
+            auto *mapped = stagingSlot.buffer.map();
+            std::memcpy(mapped, vertexData.data(), static_cast<size_t>(dataByteSize));
+            stagingSlot.buffer.unmap();
+        }
+        vertexUploadTicket =
+            ctx.uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));
     }
     // Create a buffer to hold the geometry index data
     {
@@ -137,12 +149,20 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
         mesh.indexBuffer = device.createBuffer(bufferOptions);
         const auto uploadOptions = AsyncUploader::BufferUploadRequest{
             .destinationBuffer = mesh.indexBuffer.handle(),
-            .data = indexData.data(),
             .byteSize = dataByteSize,
             .dstStages = Gpu::PipelineStageFlagBit::IndexInputBit,
             .dstMask = Gpu::AccessFlagBit::IndexReadBit,
         };
-        indexUploadTicket = ctx.uploader().enqueueBufferUpload(uploadOptions);
+        auto stagingResult = cppcoro::sync_wait(ctx.uploader().acquireStaging(dataByteSize));
+        CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
+        auto stagingSlot = std::move(*stagingResult);
+        if (dataByteSize > 0) {
+            auto *mapped = stagingSlot.buffer.map();
+            std::memcpy(mapped, indexData.data(), static_cast<size_t>(dataByteSize));
+            stagingSlot.buffer.unmap();
+        }
+        indexUploadTicket =
+            ctx.uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));
     }
     vertexUploadTicket.wait();
     indexUploadTicket.wait();

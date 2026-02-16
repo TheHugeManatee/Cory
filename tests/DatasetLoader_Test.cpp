@@ -4,13 +4,18 @@
 
 #include <cppcoro/sync_wait.hpp>
 
+#include <fmt/format.h>
+
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace {
@@ -110,6 +115,104 @@ struct TempDir {
     }
 };
 
+class FakeStagingUploader : public Cory::IStagingUploader {
+  public:
+    cppcoro::task<Cory::Result<Cory::StagingSlot>> acquireStaging(Gpu::DeviceSize byteSize) override
+    {
+        auto bytes = std::make_unique<std::vector<std::byte>>(static_cast<size_t>(byteSize));
+        auto *token = static_cast<void *>(bytes.get());
+        {
+            std::scoped_lock lock(mutex_);
+            blocks_.emplace(token, std::move(bytes));
+        }
+
+        auto slot = Cory::StagingSlot{
+            .buffer = {},
+            .byteSize = byteSize,
+            .userData = token,
+        };
+        co_return slot;
+    }
+
+    void recycleStaging(Cory::StagingSlot &&stagingSlot) override
+    {
+        if (stagingSlot.userData == nullptr) {
+            return;
+        }
+        std::scoped_lock lock(mutex_);
+        blocks_.erase(stagingSlot.userData);
+    }
+
+    std::byte *mapStaging(Cory::StagingSlot &stagingSlot) override
+    {
+        std::scoped_lock lock(mutex_);
+        auto it = blocks_.find(stagingSlot.userData);
+        if (it == blocks_.end()) {
+            return nullptr;
+        }
+        return it->second->data();
+    }
+
+    void unmapStaging(Cory::StagingSlot &) override {}
+
+    bool validStaging(const Cory::StagingSlot &stagingSlot) const override
+    {
+        return stagingSlot.userData != nullptr;
+    }
+
+  private:
+    mutable std::mutex mutex_{};
+    std::unordered_map<void *, std::unique_ptr<std::vector<std::byte>>> blocks_{};
+};
+
+Cory::Result<Cory::LoadedVolume> loadViaFakeUploader(Cory::DatasetLoader &loader,
+                                                     FakeStagingUploader &uploader,
+                                                     const Cory::LoadStackRequest &request)
+{
+    auto loaded = Cory::LoadedVolume{};
+    auto streamResult = cppcoro::sync_wait(loader.streamBmpStackToUploader(
+        request,
+        uploader,
+        [&loaded, &uploader](Cory::StagedSliceLoadUpdate &&update) -> Cory::Result<void> {
+            if (loaded.dimensions == glm::uvec3{0u, 0u, 0u}) {
+                loaded.dimensions = update.volumeDimensions;
+                const auto voxelCount = static_cast<size_t>(loaded.dimensions.x) *
+                                        static_cast<size_t>(loaded.dimensions.y) *
+                                        static_cast<size_t>(loaded.dimensions.z);
+                loaded.voxelsR8.resize(voxelCount);
+            }
+
+            const auto sliceVoxelCount =
+                static_cast<size_t>(loaded.dimensions.x) * static_cast<size_t>(loaded.dimensions.y);
+            if (update.sliceIndex >= loaded.dimensions.z) {
+                uploader.recycleStaging(std::move(update.stagingSlot));
+                return std::unexpected(
+                    fmt::format("slice index {} out of bounds", update.sliceIndex));
+            }
+
+            auto *src = uploader.mapStaging(update.stagingSlot);
+            if (src == nullptr) {
+                uploader.recycleStaging(std::move(update.stagingSlot));
+                return std::unexpected("failed to map fake staging slot");
+            }
+
+            auto dst = std::span<std::byte>{loaded.voxelsR8}.subspan(
+                update.sliceIndex * sliceVoxelCount, sliceVoxelCount);
+            std::copy_n(src, sliceVoxelCount, dst.begin());
+            uploader.unmapStaging(update.stagingSlot);
+            uploader.recycleStaging(std::move(update.stagingSlot));
+            return {};
+        }));
+
+    if (!streamResult) {
+        return std::unexpected(std::move(streamResult.error()));
+    }
+
+    loaded.dimensions = streamResult->dimensions;
+    loaded.orderedSlicePaths = std::move(streamResult->orderedSlicePaths);
+    return loaded;
+}
+
 std::byte voxelAt(const Cory::LoadedVolume &volume, uint32_t x, uint32_t y, uint32_t z)
 {
     const auto index = static_cast<size_t>(z) * static_cast<size_t>(volume.dimensions.x) *
@@ -129,11 +232,14 @@ TEST_CASE("DatasetLoader loads contiguous BMP stack into packed r8 volume", "[Da
     writeBytes(temp.path / "scan_11.bmp", makeSolidGrayBmp8(2, 2, 11));
 
     Cory::DatasetLoader loader{4};
-    auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
-        .directory = temp.path,
-        .pattern = "*.bmp",
-        .maxConcurrency = 2,
-    }));
+    FakeStagingUploader uploader{};
+    auto result = loadViaFakeUploader(loader,
+                                      uploader,
+                                      Cory::LoadStackRequest{
+                                          .directory = temp.path,
+                                          .pattern = "*.bmp",
+                                          .maxConcurrency = 2,
+                                      });
 
     REQUIRE(result);
     CHECK(result->dimensions == glm::uvec3{2u, 2u, 3u});
@@ -151,12 +257,14 @@ TEST_CASE("DatasetLoader loads contiguous BMP stack into packed r8 volume", "[Da
 TEST_CASE("DatasetLoader rejects empty match set", "[DatasetLoader]")
 {
     TempDir temp;
-
     Cory::DatasetLoader loader{2};
-    auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
-        .directory = temp.path,
-        .pattern = "*.bmp",
-    }));
+    FakeStagingUploader uploader{};
+    auto result = loadViaFakeUploader(loader,
+                                      uploader,
+                                      Cory::LoadStackRequest{
+                                          .directory = temp.path,
+                                          .pattern = "*.bmp",
+                                      });
 
     REQUIRE_FALSE(result);
     CHECK(result.error().find("No files matching") != std::string::npos);
@@ -170,10 +278,13 @@ TEST_CASE("DatasetLoader rejects non-contiguous numeric suffixes", "[DatasetLoad
     writeBytes(temp.path / "slice_3.bmp", makeSolidGrayBmp8(2, 2, 30));
 
     Cory::DatasetLoader loader{3};
-    auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
-        .directory = temp.path,
-        .pattern = "*.bmp",
-    }));
+    FakeStagingUploader uploader{};
+    auto result = loadViaFakeUploader(loader,
+                                      uploader,
+                                      Cory::LoadStackRequest{
+                                          .directory = temp.path,
+                                          .pattern = "*.bmp",
+                                      });
 
     REQUIRE_FALSE(result);
     CHECK(result.error().find("Slice index gap") != std::string::npos);
@@ -186,11 +297,14 @@ TEST_CASE("DatasetLoader rejects stack with inconsistent dimensions", "[DatasetL
     writeBytes(temp.path / "slice_1.bmp", makeSolidGrayBmp8(3, 2, 20));
 
     Cory::DatasetLoader loader{2};
-    auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
-        .directory = temp.path,
-        .pattern = "*.bmp",
-        .maxConcurrency = 2,
-    }));
+    FakeStagingUploader uploader{};
+    auto result = loadViaFakeUploader(loader,
+                                      uploader,
+                                      Cory::LoadStackRequest{
+                                          .directory = temp.path,
+                                          .pattern = "*.bmp",
+                                          .maxConcurrency = 2,
+                                      });
 
     REQUIRE_FALSE(result);
     CHECK(result.error().find("dimensions mismatch") != std::string::npos);
@@ -203,10 +317,13 @@ TEST_CASE("DatasetLoader rejects corrupt BMP in matched set", "[DatasetLoader]")
     writeBytes(temp.path / "slice_1.bmp", std::vector<std::byte>{std::byte{0x00}, std::byte{0x01}});
 
     Cory::DatasetLoader loader{2};
-    auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
-        .directory = temp.path,
-        .pattern = "*.bmp",
-    }));
+    FakeStagingUploader uploader{};
+    auto result = loadViaFakeUploader(loader,
+                                      uploader,
+                                      Cory::LoadStackRequest{
+                                          .directory = temp.path,
+                                          .pattern = "*.bmp",
+                                      });
 
     REQUIRE_FALSE(result);
     CHECK(result.error().find("failed") != std::string::npos);
@@ -220,10 +337,13 @@ TEST_CASE("DatasetLoader ordering is deterministic from numeric suffix", "[Datas
     writeBytes(temp.path / "foo_102.bmp", makeSolidGrayBmp8(1, 1, 42));
 
     Cory::DatasetLoader loader{1};
-    auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
-        .directory = temp.path,
-        .pattern = "foo_*.bmp",
-    }));
+    FakeStagingUploader uploader{};
+    auto result = loadViaFakeUploader(loader,
+                                      uploader,
+                                      Cory::LoadStackRequest{
+                                          .directory = temp.path,
+                                          .pattern = "foo_*.bmp",
+                                      });
 
     REQUIRE(result);
     REQUIRE(result->orderedSlicePaths.size() == 3u);
@@ -246,13 +366,54 @@ TEST_CASE("DatasetLoader fails large parallel load when one slice is corrupt", "
     }
 
     Cory::DatasetLoader loader{8};
-    auto result = cppcoro::sync_wait(loader.loadBmpStack(Cory::LoadStackRequest{
-        .directory = temp.path,
-        .pattern = "slice_*.bmp",
-        .maxConcurrency = 8,
-    }));
+    FakeStagingUploader uploader{};
+    auto result = loadViaFakeUploader(loader,
+                                      uploader,
+                                      Cory::LoadStackRequest{
+                                          .directory = temp.path,
+                                          .pattern = "slice_*.bmp",
+                                          .maxConcurrency = 8,
+                                      });
 
     REQUIRE_FALSE(result);
     CHECK((result.error().find("Slice") != std::string::npos ||
            result.error().find("cancelled") != std::string::npos));
+}
+
+TEST_CASE("DatasetLoader propagates callback failure and cancels sibling work", "[DatasetLoader]")
+{
+    TempDir temp;
+    for (size_t i = 0; i < 32u; ++i) {
+        writeBytes(temp.path / ("slice_" + std::to_string(i) + ".bmp"),
+                   makeSolidGrayBmp8(8, 8, static_cast<uint8_t>(i)));
+    }
+
+    Cory::DatasetLoader loader{8};
+    FakeStagingUploader uploader{};
+    auto failIndex = size_t{5u};
+    auto callbackInvocations = std::atomic<size_t>{0u};
+
+    auto result = cppcoro::sync_wait(loader.streamBmpStackToUploader(
+        Cory::LoadStackRequest{
+            .directory = temp.path,
+            .pattern = "slice_*.bmp",
+            .maxConcurrency = 8,
+        },
+        uploader,
+        [&uploader, &callbackInvocations, failIndex](
+            Cory::StagedSliceLoadUpdate &&update) -> Cory::Result<void> {
+            callbackInvocations.fetch_add(1u, std::memory_order_relaxed);
+            if (update.sliceIndex == failIndex) {
+                uploader.recycleStaging(std::move(update.stagingSlot));
+                return std::unexpected(
+                    fmt::format("intentional callback failure at slice {}", failIndex));
+            }
+
+            uploader.recycleStaging(std::move(update.stagingSlot));
+            return {};
+        }));
+
+    REQUIRE_FALSE(result);
+    CHECK(result.error().find("callback failed") != std::string::npos);
+    CHECK(callbackInvocations.load(std::memory_order_relaxed) >= 1u);
 }

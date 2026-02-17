@@ -61,6 +61,7 @@ add_library(Cory_TestLib OBJECT
         AsyncUploader_Test.cpp
         ApiPass_Test.cpp
         DatasetLoader_Test.cpp
+        CppcoroConcurrency_Test.cpp
 )
 
 target_include_directories(Cory_TestLib PRIVATE

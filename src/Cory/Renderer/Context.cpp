@@ -2,6 +2,7 @@
 
 #include <Cory/Renderer/AsyncUploader.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ThreadScheduler.hpp>
 
 #include <Cory/Base/Debugger.hpp>
 #include <Cory/Base/FileWatchManager.hpp>
@@ -120,6 +121,7 @@ struct ContextPrivate {
     uint32_t graphicsQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
     uint32_t computeQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
     uint32_t transferQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
+    ThreadScheduler renderThreadScheduler;
     std::unique_ptr<AsyncUploader> uploader;
 
     ShaderManager shaders;
@@ -598,6 +600,16 @@ AsyncUploader &Context::uploader()
 {
     CO_CORE_ASSERT(data_->uploader != nullptr, "Uploader is not initialized");
     return *data_->uploader;
+}
+
+ThreadScheduler &Context::renderThreadScheduler()
+{
+    return data_->renderThreadScheduler;
+}
+
+const ThreadScheduler &Context::renderThreadScheduler() const
+{
+    return data_->renderThreadScheduler;
 }
 
 FramegraphResourceManager &Context::framegraphResources()

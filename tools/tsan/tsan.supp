@@ -1,0 +1,7 @@
+# External Vulkan stack suppressions for TSAN-focused Cory runs.
+# These are third-party races in drivers/layers and are not actionable in project code.
+
+race:libVkLayer_khronos_validation.so
+race:libvulkan_lvp.so
+race:libvulkan.so
+race:libLLVM.so

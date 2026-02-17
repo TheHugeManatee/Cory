@@ -6,6 +6,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Base/Time.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ThreadScheduler.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
 #include <GLFW/glfw3.h>
@@ -97,6 +98,8 @@ void Application::runMainLoop(FrameSource &frameSource,
         if (options.processFileWatchEvents) {
             ctx().fileWatchManager().processPendingEvents();
         }
+        // Resume any coroutines that explicitly hopped back to the render thread.
+        ctx().renderThreadScheduler().poll();
         if (options.clearDeferredShaderReleases) {
             ctx().shaders().clearDeferredReleases(frameCtx.frameNumber);
         }

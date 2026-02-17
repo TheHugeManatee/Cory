@@ -54,7 +54,13 @@ set(CORY_SOURCES
         Base/Callback.hpp
         Base/Common.hpp
         Base/Concepts.hpp
+        Base/CoroBatch.cpp
+        Base/CoroBatch.hpp
+        Base/Coro.cpp
         Base/Coro.hpp
+        Base/CoroOps.hpp
+        Base/CoroThreadPool.cpp
+        Base/CoroThreadPool.hpp
         Base/CpuBuffer.hpp
         Base/Debugger.cpp
         Base/Debugger.hpp
@@ -141,6 +147,8 @@ set(CORY_SOURCES
         Renderer/PipelineCache.hpp
         Renderer/RadixSorter.cpp
         Renderer/RadixSorter.hpp
+        Renderer/RenderThreadScheduler.cpp
+        Renderer/RenderThreadScheduler.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
         Renderer/ShaderHotReloader.cpp

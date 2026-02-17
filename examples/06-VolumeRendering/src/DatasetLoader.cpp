@@ -156,7 +156,8 @@ DatasetLoader::scanSlices(const LoadStackRequest &request)
         }
 
         orderedSlices.push_back(OrderedSlice{
-            .index = *sliceIndex,
+            .sliceNumber = *sliceIndex,
+            .index = 0u,
             .path = entry.path(),
         });
     }
@@ -174,15 +175,19 @@ DatasetLoader::scanSlices(const LoadStackRequest &request)
     std::sort(orderedSlices.begin(),
               orderedSlices.end(),
               [](const OrderedSlice &a, const OrderedSlice &b) {
-                  if (a.index != b.index) {
-                      return a.index < b.index;
+                  if (a.sliceNumber != b.sliceNumber) {
+                      return a.sliceNumber < b.sliceNumber;
                   }
                   return a.path < b.path;
               });
 
+    for (size_t i = 0; i < orderedSlices.size(); ++i) {
+        orderedSlices[i].index = i;
+    }
+
     for (size_t i = 1; i < orderedSlices.size(); ++i) {
-        const auto prev = orderedSlices[i - 1].index;
-        const auto current = orderedSlices[i].index;
+        const auto prev = orderedSlices[i - 1].sliceNumber;
+        const auto current = orderedSlices[i].sliceNumber;
         if (current == prev) {
             return std::unexpected(fmt::format("Duplicate slice index {} for '{}' and '{}'",
                                                current,
@@ -330,10 +335,10 @@ DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
 
     auto orderedSlices = std::move(*scanResult);
 
-    // re-shuffle the slices to prioritize those with indices that are multiples of 16, to improve
+    // re-shuffle the slices to prioritize those with indices that are multiples of 8, to improve
     // progressive loading quality
     std::ranges::stable_sort(orderedSlices, {}, [](const OrderedSlice &slice) {
-        return (slice.index % 8) == 0 ? 0 : 1;
+        return (slice.sliceNumber % 8) == 0 ? 0 : 1;
     });
 
     auto firstInfo = querySliceInfo(orderedSlices.front().path);

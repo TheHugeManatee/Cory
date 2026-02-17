@@ -141,6 +141,26 @@ TEST_CASE("BMP decoder loads 8-bit grayscale top-down images", "[Cory/IO]")
     CHECK(grayAt(outR8, 1u) == 80u);
 }
 
+TEST_CASE("BMP decoder top-down fast path ignores row padding", "[Cory/IO]")
+{
+    const std::vector<uint8_t> pixelIndices{
+        1, 2, 3,
+        4, 5, 6,
+    };
+    const auto bmpBytes = makeGrayBmp8(3, -2, pixelIndices, true);
+
+    std::vector<std::byte> outR8(6);
+    auto decoded = Cory::IO::decodeBmp(bmpBytes, outR8);
+    REQUIRE(decoded);
+
+    CHECK(grayAt(outR8, 0u) == 1u);
+    CHECK(grayAt(outR8, 1u) == 2u);
+    CHECK(grayAt(outR8, 2u) == 3u);
+    CHECK(grayAt(outR8, 3u) == 4u);
+    CHECK(grayAt(outR8, 4u) == 5u);
+    CHECK(grayAt(outR8, 5u) == 6u);
+}
+
 TEST_CASE("BMP decoder rejects unsupported format", "[Cory/IO]")
 {
     const std::vector<uint8_t> pixelBytes{0, 0, 255, 0};

@@ -196,9 +196,18 @@ Result<BmpInfo> decodeBmp(std::span<const std::byte> bytes, std::span<std::byte>
     // If the palette is the identity mapping, we can skip the lookup and just copy the bytes
     if (palletteIsIdentity) {
         if (parsedData.topDown == true) {
-            // If the image is top-down, we can copy the rows in order without needing to reverse
-            // them
-            std::copy_n(src + pixelDataOffset, parsedData.height * rowStride, dst);
+            // If there is no row padding we can bulk-copy the whole image. Otherwise, copy row
+            // payload bytes only (exclude BMP row padding from destination).
+            if (rowStride == parsedData.width) {
+                std::copy_n(src + pixelDataOffset, parsedData.r8ByteSize, dst);
+                return toPublicInfo(*parsed);
+            }
+
+            for (uint32_t y = 0; y < parsedData.height; ++y) {
+                const auto srcRowOffset = pixelDataOffset + y * rowStride;
+                const auto dstRowOffset = y * parsedData.width;
+                std::copy_n(src + srcRowOffset, parsedData.width, dst + dstRowOffset);
+            }
             return toPublicInfo(*parsed);
         }
 

@@ -68,7 +68,8 @@ class DatasetLoader {
 
   private:
     struct OrderedSlice {
-        uint64_t index{};
+        uint64_t sliceNumber{};
+        size_t index{};
         std::filesystem::path path{};
     };
 

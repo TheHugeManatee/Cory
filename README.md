@@ -57,7 +57,7 @@ As such, it uses features that are only supported in rather modern compilers.
     - [x] Implement a simple BMP loader uncompressed grayscale bmp
     - [x] Use a thread pool to load multiple BMP files in parallel
     - [x] Integrate loaded textures into the renderer and display them
-    - [ ] Figure out how to further optimize loader performance parallel performance (currently not saturating disk IO)
+    - [x] Figure out how to further optimize loader performance parallel performance (currently not saturating disk IO)
 
 - [x] Basic coroutine-based framegraph **concept/API draft**
 - [x] ImGui integration

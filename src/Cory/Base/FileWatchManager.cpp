@@ -13,7 +13,6 @@
 #include <filesystem>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -72,7 +71,8 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
     Private()
         : watcher(std::make_unique<efsw::FileWatcher>())
     {
-        watcher->watch();
+        auto lockedWatcher = watcher.lock();
+        (*lockedWatcher)->watch();
     }
 
     ~Private() override { stopAll(); }
@@ -116,20 +116,27 @@ struct FileWatchManager::Private : public efsw::FileWatchListener {
 
     void stopAll()
     {
-        auto data = fileWatchThreadData.lock();
-        for (const auto &[watchId, _] : data->watchIdToDescriptors) {
-            if (watchId != kInvalidWatchId) {
-                watcher->removeWatch(watchId);
+        std::vector<efsw::WatchID> watchIdsToRemove;
+        {
+            auto data = fileWatchThreadData.lock();
+            watchIdsToRemove.reserve(data->watchIdToDescriptors.size());
+            for (const auto &[watchId, _] : data->watchIdToDescriptors) {
+                if (watchId != kInvalidWatchId) watchIdsToRemove.push_back(watchId);
             }
+            data->watchIdToDescriptors.clear();
+            data->directoryToWatchId.clear();
+            data->pendingEvents.clear();
+            watches.clear();
         }
-        data->watchIdToDescriptors.clear();
-        data->directoryToWatchId.clear();
-        data->pendingEvents.clear();
-        watches.clear();
+
+        auto lockedWatcher = watcher.lock();
+        for (auto watchId : watchIdsToRemove) {
+            (*lockedWatcher)->removeWatch(watchId);
+        }
     }
 
     SlotMap<FileWatchEntry> watches;
-    std::unique_ptr<efsw::FileWatcher> watcher;
+    Locked<std::unique_ptr<efsw::FileWatcher>> watcher;
 
     struct FileWatchThreadData {
         std::unordered_map<efsw::WatchID, std::vector<WatchDescriptor>> watchIdToDescriptors;
@@ -206,6 +213,8 @@ FileWatchHandle FileWatchManager::watch(FileWatch watch)
     }
 
     efsw::WatchID watchId = kInvalidWatchId;
+    efsw::WatchID extraWatchIdToRemove = kInvalidWatchId;
+    bool needsNewDirectoryWatch = false;
     {
         auto watchThreadData = data_->fileWatchThreadData.lock();
 
@@ -213,16 +222,38 @@ FileWatchHandle FileWatchManager::watch(FileWatch watch)
             existingWatch != watchThreadData->directoryToWatchId.end()) {
             watchId = existingWatch->second;
         }
+        else needsNewDirectoryWatch = true;
+    }
+
+    if (needsNewDirectoryWatch) {
+        efsw::WatchID createdWatchId = kInvalidWatchId;
+        {
+            auto lockedWatcher = data_->watcher.lock();
+            createdWatchId = (*lockedWatcher)->addWatch(directoryPath.string(), data_.get(), false);
+        }
+
+        if (createdWatchId < 0) {
+            CO_CORE_ERROR("Failed to start file watch for {} -- invalid watch id returned.",
+                          targetPath.string());
+            return {};
+        }
+
+        auto watchThreadData = data_->fileWatchThreadData.lock();
+        if (auto existingWatch = watchThreadData->directoryToWatchId.find(directoryPath);
+            existingWatch != watchThreadData->directoryToWatchId.end()) {
+            watchId = existingWatch->second;
+            extraWatchIdToRemove = createdWatchId;
+        }
         else {
-            watchId = data_->watcher->addWatch(directoryPath.string(), data_.get(), false);
-            if (watchId < 0) {
-                CO_CORE_ERROR("Failed to start file watch for {} -- invalid watch id returned.",
-                              targetPath.string());
-                return {};
-            }
+            watchId = createdWatchId;
             watchThreadData->directoryToWatchId[directoryPath] = watchId;
             watchThreadData->watchIdToDescriptors[watchId] = {};
         }
+    }
+
+    if (extraWatchIdToRemove != kInvalidWatchId) {
+        auto lockedWatcher = data_->watcher.lock();
+        (*lockedWatcher)->removeWatch(extraWatchIdToRemove);
     }
 
     SlotMapHandle handle = data_->watches.emplace(watchId);
@@ -294,7 +325,8 @@ bool FileWatchManager::unwatch(FileWatchHandle handle)
     }
 
     if (removeDirectoryWatch && watchId != kInvalidWatchId) {
-        data_->watcher->removeWatch(watchId);
+        auto lockedWatcher = data_->watcher.lock();
+        (*lockedWatcher)->removeWatch(watchId);
     }
 
     for (auto waiter : waiters) {

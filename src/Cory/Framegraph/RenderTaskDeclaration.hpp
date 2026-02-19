@@ -5,6 +5,7 @@
 #include <cppcoro/coroutine.hpp>
 #include <cppcoro/is_awaitable.hpp>
 
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -48,14 +49,14 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
             outputsProvided_ = true;
         }
 
-        void mark_handed_off() { handedOff_ = true; }
-        [[nodiscard]] bool handed_off() const { return handedOff_; }
+        void detach() { detached_ = true; }
+        [[nodiscard]] bool is_detached() const { return detached_; }
 
         // todo: this could easily be a std::variant
         RenderTaskOutput output_;
         std::exception_ptr exception_{nullptr};
         bool outputsProvided_{false};
-        bool handedOff_{false};
+        bool detached_{false};
     };
 
     using Handle = cppcoro::coroutine_handle<promise_type>;
@@ -71,15 +72,19 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
     }
     ~RenderTaskDeclaration()
     {
-        // Once outputs were yielded, ownership may be transferred to an external
-        // awaiter/scheduler. Conservatively destroy only before first yield.
-        if (coroHandle_ && !coroHandle_.promise().outputsProvided_) {
+        if (coroHandle_) {
             coroHandle_.destroy();
         }
     }
 
     const RenderTaskOutput &output()
     {
+        if (output_.has_value()) {
+            return *output_;
+        }
+
+        CO_CORE_ASSERT(coroHandle_, "Render task declaration has no coroutine handle");
+
         // only resume the coroutine if it did not yet yield an output
         if (!coroHandle_.promise().outputsProvided_ && !coroHandle_.done()) {
             coroHandle_.resume();
@@ -92,11 +97,19 @@ template <typename RenderTaskOutput> class RenderTaskDeclaration {
         CO_CORE_ASSERT(coroHandle_.promise().outputsProvided_,
                        "Render pass coroutine did not yield an outputs struct!");
 
-        return coroHandle_.promise().output_;
+        output_.emplace(coroHandle_.promise().output_);
+
+        // Ownership was transferred to an external scheduler/awaiter.
+        if (coroHandle_.promise().is_detached()) {
+            coroHandle_ = nullptr;
+        }
+
+        return *output_;
     }
 
   private:
     Handle coroHandle_;
+    std::optional<RenderTaskOutput> output_;
 };
 
 } // namespace Cory

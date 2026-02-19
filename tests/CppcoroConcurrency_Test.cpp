@@ -96,6 +96,7 @@ cppcoro::task<std::expected<void, std::string>> runFanOutIterationCory(Cory::Cor
 
 TEST_CASE("cppcoro fan-out gather baseline using schedule_on and when_all_ready", "[Cppcoro]")
 {
+    SKIP("Cppcoro MREs are skipped as this triggers TSAN");
     auto pool = cppcoro::static_thread_pool{4};
 
     constexpr auto iterations = size_t{64};
@@ -138,6 +139,7 @@ TEST_CASE("cppcoro fan-out gather without scheduler baseline", "[Cppcoro]")
     }
 }
 
+// This test is skipped intentionally - it was a way MRE to verify the issue lies in cppcoro
 TEST_CASE("cppcoro single schedule_on with sync_wait baseline", "[Cppcoro]")
 {
     auto pool = cppcoro::static_thread_pool{2};
@@ -183,8 +185,8 @@ TEST_CASE("Cory pool fan-out gather baseline", "[Cppcoro]")
 {
     auto pool = Cory::CoroThreadPool{4};
 
-    constexpr auto iterations = size_t{16};
-    constexpr auto taskCount = size_t{128};
+    constexpr auto iterations = size_t{64};
+    constexpr auto taskCount = size_t{256};
     for (size_t iteration = 0; iteration < iterations; ++iteration) {
         auto result = Cory::sync_wait(runFanOutIterationCory(pool, taskCount));
         REQUIRE(result);

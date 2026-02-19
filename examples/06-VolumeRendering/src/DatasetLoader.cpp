@@ -1,11 +1,9 @@
 #include "DatasetLoader.hpp"
 
+#include <Cory/Base/CoroBatch.hpp>
+#include <Cory/Base/CoroOps.hpp>
 #include <Cory/IO/Bmp.hpp>
-
-#include <cppcoro/cancellation_source.hpp>
-#include <cppcoro/cancellation_token.hpp>
-#include <cppcoro/schedule_on.hpp>
-#include <cppcoro/when_all_ready.hpp>
+#include <Cory/Renderer/ThreadScheduler.hpp>
 
 #include <fmt/format.h>
 #include <mio/mmap.hpp>
@@ -17,6 +15,7 @@
 #include <functional>
 #include <limits>
 #include <optional>
+#include <stop_token>
 
 namespace Cory {
 namespace {
@@ -111,7 +110,7 @@ namespace {
 
 DatasetLoader::DatasetLoader(size_t workerCount)
     : workerCount_{std::max<size_t>(1u, workerCount)}
-    , workerPool_{static_cast<uint32_t>(workerCount_)}
+    , workerPool_{workerCount_}
 {
 }
 
@@ -213,14 +212,14 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
                                     glm::uvec2 expectedDimensions,
                                     glm::uvec3 volumeDimensions,
                                     size_t sliceIndex,
-                                    cppcoro::cancellation_token cancellationToken,
-                                    cppcoro::cancellation_source *cancellationSource,
+                                    std::stop_token cancellationToken,
+                                    std::stop_source *cancellationSource,
                                     IStagingUploader *uploader,
                                     StagedSliceLoadedCallback *onSliceLoaded)
 {
     auto failAndCancel = [&](std::string message) -> Result<void> {
         if (cancellationSource != nullptr) {
-            cancellationSource->request_cancellation();
+            cancellationSource->request_stop();
         }
         return std::unexpected(std::move(message));
     };
@@ -229,8 +228,13 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
         co_return failAndCancel(
             fmt::format("Slice {} ('{}') staging uploader is null", sliceIndex, bmpPath.string()));
     }
+    auto *threadScheduler = uploader->threadScheduler();
+    if (threadScheduler == nullptr) {
+        co_return failAndCancel(fmt::format(
+            "Slice {} ('{}') uploader thread scheduler is null", sliceIndex, bmpPath.string()));
+    }
 
-    if (cancellationToken.is_cancellation_requested()) {
+    if (cancellationToken.stop_requested()) {
         co_return std::unexpected(
             fmt::format("Slice {} ('{}') cancelled before decode", sliceIndex, bmpPath.string()));
     }
@@ -265,6 +269,14 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
 
     const auto expectedVoxels =
         static_cast<size_t>(expectedDimensions.x) * static_cast<size_t>(expectedDimensions.y);
+
+    co_await threadScheduler->schedule();
+
+    if (cancellationToken.stop_requested()) {
+        co_return std::unexpected(fmt::format(
+            "Slice {} ('{}') cancelled before staging acquire", sliceIndex, bmpPath.string()));
+    }
+
     auto slotResult = co_await uploader->acquireStaging(expectedVoxels);
     if (!slotResult) {
         co_return failAndCancel(fmt::format("Slice {} ('{}') failed to acquire staging slot: {}",
@@ -285,17 +297,27 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
                         expectedVoxels));
     }
 
-    auto *mapped = uploader->mapStaging(stagingSlot);
+    co_await workerPool_.schedule();
+
+    if (cancellationToken.stop_requested()) {
+        co_await threadScheduler->schedule();
+        uploader->recycleStaging(std::move(stagingSlot));
+        co_return std::unexpected(
+            fmt::format("Slice {} ('{}') cancelled before decode", sliceIndex, bmpPath.string()));
+    }
+
+    auto *mapped = reinterpret_cast<std::byte *>(stagingSlot.userData);
     if (mapped == nullptr) {
+        co_await threadScheduler->schedule();
         uploader->recycleStaging(std::move(stagingSlot));
         co_return failAndCancel(
             fmt::format("Slice {} ('{}') staging map returned null", sliceIndex, bmpPath.string()));
     }
     auto target = std::span<std::byte>{mapped, expectedVoxels};
     auto decoded = IO::decodeBmp(bmpBytes, target);
-    uploader->unmapStaging(stagingSlot);
 
     if (!decoded) {
+        co_await threadScheduler->schedule();
         uploader->recycleStaging(std::move(stagingSlot));
         co_return failAndCancel(fmt::format(
             "Slice {} ('{}') decode failed: {}", sliceIndex, bmpPath.string(), decoded.error()));
@@ -317,6 +339,7 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
         }
     }
     else {
+        co_await threadScheduler->schedule();
         uploader->recycleStaging(std::move(stagingSlot));
     }
 
@@ -334,6 +357,32 @@ DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
     }
 
     auto orderedSlices = std::move(*scanResult);
+    const auto originalSliceCount = orderedSlices.size();
+    if (request.sliceSubsampleFactor == 0u) {
+        co_return std::unexpected("Slice subsample factor must be >= 1");
+    }
+
+    if (request.sliceSubsampleFactor > 1u) {
+        std::vector<OrderedSlice> subsampled;
+        subsampled.reserve((orderedSlices.size() + request.sliceSubsampleFactor - 1u) /
+                           request.sliceSubsampleFactor);
+
+        for (size_t i = 0; i < orderedSlices.size(); i += request.sliceSubsampleFactor) {
+            subsampled.push_back(std::move(orderedSlices[i]));
+        }
+        orderedSlices = std::move(subsampled);
+
+        for (size_t i = 0; i < orderedSlices.size(); ++i) {
+            orderedSlices[i].index = i;
+        }
+    }
+
+    if (orderedSlices.size() != originalSliceCount) {
+        CO_CORE_INFO("DatasetLoader: applying slice subsampling factor {} ({} -> {} slices)",
+                     request.sliceSubsampleFactor,
+                     originalSliceCount,
+                     orderedSlices.size());
+    }
 
     // re-shuffle the slices to prioritize those with indices that are multiples of 8, to improve
     // progressive loading quality
@@ -373,7 +422,7 @@ DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
         streamed.orderedSlicePaths.push_back(slice.path);
     }
 
-    cppcoro::cancellation_source cancellationSource{};
+    auto cancellationSource = std::stop_source{};
 
     const auto requestedConcurrency =
         request.maxConcurrency == 0 ? workerCount_ : request.maxConcurrency;
@@ -382,7 +431,7 @@ DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
 
     for (size_t batchStart = 0; batchStart < orderedSlices.size();
          batchStart += effectiveConcurrency) {
-        if (cancellationSource.is_cancellation_requested()) {
+        if (cancellationSource.stop_requested()) {
             co_return std::unexpected("Volume load cancelled");
         }
 
@@ -391,24 +440,20 @@ DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
         tasks.reserve(batchEnd - batchStart);
 
         for (size_t i = batchStart; i < batchEnd; ++i) {
-            tasks.emplace_back(cppcoro::schedule_on(workerPool_,
-                                                    loadSliceR8ToStaging(orderedSlices[i].path,
-                                                                         glm::uvec2{x, y},
-                                                                         streamed.dimensions,
-                                                                         orderedSlices[i].index,
-                                                                         cancellationSource.token(),
-                                                                         &cancellationSource,
-                                                                         &uploader,
-                                                                         &onSliceLoaded)));
+            tasks.emplace_back(resume_on(workerPool_,
+                                         loadSliceR8ToStaging(orderedSlices[i].path,
+                                                              glm::uvec2{x, y},
+                                                              streamed.dimensions,
+                                                              orderedSlices[i].index,
+                                                              cancellationSource.get_token(),
+                                                              &cancellationSource,
+                                                              &uploader,
+                                                              &onSliceLoaded)));
         }
 
-        auto completed = co_await cppcoro::when_all_ready(std::move(tasks));
-        for (auto &task : completed) {
-            auto result = task.result();
-            if (!result) {
-                cancellationSource.request_cancellation();
-                co_return std::unexpected(std::move(result.error()));
-            }
+        auto batchResult = co_await when_all_fail_fast(std::move(tasks), cancellationSource);
+        if (!batchResult) {
+            co_return std::unexpected(std::move(batchResult.error()));
         }
     }
 

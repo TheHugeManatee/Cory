@@ -147,8 +147,8 @@ set(CORY_SOURCES
         Renderer/PipelineCache.hpp
         Renderer/RadixSorter.cpp
         Renderer/RadixSorter.hpp
-        Renderer/RenderThreadScheduler.cpp
-        Renderer/RenderThreadScheduler.hpp
+        Renderer/ThreadScheduler.cpp
+        Renderer/ThreadScheduler.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
         Renderer/ShaderHotReloader.cpp

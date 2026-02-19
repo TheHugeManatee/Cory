@@ -12,6 +12,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <span>
@@ -45,6 +46,7 @@ class VolumeRenderDemoApplication : public Cory::Application {
     bool headless_{false};
 
     bool dumpNextFramegraph_{false};
+    size_t volumeSliceSubsampleFactor_{1u};
 
     Cory::SimulationClock clock_;
     Cory::CameraLayer *cameraLayer_;

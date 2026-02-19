@@ -412,7 +412,7 @@ void Context::setupDeviceFromSurface(const Gpu::Surface &surface)
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
-    data_->uploader = std::make_unique<AsyncUploader>(*this);
+    data_->uploader = std::make_unique<AsyncUploader>(*this, &data_->renderThreadScheduler);
 
     setupDescriptors();
 }
@@ -498,7 +498,7 @@ void Context::setupHeadlessDevice()
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
-    data_->uploader = std::make_unique<AsyncUploader>(*this);
+    data_->uploader = std::make_unique<AsyncUploader>(*this, &data_->renderThreadScheduler);
 
     setupDescriptors();
 }

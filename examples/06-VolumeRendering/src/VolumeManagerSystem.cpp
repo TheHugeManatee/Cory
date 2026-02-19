@@ -213,6 +213,7 @@ void VolumeManagerSystem::enqueueRead(DatasetRuntime &dataset, VolumeLevel level
         .directory = dataset.manifest.bmpStack->directory,
         .pattern = dataset.manifest.bmpStack->pattern,
         .maxConcurrency = dataset.manifest.bmpStack->maxConcurrency,
+        .sliceSubsampleFactor = dataset.sliceSubsampleFactor,
     };
 
     readScope_.spawn(loadAndQueueResult(dataset.manifest.datasetId, level, stackRequest));
@@ -589,6 +590,10 @@ void VolumeManagerSystem::ensureDatasetRegistered(const StreamedVolume &streamed
     auto [it, inserted] = datasets_.emplace(streamedVolume.datasetId,
                                             DatasetRuntime{
                                                 .manifest = std::move(manifest),
+                                                .sliceSubsampleFactor =
+                                                    std::max<size_t>(1u,
+                                                                     streamedVolume
+                                                                         .sliceSubsampleFactor),
                                                 .loadingStartedTimeSeconds = currentTime,
                                             });
     if (!inserted) {

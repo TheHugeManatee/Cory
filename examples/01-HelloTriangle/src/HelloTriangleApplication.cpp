@@ -16,6 +16,7 @@
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
+#include <Cory/Renderer/ThreadScheduler.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
@@ -32,6 +33,7 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
 #include <cstring>
 
 struct PushConstants {
@@ -199,6 +201,7 @@ void HelloTriangleApplication::run()
     auto frames = frameSource.frames();
 
     for (auto &frameCtx : frames) {
+        ctx().renderThreadScheduler().poll();
         runFrame(frameCtx);
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
             break;
@@ -316,9 +319,9 @@ void HelloTriangleApplication::createGeometry()
         CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
         auto stagingSlot = std::move(*stagingResult);
         if (dataByteSize > 0) {
-            auto *mapped = stagingSlot.buffer.map();
+            auto *mapped = reinterpret_cast<std::byte *>(stagingSlot.userData);
+            CO_CORE_ASSERT(mapped != nullptr, "AsyncUploader: staging slot is not mapped.");
             std::memcpy(mapped, vertexData.data(), static_cast<size_t>(dataByteSize));
-            stagingSlot.buffer.unmap();
         }
 
         vertexUploadTicket =
@@ -345,9 +348,9 @@ void HelloTriangleApplication::createGeometry()
         CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
         auto stagingSlot = std::move(*stagingResult);
         if (dataByteSize > 0) {
-            auto *mapped = stagingSlot.buffer.map();
+            auto *mapped = reinterpret_cast<std::byte *>(stagingSlot.userData);
+            CO_CORE_ASSERT(mapped != nullptr, "AsyncUploader: staging slot is not mapped.");
             std::memcpy(mapped, indexData.data(), static_cast<size_t>(dataByteSize));
-            stagingSlot.buffer.unmap();
         }
         indexUploadTicket =
             ctx().uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));

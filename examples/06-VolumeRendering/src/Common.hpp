@@ -4,6 +4,7 @@
 
 #include <glm/vec3.hpp>
 
+#include <cstddef>
 #include <filesystem>
 #include <string>
 
@@ -34,6 +35,7 @@ struct VolumeComponent {
 struct StreamedVolume {
     std::string datasetId{};
     std::filesystem::path manifestPath{};
+    size_t sliceSubsampleFactor{1u};
 };
 
 struct ProceduralVolume {

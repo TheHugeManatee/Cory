@@ -12,6 +12,7 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include <cstddef>
 #include <cstring>
 #include <gsl/narrow>
 
@@ -130,9 +131,9 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
         CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
         auto stagingSlot = std::move(*stagingResult);
         if (dataByteSize > 0) {
-            auto *mapped = stagingSlot.buffer.map();
+            auto *mapped = reinterpret_cast<std::byte *>(stagingSlot.userData);
+            CO_CORE_ASSERT(mapped != nullptr, "AsyncUploader: staging slot is not mapped.");
             std::memcpy(mapped, vertexData.data(), static_cast<size_t>(dataByteSize));
-            stagingSlot.buffer.unmap();
         }
         vertexUploadTicket =
             ctx.uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));
@@ -157,9 +158,9 @@ Mesh DynamicGeometry::createFromCpuBuffers(Context &ctx,
         CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
         auto stagingSlot = std::move(*stagingResult);
         if (dataByteSize > 0) {
-            auto *mapped = stagingSlot.buffer.map();
+            auto *mapped = reinterpret_cast<std::byte *>(stagingSlot.userData);
+            CO_CORE_ASSERT(mapped != nullptr, "AsyncUploader: staging slot is not mapped.");
             std::memcpy(mapped, indexData.data(), static_cast<size_t>(dataByteSize));
-            stagingSlot.buffer.unmap();
         }
         indexUploadTicket =
             ctx.uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));

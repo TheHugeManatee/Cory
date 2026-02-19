@@ -21,6 +21,7 @@
 namespace Cory {
 
 class Context;
+class ThreadScheduler;
 
 /**
  * Async bulk upload service that is intentionally orthogonal to framegraph execution.
@@ -138,7 +139,7 @@ class AsyncUploader : NoCopy, public IStagingUploader {
         friend class AsyncUploader;
     };
 
-    explicit AsyncUploader(Context &ctx);
+    explicit AsyncUploader(Context &ctx, ThreadScheduler *threadScheduler);
     ~AsyncUploader();
 
     // movable
@@ -152,15 +153,12 @@ class AsyncUploader : NoCopy, public IStagingUploader {
     UploadTicket enqueueStagedImageUpload(const ImageUploadRequest &request,
                                           StagingSlot &&stagingSlot);
 
-    /// Acquire/reuse a staging slot that can be mapped/written by caller code.
+    /// Acquire/reuse a pre-mapped staging slot that can be written by caller code.
     [[nodiscard]] cppcoro::task<Result<StagingSlot>>
     acquireStaging(Gpu::DeviceSize byteSize) override;
+    [[nodiscard]] ThreadScheduler *threadScheduler() const noexcept override;
     /// Return an unused staging slot to the uploader pool.
     void recycleStaging(StagingSlot &&stagingSlot) override;
-    /// Map staging memory for CPU writes.
-    [[nodiscard]] std::byte *mapStaging(StagingSlot &stagingSlot) override;
-    /// Unmap staging memory.
-    void unmapStaging(StagingSlot &stagingSlot) override;
     /// Check whether a staging slot is usable.
     [[nodiscard]] bool validStaging(const StagingSlot &stagingSlot) const override;
 
@@ -184,6 +182,8 @@ class AsyncUploader : NoCopy, public IStagingUploader {
                                                              uint32_t graphicsQueueFamily) noexcept;
 
   private:
+    void assertRenderThread(char const *methodName) const;
+
     UploadTicket enqueueBufferUploadWithRecord(const BufferUploadRequest &request,
                                                std::shared_ptr<UploadTicket::UploadRecord> record);
     UploadTicket enqueueImageUploadWithRecord(const ImageUploadRequest &request,

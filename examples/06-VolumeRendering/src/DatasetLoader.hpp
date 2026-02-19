@@ -1,12 +1,10 @@
 #pragma once
 
+#include <Cory/Base/CoroThreadPool.hpp>
 #include <Cory/Base/Function.hpp>
 #include <Cory/Base/Result.hpp>
 #include <Cory/Renderer/StagingUploader.hpp>
 
-#include <cppcoro/cancellation_source.hpp>
-#include <cppcoro/cancellation_token.hpp>
-#include <cppcoro/static_thread_pool.hpp>
 #include <cppcoro/task.hpp>
 
 #include <glm/vec2.hpp>
@@ -14,6 +12,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
@@ -49,6 +48,7 @@ struct LoadStackRequest {
     std::filesystem::path directory{};
     std::string pattern{"*.bmp"};
     size_t maxConcurrency{0};
+    size_t sliceSubsampleFactor{1u};
 };
 
 using SliceLoadedCallback = Function<Result<void>(SliceLoadUpdate &&update)>;
@@ -81,13 +81,13 @@ class DatasetLoader {
                          glm::uvec2 expectedDimensions,
                          glm::uvec3 volumeDimensions,
                          size_t sliceIndex,
-                         cppcoro::cancellation_token cancellationToken,
-                         cppcoro::cancellation_source *cancellationSource,
+                         std::stop_token cancellationToken,
+                         std::stop_source *cancellationSource,
                          IStagingUploader *uploader,
                          StagedSliceLoadedCallback *onSliceLoaded);
 
     size_t workerCount_{1u};
-    cppcoro::static_thread_pool workerPool_;
+    CoroThreadPool workerPool_;
 };
 
 } // namespace Cory

@@ -95,6 +95,7 @@ class VolumeManagerSystem {
 
         bool previewQueued{false};
         bool fullQueued{false};
+        size_t sliceSubsampleFactor{1u};
 
         std::optional<ResidentVolume> previewResident{};
         std::optional<ResidentVolume> fullResident{};

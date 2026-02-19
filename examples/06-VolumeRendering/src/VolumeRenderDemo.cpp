@@ -77,14 +77,22 @@ VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *>
     CLI::App app{"VolumeRenderDemoApplication"};
     bool disableValidation{false};
     std::string volumeCatalogPathString{};
+    size_t volumeSliceSubsampleFactor{1u};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.add_option("--volume-catalog",
                    volumeCatalogPathString,
                    "Path to .cvolcat file with volume dataset manifests");
+    app.add_option("--volume-slice-subsample",
+                   volumeSliceSubsampleFactor,
+                   "Load every Nth slice from BMP stacks (N >= 1)");
     app.allow_config_extras(true);
     app.parse(gsl::narrow<int>(args.size()), args.data());
+    if (volumeSliceSubsampleFactor == 0u) {
+        throw std::runtime_error("--volume-slice-subsample must be >= 1");
+    }
+    volumeSliceSubsampleFactor_ = volumeSliceSubsampleFactor;
 
     if (!volumeCatalogPathString.empty()) {
         VolumeCatalog catalog{};
@@ -245,6 +253,7 @@ void VolumeRenderDemoApplication::setupScene()
             StreamedVolume{
                 .datasetId = dataset.datasetId,
                 .manifestPath = dataset.manifestPath,
+                .sliceSubsampleFactor = volumeSliceSubsampleFactor_,
             });
     }
 }
@@ -473,6 +482,7 @@ void VolumeRenderDemoApplication::drawImguiControls()
                     ImGui::SeparatorText("StreamedVolume");
                     CoImGui::Text("Dataset: {}", streamed->datasetId);
                     CoImGui::Text("Manifest: {}", streamed->manifestPath.string());
+                    CoImGui::Text("Slice Subsample: {}", streamed->sliceSubsampleFactor);
                 }
 
                 ImGui::SeparatorText("VolumeComponent");

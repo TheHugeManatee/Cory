@@ -11,6 +11,7 @@
 #include <KDGpu/vulkan/vulkan_buffer.h>
 
 #include <numeric>
+#include <stdexcept>
 #include <utility>
 
 namespace Cory {
@@ -19,7 +20,11 @@ constexpr uint32_t kWorkgroupSize = 256u;
 
 ShaderHandle createComputeShader(Context &ctx, std::string_view path)
 {
-    ShaderSource source{ResourceLocator::Locate(path)};
+    const auto shaderPath = ResourceLocator::Locate(path);
+    if (!shaderPath.has_value()) {
+        throw std::runtime_error(shaderPath.error());
+    }
+    ShaderSource source{*shaderPath};
     return ctx.shaders().createShader(std::move(source));
 }
 

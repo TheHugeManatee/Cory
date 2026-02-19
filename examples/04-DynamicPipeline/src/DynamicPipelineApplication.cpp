@@ -161,13 +161,19 @@ Cory::EagerJob DynamicPipelineApplication::loadShaders()
 {
     auto vertexPath =
         Cory::ResourceLocator::Locate("dynamic_pipeline.vert.slang", Cory::ResourceType::Shader);
+    if (!vertexPath.has_value()) {
+        throw std::runtime_error{vertexPath.error()};
+    }
     auto fragmentPath =
         Cory::ResourceLocator::Locate("dynamic_pipeline.frag.slang", Cory::ResourceType::Shader);
+    if (!fragmentPath.has_value()) {
+        throw std::runtime_error{fragmentPath.error()};
+    }
 
-    Cory::ShaderSource vertexShaderSource{vertexPath, Gpu::ShaderStageFlagBits::VertexBit};
+    Cory::ShaderSource vertexShaderSource{*vertexPath, Gpu::ShaderStageFlagBits::VertexBit};
 
     auto vertexShaderHandle = ctx().shaders().createShader(
-        vertexShaderSource.source(), Gpu::ShaderStageFlagBits::VertexBit, vertexPath);
+        vertexShaderSource.source(), Gpu::ShaderStageFlagBits::VertexBit, *vertexPath);
 
     const auto &vertexShader = ctx().shaders()[vertexShaderHandle];
     if (!vertexShader.valid()) {
@@ -175,11 +181,11 @@ Cory::EagerJob DynamicPipelineApplication::loadShaders()
     }
     vertexShader_ = vertexShaderHandle;
 
-    fragmentShaderCode_ = Cory::ShaderSource{fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
+    fragmentShaderCode_ = Cory::ShaderSource{*fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
     fragmentShaderEditorSource_ = fragmentShaderCode_->source();
 
     auto fragmentShaderHandle = ctx().shaders().createShader(
-        fragmentShaderCode_->source(), Gpu::ShaderStageFlagBits::FragmentBit, fragmentPath);
+        fragmentShaderCode_->source(), Gpu::ShaderStageFlagBits::FragmentBit, *fragmentPath);
     const auto &fragmentShader = ctx().shaders()[fragmentShaderHandle];
     if (!fragmentShader.valid()) {
         throw std::runtime_error{fragmentShader.error()};
@@ -191,7 +197,7 @@ Cory::EagerJob DynamicPipelineApplication::loadShaders()
 
     // Enter the file watch loop coroutine
     auto &fileWatchManager = ctx().fileWatchManager();
-    auto fsWatchHandle = fileWatchManager.watch(Cory::FileWatch{.path = fragmentPath.string()});
+    auto fsWatchHandle = fileWatchManager.watch(Cory::FileWatch{.path = fragmentPath->string()});
     for (auto event = Cory::FileWatchEventType::Unknown;
          event != Cory::FileWatchEventType::WatchEnded;
          event = co_await fileWatchManager.nextEvent(fsWatchHandle)) {
@@ -200,7 +206,7 @@ Cory::EagerJob DynamicPipelineApplication::loadShaders()
         if (event == Cory::FileWatchEventType::Modified) {
             // Reload shader from disk
             fragmentShaderCode_ =
-                Cory::ShaderSource{fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
+                Cory::ShaderSource{*fragmentPath, Gpu::ShaderStageFlagBits::FragmentBit};
             fragmentShaderEditorSource_ = fragmentShaderCode_->source();
             fragmentShaderDirty_ = true;
             requestCompile_ = true;

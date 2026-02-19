@@ -203,7 +203,7 @@ void RenderTaskExecutionAwaiter<RenderTaskOutput>::await_suspend(
         coroHandle) noexcept
 {
     coroHandle.promise().set_output(std::move(output));
-    coroHandle.promise().mark_handed_off();
+    coroHandle.promise().detach();
     fg.enqueueRenderPass(passHandle, coroHandle);
 }
 

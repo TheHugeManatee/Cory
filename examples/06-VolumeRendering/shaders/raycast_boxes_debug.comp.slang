@@ -10,6 +10,7 @@ struct InstanceData
     float4 color;
     float4 transferParams;
     float4 raymarchParams;
+    uint4 volumeMeta;
 };
 
 struct RaycastGlobals

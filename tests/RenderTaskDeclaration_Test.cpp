@@ -7,17 +7,22 @@
 #include <catch2/catch_test_macros.hpp>
 
 struct TheMightyScheduler {
+    struct SignAwaiter {
+        TheMightyScheduler &ol;
+        [[nodiscard]] constexpr bool await_ready() const noexcept { return false; }
+        [[nodiscard]] int await_resume() const noexcept { return ol.sign; }
+        template <typename Promise>
+        void await_suspend(cppcoro::coroutine_handle<Promise> coroHandle) const noexcept
+        {
+            if constexpr (requires(Promise &promise) { promise.detach(); }) {
+                coroHandle.promise().detach();
+            }
+            ol.coro = coroHandle;
+        }
+    };
+
     auto theSign()
     {
-        struct SignAwaiter {
-            TheMightyScheduler &ol;
-            [[nodiscard]] constexpr bool await_ready() const noexcept { return false; }
-            [[nodiscard]] int await_resume() const noexcept { return ol.sign; }
-            void await_suspend(cppcoro::coroutine_handle<> coroHandle) const noexcept
-            {
-                ol.coro = coroHandle;
-            }
-        };
         return SignAwaiter{*this};
     }
     void resumeCoro() { coro.resume(); }

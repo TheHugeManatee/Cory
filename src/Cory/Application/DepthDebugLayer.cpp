@@ -17,6 +17,8 @@
 #include <KDGpu/device.h>
 #include <KDGpu/sampler.h>
 
+#include <stdexcept>
+
 namespace Cory {
 
 struct DrawData {
@@ -47,12 +49,19 @@ void DepthDebugLayer::onAttach(Context &ctx, LayerAttachInfo info)
 {
     CO_CORE_ASSERT(state_ == nullptr, "Layer was already attached!");
 
+    const auto fullscreenTriPath = ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang");
+    if (!fullscreenTriPath.has_value()) {
+        throw std::runtime_error(fullscreenTriPath.error());
+    }
+    const auto depthDebugPath = ResourceLocator::Locate("shaders/DepthDebug.frag.slang");
+    if (!depthDebugPath.has_value()) {
+        throw std::runtime_error(depthDebugPath.error());
+    }
+
     auto &res = ctx.shaders();
     state_ = std::make_unique<State>(State{
-        .fullscreenTriShader{
-            res.createShader(ResourceLocator::Locate("shaders/FullscreenTriangle.vert.slang"))},
-        .depthDebugShader{res.createShader(
-            ShaderSource{ResourceLocator::Locate("shaders/DepthDebug.frag.slang")})},
+        .fullscreenTriShader{res.createShader(*fullscreenTriPath)},
+        .depthDebugShader{res.createShader(ShaderSource{*depthDebugPath})},
         .sampler =
             ctx.device().createSampler(Gpu::SamplerOptions{.label = "DepthDebugLayer sampler",
                                                            .magFilter = Gpu::FilterMode::Linear,

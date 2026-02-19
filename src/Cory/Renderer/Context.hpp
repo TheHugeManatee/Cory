@@ -18,6 +18,7 @@ namespace Cory {
 
 class AsyncUploader;
 class FramegraphResourceManager;
+class ThreadScheduler;
 
 struct DebugMessageInfo {
     DebugMessageSeverity severity;
@@ -87,6 +88,8 @@ class Context : NoCopy {
     const DescriptorSets &descriptors() const;
 
     AsyncUploader &uploader();
+    ThreadScheduler &renderThreadScheduler();
+    const ThreadScheduler &renderThreadScheduler() const;
     FramegraphResourceManager &framegraphResources();
     const FramegraphResourceManager &framegraphResources() const;
 

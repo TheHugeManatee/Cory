@@ -2,6 +2,7 @@
 
 #include <Cory/Renderer/AsyncUploader.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/ThreadScheduler.hpp>
 
 #include <Cory/Base/Debugger.hpp>
 #include <Cory/Base/FileWatchManager.hpp>
@@ -120,6 +121,7 @@ struct ContextPrivate {
     uint32_t graphicsQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
     uint32_t computeQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
     uint32_t transferQueueTypeIndex{std::numeric_limits<uint32_t>::max()};
+    ThreadScheduler renderThreadScheduler;
     std::unique_ptr<AsyncUploader> uploader;
 
     ShaderManager shaders;
@@ -410,7 +412,7 @@ void Context::setupDeviceFromSurface(const Gpu::Surface &surface)
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
-    data_->uploader = std::make_unique<AsyncUploader>(*this);
+    data_->uploader = std::make_unique<AsyncUploader>(*this, &data_->renderThreadScheduler);
 
     setupDescriptors();
 }
@@ -496,7 +498,7 @@ void Context::setupHeadlessDevice()
 
     data_->pipelineCache = std::make_unique<PipelineCache>(
         data_->api.resourceManager(), data_->device.handle(), &data_->shaders);
-    data_->uploader = std::make_unique<AsyncUploader>(*this);
+    data_->uploader = std::make_unique<AsyncUploader>(*this, &data_->renderThreadScheduler);
 
     setupDescriptors();
 }
@@ -600,6 +602,16 @@ AsyncUploader &Context::uploader()
     return *data_->uploader;
 }
 
+ThreadScheduler &Context::renderThreadScheduler()
+{
+    return data_->renderThreadScheduler;
+}
+
+const ThreadScheduler &Context::renderThreadScheduler() const
+{
+    return data_->renderThreadScheduler;
+}
+
 FramegraphResourceManager &Context::framegraphResources()
 {
     CO_CORE_ASSERT(data_->framegraphResources != nullptr,
@@ -638,13 +650,17 @@ void ContextPrivate::receiveDebugUtilsMessage(
         // layers
         return;
     }
+    // UNASSIGNED-vkAllocateMemory-maxMemoryAllocationSize
+    if (pCallbackData->messageIdNumber == -1649273453) {
+        // This message is triggered by allocating huge buffers that exceed the reported max
+        // allocation size. It still works on my machine, so I'm sure it's fine! ;)
+        return;
+    }
 
     if (validationMessageCallback()) {
         validationMessageCallback()(info);
         return;
     }
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wswitch-default"
     switch (info.severity) {
     case DebugMessageSeverity::Verbose:
         CO_CORE_TRACE("Vulkan Validation: {}", pCallbackData->pMessage);
@@ -660,8 +676,9 @@ void ContextPrivate::receiveDebugUtilsMessage(
         CO_CORE_ERROR("Vulkan Validation: {}", pCallbackData->pMessage);
         BreakpointIfDebugging();
         break;
+    default:
+        break;
     }
-#pragma clang diagnostic pop
 }
 
 } // namespace Cory

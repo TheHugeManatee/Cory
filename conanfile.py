@@ -21,10 +21,12 @@ class CoryProjectConan(ConanFile):
         self.requires("imgui/1.92.5-docking")
         # self.requires("libunifex/0.4.0")
         self.requires("magic_enum/0.9.7")
+        self.requires("nlohmann_json/3.12.0")
         self.requires("ms-gsl/4.2.0")
         self.requires("range-v3/0.12.0")
         self.requires("spdlog/1.16.0")
         self.requires("efsw/1.4.1")
+        self.requires("mio/cci.20230303")
 
     def configure(self):
         # Need to set this env to create powershell scripts on Windows

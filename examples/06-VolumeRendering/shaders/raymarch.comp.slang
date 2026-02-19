@@ -11,6 +11,7 @@ struct InstanceData
     float4 color;
     float4 transferParams;
     float4 raymarchParams;
+    uint4 volumeMeta; // x=texture index, y/z/w=dimensions
 };
 
 struct RaycastGlobals
@@ -45,23 +46,23 @@ float hash13(float3 p)
     return frac((p3.x + p3.y) * p3.z);
 }
 
-float sampleDensity(float3 uvw)
+float sampleDensity(uint textureIndex, float3 uvw)
 {
-    return gBindlessTexture3D[globals->volumeTextureIndex].SampleLevel(saturate(uvw), 0.0f).r;
+    return gBindlessTexture3D[textureIndex].SampleLevel(saturate(uvw), 0.0f).r;
 }
 
-float3 estimateGradient(float3 uvw)
+float3 estimateGradient(uint textureIndex, uint3 dimensions, float3 uvw)
 {
-    let dims = float3(globals->volumeDimensions);
+    let dims = float3(dimensions);
     let texel = 1.0f / max(dims, float3(1.0f));
 
     let offsetX = float3(texel.x, 0.0f, 0.0f);
     let offsetY = float3(0.0f, texel.y, 0.0f);
     let offsetZ = float3(0.0f, 0.0f, texel.z);
 
-    let gx = sampleDensity(uvw + offsetX) - sampleDensity(uvw - offsetX);
-    let gy = sampleDensity(uvw + offsetY) - sampleDensity(uvw - offsetY);
-    let gz = sampleDensity(uvw + offsetZ) - sampleDensity(uvw - offsetZ);
+    let gx = sampleDensity(textureIndex, uvw + offsetX) - sampleDensity(textureIndex, uvw - offsetX);
+    let gy = sampleDensity(textureIndex, uvw + offsetY) - sampleDensity(textureIndex, uvw - offsetY);
+    let gz = sampleDensity(textureIndex, uvw + offsetZ) - sampleDensity(textureIndex, uvw - offsetZ);
     return float3(gx, gy, gz);
 }
 
@@ -100,25 +101,32 @@ struct VolumeSampler : ISampler<VolumeSample>
 {
     InstanceData instance;
     float stepSize;
+    uint textureIndex;
+    uint3 volumeDimensions;
 
     __init(InstanceData instance, float stepSize)
     {
         this.instance = instance;
         this.stepSize = stepSize;
+        this.textureIndex = instance.volumeMeta.x;
+        this.volumeDimensions = uint3(instance.volumeMeta.y, instance.volumeMeta.z, instance.volumeMeta.w);
     }
 
     VolumeSample eval(Ray ray, float t)
     {
+        if (textureIndex == 0xFFFFFFFFu) {
+            return VolumeSample();
+        }
         let localPos = ray.at(t);
         let uvw = localPos + 0.5f;
-        let density = sampleDensity(uvw);
+        let density = sampleDensity(textureIndex, uvw);
         let transfer = evaluateTransferFunction(density, stepSize, instance.transferParams);
         if (transfer.a <= 0.0f) {
             return VolumeSample();
         }
 
         var sampleColor = transfer.rgb;
-        let gradient = estimateGradient(uvw);
+        let gradient = estimateGradient(textureIndex, volumeDimensions, uvw);
         var localNormal = -ray.direction;
         if (dot(gradient, gradient) > 1e-7f) {
             localNormal = normalize(-gradient);
@@ -187,8 +195,8 @@ float4 raymarchVolume(float3 localOrigin,
     }
 
     let dirLength = max(length(localDirection), 1e-6f);
-    let maxDim = max(globals->volumeDimensions.x,
-                     max(globals->volumeDimensions.y, globals->volumeDimensions.z));
+    let volumeDimensions = uint3(instance.volumeMeta.y, instance.volumeMeta.z, instance.volumeMeta.w);
+    let maxDim = max(volumeDimensions.x, max(volumeDimensions.y, volumeDimensions.z));
     let voxelSize = 1.0f / float(max(maxDim, 1u));
     let stepMultiplier = max(instance.raymarchParams.x, 0.01f);
     let jitterEnabled = instance.raymarchParams.y > 0.5f;

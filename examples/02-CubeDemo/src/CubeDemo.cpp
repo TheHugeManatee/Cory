@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <stdexcept>
 
 static struct AnimationData {
     int num_cubes{5000};
@@ -180,11 +181,17 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
 void CubeDemoApplication::createShaders()
 {
     const Cory::ScopeTimer st{"Init/Shaders"};
+    const auto vertexPath = Cory::ResourceLocator::Locate("cube.vert.slang");
+    if (!vertexPath.has_value()) {
+        throw std::runtime_error(vertexPath.error());
+    }
+    const auto fragmentPath = Cory::ResourceLocator::Locate("cube.frag.slang");
+    if (!fragmentPath.has_value()) {
+        throw std::runtime_error(fragmentPath.error());
+    }
 
-    vertexShader_ = ctx().shaders().createShader(
-        Cory::ShaderSource{Cory::ResourceLocator::Locate("cube.vert.slang")});
-    fragmentShader_ = ctx().shaders().createShader(
-        Cory::ShaderSource{Cory::ResourceLocator::Locate("cube.frag.slang")});
+    vertexShader_ = ctx().shaders().createShader(Cory::ShaderSource{*vertexPath});
+    fragmentShader_ = ctx().shaders().createShader(Cory::ShaderSource{*fragmentPath});
 }
 
 CubeDemoApplication::~CubeDemoApplication()

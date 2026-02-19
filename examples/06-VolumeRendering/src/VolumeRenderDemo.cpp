@@ -1,6 +1,9 @@
 #include "VolumeRenderDemo.hpp"
 
 #include "Common.hpp"
+#include "VolumeCatalog.hpp"
+#include "VolumeManagerSystem.hpp"
+#include "VolumeManifest.hpp"
 #include "VolumeRenderSystem.hpp"
 
 #include <Cory/Application/CameraLayer.hpp>
@@ -35,17 +38,82 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 #include <vector>
+
+namespace {
+
+[[nodiscard]] glm::uvec3 selectDimensionsForPhysicalExtent(const VolumeManifest &manifest)
+{
+    if (manifest.sourceDimensions.x > 0u && manifest.sourceDimensions.y > 0u &&
+        manifest.sourceDimensions.z > 0u) {
+        return manifest.sourceDimensions;
+    }
+    if (manifest.fullDownsampledFrom.has_value() && manifest.fullDownsampledFrom->x > 0u &&
+        manifest.fullDownsampledFrom->y > 0u && manifest.fullDownsampledFrom->z > 0u) {
+        return *manifest.fullDownsampledFrom;
+    }
+    return manifest.full.dimensions;
+}
+
+[[nodiscard]] glm::vec3 volumeSizeFromManifest(const VolumeManifest &manifest)
+{
+    constexpr float kSceneLongestAxis = 4.0f;
+    const auto dimensions = selectDimensionsForPhysicalExtent(manifest);
+    const auto clampedSpacing = glm::max(manifest.spacingMm, glm::vec3{0.000001f});
+    const auto physicalSize = glm::vec3{dimensions} * clampedSpacing;
+    const float longestAxis = std::max({physicalSize.x, physicalSize.y, physicalSize.z});
+    if (!std::isfinite(longestAxis) || longestAxis <= 0.0f) {
+        return glm::vec3{kSceneLongestAxis};
+    }
+    return (physicalSize / longestAxis) * kSceneLongestAxis;
+}
+
+} // namespace
 
 VolumeRenderDemoApplication::VolumeRenderDemoApplication(std::span<const char *> args)
 {
     CLI::App app{"VolumeRenderDemoApplication"};
     bool disableValidation{false};
+    std::string volumeCatalogPathString{};
+    size_t volumeSliceSubsampleFactor{1u};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
     app.add_flag("--disable-validation", disableValidation, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
+    app.add_option("--volume-catalog",
+                   volumeCatalogPathString,
+                   "Path to .cvolcat file with volume dataset manifests");
+    app.add_option("--volume-slice-subsample",
+                   volumeSliceSubsampleFactor,
+                   "Load every Nth slice from BMP stacks (N >= 1)");
     app.allow_config_extras(true);
     app.parse(gsl::narrow<int>(args.size()), args.data());
+    if (volumeSliceSubsampleFactor == 0u) {
+        throw std::runtime_error("--volume-slice-subsample must be >= 1");
+    }
+    volumeSliceSubsampleFactor_ = volumeSliceSubsampleFactor;
+
+    if (!volumeCatalogPathString.empty()) {
+        VolumeCatalog catalog{};
+        std::string error{};
+        const auto catalogPath = std::filesystem::path{volumeCatalogPathString};
+        if (!loadVolumeCatalog(catalogPath, catalog, error)) {
+            throw std::runtime_error(error);
+        }
+        for (const auto &entry : catalog.entries) {
+            VolumeManifest manifest{};
+            std::string manifestError{};
+            if (!loadVolumeManifest(entry.manifestPath, manifest, manifestError)) {
+                throw std::runtime_error(manifestError);
+            }
+            catalogDatasets_.push_back(CatalogDataset{
+                .datasetId = manifest.datasetId,
+                .manifestPath = entry.manifestPath,
+                .volumeSize = volumeSizeFromManifest(manifest),
+            });
+        }
+    }
 
     Cory::ResourceLocator::addSearchPath(VOLUMERENDERING_RESOURCE_DIR);
 
@@ -101,47 +169,93 @@ void VolumeRenderDemoApplication::setupScene()
                                           .nearPlane = 0.2f,
                                           .farPlane = 1000.0f});
 
-    sceneGraph_.createEntityWithComponents(
-        root,
-        "Main Volume",
-        Cory::Components::Transform{
-            .mode = Cory::Components::TransformMode::Local,
-            .position = {0.0f, 0.0f, 0.0f},
-            .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
-            .scale = {1.0f, 1.0f, 1.0f},
-        },
-        VolumeComponent{
-            .size = {5.0f, 5.0f, 5.0f},
-            .raymarchStepSizeMultiplier = 4.0f,
-            .transferFunction =
-                {
-                    .densityMin = 0.05f,
-                    .densityMax = 0.20f,
-                    .opacityScale = 30.0f,
-                    .gamma = 0.9f,
-                },
-        });
+    if (catalogDatasets_.empty()) {
+        sceneGraph_.createEntityWithComponents(
+            root,
+            "Main Volume",
+            Cory::Components::Transform{
+                .mode = Cory::Components::TransformMode::Local,
+                .position = {0.0f, 0.0f, 0.0f},
+                .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
+                .scale = {1.0f, 1.0f, 1.0f},
+            },
+            VolumeComponent{
+                .size = {5.0f, 5.0f, 5.0f},
+                .raymarchStepSizeMultiplier = 4.0f,
+                .transferFunction =
+                    {
+                        .densityMin = 0.05f,
+                        .densityMax = 0.20f,
+                        .opacityScale = 30.0f,
+                        .gamma = 0.9f,
+                    },
+            },
+            ProceduralVolume{
+                .dimensions = {128u, 128u, 128u},
+                .densityScale = 1.0f,
+                .updateEveryFrame = true,
+                .animationSpeed = 1.0f,
+            });
 
-    sceneGraph_.createEntityWithComponents(
-        root,
-        "Secondary Volume",
-        Cory::Components::Transform{
-            .mode = Cory::Components::TransformMode::Local,
-            .position = {5.0f, 2.0f, 0.0f},
-            .orientation = Cory::eulerYXZToQuaternion({30.0, 45.0, 0.0}),
-            .scale = {1.0f, 1.0f, 1.0f},
-        },
-        VolumeComponent{
-            .size = {2.0f, 4.0f, 2.0f},
-            .raymarchStepSizeMultiplier = 2.0f,
-            .transferFunction =
-                {
-                    .densityMin = 0.25f,
-                    .densityMax = 0.98f,
-                    .opacityScale = 14.0f,
-                    .gamma = 1.45f,
-                },
-        });
+        sceneGraph_.createEntityWithComponents(
+            root,
+            "Secondary Volume",
+            Cory::Components::Transform{
+                .mode = Cory::Components::TransformMode::Local,
+                .position = {5.0f, 2.0f, 0.0f},
+                .orientation = Cory::eulerYXZToQuaternion({30.0, 45.0, 0.0}),
+                .scale = {1.0f, 1.0f, 1.0f},
+            },
+            VolumeComponent{
+                .size = {2.0f, 4.0f, 2.0f},
+                .raymarchStepSizeMultiplier = 2.0f,
+                .transferFunction =
+                    {
+                        .densityMin = 0.25f,
+                        .densityMax = 0.98f,
+                        .opacityScale = 14.0f,
+                        .gamma = 1.45f,
+                    },
+            },
+            ProceduralVolume{
+                .dimensions = {96u, 128u, 96u},
+                .densityScale = 0.9f,
+                .updateEveryFrame = true,
+                .animationSpeed = 1.4f,
+            });
+        return;
+    }
+
+    constexpr float spacingX = 5.0f;
+    for (size_t i = 0; i < catalogDatasets_.size(); ++i) {
+        const auto &dataset = catalogDatasets_[i];
+        const auto x = static_cast<float>(i) * spacingX;
+        sceneGraph_.createEntityWithComponents(
+            root,
+            fmt::format("oVert {}", dataset.datasetId),
+            Cory::Components::Transform{
+                .mode = Cory::Components::TransformMode::Local,
+                .position = {x, 0.0f, 0.0f},
+                .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
+                .scale = {1.0f, 1.0f, 1.0f},
+            },
+            VolumeComponent{
+                .size = dataset.volumeSize,
+                .raymarchStepSizeMultiplier = 12.0f,
+                .transferFunction =
+                    {
+                        .densityMin = 0.05f,
+                        .densityMax = 0.25f,
+                        .opacityScale = 32.0f,
+                        .gamma = 1.0f,
+                    },
+            },
+            StreamedVolume{
+                .datasetId = dataset.datasetId,
+                .manifestPath = dataset.manifestPath,
+                .sliceSubsampleFactor = volumeSliceSubsampleFactor_,
+            });
+    }
 }
 
 void VolumeRenderDemoApplication::setupSystems()
@@ -174,6 +288,9 @@ void VolumeRenderDemoApplication::setupSystems()
     // after the "logic" has updated, sync all the transforms of the scenegraph
     systems_.emplace<Cory::TransformSystem>();
 
+    // manager runs before rendering to populate runtime volume textures/components
+    volumeManager_ = &systems_.emplace<VolumeManagerSystem>(ctx());
+
     // render system should go last to be aware of the latest state
     volumeRenderer_ = &systems_.emplace<VolumeRenderSystem>(ctx());
 }
@@ -192,10 +309,12 @@ void VolumeRenderDemoApplication::run()
     runMainLoop(
         frameSource,
         framesToRender_,
-        {.headless = headless_,
-         .pollPlatformEvents = true,
-         .processFileWatchEvents = true,
-         .clearDeferredShaderReleases = true},
+        {
+            .headless = headless_,
+            .pollPlatformEvents = true,
+            .processFileWatchEvents = true,
+            .clearDeferredShaderReleases = true,
+        },
         [this, &framegraphs](Cory::FrameContext &frameCtx, const Cory::LogicUpdateContext &) {
             auto tickInfo = clock_.tick();
             imguizmoSystem_->setEnabled(showImGuizmo.get());
@@ -252,6 +371,13 @@ void VolumeRenderDemoApplication::drawImguiControls()
 {
     const Cory::ScopeTimer st{"Frame/ImGui"};
 
+    if (ImGui::Begin("Profiling")) {
+        auto records = Cory::Profiler::GetRecords();
+
+        CoImGui::drawProfilerRecords(records);
+    }
+    ImGui::End();
+
     if (ImGui::Begin("Demo")) {
         if (ImGui::Button("Dump Framegraph")) {
             dumpNextFramegraph_ = true;
@@ -307,8 +433,8 @@ void VolumeRenderDemoApplication::drawImguiControls()
         const auto effectiveAlpha =
             std::clamp(1.0f - std::exp(-frameDeltaSeconds / temporalTauSeconds), 0.001f, 1.0f);
         CoImGui::Slider("Iterations", iterations, 1, 200);
-        CoImGui::Slider("Temporal EMA Tau (ms)", temporalTimeMs, 1.0f, 2000.0f);
-        CoImGui::Slider("Alpha Reject Threshold", alphaRejectThreshold, 0.0f, 0.25f);
+        CoImGui::Slider("Temporal EMA Tau (ms)", temporalTimeMs, 1.0f, 300.0f);
+        CoImGui::Slider("Alpha Reject Threshold", alphaRejectThreshold, 0.0f, 1.0f);
         CoImGui::Text(
             "Effective Alpha: {:.4f} (dt: {:.2f} ms)", effectiveAlpha, frameDeltaSeconds * 1000.0f);
         volumeRenderer_->temporalIterations = std::max(iterations, 1);
@@ -319,7 +445,7 @@ void VolumeRenderDemoApplication::drawImguiControls()
         }
 
         ImGui::Separator();
-        CoImGui::Text("Volume Transfer Functions");
+        CoImGui::Text("Volume Components");
         bool hasVolumeComponent = false;
         for (auto entity : sceneGraph_.depthFirstTraversal()) {
             auto *volume = sceneGraph_.getComponent<VolumeComponent>(entity);
@@ -329,11 +455,49 @@ void VolumeRenderDemoApplication::drawImguiControls()
             hasVolumeComponent = true;
             const auto &meta = sceneGraph_.data(entity);
             ImGui::PushID(static_cast<int>(entity));
-            if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_Framed)) {
+                if (auto *procedural = sceneGraph_.getComponent<ProceduralVolume>(entity);
+                    procedural != nullptr) {
+                    ImGui::SeparatorText("ProceduralVolume");
+                    auto dims = glm::ivec3{procedural->dimensions};
+                    ImGui::InputInt3("Dimensions", &dims.x);
+                    dims = glm::max(dims, glm::ivec3{1});
+                    procedural->dimensions = glm::uvec3{dims};
+                    CoImGui::Slider("Density Scale", procedural->densityScale, 0.01f, 4.0f);
+                    ImGui::Checkbox("Update Every Frame", &procedural->updateEveryFrame);
+                    ImGui::SameLine();
+                    ImGui::BeginDisabled(procedural->updateEveryFrame);
+                    if (ImGui::Button("Regenerate")) {
+                        procedural->regenerate = true;
+                    }
+                    ImGui::EndDisabled();
+
+                    CoImGui::Slider("Animation Speed", procedural->animationSpeed, 0.0f, 8.0f);
+                    procedural->densityScale = std::max(procedural->densityScale, 0.01f);
+                    procedural->animationSpeed = std::max(procedural->animationSpeed, 0.0f);
+                }
+
+                if (auto *streamed = sceneGraph_.getComponent<StreamedVolume>(entity);
+                    streamed != nullptr) {
+                    ImGui::SeparatorText("StreamedVolume");
+                    CoImGui::Text("Dataset: {}", streamed->datasetId);
+                    CoImGui::Text("Manifest: {}", streamed->manifestPath.string());
+                    CoImGui::Text("Slice Subsample: {}", streamed->sliceSubsampleFactor);
+                }
+
+                ImGui::SeparatorText("VolumeComponent");
+                CoImGui::Text("Texture Ready: {}", volume->hasTexture ? "yes" : "no");
+                if (volume->hasTexture) {
+                    CoImGui::Text("Texture Dims: {} x {} x {}",
+                                  volume->textureDimensions.x,
+                                  volume->textureDimensions.y,
+                                  volume->textureDimensions.z);
+                    CoImGui::Text("Quality: {}", volume->fullQuality ? "full" : "preview");
+                }
                 auto &tf = volume->transferFunction;
                 ImGui::Checkbox("Enable Jitter", &volume->raymarchJitteringEnabled);
                 CoImGui::Slider(
-                    "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 8.0f);
+                    "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 20.0f);
                 CoImGui::Slider("Density Min", tf.densityMin, 0.0f, 1.0f);
                 CoImGui::Slider("Density Max", tf.densityMax, 0.0f, 1.0f);
                 CoImGui::Slider("Opacity Scale", tf.opacityScale, 0.01f, 64.0f);
@@ -351,13 +515,17 @@ void VolumeRenderDemoApplication::drawImguiControls()
         if (!hasVolumeComponent) {
             CoImGui::Text("No VolumeComponent found in scene.");
         }
-    }
-    ImGui::End();
 
-    if (ImGui::Begin("Profiling")) {
-        auto records = Cory::Profiler::GetRecords();
-
-        CoImGui::drawProfilerRecords(records);
+        const auto statuses = volumeManager_ != nullptr
+                                  ? volumeManager_->datasetStatuses()
+                                  : std::vector<std::pair<std::string, std::string>>{};
+        if (!statuses.empty()) {
+            ImGui::Separator();
+            CoImGui::Text("Dataset Streaming");
+            for (const auto &[datasetId, status] : statuses) {
+                CoImGui::Text("{}: {}", datasetId, status);
+            }
+        }
     }
     ImGui::End();
 }

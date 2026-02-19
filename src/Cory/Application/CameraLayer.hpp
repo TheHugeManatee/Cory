@@ -23,7 +23,7 @@ class CameraLayer : public ApplicationLayer {
     bool onEvent(Event event) override;
     void onUpdate(const LogicUpdateContext &updateContext) override;
 
-    kdb::Property<glm::vec3> position{glm::vec3{0.0f, 0.0f, 15.0f}};
+    kdb::Property<glm::vec3> position{glm::vec3{0.0f, 0.0f, 5.0f}};
     kdb::Property<glm::vec3> up{glm::vec3{0.0f, 1.0f, 0.0f}};
     kdb::Property<glm::vec3> focus{glm::vec3{0.0f, 0.0f, 0.0f}};
 

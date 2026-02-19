@@ -12,6 +12,7 @@ find_package(glm REQUIRED)
 set(KDGPU_BUILD_KDXR OFF)
 set(KDGPU_OPENXR_SUPPORT OFF)
 set(KDGPU_BUILD_TESTS OFF)
+set(KDGPU_BUILD_EXAMPLES OFF)
 set(VMA_STATIC_VULKAN_FUNCTIONS ON)
 
 set(KDGPU_SOURCE_DIR "" CACHE PATH "Path to a local KDGpu checkout")
@@ -22,7 +23,6 @@ if (NOT KDGPU_SOURCE_DIR)
             "$ENV{KDGPU_DIR}"
             "${CMAKE_SOURCE_DIR}/../KDGpu"
             "${CMAKE_SOURCE_DIR}/../kdgpu"
-            "${CMAKE_SOURCE_DIR}/../codex/_deps/kdgpu-src"
     )
     foreach (_kdgpu_path IN LISTS _kdgpu_search_paths)
         if (_kdgpu_path AND EXISTS "${_kdgpu_path}/CMakeLists.txt")

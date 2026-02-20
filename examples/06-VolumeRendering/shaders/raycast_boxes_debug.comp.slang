@@ -2,6 +2,11 @@ import Raycast;
 import Msaa;
 import CoryBindings;
 
+enum class VolumeRenderMode : uint32_t {
+    DvrRaymarch,
+    SingleBounceMC,
+};
+
 struct InstanceData
 {
     float4x4 modelToWorld;
@@ -9,8 +14,11 @@ struct InstanceData
     float4x4 normalToWorld;
     float4 color;
     float4 transferParams;
-    float4 raymarchParams;
-    uint4 volumeMeta;
+    float raymarchStepSizeMultiplier;
+    float raymarchJitteringEnabled;
+    VolumeRenderMode renderMode;
+    uint32_t padding0;
+    uint4 volumeMeta; // x=texture index, y/z/w=dimensions
 };
 
 struct RaycastGlobals

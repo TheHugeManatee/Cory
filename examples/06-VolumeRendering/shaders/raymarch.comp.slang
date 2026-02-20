@@ -2,6 +2,12 @@ import Raycast;
 import Raymarch;
 import Msaa;
 import CoryBindings;
+import Random;
+
+enum class VolumeRenderMode : uint32_t {
+    DvrRaymarch,
+    SingleBounceMC,
+};
 
 struct InstanceData
 {
@@ -10,7 +16,10 @@ struct InstanceData
     float4x4 normalToWorld;
     float4 color;
     float4 transferParams;
-    float4 raymarchParams;
+    float raymarchStepSizeMultiplier;
+    float raymarchJitteringEnabled;
+    VolumeRenderMode renderMode ;
+    uint32_t padding0;
     uint4 volumeMeta; // x=texture index, y/z/w=dimensions
 };
 
@@ -176,6 +185,67 @@ struct FrontToBackAccumulator : IAccumulator<VolumeSample, FrontToBackState, flo
     }
 };
 
+float4 raycastSingleBounce(float3 localOrigin,
+                      float3 localDirection,
+                      InstanceData instance, uint pathKey)
+{
+    let majorantSigmaT = instance.transferParams.y / 0.5;
+
+    let box = AABB(boxMin, boxMax);
+    let localRay = Ray(localOrigin, localDirection);
+    let hitInfo = intersect(localRay, box);
+    if (!hitInfo.hit) {
+        return float4(0.1f);
+    }
+
+    let tStart = max(hitInfo.tEnter, 0.0f);
+    let tEnd = hitInfo.tExit;
+    if (tEnd <= tStart) {
+        return float4(0.1f);
+    }
+
+    let dirLength = max(length(localDirection), 1e-6f);
+    let volumeDimensions = uint3(instance.volumeMeta.y, instance.volumeMeta.z, instance.volumeMeta.w);
+    let maxDim = max(volumeDimensions.x, max(volumeDimensions.y, volumeDimensions.z));
+    let voxelSize = 1.0f / float(max(maxDim, 1u));
+    let stepMultiplier = instance.raymarchStepSizeMultiplier;
+    let stepSize = stepMultiplier * voxelSize / dirLength;
+    let opacityScale = instance.transferParams.z;
+
+
+    let textureIndex = instance.volumeMeta.x;
+
+    var rngCounter = 0u;
+
+    var t = tStart;
+    while (t < tEnd) {
+        float2 pathLengthAndReject = spatialNoise02(uint3(rngCounter++, 0, 0), pathKey);
+
+        // Determine free-flight distance
+        var freeFlightLength = -log(1.0f - pathLengthAndReject.x) * majorantSigmaT;
+        freeFlightLength = max(freeFlightLength, 1e-7f); // avoid zero step to get stuck
+        // If we exit the volume, no interaction occurs.
+        if (freeFlightLength >= tEnd - t) {
+            break;
+        }
+
+        t += freeFlightLength;
+        
+        let uvw = localRay.at(t) + 0.5f;
+        let density = sampleDensity(textureIndex, uvw);
+        let sigmaT = density * opacityScale;
+        let acceptanceProbability = min(sigmaT / majorantSigmaT, 1.0f);
+        if (pathLengthAndReject.y >= acceptanceProbability) {
+            continue; // Rejection: no interaction occurs, keep marching
+        }
+        // Accept the interaction: compute the contribution of this scattering event and terminate.
+        let transfer = evaluateTransferFunction(density, stepSize, instance.transferParams);
+        return float4(transfer.rgb, 1.0f); // Full absorption with the sampled color
+    }
+
+    return float4(0.0, 0.0, 0.0, 0.0); // No interaction
+}
+
 float4 raymarchVolume(float3 localOrigin,
                       float3 localDirection,
                       InstanceData instance,
@@ -198,8 +268,8 @@ float4 raymarchVolume(float3 localOrigin,
     let volumeDimensions = uint3(instance.volumeMeta.y, instance.volumeMeta.z, instance.volumeMeta.w);
     let maxDim = max(volumeDimensions.x, max(volumeDimensions.y, volumeDimensions.z));
     let voxelSize = 1.0f / float(max(maxDim, 1u));
-    let stepMultiplier = max(instance.raymarchParams.x, 0.01f);
-    let jitterEnabled = instance.raymarchParams.y > 0.5f;
+    let stepMultiplier = instance.raymarchStepSizeMultiplier;
+    let jitterEnabled = instance.raymarchJitteringEnabled > 0.5f;
     let stepSize = stepMultiplier * voxelSize / dirLength;
     let segmentLength = tEnd - tStart;
     let jitterCentered = (phaseJitter - 0.5f) * (jitterEnabled ? 1.0f : 0.0f);
@@ -273,7 +343,18 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
                 let instance = globals->instances[i];
                 let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
                 let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
-                let instanceVolume = raymarchVolume(localOrigin, localDirection, instance, phaseJitter);
+                var instanceVolume = float4(1.0, 0.0f, 1.0f, 1.0f);
+                switch(instance.renderMode) {
+                case VolumeRenderMode::DvrRaymarch:
+                    instanceVolume = raymarchVolume(localOrigin, localDirection, instance, phaseJitter);
+                break;
+                case VolumeRenderMode::SingleBounceMC: 
+                    uint t = uint(globals->time * 1000.0f);
+                    uint pathKey = makePathKey(coords.x * 4000 +coords.y, t, sample, iteration);
+                    instanceVolume = raycastSingleBounce(localOrigin, localDirection, instance, pathKey);
+                    break;
+                }
+
                 if (instanceVolume.a > 0.0f) {
                     volumeColor.rgb += (1.0f - volumeColor.a) * instanceVolume.rgb;
                     volumeColor.a += (1.0f - volumeColor.a) * instanceVolume.a;

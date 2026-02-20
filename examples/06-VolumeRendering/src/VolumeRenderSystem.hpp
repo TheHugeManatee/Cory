@@ -31,7 +31,10 @@ struct alignas(16) InstanceData {
     glm::mat4 normalToWorld{1.0f};
     glm::vec4 color{1.0f};
     glm::vec4 transferParams{0.0f};
-    glm::vec4 raymarchParams{0.0f};
+    float raymarchStepSizeMultiplier{2.0f};
+    float raymarchJitteringEnabled{1.0f}; // bools not allowed in std140/std430, use float as workaround
+    VolumeRenderMode renderMode{VolumeRenderMode::SingleBounceMC};
+    uint32_t padding0{0u};
     glm::uvec4 volumeMeta{0u}; // x=texture index, y/z/w=dimensions
 };
 

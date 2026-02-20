@@ -495,6 +495,7 @@ void VolumeRenderDemoApplication::drawImguiControls()
                     CoImGui::Text("Quality: {}", volume->fullQuality ? "full" : "preview");
                 }
                 auto &tf = volume->transferFunction;
+                CoImGui::ComboBox("Render Mode", volume->renderMode);
                 ImGui::Checkbox("Enable Jitter", &volume->raymarchJitteringEnabled);
                 CoImGui::Slider(
                     "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 20.0f);

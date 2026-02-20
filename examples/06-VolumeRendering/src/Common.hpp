@@ -8,6 +8,11 @@
 #include <filesystem>
 #include <string>
 
+enum class VolumeRenderMode : uint32_t {
+    DvrRaymarch,
+    SingleBounceMC,
+};
+
 struct VolumeTransferFunction {
     float densityMin{0.08f};
     float densityMax{0.92f};
@@ -30,6 +35,7 @@ struct VolumeComponent {
     // toggles interval jittering for start/end raymarch bounds
     bool raymarchJitteringEnabled{true};
     VolumeTransferFunction transferFunction{};
+    VolumeRenderMode renderMode{VolumeRenderMode::DvrRaymarch};
 };
 
 struct StreamedVolume {

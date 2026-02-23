@@ -30,17 +30,19 @@ struct alignas(16) InstanceData {
     glm::mat4 worldToModel{1.0f};
     glm::mat4 normalToWorld{1.0f};
     glm::vec4 color{1.0f};
-    glm::vec4 transferParams{0.0f};
+    VolumeTransferParams transferParams{};
     float raymarchStepSizeMultiplier{2.0f};
-    float raymarchJitteringEnabled{1.0f}; // bools not allowed in std140/std430, use float as workaround
-    VolumeRenderMode renderMode{VolumeRenderMode::SingleBounceMC};
-    uint32_t padding0{0u};
-    glm::uvec4 volumeMeta{0u}; // x=texture index, y/z/w=dimensions
+    uint32_t samples{1u};
+    // bools not allowed in std140/std430, use float as workaround
+    float raymarchJitteringEnabled{1.0f};
+    VolumeRenderMode renderMode{VolumeRenderMode::StochasticSingleBounce};
+    uint32_t volumeTextureIndex{0u};
+    glm::uvec3 volumeDimensions{0u}; // x/y/z=dimensions
 };
 
 static_assert(std::is_trivially_copyable_v<InstanceData>);
-static_assert(sizeof(InstanceData) ==
-              3 * sizeof(glm::mat4) + 3 * sizeof(glm::vec4) + sizeof(glm::uvec4));
+static_assert(sizeof(InstanceData) == 3 * sizeof(glm::mat4) + 3 * sizeof(glm::vec4) +
+                                          sizeof(uint32_t) + sizeof(glm::uvec3));
 
 /**
  * @brief Render-only system for drawing volume entities.
@@ -65,7 +67,6 @@ class VolumeRenderSystem
     Cory::Property<bool> debugRasterize{false};
     Cory::Property<bool> debugRaycast{false};
     Cory::Property<bool> temporalAccumulation{true};
-    Cory::Property<int32_t> temporalIterations{1};
     Cory::Property<float> temporalEmaTauMs{50.0f};
     Cory::Property<float> alphaDeltaRejectThreshold{0.5f};
 

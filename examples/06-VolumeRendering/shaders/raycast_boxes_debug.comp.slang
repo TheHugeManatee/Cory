@@ -1,46 +1,11 @@
 import Raycast;
 import Msaa;
 import CoryBindings;
+import Random;
 
-enum class VolumeRenderMode : uint32_t {
-    DvrRaymarch,
-    SingleBounceMC,
-};
-
-struct InstanceData
-{
-    float4x4 modelToWorld;
-    float4x4 worldToModel;
-    float4x4 normalToWorld;
-    float4 color;
-    float4 transferParams;
-    float raymarchStepSizeMultiplier;
-    float raymarchJitteringEnabled;
-    VolumeRenderMode renderMode;
-    uint32_t padding0;
-    uint4 volumeMeta; // x=texture index, y/z/w=dimensions
-};
-
-struct RaycastGlobals
-{
-    float4x4 invViewProjection;
-    float4 cameraPosition;
-    uint3 volumeDimensions;
-    float time;
-    uint instanceCount;
-    uint volumeTextureIndex;
-    uint colorTargetIsMsaa;
-    float temporalBlendFactor;
-    uint iterations;
-    float alphaDeltaRejectThreshold;
-    uint _padding0;
-    Ptr<InstanceData, Access::Read> instances;
-};
+#include "SharedStructs.slang"
 
 [[vk::push_constant]] RaycastGlobals *globals;
-
-static const float3 boxMin = float3(-0.5, -0.5, -0.5);
-static const float3 boxMax = float3(0.5, 0.5, 0.5);
 
 struct RayBoxHit
 {

@@ -37,4 +37,9 @@ struct PointLightComponent {
     float intensity{1.0f};
 };
 
+struct EditorState {
+    bool selected{false};
+    bool hovered{false};
+};
+
 } // namespace Cory::Components

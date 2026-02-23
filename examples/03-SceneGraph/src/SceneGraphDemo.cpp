@@ -20,6 +20,7 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
+#include <Cory/Systems/ComponentEditorSystem.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
@@ -186,6 +187,42 @@ void SceneGraphDemoApplication::setupSystems()
 
     // render system should go last to be aware of the latest state
     renderSystem_ = &systems_.emplace<CubeRenderSystem>(ctx());
+
+    auto &componentEditor = systems_.emplace<Cory::ComponentEditorSystem>();
+    componentEditor.addComponentEditor(
+        "Animation", [](Cory::SceneGraph &sceneGraph, Cory::Entity entity) {
+            auto *animation = sceneGraph.getComponent<AnimationComponent>(entity);
+            if (animation == nullptr ||
+                !ImGui::CollapsingHeader("Animation Component", ImGuiTreeNodeFlags_DefaultOpen)) {
+                return;
+            }
+
+            bool animated = animation->entityIndex >= 0.0f;
+            if (ImGui::Checkbox("Driven by Animation System", &animated)) {
+                if (animated && animation->entityIndex < 0.0f) {
+                    animation->entityIndex = 0.0f;
+                }
+                else if (!animated) {
+                    animation->entityIndex = -1.0f;
+                }
+            }
+
+            if (animated) {
+                ImGui::DragFloat("Animation Index", &animation->entityIndex, 0.05f, 0.0f, 200.0f);
+                CoImGui::Text("Color/Blend are authored by CubeAnimationSystem at runtime.");
+            }
+            else {
+                ImGui::ColorEdit4("Color", &animation->color.x);
+                ImGui::SliderFloat("Blend", &animation->blend, 0.0f, 1.0f, "%.3f");
+            }
+
+            CoImGui::Text("Current RGBA: [{:.3f}, {:.3f}, {:.3f}, {:.3f}]",
+                          animation->color.x,
+                          animation->color.y,
+                          animation->color.z,
+                          animation->color.w);
+            CoImGui::Text("Current Blend: {:.3f}", animation->blend);
+        });
 }
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()

@@ -20,6 +20,7 @@
 #include <vector>
 
 namespace Cory {
+class ComponentEditorSystem;
 class ImGuizmoTransformSystem;
 }
 
@@ -56,6 +57,7 @@ class VolumeRenderDemoApplication : public Cory::Application {
     class VolumeRenderSystem *volumeRenderer_{nullptr};
     class VolumeManagerSystem *volumeManager_{nullptr};
     Cory::ImGuizmoTransformSystem *imguizmoSystem_{nullptr};
+    Cory::ComponentEditorSystem* componentEditorSystem_{nullptr};
 
     struct CatalogDataset {
         std::string datasetId{};
@@ -65,5 +67,6 @@ class VolumeRenderDemoApplication : public Cory::Application {
     std::vector<CatalogDataset> catalogDatasets_{};
 
     void setupSystems();
+    void setupComponentEditors();
     void setupScene();
 };

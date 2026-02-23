@@ -20,6 +20,7 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
+#include <Cory/Systems/ComponentEditorSystem.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
@@ -30,6 +31,7 @@
 #include <gsl/narrow>
 
 #include <algorithm>
+#include <glm/common.hpp>
 
 ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const char *> args)
 {
@@ -153,6 +155,36 @@ void ParticleComputeDemoApplication::setupSystems()
 
     // render system should go last to be aware of the latest state
     renderSystem_ = &systems_.emplace<PointSpriteRenderSystem>(ctx());
+
+    auto &componentEditor = systems_.emplace<Cory::ComponentEditorSystem>();
+    componentEditor.addComponentEditor(
+        "Point Sprite", [](Cory::SceneGraph &sceneGraph, Cory::Entity entity) {
+            auto *sprite = sceneGraph.getComponent<PointSpriteComponent>(entity);
+            if (sprite == nullptr ||
+                !ImGui::CollapsingHeader("Point Sprite Component", ImGuiTreeNodeFlags_DefaultOpen)) {
+                return;
+            }
+
+            ImGui::DragFloat3("Position", &sprite->position.x, 0.05f);
+
+            auto diameter = sprite->radius * 2.0f;
+            if (ImGui::DragFloat(
+                    "Diameter", &diameter, 0.005f, 0.002f, 20.0f, "%.4f", ImGuiSliderFlags_Logarithmic)) {
+                sprite->radius = std::max(diameter * 0.5f, 0.001f);
+            }
+
+            if (ImGui::DragFloat(
+                    "Radius", &sprite->radius, 0.005f, 0.001f, 10.0f, "%.4f", ImGuiSliderFlags_Logarithmic)) {
+                sprite->radius = std::max(sprite->radius, 0.001f);
+            }
+
+            ImGui::ColorEdit4("Color", &sprite->color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
+            sprite->color.w = glm::clamp(sprite->color.w, 0.0f, 1.0f);
+
+            const auto luminance =
+                glm::dot(glm::vec3{sprite->color}, glm::vec3{0.2126f, 0.7152f, 0.0722f});
+            CoImGui::Text("Perceived luminance: {:.3f}", luminance);
+        });
 }
 
 ParticleComputeDemoApplication::~ParticleComputeDemoApplication()

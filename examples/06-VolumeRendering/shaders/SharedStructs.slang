@@ -26,6 +26,12 @@ struct InstanceData
     uint3 volumeDimensions;
 };
 
+struct LightData
+{
+    float4 position;
+    float4 radiance;
+};
+
 struct RaycastGlobals
 {
     float4x4 invViewProjection;
@@ -35,8 +41,10 @@ struct RaycastGlobals
     uint colorTargetIsMsaa;
     float temporalBlendFactor;
     float alphaDeltaRejectThreshold;
+    uint lightCount;
     uint _padding0;
     Ptr<InstanceData, Access::Read> instances;
+    Ptr<LightData, Access::Read> lights;
 };
 
 static const float3 boxMin = float3(-0.5, -0.5, -0.5);

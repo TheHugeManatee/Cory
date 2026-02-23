@@ -122,12 +122,17 @@ class VolumeRenderSystem
                          Cory::TransientTextureHandle depthTarget);
 
   private:
-    struct RenderStateEntry {
+    struct VolumeInstanceRenderState {
         InstanceData data{};
         Gpu::TextureViewHandle textureView{};
         bool hasTexture{false};
     };
-    std::vector<RenderStateEntry> renderState_;
+    std::vector<VolumeInstanceRenderState> volumeRenderState_;
+    struct LightRenderState {
+        glm::vec4 position{0.0f, 0.0f, 0.0f, 1.0f};
+        glm::vec4 radiance{1.0f, 1.0f, 1.0f, 0.0f};
+    };
+    std::vector<LightRenderState> lightsRenderState_;
     Cory::Components::CameraComponent camera_;
 
     Cory::Mesh cube_;

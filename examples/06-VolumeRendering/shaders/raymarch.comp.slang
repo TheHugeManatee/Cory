@@ -119,12 +119,20 @@ struct VolumeSampler : ISampler<VolumeSample>
         let worldNormal = normalize(mul((float3x3)instance.normalToWorld, localNormal));
         let worldPos = mul(instance.modelToWorld, float4(localPos, 1.0f)).xyz;
         let viewDir = normalize(globals->cameraPosition.xyz - worldPos);
-        let lightDir = viewDir; // headlight-style lighting for simple direct illumination
-        let halfDir = normalize(lightDir + viewDir);
-
-        let ndotl = max(dot(worldNormal, lightDir), 0.0f);
-        let spec = pow(max(dot(worldNormal, halfDir), 0.0f), 24.0f) * 0.20f;
-        sampleColor = sampleColor * (0.15f + 0.85f * ndotl) + spec.xxx;
+        var litColor = sampleColor * 0.08f; // ambient floor
+        [loop]
+        for (uint lightIndex = 0u; lightIndex < globals->lightCount; ++lightIndex) {
+            let light = globals->lights[lightIndex];
+            let toLight = light.position.xyz - worldPos;
+            let distSquared = max(dot(toLight, toLight), 1e-4f);
+            let lightDir = toLight * rsqrt(distSquared);
+            let halfDir = normalize(lightDir + viewDir);
+            let ndotl = max(dot(worldNormal, lightDir), 0.0f);
+            let spec = pow(max(dot(worldNormal, halfDir), 0.0f), 24.0f) * 0.20f;
+            let irradiance = light.radiance.xyz / distSquared;
+            litColor += (sampleColor * ndotl + spec.xxx) * irradiance;
+        }
+        sampleColor = litColor;
         return VolumeSample(sampleColor, transfer.a);
     }
 };

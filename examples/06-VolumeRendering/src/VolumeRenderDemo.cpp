@@ -288,6 +288,20 @@ void VolumeRenderDemoApplication::setupScene()
                 .sliceSubsampleFactor = volumeSliceSubsampleFactor_,
             });
     }
+
+    sceneGraph_.createEntityWithComponents(
+        root,
+        "Point Light",
+        Cory::Components::Transform{
+            .mode = Cory::Components::TransformMode::Local,
+            .position = {0.0f, 3.0f, 3.0f},
+            .orientation = {},
+            .scale = {1.0f, 1.0f, 1.0f},
+        },
+        Cory::Components::PointLightComponent{
+            .color = {1.0f, 1.0f, 1.0f},
+            .intensity = 100.0f,
+        });
 }
 
 void VolumeRenderDemoApplication::setupSystems()

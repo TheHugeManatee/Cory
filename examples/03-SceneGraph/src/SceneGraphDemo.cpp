@@ -143,11 +143,12 @@ void SceneGraphDemoApplication::setupScene()
     }
 
     /// add a coordinate system indicator
+    auto cosy = sceneGraph_.createEntity(root, "Coordinate System");
     auto make_colored_axis =
         [&](std::string_view axis_name, glm::vec3 color, glm::vec3 axis, uint32_t steps) {
             // create entity with an AnimationComponent and a TransformComponent for each step
             for (uint32_t i = 0; i < steps / 2; ++i) {
-                sceneGraph_.createEntity(root,
+                sceneGraph_.createEntity(cosy,
                                          fmt::format("{}{}", axis_name, i),
                                          AnimationComponent{
                                              .color = glm::vec4{color, 1.0f},

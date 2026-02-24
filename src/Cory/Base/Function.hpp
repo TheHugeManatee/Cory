@@ -35,8 +35,10 @@ template <typename R, typename... Args> class Function<R(Args...)> {
             if constexpr (ConstCallableWith<F, Args...>) {
                 return f(std::forward<Args>(args)...);
             }
-            // f might be a mutable lambda, so we have to const_cast here
-            return const_cast<F &>(f)(std::forward<Args>(args)...);
+            else {
+                // f might be a mutable lambda, so we have to const_cast here
+                return const_cast<F &>(f)(std::forward<Args>(args)...);
+            }
         }
     };
 

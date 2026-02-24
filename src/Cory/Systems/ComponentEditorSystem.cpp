@@ -454,7 +454,7 @@ void ComponentEditorSystem::tick(SceneGraph &graph, TickInfo tickInfo)
 
         ImGui::Separator();
 
-        ImGui::BeginChild("Component Editor", ImVec2(0, avail.y - treeHeight));
+        ImGui::BeginChild("Component Editor", ImVec2(0, 0));
         data_->drawSelectedComponents(graph);
         ImGui::EndChild();
     }

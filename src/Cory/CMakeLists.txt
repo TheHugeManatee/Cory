@@ -180,6 +180,10 @@ set(CORY_SOURCES
         Base/Prop.hpp
         Systems/ComponentEditorSystem.cpp
         Systems/ComponentEditorSystem.hpp
+        Proper/Properties.cpp
+        Proper/Properties.hpp
+        Proper/PropertySet.cpp
+        Proper/PropertySet.hpp
 )
 
 

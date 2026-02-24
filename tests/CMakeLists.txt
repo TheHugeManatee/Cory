@@ -62,6 +62,7 @@ add_library(Cory_TestLib OBJECT
         ApiPass_Test.cpp
         DatasetLoader_Test.cpp
         CppcoroConcurrency_Test.cpp
+        Properties_Test.cpp
 )
 
 target_include_directories(Cory_TestLib PRIVATE

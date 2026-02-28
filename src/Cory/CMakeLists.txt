@@ -242,6 +242,7 @@ target_link_libraries(${TARGET_NAME}
         KDGpu::KDGpuExample
         KDGpuExample::Resources # for the embedded roboto font
         KDGpuExample::ShaderResources # for the embedded imgui shaders
+        Cory::project_sanitizers
         Cory::project_warnings
         Cory::project_options
 )

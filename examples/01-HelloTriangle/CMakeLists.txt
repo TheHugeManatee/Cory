@@ -22,6 +22,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE "TRIANGLE_RESOURCE_DIR=\"${CMA
 
 target_link_libraries(${TARGET_NAME}
         PRIVATE
+        project_sanitizers
         project_options
         project_warnings
         Cory::Cory

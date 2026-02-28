@@ -48,6 +48,7 @@ include(CMakeDependentOption)# This is a really useful scripts that creates opti
 # Custom modules and scripts
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake")
 include(Warnings)
+include(Sanitizers)
 
 # disable this to debug conan-related problems
 option(CORY_CONAN_CMAKE_SILENT_OUTPUT "Silence conan output in CMake config" ON)

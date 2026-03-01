@@ -23,6 +23,8 @@ Use `./cbt` as the single entrypoint for project tasks. Avoid direct `cmake`, `c
 3. Respect platform/build-root constraints
 - On Linux/WSL, keep build roots on native Linux storage (typically `~/cory-work/`), not the mounted source tree.
 - Reuse configured profiles/build dirs unless the task explicitly needs a new one.
+- Sanitizer-enabled builds are supported through `cbt`-managed Conan variants. Prefer `./cbt configure` or
+  `./cbt reconfigure` with `--cmake-define CORY_SANITIZERS_<Config>=...` instead of invoking Conan/CMake directly.
 
 4. Handle failures deterministically
 - Use `./cbt status`, `./cbt tests`, `./cbt targets`, and `./cbt which` to inspect state.
@@ -37,6 +39,16 @@ Use `./cbt` as the single entrypoint for project tasks. Avoid direct `cmake`, `c
 ./cbt configure
 ./cbt build
 ```
+
+### Configure a sanitizer variant
+```bash
+./cbt configure --cmake-define CORY_SANITIZERS_Debug=ASAN
+```
+
+Notes:
+- `cbt` resolves the active sanitizer set before Conan and CMake.
+- Sanitized and non-sanitized dependency graphs use different `CONAN_HOME` directories.
+- Direct non-`cbt` sanitizer builds are not considered supported, especially on Windows/MSVC.
 
 ### Run one test scope
 ```bash
@@ -59,6 +71,7 @@ Use `./cbt` as the single entrypoint for project tasks. Avoid direct `cmake`, `c
 - Do not run interactive targets without `--frames=N`.
 - Prefer `./cbt` command outputs over guessing paths or tool invocations.
 - Keep command usage repo-root relative.
+- Use an empty value to disable a per-config sanitizer override, e.g. `--cmake-define CORY_SANITIZERS_Debug=`.
 
 ## Resource Map
 

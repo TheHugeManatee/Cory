@@ -1,6 +1,9 @@
 include(CheckCXXSourceCompiles)
 include(CMakePushCheckState)
 
+set(CORY_SANITIZERS_VIA_TOOLCHAIN OFF CACHE BOOL
+        "Internal flag: sanitizer flags are injected externally by cbt/toolchain.")
+
 function(cory_normalize_sanitizers out_var)
     set(normalized)
     foreach (entry IN LISTS ARGN)
@@ -41,6 +44,20 @@ function(cory_default_sanitizers out_var config)
     set(${out_var} "${defaults}" PARENT_SCOPE)
 endfunction()
 
+function(cory_requested_sanitizers out_var config)
+    if (DEFINED CORY_ACTIVE_SANITIZERS)
+        cory_normalize_sanitizers(requested ${CORY_ACTIVE_SANITIZERS})
+    else ()
+        cory_default_sanitizers(defaults "${config}")
+        set(cache_name "CORY_SANITIZERS_${config}")
+        set(${cache_name} "${defaults}" CACHE STRING
+                "Semicolon-separated sanitizer list for ${config} builds (ASAN;TSAN;UBSAN).")
+        cory_normalize_sanitizers(requested ${${cache_name}})
+    endif ()
+
+    set(${out_var} "${requested}" PARENT_SCOPE)
+endfunction()
+
 function(cory_check_flag out_var flag)
     string(MAKE_C_IDENTIFIER "${flag}" flag_id)
     set(cache_var "CORY_HAS_FLAG_${flag_id}")
@@ -61,12 +78,7 @@ function(cory_check_flag out_var flag)
 endfunction()
 
 function(cory_collect_sanitizer_flags out_compile_flags out_link_flags out_requested out_supported config)
-    cory_default_sanitizers(defaults "${config}")
-    set(cache_name "CORY_SANITIZERS_${config}")
-    set(${cache_name} "${defaults}" CACHE STRING
-            "Semicolon-separated sanitizer list for ${config} builds (ASAN;TSAN;UBSAN).")
-
-    cory_normalize_sanitizers(requested ${${cache_name}})
+    cory_requested_sanitizers(requested "${config}")
 
     if (NOT requested)
         set(${out_compile_flags} "" PARENT_SCOPE)
@@ -80,7 +92,7 @@ function(cory_collect_sanitizer_flags out_compile_flags out_link_flags out_reque
     list(FIND requested "TSAN" has_tsan)
     if (NOT has_asan EQUAL -1 AND NOT has_tsan EQUAL -1)
         message(FATAL_ERROR
-                "${cache_name} cannot enable ASAN and TSAN at the same time.")
+                "Requested sanitizer set for ${config} cannot enable ASAN and TSAN at the same time.")
     endif ()
 
     set(compile_flags)
@@ -95,14 +107,14 @@ function(cory_collect_sanitizer_flags out_compile_flags out_link_flags out_reque
                     list(APPEND compile_flags "/fsanitize=address")
                     list(APPEND supported "${sanitizer}")
                 else ()
-                    message(WARNING
-                            "${cache_name} requested ASAN for ${config}, but ${CMAKE_CXX_COMPILER_ID} "
-                            "does not accept /fsanitize=address. Disabling it for that configuration.")
+                    message(FATAL_ERROR
+                            "ASAN was requested for ${config}, but ${CMAKE_CXX_COMPILER_ID} "
+                            "does not accept /fsanitize=address.")
                 endif ()
             else ()
-                message(WARNING
-                        "${cache_name} requested ${sanitizer} for ${config}, but only ASAN is supported "
-                        "with MSVC-style Windows builds. Disabling it for that configuration.")
+                message(FATAL_ERROR
+                        "${sanitizer} was requested for ${config}, but only ASAN is supported "
+                        "with MSVC-style Windows builds.")
             endif ()
         endforeach ()
     elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
@@ -128,9 +140,14 @@ function(cory_collect_sanitizer_flags out_compile_flags out_link_flags out_reque
             endif ()
         endif ()
     else ()
-        message(WARNING
-                "${cache_name} requested ${requested} for ${config}, but compiler "
-                "${CMAKE_CXX_COMPILER_ID} is not recognized for sanitizer setup. Disabling them.")
+        message(FATAL_ERROR
+                "Sanitizers were requested for ${config}, but compiler "
+                "${CMAKE_CXX_COMPILER_ID} is not recognized for sanitizer setup.")
+    endif ()
+
+    if (CORY_SANITIZERS_VIA_TOOLCHAIN)
+        set(compile_flags "")
+        set(link_flags "")
     endif ()
 
     if (compile_flags)

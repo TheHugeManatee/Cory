@@ -5,8 +5,8 @@ This reference condenses repository guidance in `CBT.md` into practical command 
 ## Command Selection
 
 - `./cbt doctor` - check environment/tool prerequisites.
-- `./cbt configure` - create/update build configuration (Conan + CMake setup).
-- `./cbt reconfigure` - rerun CMake config using stored settings.
+- `./cbt configure` - create/update build configuration (Conan + CMake setup), including sanitizer-aware Conan variants.
+- `./cbt reconfigure` - rerun CMake config using stored settings; Conan reruns automatically if sanitizer settings change.
 - `./cbt build` - build default or selected target.
 - `./cbt tests` - list tests.
 - `./cbt test <regex>` - run selected tests.
@@ -30,6 +30,19 @@ This reference condenses repository guidance in `CBT.md` into practical command 
 ./cbt configure
 ./cbt build
 ```
+
+### Sanitizer workflow
+
+```bash
+./cbt configure --cmake-define CORY_SANITIZERS_Debug=ASAN
+./cbt reconfigure --cmake-define CORY_SANITIZERS_Debug=
+```
+
+Notes:
+- `cbt` is the supported entrypoint for sanitizer variants.
+- It resolves the active sanitizer set before Conan/CMake and stores it in `.cbt/config.toml`.
+- Sanitizer variants use isolated `CONAN_HOME` directories so dependency binaries do not mix.
+- On Windows/MSVC, ASAN builds require sanitizer-matched Conan dependencies; direct CLion/Conan sanitizer builds are not a supported path.
 
 ### Targeted test loop
 
@@ -62,6 +75,7 @@ Use focused regexes. Avoid full-suite test runs unless explicitly requested.
 2. Run `./cbt status` when command behavior differs from expectations.
 3. Run `./cbt targets` / `./cbt tests` if a target/test name is not found.
 4. Reconfigure before deeper debugging when build settings are stale.
+5. If a sanitizer build links the wrong dependency variants, inspect `./cbt status --json` and verify the `sanitizers` and `conan.home` fields.
 
 ## Safety Rules
 

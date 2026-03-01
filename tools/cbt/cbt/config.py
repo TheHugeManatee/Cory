@@ -45,8 +45,10 @@ def new_config(
     toolchain_file: Path,
     defines: dict[str, str],
     tools: dict[str, str],
+    conan_home: Path,
     vulkan_sdk: str | None,
     vulkan_hints: dict[str, str],
+    sanitizer: dict[str, str | bool],
 ) -> dict:
     config: dict = {
         "cbt": {
@@ -64,6 +66,7 @@ def new_config(
             "profile_host": profile_host,
             "profile_build": profile_build,
             "build_missing": True,
+            "home": str(conan_home),
         },
         "cmake": {
             "generator": "Ninja",
@@ -71,6 +74,7 @@ def new_config(
             "export_compile_commands": True,
             "defines": dict(defines),
         },
+        "sanitizers": dict(sanitizer),
         "tools": dict(tools),
     }
     if vulkan_sdk or vulkan_hints:
@@ -100,7 +104,7 @@ def _dumps_toml(config: dict) -> str:
             return "{ " + items + " }"
         return json.dumps(str(v))
 
-    for section in ("cbt", "paths", "conan", "cmake", "tools", "vulkan", "msvc"):
+    for section in ("cbt", "paths", "conan", "cmake", "sanitizers", "tools", "vulkan", "msvc"):
         if section in config:
             write_table(section, config[section])
     return "\n".join(lines).rstrip() + "\n"

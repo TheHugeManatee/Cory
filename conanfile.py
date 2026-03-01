@@ -8,6 +8,9 @@ class CoryProjectConan(ConanFile):
     name = "Cory"
     version = "0.1"
     settings = "os", "compiler", "build_type", "arch"
+    default_options = {
+        "spdlog/*:shared": True,
+    }
 
     def requirements(self):
         self.requires("andreasbuhr-cppcoro/cci.20230629")

@@ -1,23 +1,82 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
-import json
+import shutil
 
-from .util import run, write_text, read_text
+from .util import ConfigError, ensure_dir, read_text, run, write_text
 
-def ensure_profile_detected(conan: str, quiet: bool) -> None:
+
+def _default_conan_home() -> Path:
+    return Path.home() / ".conan2"
+
+
+def _profiles_dir(home: Path) -> Path:
+    return home / "profiles"
+
+
+def _sync_settings_file(conan_home: Path, quiet: bool) -> None:
+    source = _default_conan_home() / "settings.yml"
+    if not source.exists():
+        return
+
+    dest = conan_home / "settings.yml"
+    ensure_dir(conan_home)
+    shutil.copy2(source, dest)
+    if not quiet:
+        print(f"Synchronized Conan settings from {source} to {dest}")
+
+
+def _ensure_requested_profiles(
+    conan_home: Path, requested_profiles: list[str], quiet: bool
+) -> None:
+    source_profiles = _profiles_dir(_default_conan_home())
+    dest_profiles = _profiles_dir(conan_home)
+    ensure_dir(dest_profiles)
+
+    for profile in requested_profiles:
+        if not profile:
+            continue
+
+        dest = dest_profiles / profile
+        if dest.exists() or profile == "default":
+            continue
+
+        source = source_profiles / profile
+        if source.exists():
+            shutil.copy2(source, dest)
+            if not quiet:
+                print(f"Copied Conan profile '{profile}' into {dest}")
+            continue
+
+        raise ConfigError(
+            f"Conan profile '{profile}' was not found in {dest_profiles} or {source_profiles}."
+        )
+
+
+def ensure_profile_detected(
+    conan: str,
+    quiet: bool,
+    env: dict[str, str] | None = None,
+    requested_profiles: list[str] | None = None,
+) -> None:
+    conan_home = Path((env or {}).get("CONAN_HOME", str(_default_conan_home())))
+    ensure_dir(conan_home)
+    _sync_settings_file(conan_home, quiet)
+    if requested_profiles:
+        _ensure_requested_profiles(conan_home, requested_profiles, quiet)
     try:
         # If the default profile exists this will succeed; don't run detect.
-        run([conan, "profile", "show", "default"], quiet=True)
+        run([conan, "profile", "show", "default"], env=env, quiet=True)
         return
     except Exception:
         # No default profile: auto-detect one and then ensure cppstd=20
-        run([conan, "profile", "detect", "--force"], quiet=quiet)
+        run([conan, "profile", "detect", "--force"], env=env, quiet=quiet)
         # Conan 2 removed `profile update` - edit the profile file directly.
         try:
             # `conan profile path default` prints the path to the profile file.
-            res = run([conan, "profile", "path", "default"], quiet=True)
+            res = run([conan, "profile", "path", "default"], env=env, quiet=True)
             profile_path_str = res.stdout.strip()
             if not profile_path_str:
                 return
@@ -83,6 +142,8 @@ def install(
     build_type: str,
     quiet: bool,
     preset_name: str | None = None,
+    env: dict[str, str] | None = None,
+    conf: dict[str, list[str]] | None = None,
 ) -> None:
     cmd = [
         conan,
@@ -98,7 +159,9 @@ def install(
         "-pr:b",
         profile_build,
     ]
-    run(cmd, quiet=quiet)
+    for key, value in (conf or {}).items():
+        cmd.extend(["-c", f"{key}={json.dumps(value)}"])
+    run(cmd, env=env, quiet=quiet)
     # If Conan or CMake emitted a CMakePresets.json in the build dir, patch its
     # configure/build/test preset names so that they match the `cbt` profile name
     # (preset_name). This ensures the generated presets are aligned with the

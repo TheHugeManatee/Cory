@@ -31,6 +31,18 @@ def config_path(build_dir: Path) -> Path:
     return build_dir / ".cbt" / "config.toml"
 
 
+def profile_lock_path(profile: str) -> Path:
+    return repo_root() / ".cbt" / "locks" / f"{profile}.json"
+
+
+def conan_home_for_profile(
+    profile: str, build_root: Path, build_type: str, sanitizer_signature: str
+) -> Path:
+    del profile
+    del build_type
+    return build_root / ".conan2" / sanitizer_signature
+
+
 def last_profile_path(build_root: Path) -> Path:
     return build_root / ".cbt" / "last_profile"
 

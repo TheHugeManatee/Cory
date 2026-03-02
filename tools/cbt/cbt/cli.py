@@ -126,6 +126,20 @@ def _prepend_env_path(env: dict[str, str], key: str, value: str) -> None:
         env[key] = value
 
 
+def _append_colon_option(existing: str | None, option: str) -> str:
+    current = existing or ""
+    if not current:
+        return option
+    if option in current.split(":"):
+        return current
+    return f"{current}:{option}"
+
+
+def _is_tsan_profile(config: dict) -> bool:
+    profile = str(config.get("cbt", {}).get("profile", "")).lower()
+    return "tsan" in profile
+
+
 def _env_profile() -> str | None:
     return os.environ.get("CORY_BUILD_PROFILE")
 
@@ -136,6 +150,12 @@ def _resolve_profile(profile: str | None) -> str:
 
 def _config_env(config: dict) -> dict[str, str]:
     env = dict(os.environ)
+    if _is_tsan_profile(config):
+        suppressions = repo_root() / "tools" / "tsan" / "tsan.supp"
+        if suppressions.exists():
+            option = f"suppressions={suppressions}"
+            env["TSAN_OPTIONS"] = _append_colon_option(env.get("TSAN_OPTIONS"), option)
+
     vulkan = config.get("vulkan")
     if vulkan and vulkan.get("sdk"):
         sdk = Path(vulkan["sdk"])

@@ -10,6 +10,17 @@ find_package(glfw3 REQUIRED)
 find_package(Microsoft.GSL REQUIRED)
 find_package(fmt REQUIRED)
 find_package(cppcoro REQUIRED)
+
+if (MSVC)
+    # Conan currently provides cppcoro binaries with mismatched coroutine ABIs between
+    # Release and Debug on Windows for this workspace:
+    # - Release cppcoro.lib exports std::experimental::coroutine_handle (needs /await)
+    # - Debug cppcoro.lib exports std::coroutine_handle (must not use /await)
+    # Match consumer compile options per config to avoid _COROUTINE_ABI linker mismatches.
+    set_property(TARGET cppcoro::cppcoro PROPERTY INTERFACE_COMPILE_OPTIONS
+            "$<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CONFIG:Release>>:/await>")
+endif ()
+
 find_package(EnTT REQUIRED)
 find_package(glm REQUIRED)
 find_package(imgui REQUIRED)
@@ -43,7 +54,13 @@ set(CORY_SOURCES
         Base/Callback.hpp
         Base/Common.hpp
         Base/Concepts.hpp
+        Base/CoroBatch.cpp
+        Base/CoroBatch.hpp
+        Base/Coro.cpp
         Base/Coro.hpp
+        Base/CoroOps.hpp
+        Base/CoroThreadPool.cpp
+        Base/CoroThreadPool.hpp
         Base/CpuBuffer.hpp
         Base/Debugger.cpp
         Base/Debugger.hpp
@@ -96,6 +113,8 @@ set(CORY_SOURCES
         Framegraph/TransientComputePass.hpp
         Framegraph/TransientRenderPass.cpp
         Framegraph/TransientRenderPass.hpp
+        IO/Bmp.cpp
+        IO/Bmp.hpp
         ImGui/ImguiRenderer.cpp
         ImGui/ImguiRenderer.hpp
         ImGui/Inputs.hpp
@@ -128,6 +147,8 @@ set(CORY_SOURCES
         Renderer/PipelineCache.hpp
         Renderer/RadixSorter.cpp
         Renderer/RadixSorter.hpp
+        Renderer/ThreadScheduler.cpp
+        Renderer/ThreadScheduler.hpp
         Renderer/Shader.cpp
         Renderer/Shader.hpp
         Renderer/ShaderHotReloader.cpp

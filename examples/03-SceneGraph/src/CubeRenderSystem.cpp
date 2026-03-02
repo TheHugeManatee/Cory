@@ -10,6 +10,7 @@
 #include <KDGpu/gpu_core.h>
 
 #include <cstddef>
+#include <stdexcept>
 
 CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx)
     : Base()
@@ -23,8 +24,17 @@ CubeRenderSystem::CubeRenderSystem(Cory::Context &ctx)
         .indexCount = cube.indexCount,
     });
 
-    vertexShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.vert.slang"));
-    fragmentShader_ = ctx.shaders().createShader(Cory::ResourceLocator::Locate("cube.frag.slang"));
+    const auto vertexPath = Cory::ResourceLocator::Locate("cube.vert.slang");
+    if (!vertexPath.has_value()) {
+        throw std::runtime_error(vertexPath.error());
+    }
+    const auto fragmentPath = Cory::ResourceLocator::Locate("cube.frag.slang");
+    if (!fragmentPath.has_value()) {
+        throw std::runtime_error(fragmentPath.error());
+    }
+
+    vertexShader_ = ctx.shaders().createShader(*vertexPath);
+    fragmentShader_ = ctx.shaders().createShader(*fragmentPath);
 }
 
 CubeRenderSystem::~CubeRenderSystem()

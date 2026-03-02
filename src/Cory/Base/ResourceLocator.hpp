@@ -4,16 +4,12 @@
 
 #pragma once
 
+#include <Cory/Base/Result.hpp>
+
 #include <filesystem>
-#include <stdexcept>
 #include <vector>
 
 namespace Cory {
-
-struct ResourceNotFound : public std::runtime_error {
-    using std::runtime_error::runtime_error;
-    ~ResourceNotFound() override;
-};
 
 enum class ResourceType {
     Shader,
@@ -32,10 +28,9 @@ class ResourceLocator {
      * matches the file. most recently added search paths will be checked first
      *
      * @param type The resource type
-     * @throws ResourceNotFound if a resource cannot be located
      */
-    static std::filesystem::path Locate(std::filesystem::path resourcePath,
-                                        ResourceType type = ResourceType::Any);
+    static Result<std::filesystem::path> Locate(std::filesystem::path resourcePath,
+                                                ResourceType type = ResourceType::Any);
 
   private:
     static std::vector<std::filesystem::path> &searchPaths();

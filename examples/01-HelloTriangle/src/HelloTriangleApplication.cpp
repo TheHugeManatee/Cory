@@ -16,12 +16,14 @@
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/MappedCoherentDeviceBuffer.hpp>
+#include <Cory/Renderer/ThreadScheduler.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/vulkan/vulkan_graphics_api.h>
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
+#include <cppcoro/sync_wait.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat2x2.hpp>
 #include <glm/vec3.hpp>
@@ -31,6 +33,8 @@
 
 #include <array>
 #include <chrono>
+#include <cstddef>
+#include <cstring>
 
 struct PushConstants {
     glm::vec4 color{1.0, 0.0, 0.0, 1.0};
@@ -197,6 +201,7 @@ void HelloTriangleApplication::run()
     auto frames = frameSource.frames();
 
     for (auto &frameCtx : frames) {
+        ctx().renderThreadScheduler().poll();
         runFrame(frameCtx);
         if (framesToRender_ > 0 && frameCtx.frameNumber >= framesToRender_) {
             break;
@@ -274,6 +279,8 @@ void HelloTriangleApplication::createGeometry()
     auto &device = ctx().device();
 
     mesh_ = std::make_unique<Mesh>();
+    auto vertexUploadTicket = Cory::AsyncUploader::UploadTicket{};
+    auto indexUploadTicket = Cory::AsyncUploader::UploadTicket{};
 
     // Create a buffer to hold triangle vertex data
     {
@@ -303,13 +310,22 @@ void HelloTriangleApplication::createGeometry()
 
         const auto uploadOptions = Cory::AsyncUploader::BufferUploadRequest{
             .destinationBuffer = mesh_->vertexBuffer.handle(),
-            .data = vertexData.data(),
             .byteSize = dataByteSize,
             .dstStages = KDGpu::PipelineStageFlagBit::VertexAttributeInputBit,
             .dstMask = KDGpu::AccessFlagBit::VertexAttributeReadBit,
         };
 
-        ctx().uploader().enqueueBufferUpload(uploadOptions);
+        auto stagingResult = cppcoro::sync_wait(ctx().uploader().acquireStaging(dataByteSize));
+        CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
+        auto stagingSlot = std::move(*stagingResult);
+        if (dataByteSize > 0) {
+            auto *mapped = reinterpret_cast<std::byte *>(stagingSlot.userData);
+            CO_CORE_ASSERT(mapped != nullptr, "AsyncUploader: staging slot is not mapped.");
+            std::memcpy(mapped, vertexData.data(), static_cast<size_t>(dataByteSize));
+        }
+
+        vertexUploadTicket =
+            ctx().uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));
     }
     // Create a buffer to hold the geometry index data
     {
@@ -324,13 +340,23 @@ void HelloTriangleApplication::createGeometry()
         mesh_->indexBuffer = device.createBuffer(bufferOptions);
         const auto uploadOptions = Cory::AsyncUploader::BufferUploadRequest{
             .destinationBuffer = mesh_->indexBuffer.handle(),
-            .data = indexData.data(),
             .byteSize = dataByteSize,
             .dstStages = KDGpu::PipelineStageFlagBit::IndexInputBit,
             .dstMask = KDGpu::AccessFlagBit::IndexReadBit,
         };
-        ctx().uploader().enqueueBufferUpload(uploadOptions);
+        auto stagingResult = cppcoro::sync_wait(ctx().uploader().acquireStaging(dataByteSize));
+        CO_CORE_ASSERT(stagingResult, "AsyncUploader: failed to acquire staging slot.");
+        auto stagingSlot = std::move(*stagingResult);
+        if (dataByteSize > 0) {
+            auto *mapped = reinterpret_cast<std::byte *>(stagingSlot.userData);
+            CO_CORE_ASSERT(mapped != nullptr, "AsyncUploader: staging slot is not mapped.");
+            std::memcpy(mapped, indexData.data(), static_cast<size_t>(dataByteSize));
+        }
+        indexUploadTicket =
+            ctx().uploader().enqueueStagedBufferUpload(uploadOptions, std::move(stagingSlot));
     }
+    vertexUploadTicket.wait();
+    indexUploadTicket.wait();
 }
 
 void HelloTriangleApplication::renderImGuiOverlay(Cory::FrameContext &frameCtx,

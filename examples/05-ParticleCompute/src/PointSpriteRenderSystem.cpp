@@ -19,6 +19,7 @@
 #include <KDGpu/vulkan/vulkan_buffer.h>
 #include <cstddef>
 #include <span>
+#include <stdexcept>
 
 namespace {
 InstanceBuffer &getInstanceBufferForFrame(std::vector<InstanceBuffer> &instanceBuffers,
@@ -112,13 +113,23 @@ PointSpriteRenderSystem::PointSpriteRenderSystem(Cory::Context &ctx)
     , ctx_(&ctx)
     , sorter_{ctx}
 {
-    vertexShader_ =
-        ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.vert.slang"));
-    fragmentShader_ =
-        ctx.shaders().createShader(Cory::ResourceLocator::Locate("pointsprite.frag.slang"));
+    const auto vertexPath = Cory::ResourceLocator::Locate("pointsprite.vert.slang");
+    if (!vertexPath.has_value()) {
+        throw std::runtime_error(vertexPath.error());
+    }
+    const auto fragmentPath = Cory::ResourceLocator::Locate("pointsprite.frag.slang");
+    if (!fragmentPath.has_value()) {
+        throw std::runtime_error(fragmentPath.error());
+    }
+    const auto predicatePath = Cory::ResourceLocator::Locate("sort_preprocess.comp.slang");
+    if (!predicatePath.has_value()) {
+        throw std::runtime_error(predicatePath.error());
+    }
+
+    vertexShader_ = ctx.shaders().createShader(*vertexPath);
+    fragmentShader_ = ctx.shaders().createShader(*fragmentPath);
     {
-        Cory::ShaderSource predicateSource{
-            Cory::ResourceLocator::Locate("sort_preprocess.comp.slang")};
+        Cory::ShaderSource predicateSource{*predicatePath};
         predicateShader_ = ctx.shaders().createShader(std::move(predicateSource));
     }
 }

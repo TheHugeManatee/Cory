@@ -29,15 +29,11 @@ class Behavior {
   public:
     struct promise_type {
         Behavior get_return_object() { return Behavior{this}; }
-        auto initial_suspend() { return cppcoro::suspend_never{}; }
+        auto initial_suspend() { return cppcoro::suspend_always{}; }
         // suspend always so we can be explicit about destroying it
         auto final_suspend() noexcept { return cppcoro::suspend_always{}; }
         void return_void() {}
         void unhandled_exception() { std::terminate(); }
-
-        // adopted means the coroutine was moved to some other entity that manages it
-        // and such we don't need to destroy it ourselves
-        bool wasAdopted_{false};
     };
 
     using Handle = cppcoro::coroutine_handle<promise_type>;
@@ -53,10 +49,12 @@ class Behavior {
     }
     ~Behavior()
     {
-        if (handle_ && !handle_.promise().wasAdopted_) {
+        if (handle_) {
             handle_.destroy();
         }
     }
+
+    [[nodiscard]] Handle release() noexcept { return std::exchange(handle_, nullptr); }
 
     Handle handle_;
 };
@@ -106,6 +104,7 @@ class World {
     void tick();
     void tickBy(Seconds duration);
     void end();
+    void spawn(Behavior &&behavior);
 
   public:
     friend class Behavior;
@@ -119,7 +118,6 @@ class World {
             void await_suspend(Behavior::Handle h) noexcept
             {
                 world_.waitingForFutureTicks_.enqueueFor(world_.lastTick_.ticks + sleepTicks, h);
-                h.promise().wasAdopted_ = true;
             }
             SimulationClock::TickInfo await_resume() noexcept { return world_.lastTick_; }
         };
@@ -136,7 +134,6 @@ class World {
             void await_suspend(Behavior::Handle h) noexcept
             {
                 world_.waitingForTimePoint_.enqueueFor(world_.lastTick_.now + sleepTime, h);
-                h.promise().wasAdopted_ = true;
             }
             SimulationClock::TickInfo await_resume() noexcept { return world_.lastTick_; }
         };
@@ -162,6 +159,18 @@ void World::tickBy(Seconds duration)
 {
     auto tickInfo = clock_.tickBy(duration);
     processTick(tickInfo);
+}
+void World::spawn(Behavior &&behavior)
+{
+    auto h = behavior.release();
+    if (!h) {
+        return;
+    }
+
+    h.resume();
+    if (h.done()) {
+        h.destroy();
+    }
 }
 
 void World::processTick(SimulationClock::TickInfo tickInfo)
@@ -212,6 +221,7 @@ TEST_CASE("Simple behavior")
         CO_CORE_TRACE("behavior: tick 2: {:<05f}", tick2.now.time_since_epoch().count());
         state = 3;
     }(world, state);
+    world.spawn(std::move(ticker));
 
     LogicComponent logic{
         [](World &world) -> Behavior { auto tick = co_await world.sleepNextTick(); }};
@@ -249,6 +259,7 @@ TEST_CASE("Looping behavior")
             ++state;
         }
     }(world, state);
+    world.spawn(std::move(ticker));
 
     CHECK(state == 0);
     CO_CORE_TRACE("Before world tick");
@@ -280,6 +291,7 @@ TEST_CASE("Sleeping multiple ticks")
         auto tick2 = co_await world.sleepForTicks(2);
         state = 3;
     }(world, state);
+    world.spawn(std::move(ticker));
 
     CHECK(state == 1);
     CO_CORE_TRACE("Before world tick");
@@ -314,6 +326,7 @@ TEST_CASE("Sleeping for simulated time")
         state = 2;
         auto tick2 = co_await world.sleepFor(2.0_ms);
     }(world, state);
+    world.spawn(std::move(ticker));
 
     CHECK(state == 1);
     CO_CORE_TRACE("Before world tick");

@@ -7,7 +7,7 @@
 
 TEST_CASE("Parameters")
 {
-    using namespace Cory::Proper;
+    using namespace Cory;
 
     enum class Quality {
         Low,
@@ -23,20 +23,59 @@ TEST_CASE("Parameters")
         CHECK(parameter.get() == 5);
     }
 
-    SECTION("Ranged parameters enforce inclusive bounds")
+    SECTION("Numeric parameters enforce inclusive bounds")
     {
-        RangedParameter<int, 1, 10> parameter("intRange", 5);
+        NumericParameter<int> parameter("intRange", 5, 1, 10);
 
         CHECK(parameter.name() == "intRange");
         CHECK(parameter.get() == 5);
-        CHECK(parameter.min() == 1);
-        CHECK(parameter.max() == 10);
+        REQUIRE(parameter.min().has_value());
+        REQUIRE(parameter.max().has_value());
+        CHECK(parameter.min().value() == 1);
+        CHECK(parameter.max().value() == 10);
+        CHECK(parameter.hasMin());
+        CHECK(parameter.hasMax());
 
-        parameter = 10;
+        CHECK((parameter = 10));
         CHECK(parameter.get() == 10);
 
-        CHECK_THROWS_AS(parameter.set(0), std::out_of_range);
-        CHECK_THROWS_AS(parameter = 11, std::out_of_range);
+        CHECK_FALSE(parameter.set(0));
+        CHECK(parameter.get() == 10);
+        CHECK_FALSE((parameter = 11));
+        CHECK(parameter.get() == 10);
+    }
+
+    SECTION("Numeric parameters can omit explicit bounds")
+    {
+        NumericParameter<float> parameter("unbounded", 5.0f);
+
+        CHECK(parameter.name() == "unbounded");
+        CHECK(parameter.get() == 5.0f);
+        CHECK_FALSE(parameter.hasMin());
+        CHECK_FALSE(parameter.hasMax());
+
+        CHECK(parameter.set(123.0f));
+        CHECK(parameter.get() == 123.0f);
+    }
+
+    SECTION("Numeric parameters support glm component-wise bounds")
+    {
+        NumericParameter<glm::vec3> parameter("position",
+                                              glm::vec3{0.0f, 1.0f, 2.0f},
+                                              glm::vec3{-1.0f, 0.0f, 1.0f},
+                                              glm::vec3{1.0f, 2.0f, 3.0f});
+
+        CHECK(parameter.name() == "position");
+        CHECK(parameter.get() == glm::vec3{0.0f, 1.0f, 2.0f});
+        CHECK(parameter.hasMin());
+        CHECK(parameter.hasMax());
+
+        CHECK(parameter.set(glm::vec3{1.0f, 2.0f, 3.0f}));
+        CHECK(parameter.get() == glm::vec3{1.0f, 2.0f, 3.0f});
+
+        CHECK_FALSE(parameter.set(glm::vec3{2.0f, 2.0f, 3.0f}));
+        CHECK_FALSE(parameter.set(glm::vec3{1.0f, -1.0f, 3.0f}));
+        CHECK(parameter.get() == glm::vec3{1.0f, 2.0f, 3.0f});
     }
 
     SECTION("Option parameters expose and enforce their accepted values")
@@ -47,10 +86,11 @@ TEST_CASE("Parameters")
         CHECK(parameter.get() == 3);
         CHECK(parameter.acceptedValues() == std::array{1, 3, 5});
 
-        parameter.set(5);
+        CHECK(parameter.set(5));
         CHECK(parameter.get() == 5);
 
-        CHECK_THROWS_AS(parameter.set(2), std::invalid_argument);
+        CHECK_FALSE(parameter.set(2));
+        CHECK(parameter.get() == 5);
     }
 
     SECTION("Enum parameters derive accepted values from magic_enum")
@@ -61,14 +101,30 @@ TEST_CASE("Parameters")
         CHECK(parameter.get() == Quality::Medium);
         CHECK(parameter.acceptedValues() == std::array{Quality::Low, Quality::Medium, Quality::High});
 
-        parameter = Quality::High;
+        CHECK((parameter = Quality::High));
         CHECK(parameter.get() == Quality::High);
+    }
+
+    SECTION("String option parameters expose and enforce accepted values")
+    {
+        StringOptionParameter parameter("backend", "vulkan", {"vulkan", "opengl", "metal"});
+
+        CHECK(parameter.name() == "backend");
+        CHECK(parameter.get() == "vulkan");
+        CHECK(std::ranges::equal(parameter.acceptedValues(),
+                                 std::array<std::string_view, 3>{"vulkan", "opengl", "metal"}));
+
+        CHECK(parameter.set("metal"));
+        CHECK(parameter.get() == "metal");
+
+        CHECK_FALSE(parameter.set("directx"));
+        CHECK(parameter.get() == "metal");
     }
 }
 
 TEST_CASE("Properties can be set and retrieved", "[Properties]")
 {
-    using namespace Cory::Proper;
+    using namespace Cory;
 
     Property intProp(42);
     Property floatProp(3.14f);
@@ -90,7 +146,7 @@ TEST_CASE("Properties can be set and retrieved", "[Properties]")
 TEST_CASE("Properties can be co_awaited on safely, and pending waiters are cleaned up",
           "[Properties]")
 {
-    using namespace Cory::Proper;
+    using namespace Cory;
 
     auto waitForChanges = [](Property<int> &property, int &target, bool &cleanedUp) -> Task<> {
         struct CleanupChecker {
@@ -170,7 +226,7 @@ TEST_CASE("Properties can be co_awaited on safely, and pending waiters are clean
 
 TEST_CASE("Perf test to get some ideas", "[Properties]")
 {
-    using namespace Cory::Proper;
+    using namespace Cory;
 
     auto waitForever = [](Property<int> &property) -> Task<> {
         while (true) {
@@ -200,7 +256,7 @@ TEST_CASE("Perf test to get some ideas", "[Properties]")
 
 TEST_CASE("Pingpong")
 {
-    using namespace Cory::Proper;
+    using namespace Cory;
     spdlog::warn("Starting pingpong");
 
     auto setTo1 = [](Property<int> &property) -> Task<> {

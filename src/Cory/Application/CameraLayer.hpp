@@ -2,8 +2,8 @@
 
 #include <Cory/Application/ApplicationLayer.hpp>
 #include <Cory/Application/Common.hpp>
-
-#include "kdbindings/property.h"
+#include <Cory/Proper/Parameter.hpp>
+#include <Cory/Proper/Property.hpp>
 
 namespace Cory {
 
@@ -23,22 +23,31 @@ class CameraLayer : public ApplicationLayer {
     bool onEvent(Event event) override;
     void onUpdate(const LogicUpdateContext &updateContext) override;
 
-    kdb::Property<glm::vec3> position{glm::vec3{0.0f, 0.0f, 5.0f}};
-    kdb::Property<glm::vec3> up{glm::vec3{0.0f, 1.0f, 0.0f}};
-    kdb::Property<glm::vec3> focus{glm::vec3{0.0f, 0.0f, 0.0f}};
+    NumericParameter<glm::vec3> position{"position",
+                                         glm::vec3{0.0f, 0.0f, 5.0f},
+                                         glm::vec3{-10.0f},
+                                         glm::vec3{10.0f}};
+    NumericParameter<glm::vec3> up{"up",
+                                   glm::vec3{0.0f, 1.0f, 0.0f},
+                                   glm::vec3{-1.0f},
+                                   glm::vec3{1.0f}};
+    NumericParameter<glm::vec3> focus{"focus",
+                                      glm::vec3{0.0f, 0.0f, 0.0f},
+                                      glm::vec3{-10.0f},
+                                      glm::vec3{10.0f}};
 
-    kdb::Property<float> roll{0.0f};
-    kdb::Property<float> fovy{glm::radians(70.0f)};
+    Parameter<float> roll{"roll", 0.0f};
+    NumericParameter<float> fovy{"fovy", glm::radians(70.0f), glm::radians(10.0f), glm::radians(140.0f)};
 
-    kdb::Property<float> rotationSpeed{0.002f};
-    kdb::Property<float> movementSpeed{0.010f};
-    kdb::Property<float> scrollSpeed{0.25f};
+    NumericParameter<float> rotationSpeed{"rotation speed", 0.002f, 0.001f, 0.1f};
+    NumericParameter<float> movementSpeed{"movement speed", 0.010f, 0.01f, 1.0f};
+    NumericParameter<float> scrollSpeed{"scroll speed", 0.25f, 0.1f, 10.0f};
 
     // external modifications to these will likely be ignored/overwritten
-    kdb::Property<glm::vec3> forward{glm::vec3{0.0f, 0.0f, 1.0f}};   ///< =normalize(focus-position)
-    kdb::Property<glm::vec3> right{glm::vec3{1.0f, 0.0f, 0.0f}};     ///< cross(forward, up)
-    kdb::Property<glm::mat4x4> worldToViewMatrix{glm::mat4x4(1.0f)}; // the "View Matrix"
-    kdb::Property<glm::mat4x4> viewToWorldMatrix{glm::mat4x4(1.0f)};
+    Property<glm::vec3> forward{glm::vec3{0.0f, 0.0f, 1.0f}};   ///< =normalize(focus-position)
+    Property<glm::vec3> right{glm::vec3{1.0f, 0.0f, 0.0f}};     ///< cross(forward, up)
+    Property<glm::mat4x4> worldToViewMatrix{glm::mat4x4(1.0f)}; // the "View Matrix"
+    Property<glm::mat4x4> viewToWorldMatrix{glm::mat4x4(1.0f)};
 
     static constexpr glm::vec3 localRight = {1.0f, 0.0f, 0.0f};
     static constexpr glm::vec3 localUp = {0.0f, 1.0f, 0.0f};

@@ -8,7 +8,9 @@ Basic premises:
 
 Parameter layer note:
  - Added a named `Parameter<T>` wrapper on top of `Property<T>` so higher-level UI/config values can carry an explicit identifier without losing the existing property await/get/set behavior.
- - Added `RangedParameter<T, Min, Max>` for compile-time inclusive bounds and `OptionParameter<T, ...>` for compile-time accepted value sets.
+ - Added `NumericParameter<T>` with optional per-instance `min`/`max` bounds; this works for both scalar values and `glm` vector types, with vector bounds enforced component-wise.
+ - Validation-based parameter setters are non-throwing and return `bool`, so invalid UI edits can be rejected without exceptions while leaving the existing value unchanged.
+ - `CoImGui` property editors are no longer tied to `kdb::Property`; they now work with any holder exposing `get()` and `set(...)`, which makes the new Proper property/parameter types usable directly in existing UI code.
  - Added enum-specific `EnumParameter<E>` that derives its accepted values from `magic_enum::enum_values<E>()` and validates assignments with `magic_enum::enum_contains`.
 
 Build-system note:

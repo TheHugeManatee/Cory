@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace Cory::Proper {
+namespace Cory {
 
 class PropertySet {
   public:
@@ -60,7 +60,7 @@ class PropertySet {
             auto awaiterHandle = cppcoro::coroutine_handle<>{awaiting};
             set_.registerWaiter(handle_, awaiterHandle);
 
-            if constexpr (std::same_as<PromiseType, Proper::Task<void>::promise_type>) {
+            if constexpr (std::same_as<PromiseType, Task<void>::promise_type>) {
                 awaiting.promise().setCancellation(&set_, handle_, awaiterHandle);
             }
         }
@@ -86,7 +86,7 @@ class PropertySet {
             auto awaiterHandle = cppcoro::coroutine_handle<>{awaiting};
             set_.registerWaiter(handle_, awaiterHandle);
 
-            if constexpr (std::same_as<PromiseType, Proper::Task<void>::promise_type>) {
+            if constexpr (std::same_as<PromiseType, Task<void>::promise_type>) {
                 awaiting.promise().setCancellation(&set_, handle_, awaiterHandle);
             }
         }
@@ -104,7 +104,7 @@ class PropertySet {
     };
 
   private:
-    friend class Proper::Task<void>::promise_type;
+    friend class Task<void>::promise_type;
 
     PropertyHandle createImpl(const std::string &name, PropertyVariant property);
     ChangedAwaiter changed(PropertyHandle handle);
@@ -130,4 +130,4 @@ PropertyHandle PropertySet::create(const std::string &name, IsProperty auto prop
 {
     return createImpl(name, PropertyVariant{std::move(property)});
 }
-} // namespace Cory::Proper
+} // namespace Cory

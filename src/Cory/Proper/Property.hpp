@@ -7,7 +7,7 @@
 #include <concepts>
 #include <vector>
 
-namespace Cory::Proper {
+namespace Cory {
 
 template <std::copyable T> class Property : public AbstractProperty {
   public:
@@ -115,4 +115,4 @@ template <std::copyable T> typename Property<T>::ChangedAwaiter Property<T>::cha
     return {this};
 }
 
-} // namespace Cory::Proper
+} // namespace Cory

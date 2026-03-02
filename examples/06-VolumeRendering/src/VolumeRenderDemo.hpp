@@ -31,8 +31,8 @@ class VolumeRenderDemoApplication : public Cory::Application {
 
     void run() override;
 
-    Cory::Property<bool> showImGuizmo{false};
-    Cory::Property<int32_t> msaaSamples{1};
+    Cory::KdbProperty<bool> showImGuizmo{false};
+    Cory::KdbProperty<int32_t> msaaSamples{1};
 
   private:
     // create the mesh to be rendered

@@ -14,7 +14,7 @@
 #include <utility>
 #include <variant>
 
-namespace Cory::Proper {
+namespace Cory {
 
 class PropertySet;
 
@@ -155,4 +155,4 @@ template <> class Task<void> {
     Handle handle_{};
 };
 
-} // namespace Cory::Proper
+} // namespace Cory

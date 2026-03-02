@@ -2,7 +2,7 @@
 
 #include "PropertySet.hpp"
 
-namespace Cory::Proper {
+namespace Cory {
 
 void AbstractProperty::registerWaiter(cppcoro::coroutine_handle<> waiter)
 {
@@ -37,4 +37,4 @@ void Task<void>::promise_type::cancel()
     clearCancellation();
 }
 
-} // namespace Cory::Proper
+} // namespace Cory

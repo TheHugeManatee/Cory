@@ -1,12 +1,13 @@
 #pragma once
 
+#include <Cory/Proper/Parameter.hpp>
+
 #include <fmt/format.h>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <imgui.h>
-#include <kdbindings/property.h>
 #include <magic_enum/magic_enum.hpp>
 
 #include <KDGpu/utils/flags.h>
@@ -29,6 +30,47 @@ inline void Label(std::string_view label)
 {
     const auto labelText = std::string{label};
     ::ImGui::TextUnformatted(labelText.c_str());
+}
+
+template <typename T>
+concept MutableValueHolder = requires(T holder, const T constHolder) {
+    constHolder.get();
+    holder.set(constHolder.get());
+};
+
+template <typename T>
+concept NamedValueHolder = MutableValueHolder<T> && requires(const T constHolder) {
+    { constHolder.name() } -> std::convertible_to<std::string_view>;
+};
+
+template <typename T>
+concept StringOptionsHolder = NamedValueHolder<T> && requires(const T constHolder) {
+    requires std::same_as<std::remove_cvref_t<decltype(constHolder.get())>, std::string>;
+    constHolder.acceptedValues();
+};
+
+template <typename Holder, typename Value>
+auto setValue(Holder &holder, Value &&value) -> bool
+{
+    if constexpr (std::same_as<decltype(holder.set(std::forward<Value>(value))), bool>) {
+        return holder.set(std::forward<Value>(value));
+    }
+    else {
+        holder.set(std::forward<Value>(value));
+        return true;
+    }
+}
+
+template <typename T>
+[[nodiscard]] constexpr auto sliderBoundValue(const T &value) -> const T &
+{
+    return value;
+}
+
+template <glm::length_t L, typename T, glm::qualifier Q>
+[[nodiscard]] constexpr auto sliderBoundValue(const glm::vec<L, T, Q> &value) -> T
+{
+    return value.x;
 }
 
 } // namespace detail
@@ -88,17 +130,33 @@ auto Slider(std::string_view label, glm::vec<L, T> &value, Arguments... args)
     }
 }
 
-// template for KDBindings::Property
-template <typename Property, typename... Arguments>
-    requires KDBindings::Private::is_property<Property>::value
-auto Slider(std::string_view label, Property &property, Arguments... args)
+template <detail::MutableValueHolder Holder, typename... Arguments>
+auto Slider(std::string_view label, Holder &holder, Arguments... args)
 {
-    auto v = property.get();
+    auto v = holder.get();
     if (Slider(label, v, args...)) {
-        property.set(v);
-        return true;
+        return detail::setValue(holder, v);
     }
     return false;
+}
+
+template <detail::NamedValueHolder Holder, typename... Arguments>
+auto Slider(Holder &holder, Arguments... args)
+{
+    return Slider(holder.name(), holder, args...);
+}
+
+template <typename T>
+auto Slider(Cory::NumericParameter<T> &parameter)
+{
+    if (!parameter.hasMin() || !parameter.hasMax()) {
+        return false;
+    }
+
+    return Slider(parameter.name(),
+                  parameter,
+                  detail::sliderBoundValue(*parameter.min()),
+                  detail::sliderBoundValue(*parameter.max()));
 }
 
 // template for double, float, int
@@ -154,17 +212,20 @@ auto Input(std::string_view label, glm::vec<L, T> &value, Arguments... args)
     }
 }
 
-// template for KDBindings::Property
-template <typename Property, typename... Arguments>
-    requires KDBindings::Private::is_property<Property>::value
-auto Input(std::string_view label, Property &property, Arguments... args)
+template <detail::MutableValueHolder Holder, typename... Arguments>
+auto Input(std::string_view label, Holder &holder, Arguments... args)
 {
-    auto v = property.get();
+    auto v = holder.get();
     if (Input(label, v, args...)) {
-        property.set(v);
-        return true;
+        return detail::setValue(holder, v);
     }
     return false;
+}
+
+template <detail::NamedValueHolder Holder, typename... Arguments>
+auto Input(Holder &holder, Arguments... args)
+{
+    return Input(holder.name(), holder, args...);
 }
 
 template <typename E>
@@ -197,16 +258,51 @@ bool ComboBox(std::string_view label, E &value, ImGuiComboFlags flags = 0)
     return wasChanged;
 }
 
-template <typename E>
-    requires std::is_enum_v<E>
-bool ComboBox(std::string_view label, KDBindings::Property<E> &property)
+template <detail::MutableValueHolder Holder>
+    requires std::is_enum_v<std::remove_cvref_t<decltype(std::declval<const Holder &>().get())>>
+bool ComboBox(std::string_view label, Holder &holder)
 {
-    auto v = property.get();
+    auto v = holder.get();
     if (ComboBox(label, v)) {
-        property.set(v);
-        return true;
+        return detail::setValue(holder, v);
     }
     return false;
+}
+
+template <detail::NamedValueHolder Holder>
+    requires std::is_enum_v<std::remove_cvref_t<decltype(std::declval<const Holder &>().get())>>
+bool ComboBox(Holder &holder)
+{
+    return ComboBox(holder.name(), holder);
+}
+
+template <detail::StringOptionsHolder Holder>
+bool ComboBox(std::string_view label, Holder &holder, ImGuiComboFlags flags = 0)
+{
+    detail::Label(label);
+    ::ImGui::SameLine(detail::availableWidth() / 3.0f);
+
+    const auto currentValue = holder.get();
+    bool wasChanged = false;
+    if (ImGui::BeginCombo(label.data(), currentValue.c_str(), flags)) {
+        for (const auto &option : holder.acceptedValues()) {
+            const bool isSelected = currentValue == option;
+            if (ImGui::Selectable(option.c_str(), isSelected)) {
+                wasChanged = detail::setValue(holder, option);
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    return wasChanged;
+}
+
+template <detail::StringOptionsHolder Holder>
+bool ComboBox(Holder &holder, ImGuiComboFlags flags = 0)
+{
+    return ComboBox(holder.name(), holder, flags);
 }
 
 template <typename E>
@@ -222,14 +318,23 @@ bool ComboBox(std::string_view label, KDGpu::Flags<E> &flags)
     return wasChanged;
 }
 
-inline bool CheckBox(const char *str, KDBindings::Property<bool> &property)
+template <detail::MutableValueHolder Holder>
+    requires std::same_as<std::remove_cvref_t<decltype(std::declval<const Holder &>().get())>, bool>
+inline bool CheckBox(const char *str, Holder &holder)
 {
-    bool v = property.get();
+    bool v = holder.get();
     if (ImGui::Checkbox(str, &v)) {
-        property.set(v);
-        return true;
+        return detail::setValue(holder, v);
     }
     return false;
+}
+
+template <detail::NamedValueHolder Holder>
+    requires std::same_as<std::remove_cvref_t<decltype(std::declval<const Holder &>().get())>, bool>
+inline bool CheckBox(Holder &holder)
+{
+    const auto label = std::string{holder.name()};
+    return CheckBox(label.c_str(), holder);
 }
 
 template <typename E>

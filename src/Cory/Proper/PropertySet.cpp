@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <type_traits>
 
-namespace Cory::Proper {
+namespace Cory {
 
 PropertyHandle PropertySet::createImpl(const std::string &name, PropertyVariant property)
 {
@@ -138,4 +138,4 @@ void PropertySet::notifyChanged(PropertyHandle handle)
     }
 }
 
-} // namespace Cory::Proper
+} // namespace Cory

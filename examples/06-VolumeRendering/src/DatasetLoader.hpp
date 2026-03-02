@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Cory/Base/CoroThreadPool.hpp>
 #include <Cory/Base/Function.hpp>
 #include <Cory/Base/Result.hpp>
+#include <Cory/Coro/CoroThreadPool.hpp>
 #include <Cory/Renderer/StagingUploader.hpp>
 
 #include <cppcoro/task.hpp>

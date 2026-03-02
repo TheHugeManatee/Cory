@@ -1,4 +1,4 @@
-#include <Cory/Base/CoroThreadPool.hpp>
+#include "CoroThreadPool.hpp"
 
 #include <algorithm>
 #include <cassert>

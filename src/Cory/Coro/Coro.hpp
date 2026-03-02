@@ -1,8 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-
-#include "Log.hpp"
+#include <Cory/Base/Log.hpp>
 
 #include <cppcoro/awaitable_traits.hpp>
 #include <cppcoro/config.hpp>

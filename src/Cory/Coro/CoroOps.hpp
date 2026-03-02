@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Cory/Base/CoroThreadPool.hpp>
+#include "CoroThreadPool.hpp"
 
 #include <cppcoro/awaitable_traits.hpp>
 #include <cppcoro/detail/remove_rvalue_reference.hpp>

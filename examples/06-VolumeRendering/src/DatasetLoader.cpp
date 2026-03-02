@@ -1,7 +1,7 @@
 #include "DatasetLoader.hpp"
 
-#include <Cory/Base/CoroBatch.hpp>
-#include <Cory/Base/CoroOps.hpp>
+#include <Cory/Coro/CoroBatch.hpp>
+#include <Cory/Coro/CoroOps.hpp>
 #include <Cory/IO/Bmp.hpp>
 #include <Cory/Renderer/ThreadScheduler.hpp>
 

@@ -156,7 +156,7 @@ class VolumeManagerSystem {
     /// Applies streamed dataset runtime textures onto entity `VolumeComponent`.
     void updateStreamedEntities(Cory::SceneGraph &graph, double currentTime);
     /// Generates/updates procedural textures and applies them onto `VolumeComponent`.
-    void updateProceduralEntities(Cory::SceneGraph &graph, uint64_t frameNumber, float timeSeconds);
+    void updateProceduralEntities(Cory::SceneGraph &graph, uint64_t frameNumber, double timeSeconds);
     void enqueueProceduralGeneration(Cory::Entity entity,
                                      ProceduralVolume procedural,
                                      uint64_t frameNumber,

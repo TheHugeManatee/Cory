@@ -61,23 +61,21 @@ class ShaderBindingContext : NoCopy, NoMove {
     ~ShaderBindingContext();
 
     // clang-format off
-    [[nodiscard]] TextureHeapIndex bindTexture2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
-    [[nodiscard]] TextureHeapIndex bindTexture2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+    TextureHeapIndex bindTexture2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+    TextureHeapIndex bindTexture2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
 
-    [[nodiscard]] TextureHeapIndex bindTexture3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
-    [[nodiscard]] TextureHeapIndex bindTexture3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+    TextureHeapIndex bindTexture3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
+    TextureHeapIndex bindTexture3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout, Gpu::TextureSamplerHandle sampler = {});
 
-    [[nodiscard]] TextureHeapIndex bindStorageImage2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
-    [[nodiscard]] TextureHeapIndex bindStorageImage2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
-    [[nodiscard]] TextureHeapIndex bindStorageImage2DMS(TransientTextureHandle textureHandle,
-                                                        Gpu::TextureLayout layout);
-    [[nodiscard]] TextureHeapIndex bindStorageImage2DMS(Gpu::TextureViewHandle view,
-                                                        Gpu::TextureLayout layout);
+    TextureHeapIndex bindStorageImage2D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
+    TextureHeapIndex bindStorageImage2D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
+    TextureHeapIndex bindStorageImage2DMS(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
+    TextureHeapIndex bindStorageImage2DMS(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
 
-    [[nodiscard]] TextureHeapIndex bindStorageImage3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
-    [[nodiscard]] TextureHeapIndex bindStorageImage3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
+    TextureHeapIndex bindStorageImage3D(TransientTextureHandle textureHandle, Gpu::TextureLayout layout);
+    TextureHeapIndex bindStorageImage3D(Gpu::TextureViewHandle view, Gpu::TextureLayout layout);
 
-    [[nodiscard]] SamplerHeapIndex bindSampler(Gpu::TextureSamplerHandle sampler);
+    SamplerHeapIndex bindSampler(Gpu::TextureSamplerHandle sampler);
     // clang-format on
 
     void bind(Gpu::RenderPassCommandRecorder &cmd);

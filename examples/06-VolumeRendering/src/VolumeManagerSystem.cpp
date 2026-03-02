@@ -587,15 +587,13 @@ void VolumeManagerSystem::ensureDatasetRegistered(const StreamedVolume &streamed
                      streamedVolume.manifestPath.string());
     }
     manifest.datasetId = streamedVolume.datasetId;
-    auto [it, inserted] = datasets_.emplace(streamedVolume.datasetId,
-                                            DatasetRuntime{
-                                                .manifest = std::move(manifest),
-                                                .sliceSubsampleFactor =
-                                                    std::max<size_t>(1u,
-                                                                     streamedVolume
-                                                                         .sliceSubsampleFactor),
-                                                .loadingStartedTimeSeconds = currentTime,
-                                            });
+    auto [it, inserted] = datasets_.emplace(
+        streamedVolume.datasetId,
+        DatasetRuntime{
+            .manifest = std::move(manifest),
+            .sliceSubsampleFactor = std::max<size_t>(1u, streamedVolume.sliceSubsampleFactor),
+            .loadingStartedTimeSeconds = currentTime,
+        });
     if (!inserted) {
         return;
     }
@@ -773,7 +771,7 @@ void VolumeManagerSystem::enqueueProceduralGeneration(Cory::Entity entity,
 
 void VolumeManagerSystem::updateProceduralEntities(Cory::SceneGraph &graph,
                                                    uint64_t frameNumber,
-                                                   float timeSeconds)
+                                                   double timeSeconds)
 {
     for (auto entity : graph.depthFirstTraversal()) {
         auto *procedural = graph.getComponent<ProceduralVolume>(entity);
@@ -787,7 +785,8 @@ void VolumeManagerSystem::updateProceduralEntities(Cory::SceneGraph &graph,
         const auto needsRebuild = procedural->regenerate || !runtime.resident.has_value() ||
                                   procedural->updateEveryFrame || parametersChanged;
         if (needsRebuild) {
-            enqueueProceduralGeneration(entity, *procedural, frameNumber, timeSeconds);
+            enqueueProceduralGeneration(
+                entity, *procedural, frameNumber, gsl::narrow_cast<float>(timeSeconds));
             procedural->regenerate = false;
         }
 

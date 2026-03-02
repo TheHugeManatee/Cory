@@ -54,13 +54,13 @@ set(CORY_SOURCES
         Base/Callback.hpp
         Base/Common.hpp
         Base/Concepts.hpp
-        Base/CoroBatch.cpp
-        Base/CoroBatch.hpp
-        Base/Coro.cpp
-        Base/Coro.hpp
-        Base/CoroOps.hpp
-        Base/CoroThreadPool.cpp
-        Base/CoroThreadPool.hpp
+        Coro/CoroBatch.cpp
+        Coro/CoroBatch.hpp
+        Coro/Coro.cpp
+        Coro/Coro.hpp
+        Coro/CoroOps.hpp
+        Coro/CoroThreadPool.cpp
+        Coro/CoroThreadPool.hpp
         Base/CpuBuffer.hpp
         Base/Debugger.cpp
         Base/Debugger.hpp

@@ -2,7 +2,7 @@
 
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
-#include <Cory/Base/Coro.hpp>
+#include <Cory/Coro/Coro.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Shader.hpp>
 

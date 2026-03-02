@@ -19,8 +19,6 @@ struct ViewData
 };
 [[vk::push_constant]] ViewData *globals;
 
-
-
 struct VSInput
 {
     float3 position : TEXCOORD0;

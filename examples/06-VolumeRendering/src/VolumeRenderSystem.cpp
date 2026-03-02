@@ -37,16 +37,15 @@ struct DrawData {
 struct RaycastGlobals {
     glm::mat4 invViewProjection;
     glm::vec4 cameraPosition;
-    glm::uvec3 volumeDimensions;
     float time;
     uint32_t instanceCount;
-    uint32_t volumeTextureIndex;
     uint32_t colorTargetIsMsaa;
     float temporalBlendFactor;
-    uint32_t iterations;
     float alphaDeltaRejectThreshold;
+    uint32_t lightCount;
     uint32_t padding0;
     Cory::BufferDeviceAddress instances;
+    Cory::BufferDeviceAddress lights;
 };
 
 static constexpr uint32_t kInvalidVolumeTextureIndex = std::numeric_limits<uint32_t>::max();
@@ -161,10 +160,29 @@ void VolumeRenderSystem::ensureTemporalHistoryTexture(const Cory::FrameContext &
 void VolumeRenderSystem::beforeUpdate(Cory::SceneGraph &sg, uint64_t frameNumber)
 {
     shaderHotReloader_.processPendingReloads(frameNumber);
-    renderState_.clear();
+    volumeRenderState_.clear();
     // update the camera's state
     forEach<Cory::Components::CameraComponent>(
         sg, [this](Cory::Entity e, auto &camera) { camera_ = camera; });
+
+    lightsRenderState_.clear();
+    forEach<Cory::Components::Transform, Cory::Components::PointLightComponent>(
+        sg, [this](Cory::Entity, const auto &transform, const auto &light) {
+            const auto lightPositionWorld =
+                transform.modelToWorld * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+            lightsRenderState_.push_back(LightRenderState{
+                .position = lightPositionWorld,
+                .radiance = glm::vec4{light.color * light.intensity, 0.0f},
+            });
+        });
+
+    // Keep GPU logic branch-free by guaranteeing at least one valid light entry.
+    if (lightsRenderState_.empty()) {
+        lightsRenderState_.push_back(LightRenderState{
+            .position = glm::vec4{camera_.position, 1.0f},
+            .radiance = glm::vec4{1.0f, 1.0f, 1.0f, 0.0f},
+        });
+    }
 }
 
 void VolumeRenderSystem::update(Cory::SceneGraph &sg,
@@ -179,7 +197,7 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
     lastFrameDeltaSeconds_ = std::max(static_cast<float>(tick.delta.count()), 1e-6f);
     currentFrameTimeSeconds_ = static_cast<float>(tick.now.time_since_epoch().count());
 
-    auto entry = RenderStateEntry{
+    auto entry = VolumeInstanceRenderState{
         .data =
             InstanceData{
                 .modelToWorld = transform.modelToWorld * glm::scale(volume.size),
@@ -188,29 +206,32 @@ void VolumeRenderSystem::update(Cory::SceneGraph &sg,
                     transpose(inverse(transform.modelToWorld * glm::scale(volume.size))),
                 .color = Cory::Color{1.0, 0.0, 0.0, 1.0},
                 .transferParams =
-                    glm::vec4{std::clamp(volume.transferFunction.densityMin, 0.0f, 1.0f),
-                              std::clamp(volume.transferFunction.densityMax,
-                                         volume.transferFunction.densityMin + 0.001f,
-                                         1.0f),
-                              std::max(volume.transferFunction.opacityScale, 0.01f),
-                              std::max(volume.transferFunction.gamma, 0.01f)},
-                .raymarchParams = glm::vec4{std::max(volume.raymarchStepSizeMultiplier, 0.01f),
-                                            volume.raymarchJitteringEnabled ? 1.0f : 0.0f,
-                                            0.0f,
-                                            0.0f},
-                .volumeMeta = glm::uvec4{kInvalidVolumeTextureIndex, 1u, 1u, 1u},
+                    VolumeTransferParams{
+                        .densityMin = std::clamp(volume.transferFunction.densityMin, 0.0f, 1.0f),
+                        .densityMax = std::clamp(volume.transferFunction.densityMax,
+                                                 volume.transferFunction.densityMin + 0.001f,
+                                                 1.0f),
+                        .opacityScale = std::max(volume.transferFunction.opacityScale, 0.01f),
+                        .gamma = std::max(volume.transferFunction.gamma, 0.01f),
+                    },
+                .raymarchStepSizeMultiplier = std::max(volume.raymarchStepSizeMultiplier, 0.01f),
+                .samples = std::max(volume.samples, 1u),
+                .raymarchJitteringEnabled = volume.raymarchJitteringEnabled ? 1.0f : 0.0f,
+                .renderMode = volume.renderMode,
+                .volumeTextureIndex = kInvalidVolumeTextureIndex,
+                .volumeDimensions = glm::uvec3{1u, 1u, 1u},
             },
     };
 
     if (volume.hasTexture) {
         entry.hasTexture = true;
         entry.textureView = volume.textureView;
-        entry.data.volumeMeta.y = std::max(volume.textureDimensions.x, 1u);
-        entry.data.volumeMeta.z = std::max(volume.textureDimensions.y, 1u);
-        entry.data.volumeMeta.w = std::max(volume.textureDimensions.z, 1u);
+        entry.data.volumeDimensions.x = std::max(volume.textureDimensions.x, 1u);
+        entry.data.volumeDimensions.y = std::max(volume.textureDimensions.y, 1u);
+        entry.data.volumeDimensions.z = std::max(volume.textureDimensions.z, 1u);
     }
 
-    renderState_.push_back(std::move(entry));
+    volumeRenderState_.push_back(std::move(entry));
 }
 
 Cory::RenderTaskDeclaration<VolumeRenderSystem::PassOutputs>
@@ -262,13 +283,14 @@ VolumeRenderSystem::rasterizationTask(Cory::RenderTaskBuilder builder,
     drawData->view = viewMatrix;
     drawData->projection = projectionMatrix;
     drawData->viewProjection = viewProjection;
-    drawData->lightPosition = camera_.position;
+    drawData->lightPosition =
+        lightsRenderState_.empty() ? camera_.position : lightsRenderState_.front().position;
     drawData->instances = 0;
     renderApi.bindingContext->push(drawData.gpu);
 
     std::vector<InstanceData> packedInstances;
-    packedInstances.reserve(renderState_.size());
-    for (const auto &entry : renderState_) {
+    packedInstances.reserve(volumeRenderState_.size());
+    for (const auto &entry : volumeRenderState_) {
         packedInstances.push_back(entry.data);
     }
     const uint32_t instanceCount = static_cast<uint32_t>(packedInstances.size());
@@ -400,13 +422,13 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     }
 
     std::vector<InstanceData> packedInstances;
-    packedInstances.reserve(renderState_.size());
-    for (const auto &entry : renderState_) {
+    packedInstances.reserve(volumeRenderState_.size());
+    for (const auto &entry : volumeRenderState_) {
         if (!entry.hasTexture) {
             continue;
         }
         auto instance = entry.data;
-        instance.volumeMeta.x = renderApi.bindingContext->bindTexture3D(
+        instance.volumeTextureIndex = renderApi.bindingContext->bindTexture3D(
             entry.textureView, Gpu::TextureLayout::ShaderReadOnlyOptimal, volumeSampler_.handle());
         packedInstances.push_back(instance);
     }
@@ -415,14 +437,8 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->volumeDimensions = instanceCount > 0
-                                     ? glm::uvec3{packedInstances.front().volumeMeta.y,
-                                                  packedInstances.front().volumeMeta.z,
-                                                  packedInstances.front().volumeMeta.w}
-                                     : glm::uvec3{1u, 1u, 1u};
     drawData->time = currentFrameTimeSeconds_;
     drawData->instanceCount = instanceCount;
-    drawData->volumeTextureIndex = kInvalidVolumeTextureIndex;
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
     const auto temporalTauSeconds = std::max(temporalEmaTauMs.get() * 0.001f, 1e-4f);
@@ -431,10 +447,10 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
     const bool applyTemporal = temporalAccumulation.get() && temporalHistory_.valid &&
                                !temporalHistory_.forceTemporalReset;
     drawData->temporalBlendFactor = applyTemporal ? temporalAlpha : 1.0f;
-    drawData->iterations = static_cast<uint32_t>(std::max(temporalIterations.get(), 1));
     drawData->alphaDeltaRejectThreshold = std::max(alphaDeltaRejectThreshold.get(), 0.0f);
     drawData->padding0 = 0u;
 
+    // upload instance data
     const auto uploadCount = std::max(instanceCount, 1u);
     auto alloc = renderApi.bindingContext->alloc<InstanceData>(uploadCount);
     if (instanceCount > 0) {
@@ -446,6 +462,16 @@ VolumeRenderSystem::cubeRaycastTask(Cory::RenderTaskBuilder builder,
         *alloc.cpu = InstanceData{};
     }
     drawData->instances = alloc.gpu;
+
+    // Upload light data
+    auto lightAlloc = renderApi.bindingContext->alloc<LightRenderState>(
+        static_cast<uint32_t>(lightsRenderState_.size()));
+    std::memcpy(lightAlloc.cpu,
+                lightsRenderState_.data(),
+                static_cast<size_t>(lightsRenderState_.size()) * sizeof(LightRenderState));
+    drawData->lightCount = static_cast<uint32_t>(lightsRenderState_.size());
+    drawData->lights = lightAlloc.gpu;
+
     renderApi.bindingContext->push(drawData.gpu);
 
     constexpr uint32_t kThreadGroupSizeX = 16u;
@@ -500,35 +526,36 @@ VolumeRenderSystem::cubeRaycastDebugTask(Cory::RenderTaskBuilder builder,
     }
 
     std::vector<InstanceData> packedInstances;
-    packedInstances.reserve(renderState_.size());
-    for (const auto &entry : renderState_) {
+    packedInstances.reserve(volumeRenderState_.size());
+    for (const auto &entry : volumeRenderState_) {
         packedInstances.push_back(entry.data);
     }
     const uint32_t instanceCount = static_cast<uint32_t>(packedInstances.size());
     auto drawData = renderApi.bindingContext->alloc<RaycastGlobals>();
     drawData->invViewProjection = invViewProjection;
     drawData->cameraPosition = glm::vec4{camera_.position, 1.0f};
-    drawData->volumeDimensions = instanceCount > 0
-                                     ? glm::uvec3{packedInstances.front().volumeMeta.y,
-                                                  packedInstances.front().volumeMeta.z,
-                                                  packedInstances.front().volumeMeta.w}
-                                     : glm::uvec3{1u, 1u, 1u};
     drawData->time = currentFrameTimeSeconds_;
     drawData->instanceCount = instanceCount;
-    drawData->volumeTextureIndex = 0;
     drawData->colorTargetIsMsaa =
         colorInfo.sampleCount == Gpu::SampleCountFlagBits::Samples1Bit ? 0u : 1u;
     drawData->temporalBlendFactor = 1.0f;
-    drawData->iterations = 1u;
     drawData->alphaDeltaRejectThreshold = 0.0f;
     drawData->padding0 = 0u;
 
     if (instanceCount > 0) {
-        auto alloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
-        std::memcpy(alloc.cpu,
+        auto instanceAlloc = renderApi.bindingContext->alloc<InstanceData>(instanceCount);
+        std::memcpy(instanceAlloc.cpu,
                     packedInstances.data(),
                     static_cast<size_t>(instanceCount) * sizeof(InstanceData));
-        drawData->instances = alloc.gpu;
+        drawData->instances = instanceAlloc.gpu;
+
+        auto lightsAlloc = renderApi.bindingContext->alloc<LightRenderState>(
+            static_cast<uint32_t>(lightsRenderState_.size()));
+        std::memcpy(lightsAlloc.cpu,
+                    lightsRenderState_.data(),
+                    static_cast<size_t>(lightsRenderState_.size()) * sizeof(LightRenderState));
+        drawData->lightCount = static_cast<uint32_t>(lightsRenderState_.size());
+        drawData->lights = lightsAlloc.gpu;
 
         renderApi.bindingContext->push(drawData.gpu);
 

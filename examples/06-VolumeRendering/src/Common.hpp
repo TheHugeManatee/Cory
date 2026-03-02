@@ -8,7 +8,12 @@
 #include <filesystem>
 #include <string>
 
-struct VolumeTransferFunction {
+enum class VolumeRenderMode : uint32_t {
+    DvrRaymarch,
+    StochasticSingleBounce,
+};
+
+struct VolumeTransferParams {
     float densityMin{0.08f};
     float densityMax{0.92f};
     float opacityScale{24.0f};
@@ -27,9 +32,12 @@ struct VolumeComponent {
     bool fullQuality{false};
     // raymarch step size in units of voxels sampled per step
     float raymarchStepSizeMultiplier{2.0f};
+    // per-volume sample count for stochastic/raymarch integration
+    uint32_t samples{1u};
     // toggles interval jittering for start/end raymarch bounds
     bool raymarchJitteringEnabled{true};
-    VolumeTransferFunction transferFunction{};
+    VolumeTransferParams transferFunction{};
+    VolumeRenderMode renderMode{VolumeRenderMode::DvrRaymarch};
 };
 
 struct StreamedVolume {

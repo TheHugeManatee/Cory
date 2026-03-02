@@ -2,42 +2,11 @@ import Raycast;
 import Raymarch;
 import Msaa;
 import CoryBindings;
+import Random;
 
-struct InstanceData
-{
-    float4x4 modelToWorld;
-    float4x4 worldToModel;
-    float4x4 normalToWorld;
-    float4 color;
-    float4 transferParams;
-    float4 raymarchParams;
-    uint4 volumeMeta; // x=texture index, y/z/w=dimensions
-};
-
-struct RaycastGlobals
-{
-    float4x4 invViewProjection;
-    float4 cameraPosition;
-    uint3 volumeDimensions;
-    float time;
-    uint instanceCount;
-    uint volumeTextureIndex;
-    uint colorTargetIsMsaa;
-    float temporalBlendFactor;
-    uint iterations;
-    float alphaDeltaRejectThreshold;
-    uint _padding0;
-    Ptr<InstanceData, Access::Read> instances;
-};
+#include "SharedStructs.slang"
 
 [[vk::push_constant]] RaycastGlobals *globals;
-
-static const float3 boxMin = float3(-0.5, -0.5, -0.5);
-static const float3 boxMax = float3(0.5, 0.5, 0.5);
-static const uint kMaxRaymarchStepsLimit = 1024u;
-static const float kTransmittanceCutoff = 0.98f;
-static const float3 kTransferLowColor = float3(0.08f, 0.20f, 0.42f);
-static const float3 kTransferHighColor = float3(1.00f, 0.86f, 0.48f);
 
 float hash13(float3 p)
 {
@@ -49,6 +18,27 @@ float hash13(float3 p)
 float sampleDensity(uint textureIndex, float3 uvw)
 {
     return gBindlessTexture3D[textureIndex].SampleLevel(saturate(uvw), 0.0f).r;
+}
+
+float mapDensity(float density, VolumeTransferParams transferParams)
+{
+    let densityMin = transferParams.densityMin;
+    let densityMax = transferParams.densityMax;
+    let gamma = transferParams.gamma;
+
+    let densityRange = max(densityMax - densityMin, 1e-5f);
+    var mapped = saturate((density - densityMin) / densityRange);
+    if (mapped <= 0.0f) {
+        return 0.0f;
+    }
+
+    return pow(mapped, gamma);
+}
+
+float densityToSigmaT(float density, VolumeTransferParams transferParams)
+{
+    let opacityScale = transferParams.opacityScale;
+    return mapDensity(density, transferParams) * opacityScale;
 }
 
 float3 estimateGradient(uint textureIndex, uint3 dimensions, float3 uvw)
@@ -66,22 +56,16 @@ float3 estimateGradient(uint textureIndex, uint3 dimensions, float3 uvw)
     return float3(gx, gy, gz);
 }
 
-float4 evaluateTransferFunction(float density, float stepSize, float4 transferParams)
+float4 evaluateTransferFunction(float density, float stepSize, VolumeTransferParams transferParams)
 {
-    let densityMin = transferParams.x;
-    let densityMax = transferParams.y;
-    let opacityScale = transferParams.z;
-    let gamma = transferParams.w;
-
-    let densityRange = max(densityMax - densityMin, 1e-5f);
-    var mapped = saturate((density - densityMin) / densityRange);
+    var mapped = mapDensity(density, transferParams);
     if (mapped <= 0.0f) {
         return float4(0.0f);
     }
 
-    mapped = pow(mapped, gamma);
+    let sigmaT = mapped * transferParams.opacityScale;
     let color = lerp(kTransferLowColor, kTransferHighColor, mapped);
-    let opacity = saturate(1.0f - exp(-mapped * opacityScale * stepSize));
+    let opacity = saturate(1.0f - exp(-sigmaT * stepSize));
     return float4(color, opacity);
 }
 
@@ -108,8 +92,8 @@ struct VolumeSampler : ISampler<VolumeSample>
     {
         this.instance = instance;
         this.stepSize = stepSize;
-        this.textureIndex = instance.volumeMeta.x;
-        this.volumeDimensions = uint3(instance.volumeMeta.y, instance.volumeMeta.z, instance.volumeMeta.w);
+        this.textureIndex = instance.volumeTextureIndex;
+        this.volumeDimensions = instance.volumeDimensions;
     }
 
     VolumeSample eval(Ray ray, float t)
@@ -135,12 +119,20 @@ struct VolumeSampler : ISampler<VolumeSample>
         let worldNormal = normalize(mul((float3x3)instance.normalToWorld, localNormal));
         let worldPos = mul(instance.modelToWorld, float4(localPos, 1.0f)).xyz;
         let viewDir = normalize(globals->cameraPosition.xyz - worldPos);
-        let lightDir = viewDir; // headlight-style lighting for simple direct illumination
-        let halfDir = normalize(lightDir + viewDir);
-
-        let ndotl = max(dot(worldNormal, lightDir), 0.0f);
-        let spec = pow(max(dot(worldNormal, halfDir), 0.0f), 24.0f) * 0.20f;
-        sampleColor = sampleColor * (0.15f + 0.85f * ndotl) + spec.xxx;
+        var litColor = sampleColor * 0.08f; // ambient floor
+        [loop]
+        for (uint lightIndex = 0u; lightIndex < globals->lightCount; ++lightIndex) {
+            let light = globals->lights[lightIndex];
+            let toLight = light.position.xyz - worldPos;
+            let distSquared = max(dot(toLight, toLight), 1e-4f);
+            let lightDir = toLight * rsqrt(distSquared);
+            let halfDir = normalize(lightDir + viewDir);
+            let ndotl = max(dot(worldNormal, lightDir), 0.0f);
+            let spec = pow(max(dot(worldNormal, halfDir), 0.0f), 24.0f) * 0.20f;
+            let irradiance = light.radiance.xyz / distSquared;
+            litColor += (sampleColor * ndotl + spec.xxx) * irradiance;
+        }
+        sampleColor = litColor;
         return VolumeSample(sampleColor, transfer.a);
     }
 };
@@ -176,6 +168,67 @@ struct FrontToBackAccumulator : IAccumulator<VolumeSample, FrontToBackState, flo
     }
 };
 
+float4 stochasticSingleBounce(float3 localOrigin,
+                      float3 localDirection,
+                      InstanceData instance, uint pathKey)
+{
+    let majorantSigmaT = max(instance.transferParams.opacityScale, 1e-5f);
+
+    let box = AABB(boxMin, boxMax);
+    let localRay = Ray(localOrigin, localDirection);
+    let hitInfo = intersect(localRay, box);
+    if (!hitInfo.hit) {
+        return float4(0.0f);
+    }
+
+    let tStart = max(hitInfo.tEnter, 0.0f);
+    let tEnd = hitInfo.tExit;
+    if (tEnd <= tStart) {
+        return float4(0.0f);
+    }
+
+    let dirLength = max(length(localDirection), 1e-6f);
+    let volumeDimensions = instance.volumeDimensions;
+    let maxDim = max(volumeDimensions.x, max(volumeDimensions.y, volumeDimensions.z));
+    let voxelSize = 1.0f / float(max(maxDim, 1u));
+    let stepMultiplier = instance.raymarchStepSizeMultiplier;
+    let stepSize = stepMultiplier * voxelSize / dirLength;
+
+
+
+    let textureIndex = instance.volumeTextureIndex;
+
+    var rngCounter = 0u;
+
+    var t = tStart;
+    while (t < tEnd) {
+        float2 pathLengthAndReject = spatialNoise02(uint3(rngCounter++, 0, 0), pathKey);
+
+        // Determine free-flight distance
+        var freeFlightLength = -log(max(1.0f - pathLengthAndReject.x, 1e-7f)) / majorantSigmaT;
+        freeFlightLength = max(freeFlightLength, 1e-7f); // avoid zero step to get stuck
+        // If we exit the volume, no interaction occurs.
+        if (freeFlightLength >= tEnd - t) {
+            break;
+        }
+
+        t += freeFlightLength;
+        
+        let uvw = localRay.at(t) + 0.5f;
+        let density = sampleDensity(textureIndex, uvw);
+        let sigmaT = densityToSigmaT(density, instance.transferParams);
+        let acceptanceProbability = min(sigmaT / majorantSigmaT, 1.0f);
+        if (pathLengthAndReject.y >= acceptanceProbability) {
+            continue; // Rejection: no interaction occurs, keep marching
+        }
+        // Accept the interaction: compute the contribution of this scattering event and terminate.
+        let transfer = evaluateTransferFunction(density, stepSize, instance.transferParams);
+        return float4(transfer.rgb, 1.0f); // Full absorption with the sampled color
+    }
+
+    return float4(0.0, 0.0, 0.0, 0.0); // No interaction
+}
+
 float4 raymarchVolume(float3 localOrigin,
                       float3 localDirection,
                       InstanceData instance,
@@ -195,11 +248,11 @@ float4 raymarchVolume(float3 localOrigin,
     }
 
     let dirLength = max(length(localDirection), 1e-6f);
-    let volumeDimensions = uint3(instance.volumeMeta.y, instance.volumeMeta.z, instance.volumeMeta.w);
+    let volumeDimensions = instance.volumeDimensions;
     let maxDim = max(volumeDimensions.x, max(volumeDimensions.y, volumeDimensions.z));
     let voxelSize = 1.0f / float(max(maxDim, 1u));
-    let stepMultiplier = max(instance.raymarchParams.x, 0.01f);
-    let jitterEnabled = instance.raymarchParams.y > 0.5f;
+    let stepMultiplier = instance.raymarchStepSizeMultiplier;
+    let jitterEnabled = instance.raymarchJitteringEnabled > 0.5f;
     let stepSize = stepMultiplier * voxelSize / dirLength;
     let segmentLength = tEnd - tStart;
     let jitterCentered = (phaseJitter - 0.5f) * (jitterEnabled ? 1.0f : 0.0f);
@@ -257,37 +310,52 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         worldPos /= worldPos.w;
 
         let rayDirection = normalize(worldPos.xyz - rayOrigin);
-        let iterationCount = max(globals->iterations, 1u);
-        var averagedVolume = float4(0.0f);
+        var volumeColor = float4(0.0f);
 
         [loop]
-        for (uint iteration = 0u; iteration < iterationCount; ++iteration) {
-            let jitterSeed = float3(float2(coords) + samplePosition,
-                                    globals->time * 91.7f + float(sample) * 17.0f +
-                                        float(iteration) * 59.3f);
-            let phaseJitter = hash13(jitterSeed + float3(13.1f, 7.7f, 3.3f));
-            var volumeColor = float4(0.0f);
+        for (uint i = 0u; i < globals->instanceCount; ++i) {
+            let instance = globals->instances[i];
+            let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
+            let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
+            let sampleIterations = max(instance.samples, 1u);
+            var averagedInstance = float4(0.0f);
 
             [loop]
-            for (uint i = 0u; i < globals->instanceCount; ++i) {
-                let instance = globals->instances[i];
-                let localOrigin = mul(instance.worldToModel, float4(rayOrigin, 1.0f)).xyz;
-                let localDirection = mul(instance.worldToModel, float4(rayDirection, 0.0f)).xyz;
-                let instanceVolume = raymarchVolume(localOrigin, localDirection, instance, phaseJitter);
-                if (instanceVolume.a > 0.0f) {
-                    volumeColor.rgb += (1.0f - volumeColor.a) * instanceVolume.rgb;
-                    volumeColor.a += (1.0f - volumeColor.a) * instanceVolume.a;
-                    if (volumeColor.a >= kTransmittanceCutoff) {
-                        break;
-                    }
+            for (uint sampleIndex = 0u; sampleIndex < sampleIterations; ++sampleIndex) {
+                let jitterSeed = float3(float2(coords) + samplePosition,
+                                        globals->time * 91.7f + float(sample) * 17.0f +
+                                            float(i) * 131.3f + float(sampleIndex) * 59.3f);
+                let phaseJitter = hash13(jitterSeed + float3(13.1f, 7.7f, 3.3f));
+                var sampleVolume = float4(1.0, 0.0f, 1.0f, 1.0f);
+                switch(instance.renderMode) {
+                case VolumeRenderMode::DvrRaymarch:
+                    sampleVolume = raymarchVolume(localOrigin, localDirection, instance, phaseJitter);
+                    break;
+                case VolumeRenderMode::StochasticSingleBounce:
+                    uint t = uint(globals->time * 1000.0f);
+                    uint pathKey = makePathKey(uint(coords.y) * imageWidth + uint(coords.x),
+                                               t,
+                                               sample,
+                                               sampleIndex + i * 977u);
+                    sampleVolume =
+                        stochasticSingleBounce(localOrigin, localDirection, instance, pathKey);
+                    break;
                 }
+
+                let averageWeight = 1.0f / float(sampleIndex + 1u);
+                averagedInstance = lerp(averagedInstance, sampleVolume, averageWeight);
             }
 
-            let weight = 1.0f / float(iteration + 1u);
-            averagedVolume = lerp(averagedVolume, volumeColor, weight);
+            if (averagedInstance.a > 0.0f) {
+                volumeColor.rgb += (1.0f - volumeColor.a) * averagedInstance.rgb;
+                volumeColor.a += (1.0f - volumeColor.a) * averagedInstance.a;
+                if (volumeColor.a >= kTransmittanceCutoff) {
+                    break;
+                }
+            }
         }
 
-        let currentColor = averagedVolume;
+        let currentColor = volumeColor;
         let temporalBlend = globals->temporalBlendFactor;
         if (globals->colorTargetIsMsaa != 0u) {
             let historyColor = gBindlessStorageImage2DMS[coords, sample];

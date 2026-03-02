@@ -178,6 +178,8 @@ set(CORY_SOURCES
         Renderer/SlangCompilerTools.cpp
         Renderer/SlangCompilerTools.hpp
         Base/Prop.hpp
+        Systems/ComponentEditorSystem.cpp
+        Systems/ComponentEditorSystem.hpp
 )
 
 

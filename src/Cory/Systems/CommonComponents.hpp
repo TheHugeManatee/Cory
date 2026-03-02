@@ -32,4 +32,14 @@ struct CameraComponent {
     float farPlane{100.0f};
 };
 
+struct PointLightComponent {
+    glm::vec3 color{1.0f};
+    float intensity{1.0f};
+};
+
+struct EditorState {
+    bool selected{false};
+    bool hovered{false};
+};
+
 } // namespace Cory::Components

@@ -20,6 +20,7 @@
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
+#include <Cory/Systems/ComponentEditorSystem.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
 #include <CLI/App.hpp>
@@ -142,11 +143,12 @@ void SceneGraphDemoApplication::setupScene()
     }
 
     /// add a coordinate system indicator
+    auto cosy = sceneGraph_.createEntity(root, "Coordinate System");
     auto make_colored_axis =
         [&](std::string_view axis_name, glm::vec3 color, glm::vec3 axis, uint32_t steps) {
             // create entity with an AnimationComponent and a TransformComponent for each step
             for (uint32_t i = 0; i < steps / 2; ++i) {
-                sceneGraph_.createEntity(root,
+                sceneGraph_.createEntity(cosy,
                                          fmt::format("{}{}", axis_name, i),
                                          AnimationComponent{
                                              .color = glm::vec4{color, 1.0f},
@@ -186,6 +188,42 @@ void SceneGraphDemoApplication::setupSystems()
 
     // render system should go last to be aware of the latest state
     renderSystem_ = &systems_.emplace<CubeRenderSystem>(ctx());
+
+    auto &componentEditor = systems_.emplace<Cory::ComponentEditorSystem>();
+    componentEditor.addComponentEditor(
+        "Animation", [](Cory::SceneGraph &sceneGraph, Cory::Entity entity) {
+            auto *animation = sceneGraph.getComponent<AnimationComponent>(entity);
+            if (animation == nullptr ||
+                !ImGui::CollapsingHeader("Animation Component", ImGuiTreeNodeFlags_DefaultOpen)) {
+                return;
+            }
+
+            bool animated = animation->entityIndex >= 0.0f;
+            if (ImGui::Checkbox("Driven by Animation System", &animated)) {
+                if (animated && animation->entityIndex < 0.0f) {
+                    animation->entityIndex = 0.0f;
+                }
+                else if (!animated) {
+                    animation->entityIndex = -1.0f;
+                }
+            }
+
+            if (animated) {
+                ImGui::DragFloat("Animation Index", &animation->entityIndex, 0.05f, 0.0f, 200.0f);
+                CoImGui::Text("Color/Blend are authored by CubeAnimationSystem at runtime.");
+            }
+            else {
+                ImGui::ColorEdit4("Color", &animation->color.x);
+                ImGui::SliderFloat("Blend", &animation->blend, 0.0f, 1.0f, "%.3f");
+            }
+
+            CoImGui::Text("Current RGBA: [{:.3f}, {:.3f}, {:.3f}, {:.3f}]",
+                          animation->color.x,
+                          animation->color.y,
+                          animation->color.z,
+                          animation->color.w);
+            CoImGui::Text("Current Blend: {:.3f}", animation->blend);
+        });
 }
 
 SceneGraphDemoApplication::~SceneGraphDemoApplication()

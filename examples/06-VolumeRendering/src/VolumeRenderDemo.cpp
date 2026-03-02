@@ -25,6 +25,7 @@
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
+#include <Cory/Systems/ComponentEditorSystem.hpp>
 #include <Cory/Systems/ImGuizmoTransformSystem.hpp>
 #include <Cory/Systems/TransformSystem.hpp>
 
@@ -230,6 +231,9 @@ void VolumeRenderDemoApplication::setupScene()
     for (size_t i = 0; i < catalogDatasets_.size(); ++i) {
         const auto &dataset = catalogDatasets_[i];
         const auto x = static_cast<float>(i) * spacingX;
+
+        // For visual comparison - create two entities for the same dataset with different rendering
+        // param sets
         sceneGraph_.createEntityWithComponents(
             root,
             fmt::format("oVert {}", dataset.datasetId),
@@ -242,6 +246,7 @@ void VolumeRenderDemoApplication::setupScene()
             VolumeComponent{
                 .size = dataset.volumeSize,
                 .raymarchStepSizeMultiplier = 12.0f,
+                .samples = 1u,
                 .transferFunction =
                     {
                         .densityMin = 0.05f,
@@ -249,6 +254,34 @@ void VolumeRenderDemoApplication::setupScene()
                         .opacityScale = 32.0f,
                         .gamma = 1.0f,
                     },
+                .renderMode = VolumeRenderMode::DvrRaymarch,
+            },
+            StreamedVolume{
+                .datasetId = dataset.datasetId,
+                .manifestPath = dataset.manifestPath,
+                .sliceSubsampleFactor = volumeSliceSubsampleFactor_,
+            });
+
+        sceneGraph_.createEntityWithComponents(
+            root,
+            fmt::format("oVert {}", dataset.datasetId),
+            Cory::Components::Transform{
+                .mode = Cory::Components::TransformMode::Local,
+                .position = {x, 3.0f, 0.0f},
+                .orientation = Cory::eulerYXZToQuaternion({0.0, 0.0, 0.0}),
+                .scale = {1.0f, 1.0f, 1.0f},
+            },
+            VolumeComponent{
+                .size = dataset.volumeSize,
+                .samples = 8u,
+                .transferFunction =
+                    {
+                        .densityMin = 0.05f,
+                        .densityMax = 0.25f,
+                        .opacityScale = 32.0f,
+                        .gamma = 1.0f,
+                    },
+                .renderMode = VolumeRenderMode::StochasticSingleBounce,
             },
             StreamedVolume{
                 .datasetId = dataset.datasetId,
@@ -256,6 +289,19 @@ void VolumeRenderDemoApplication::setupScene()
                 .sliceSubsampleFactor = volumeSliceSubsampleFactor_,
             });
     }
+
+    sceneGraph_.createEntityWithComponents(root,
+                                           "Point Light",
+                                           Cory::Components::Transform{
+                                               .mode = Cory::Components::TransformMode::Local,
+                                               .position = {0.0f, 3.0f, 3.0f},
+                                               .orientation = {},
+                                               .scale = {1.0f, 1.0f, 1.0f},
+                                           },
+                                           Cory::Components::PointLightComponent{
+                                               .color = {1.0f, 1.0f, 1.0f},
+                                               .intensity = 100.0f,
+                                           });
 }
 
 void VolumeRenderDemoApplication::setupSystems()
@@ -293,6 +339,84 @@ void VolumeRenderDemoApplication::setupSystems()
 
     // render system should go last to be aware of the latest state
     volumeRenderer_ = &systems_.emplace<VolumeRenderSystem>(ctx());
+
+    componentEditorSystem_ = &systems_.emplace<Cory::ComponentEditorSystem>();
+
+    setupComponentEditors();
+}
+
+void VolumeRenderDemoApplication::setupComponentEditors()
+{
+    componentEditorSystem_->addComponentEditor(
+        "Volume", [](Cory::SceneGraph &sceneGraph, Cory::Entity entity) {
+            auto *volume = sceneGraph.getComponent<VolumeComponent>(entity);
+            if (volume == nullptr || !ImGui::CollapsingHeader("Volume Component")) {
+                return;
+            }
+            CoImGui::Text("Texture Ready: {}", volume->hasTexture ? "yes" : "no");
+            if (volume->hasTexture) {
+                CoImGui::Text("Texture Dims: {} x {} x {}",
+                              volume->textureDimensions.x,
+                              volume->textureDimensions.y,
+                              volume->textureDimensions.z);
+                CoImGui::Text("Quality: {}", volume->fullQuality ? "full" : "preview");
+            }
+            auto &tf = volume->transferFunction;
+            CoImGui::ComboBox("Render Mode", volume->renderMode);
+            ImGui::Checkbox("Enable Jitter", &volume->raymarchJitteringEnabled);
+            auto samples = static_cast<int32_t>(volume->samples);
+            CoImGui::Slider("Samples", samples, 1, 200);
+            CoImGui::Slider(
+                "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 20.0f);
+            CoImGui::Slider("Density Min", tf.densityMin, 0.0f, 1.0f);
+            CoImGui::Slider("Density Max", tf.densityMax, 0.0f, 1.0f);
+            CoImGui::Slider("Opacity Scale", tf.opacityScale, 0.01f, 64.0f);
+            CoImGui::Slider("Gamma", tf.gamma, 0.05f, 3.0f);
+
+            volume->samples = static_cast<uint32_t>(std::max(samples, 1));
+            volume->raymarchStepSizeMultiplier =
+                std::max(volume->raymarchStepSizeMultiplier, 0.01f);
+            tf.densityMin = std::clamp(tf.densityMin, 0.0f, 1.0f);
+            tf.densityMax = std::clamp(tf.densityMax, tf.densityMin + 0.001f, 1.0f);
+            tf.opacityScale = std::max(tf.opacityScale, 0.01f);
+            tf.gamma = std::max(tf.gamma, 0.05f);
+        });
+
+    componentEditorSystem_->addComponentEditor(
+        "Procedural Volume", [](Cory::SceneGraph &sceneGraph, Cory::Entity entity) {
+            auto *procedural = sceneGraph.getComponent<ProceduralVolume>(entity);
+            if (procedural == nullptr || !ImGui::CollapsingHeader("Procedural Volume")) {
+                return;
+            }
+            auto dims = glm::ivec3{procedural->dimensions};
+            ImGui::InputInt3("Dimensions", &dims.x);
+            dims = glm::max(dims, glm::ivec3{1});
+            procedural->dimensions = glm::uvec3{dims};
+            CoImGui::Slider("Density Scale", procedural->densityScale, 0.01f, 4.0f);
+            ImGui::Checkbox("Update Every Frame", &procedural->updateEveryFrame);
+            ImGui::SameLine();
+            ImGui::BeginDisabled(procedural->updateEveryFrame);
+            if (ImGui::Button("Regenerate")) {
+                procedural->regenerate = true;
+            }
+            ImGui::EndDisabled();
+
+            CoImGui::Slider("Animation Speed", procedural->animationSpeed, 0.0f, 8.0f);
+            procedural->densityScale = std::max(procedural->densityScale, 0.01f);
+            procedural->animationSpeed = std::max(procedural->animationSpeed, 0.0f);
+        });
+
+    componentEditorSystem_->addComponentEditor(
+        "Streamed Volume", [](Cory::SceneGraph &sceneGraph, Cory::Entity entity) {
+            auto *streamed = sceneGraph.getComponent<StreamedVolume>(entity);
+            if (streamed == nullptr || !ImGui::CollapsingHeader("Streamed Volume")) {
+                return;
+            }
+            ImGui::SeparatorText("StreamedVolume");
+            CoImGui::Text("Dataset: {}", streamed->datasetId);
+            CoImGui::Text("Manifest: {}", streamed->manifestPath.string());
+            CoImGui::Text("Slice Subsample: {}", streamed->sliceSubsampleFactor);
+        });
 }
 
 VolumeRenderDemoApplication::~VolumeRenderDemoApplication()
@@ -426,105 +550,19 @@ void VolumeRenderDemoApplication::drawImguiControls()
         CoImGui::CheckBox("Enable Temporal", volumeRenderer_->temporalAccumulation);
         auto temporalTimeMs = volumeRenderer_->temporalEmaTauMs.get();
         auto alphaRejectThreshold = volumeRenderer_->alphaDeltaRejectThreshold.get();
-        auto iterations = volumeRenderer_->temporalIterations.get();
         const auto frameDeltaSeconds =
             std::max(static_cast<float>(clock_.lastTick().delta.count()), 1e-6f);
         const auto temporalTauSeconds = std::max(temporalTimeMs * 0.001f, 1e-4f);
         const auto effectiveAlpha =
             std::clamp(1.0f - std::exp(-frameDeltaSeconds / temporalTauSeconds), 0.001f, 1.0f);
-        CoImGui::Slider("Iterations", iterations, 1, 200);
         CoImGui::Slider("Temporal EMA Tau (ms)", temporalTimeMs, 1.0f, 300.0f);
         CoImGui::Slider("Alpha Reject Threshold", alphaRejectThreshold, 0.0f, 1.0f);
         CoImGui::Text(
             "Effective Alpha: {:.4f} (dt: {:.2f} ms)", effectiveAlpha, frameDeltaSeconds * 1000.0f);
-        volumeRenderer_->temporalIterations = std::max(iterations, 1);
         volumeRenderer_->temporalEmaTauMs = std::max(temporalTimeMs, 1.0f);
         volumeRenderer_->alphaDeltaRejectThreshold = std::max(alphaRejectThreshold, 0.0f);
         if (ImGui::Button("Reset Temporal")) {
             volumeRenderer_->resetTemporalHistory();
-        }
-
-        ImGui::Separator();
-        CoImGui::Text("Volume Components");
-        bool hasVolumeComponent = false;
-        for (auto entity : sceneGraph_.depthFirstTraversal()) {
-            auto *volume = sceneGraph_.getComponent<VolumeComponent>(entity);
-            if (volume == nullptr) {
-                continue;
-            }
-            hasVolumeComponent = true;
-            const auto &meta = sceneGraph_.data(entity);
-            ImGui::PushID(static_cast<int>(entity));
-            if (ImGui::CollapsingHeader(meta.name.c_str(), ImGuiTreeNodeFlags_Framed)) {
-                if (auto *procedural = sceneGraph_.getComponent<ProceduralVolume>(entity);
-                    procedural != nullptr) {
-                    ImGui::SeparatorText("ProceduralVolume");
-                    auto dims = glm::ivec3{procedural->dimensions};
-                    ImGui::InputInt3("Dimensions", &dims.x);
-                    dims = glm::max(dims, glm::ivec3{1});
-                    procedural->dimensions = glm::uvec3{dims};
-                    CoImGui::Slider("Density Scale", procedural->densityScale, 0.01f, 4.0f);
-                    ImGui::Checkbox("Update Every Frame", &procedural->updateEveryFrame);
-                    ImGui::SameLine();
-                    ImGui::BeginDisabled(procedural->updateEveryFrame);
-                    if (ImGui::Button("Regenerate")) {
-                        procedural->regenerate = true;
-                    }
-                    ImGui::EndDisabled();
-
-                    CoImGui::Slider("Animation Speed", procedural->animationSpeed, 0.0f, 8.0f);
-                    procedural->densityScale = std::max(procedural->densityScale, 0.01f);
-                    procedural->animationSpeed = std::max(procedural->animationSpeed, 0.0f);
-                }
-
-                if (auto *streamed = sceneGraph_.getComponent<StreamedVolume>(entity);
-                    streamed != nullptr) {
-                    ImGui::SeparatorText("StreamedVolume");
-                    CoImGui::Text("Dataset: {}", streamed->datasetId);
-                    CoImGui::Text("Manifest: {}", streamed->manifestPath.string());
-                    CoImGui::Text("Slice Subsample: {}", streamed->sliceSubsampleFactor);
-                }
-
-                ImGui::SeparatorText("VolumeComponent");
-                CoImGui::Text("Texture Ready: {}", volume->hasTexture ? "yes" : "no");
-                if (volume->hasTexture) {
-                    CoImGui::Text("Texture Dims: {} x {} x {}",
-                                  volume->textureDimensions.x,
-                                  volume->textureDimensions.y,
-                                  volume->textureDimensions.z);
-                    CoImGui::Text("Quality: {}", volume->fullQuality ? "full" : "preview");
-                }
-                auto &tf = volume->transferFunction;
-                ImGui::Checkbox("Enable Jitter", &volume->raymarchJitteringEnabled);
-                CoImGui::Slider(
-                    "Step Multiplier (vox)", volume->raymarchStepSizeMultiplier, 0.25f, 20.0f);
-                CoImGui::Slider("Density Min", tf.densityMin, 0.0f, 1.0f);
-                CoImGui::Slider("Density Max", tf.densityMax, 0.0f, 1.0f);
-                CoImGui::Slider("Opacity Scale", tf.opacityScale, 0.01f, 64.0f);
-                CoImGui::Slider("Gamma", tf.gamma, 0.05f, 3.0f);
-
-                volume->raymarchStepSizeMultiplier =
-                    std::max(volume->raymarchStepSizeMultiplier, 0.01f);
-                tf.densityMin = std::clamp(tf.densityMin, 0.0f, 1.0f);
-                tf.densityMax = std::clamp(tf.densityMax, tf.densityMin + 0.001f, 1.0f);
-                tf.opacityScale = std::max(tf.opacityScale, 0.01f);
-                tf.gamma = std::max(tf.gamma, 0.05f);
-            }
-            ImGui::PopID();
-        }
-        if (!hasVolumeComponent) {
-            CoImGui::Text("No VolumeComponent found in scene.");
-        }
-
-        const auto statuses = volumeManager_ != nullptr
-                                  ? volumeManager_->datasetStatuses()
-                                  : std::vector<std::pair<std::string, std::string>>{};
-        if (!statuses.empty()) {
-            ImGui::Separator();
-            CoImGui::Text("Dataset Streaming");
-            for (const auto &[datasetId, status] : statuses) {
-                CoImGui::Text("{}: {}", datasetId, status);
-            }
         }
     }
     ImGui::End();

@@ -30,14 +30,19 @@ struct alignas(16) InstanceData {
     glm::mat4 worldToModel{1.0f};
     glm::mat4 normalToWorld{1.0f};
     glm::vec4 color{1.0f};
-    glm::vec4 transferParams{0.0f};
-    glm::vec4 raymarchParams{0.0f};
-    glm::uvec4 volumeMeta{0u}; // x=texture index, y/z/w=dimensions
+    VolumeTransferParams transferParams{};
+    float raymarchStepSizeMultiplier{2.0f};
+    uint32_t samples{1u};
+    // bools not allowed in std140/std430, use float as workaround
+    float raymarchJitteringEnabled{1.0f};
+    VolumeRenderMode renderMode{VolumeRenderMode::StochasticSingleBounce};
+    uint32_t volumeTextureIndex{0u};
+    glm::uvec3 volumeDimensions{0u}; // x/y/z=dimensions
 };
 
 static_assert(std::is_trivially_copyable_v<InstanceData>);
-static_assert(sizeof(InstanceData) ==
-              3 * sizeof(glm::mat4) + 3 * sizeof(glm::vec4) + sizeof(glm::uvec4));
+static_assert(sizeof(InstanceData) == 3 * sizeof(glm::mat4) + 3 * sizeof(glm::vec4) +
+                                          sizeof(uint32_t) + sizeof(glm::uvec3));
 
 /**
  * @brief Render-only system for drawing volume entities.
@@ -62,7 +67,6 @@ class VolumeRenderSystem
     Cory::Property<bool> debugRasterize{false};
     Cory::Property<bool> debugRaycast{false};
     Cory::Property<bool> temporalAccumulation{true};
-    Cory::Property<int32_t> temporalIterations{1};
     Cory::Property<float> temporalEmaTauMs{50.0f};
     Cory::Property<float> alphaDeltaRejectThreshold{0.5f};
 
@@ -118,12 +122,17 @@ class VolumeRenderSystem
                          Cory::TransientTextureHandle depthTarget);
 
   private:
-    struct RenderStateEntry {
+    struct VolumeInstanceRenderState {
         InstanceData data{};
         Gpu::TextureViewHandle textureView{};
         bool hasTexture{false};
     };
-    std::vector<RenderStateEntry> renderState_;
+    std::vector<VolumeInstanceRenderState> volumeRenderState_;
+    struct LightRenderState {
+        glm::vec4 position{0.0f, 0.0f, 0.0f, 1.0f};
+        glm::vec4 radiance{1.0f, 1.0f, 1.0f, 0.0f};
+    };
+    std::vector<LightRenderState> lightsRenderState_;
     Cory::Components::CameraComponent camera_;
 
     Cory::Mesh cube_;

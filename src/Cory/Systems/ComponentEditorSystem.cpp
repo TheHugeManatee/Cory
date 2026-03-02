@@ -2,8 +2,8 @@
 #include "ComponentEditorSystem.hpp"
 
 #include <Cory/Base/Math.hpp>
-#include <Cory/Imgui/Inputs.hpp>
-#include <Cory/Imgui/Widgets.hpp>
+#include <Cory/ImGui/Inputs.hpp>
+#include <Cory/ImGui/Widgets.hpp>
 #include <Cory/SceneGraph/SceneGraph.hpp>
 #include <Cory/Systems/CommonComponents.hpp>
 
@@ -442,6 +442,10 @@ ComponentEditorSystem::~ComponentEditorSystem() {}
 
 void ComponentEditorSystem::tick(SceneGraph &graph, TickInfo tickInfo)
 {
+    if (ImGui::GetCurrentContext() == nullptr) {
+        return;
+    }
+
     ImGui::ShowDemoWindow();
     if (ImGui::Begin("Scene Graph")) {
         // Available vertical space for the split area.

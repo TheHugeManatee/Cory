@@ -37,3 +37,13 @@ Build-system note:
    state and the corresponding `CORY_SANITIZERS_<build-type>` CMake define.
  - Direct non-`cbt` sanitizer builds are not considered supported, especially on Windows where
    Conan dependency variants must match the active sanitizer set.
+
+Volume streaming robustness note:
+ - `VolumeManagerSystem` now owns a stop source for in-flight dataset reads and requests
+   cancellation during teardown before waiting on `readScope_`.
+ - Destruction pumps the uploader render-thread scheduler while `readScope_.join()` completes so
+   coroutines suspended on `threadScheduler()->schedule()` can observe cancellation and finish
+   instead of deadlocking shutdown.
+ - Datasets that enter `StreamState::Error` now actively recycle queued staging slots and keep
+   draining already-submitted upload tickets as they complete, preventing upload resources from
+   being retained for the remainder of the dataset lifetime.

@@ -213,6 +213,7 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
                                     glm::uvec3 volumeDimensions,
                                     size_t sliceIndex,
                                     std::stop_token cancellationToken,
+                                    std::stop_token externalCancellationToken,
                                     std::stop_source *cancellationSource,
                                     IStagingUploader *uploader,
                                     StagedSliceLoadedCallback *onSliceLoaded)
@@ -222,6 +223,9 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
             cancellationSource->request_stop();
         }
         return std::unexpected(std::move(message));
+    };
+    const auto stopRequested = [&]() {
+        return cancellationToken.stop_requested() || externalCancellationToken.stop_requested();
     };
 
     if (uploader == nullptr) {
@@ -234,7 +238,7 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
             "Slice {} ('{}') uploader thread scheduler is null", sliceIndex, bmpPath.string()));
     }
 
-    if (cancellationToken.stop_requested()) {
+    if (stopRequested()) {
         co_return std::unexpected(
             fmt::format("Slice {} ('{}') cancelled before decode", sliceIndex, bmpPath.string()));
     }
@@ -272,7 +276,7 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
 
     co_await threadScheduler->schedule();
 
-    if (cancellationToken.stop_requested()) {
+    if (stopRequested()) {
         co_return std::unexpected(fmt::format(
             "Slice {} ('{}') cancelled before staging acquire", sliceIndex, bmpPath.string()));
     }
@@ -299,7 +303,7 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
 
     co_await workerPool_.schedule();
 
-    if (cancellationToken.stop_requested()) {
+    if (stopRequested()) {
         co_await threadScheduler->schedule();
         uploader->recycleStaging(std::move(stagingSlot));
         co_return std::unexpected(
@@ -349,7 +353,8 @@ DatasetLoader::loadSliceR8ToStaging(const std::filesystem::path &bmpPath,
 cppcoro::task<Result<StreamedVolume>>
 DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
                                         IStagingUploader &uploader,
-                                        StagedSliceLoadedCallback onSliceLoaded)
+                                        StagedSliceLoadedCallback onSliceLoaded,
+                                        std::stop_token cancellationToken)
 {
     auto scanResult = scanSlices(request);
     if (!scanResult) {
@@ -431,7 +436,7 @@ DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
 
     for (size_t batchStart = 0; batchStart < orderedSlices.size();
          batchStart += effectiveConcurrency) {
-        if (cancellationSource.stop_requested()) {
+        if (cancellationSource.stop_requested() || cancellationToken.stop_requested()) {
             co_return std::unexpected("Volume load cancelled");
         }
 
@@ -446,6 +451,7 @@ DatasetLoader::streamBmpStackToUploader(const LoadStackRequest &request,
                                                               streamed.dimensions,
                                                               orderedSlices[i].index,
                                                               cancellationSource.get_token(),
+                                                              cancellationToken,
                                                               &cancellationSource,
                                                               &uploader,
                                                               &onSliceLoaded)));

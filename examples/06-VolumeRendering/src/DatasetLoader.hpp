@@ -64,7 +64,8 @@ class DatasetLoader {
     [[nodiscard]] cppcoro::task<Result<StreamedVolume>>
     streamBmpStackToUploader(const LoadStackRequest &request,
                              IStagingUploader &uploader,
-                             StagedSliceLoadedCallback onSliceLoaded);
+                             StagedSliceLoadedCallback onSliceLoaded,
+                             std::stop_token cancellationToken = {});
 
   private:
     struct OrderedSlice {
@@ -82,6 +83,7 @@ class DatasetLoader {
                          glm::uvec3 volumeDimensions,
                          size_t sliceIndex,
                          std::stop_token cancellationToken,
+                         std::stop_token externalCancellationToken,
                          std::stop_source *cancellationSource,
                          IStagingUploader *uploader,
                          StagedSliceLoadedCallback *onSliceLoaded);

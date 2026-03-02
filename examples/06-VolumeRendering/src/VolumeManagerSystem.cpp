@@ -7,6 +7,7 @@
 #include <Cory/Renderer/PipelineCache.hpp>
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
+#include <Cory/Renderer/ThreadScheduler.hpp>
 
 #include <cppcoro/sync_wait.hpp>
 
@@ -20,8 +21,11 @@
 
 #include <Cory/Base/Profiling.hpp>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <future>
 #include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace {
@@ -115,7 +119,21 @@ VolumeManagerSystem::VolumeManagerSystem(Cory::Context &ctx)
 
 VolumeManagerSystem::~VolumeManagerSystem()
 {
-    cppcoro::sync_wait(readScope_.join());
+    readCancellationSource_.request_stop();
+
+    auto joinTask = readScope_.join();
+    auto joinFuture = std::async(std::launch::async, [task = std::move(joinTask)]() mutable {
+        cppcoro::sync_wait(std::move(task));
+    });
+
+    auto *threadScheduler = ctx_ != nullptr ? ctx_->uploader().threadScheduler() : nullptr;
+    while (joinFuture.wait_for(std::chrono::milliseconds{0}) != std::future_status::ready) {
+        if (threadScheduler != nullptr) {
+            threadScheduler->poll();
+        }
+        std::this_thread::yield();
+    }
+    joinFuture.get();
 }
 
 void VolumeManagerSystem::tick(Cory::SceneGraph &graph, Cory::TickInfo tickInfo)
@@ -176,7 +194,8 @@ cppcoro::task<void> VolumeManagerSystem::loadAndQueueResult(std::string datasetI
                     completedSliceReads_.push_back(std::move(sliceResult));
                 }
                 return Cory::Result<void>{};
-            });
+            },
+            readCancellationSource_.get_token());
         if (!stackResult) {
             result.error = std::move(stackResult.error());
         }
@@ -392,6 +411,7 @@ void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber, double c
     for (auto &[datasetId, dataset] : datasets_) {
         (void)frameNumber;
         if (dataset.state == StreamState::Error) {
+            drainErroredDatasetUploads(dataset);
             continue;
         }
 
@@ -439,6 +459,32 @@ void VolumeManagerSystem::processUploadCompletion(uint64_t frameNumber, double c
                          throughputMiBps,
                          loadingTime);
         }
+    }
+}
+
+void VolumeManagerSystem::drainErroredDatasetUploads(DatasetRuntime &dataset)
+{
+    if (ctx_ == nullptr) {
+        dataset.pendingSliceUploads.clear();
+        dataset.inFlightSliceUploads.clear();
+        return;
+    }
+
+    while (!dataset.pendingSliceUploads.empty()) {
+        auto pending = std::move(dataset.pendingSliceUploads.front());
+        dataset.pendingSliceUploads.pop_front();
+        if (pending.stagingSlot.valid()) {
+            ctx_->uploader().recycleStaging(std::move(pending.stagingSlot));
+        }
+    }
+
+    auto uploadIt = dataset.inFlightSliceUploads.begin();
+    while (uploadIt != dataset.inFlightSliceUploads.end()) {
+        if (uploadIt->ready()) {
+            uploadIt = dataset.inFlightSliceUploads.erase(uploadIt);
+            continue;
+        }
+        ++uploadIt;
     }
 }
 

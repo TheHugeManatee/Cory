@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <concepts>
 #include <condition_variable>
 #include <cstdint>
 #include <exception>
@@ -263,6 +264,21 @@ SyncWaitTask<void> makeSyncWaitTask(TAwaitable &&awaitable)
 #endif
 
 } // namespace detail
+
+/// Awaitable helper concept
+template <typename T>
+concept Awaitable = requires(T value, cppcoro::coroutine_handle<> h) {
+    { value.await_ready() } -> std::convertible_to<bool>;
+    value.await_suspend(h);
+    value.await_resume();
+};
+
+/// Scheduler concept: has a co_awaitable schedule() function that takes a coroutine handle and
+/// schedules it to be resumed later
+template <typename T>
+concept Scheduler = requires(T scheduler, cppcoro::coroutine_handle<> handle) {
+    { scheduler.schedule() } -> Awaitable;
+};
 
 template <typename TAwaitable>
 auto sync_wait(TAwaitable &&awaitable) ->

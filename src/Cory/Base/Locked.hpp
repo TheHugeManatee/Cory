@@ -66,6 +66,12 @@ template <typename T> class Locked : NoCopy, NoMove {
     auto lock() { return LockedProxy{&object_, mutex_}; }
     auto lock() const { return ConstLockedProxy{&object_, mutex_}; }
 
+    auto exchange(T newObject)
+    {
+        std::scoped_lock lock(mutex_);
+        return std::exchange(object_, newObject);
+    }
+
   private:
     T object_;
     mutable std::mutex mutex_;

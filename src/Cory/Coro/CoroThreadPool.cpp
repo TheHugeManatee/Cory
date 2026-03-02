@@ -1,9 +1,13 @@
 #include "CoroThreadPool.hpp"
 
+#include "Scheduler.hpp"
+
 #include <algorithm>
 #include <cassert>
 
 namespace Cory {
+
+static_assert(Scheduler<CoroThreadPool>, "CoroThreadPool must satisfy the Scheduler concept");
 
 CoroThreadPool::CoroThreadPool(size_t workerCount)
 {

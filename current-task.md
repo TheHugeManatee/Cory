@@ -6,6 +6,11 @@ Basic premises:
  - Properties are simple structs
  - Avoid heap allocations as much as possible (use std::pmr and arenas where needed)
 
+Parameter layer note:
+ - Added a named `Parameter<T>` wrapper on top of `Property<T>` so higher-level UI/config values can carry an explicit identifier without losing the existing property await/get/set behavior.
+ - Added `RangedParameter<T, Min, Max>` for compile-time inclusive bounds and `OptionParameter<T, ...>` for compile-time accepted value sets.
+ - Added enum-specific `EnumParameter<E>` that derives its accepted values from `magic_enum::enum_values<E>()` and validates assignments with `magic_enum::enum_contains`.
+
 Build-system note:
  - Added configurable per-configuration sanitizer settings via CMake cache variables:
    `CORY_SANITIZERS_Debug`, `CORY_SANITIZERS_Release`, `CORY_SANITIZERS_RelWithDebInfo`,

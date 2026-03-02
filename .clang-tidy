@@ -1,5 +1,5 @@
 ---
-Checks: "clang-analyzer-*"
+Checks: "-*,bugprone-*,cert-*,clang-analyzer-*,hicpp-*,misc-*,mpi-*,cppcoreguidelines-*,-cppcoreguidelines-avoid-do-while,-cppcoreguidelines-special-member-functions,-cppcoreguidelines-avoid-magic-numbers,google-default-arguments,google-runtime-operator,google-explicit-constructor,modernize-*,-modernize-use-trailing-return-type,-modernize-avoid-c-arrays,-modernize-use-using,-modernize-use-default-member-init,-modernize-macro-to-enum,performance-*,-performance-no-int-to-ptr,portability-simd-intrinsics,readability-*,-readability-redundant-preprocessor,-readability-named-parameter,-readability-function-size,-readability-identifier-length,-readability-magic-numbers,-readability-redundant-member-init,-readability-uppercase-literal-suffix,-readability-implicit-bool-conversion,-readability-isolate-declaration,-readability-redundant-access-specifiers,-readability-function-cognitive-complexity,-readability-identifier-naming"
 WarningsAsErrors: ''
 HeaderFilterRegex: ''
 FormatStyle:     none

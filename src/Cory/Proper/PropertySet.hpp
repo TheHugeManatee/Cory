@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace Cory::Prop {
+namespace Cory::Proper {
 
 class PropertySet {
   public:
@@ -93,8 +93,8 @@ class PropertySet {
         ValueType await_resume() const
         {
             const auto value = set_.read(handle_);
-            CO_CORE_ASSERT(std::holds_alternative<ValueType>(value),
-                           "Property type mismatch in changed<T>()");
+            CO_CORE_DEBUG_ASSERT(std::holds_alternative<ValueType>(value),
+                                 "Property type mismatch in changed<T>()");
             return std::get<ValueType>(value);
         }
 
@@ -106,7 +106,7 @@ class PropertySet {
   private:
     friend class Proper::Task<void>::promise_type;
 
-    PropertyHandle createImpl(const std::string &name, Property property);
+    PropertyHandle createImpl(const std::string &name, PropertyVariant property);
     ChangedAwaiter changed(PropertyHandle handle);
     template <IsPropertyValue ValueType>
     TypedChangedAwaiter<ValueType> changed(PropertyHandle handle)
@@ -117,7 +117,7 @@ class PropertySet {
     void unregisterWaiter(PropertyHandle handle, cppcoro::coroutine_handle<> awaiting);
     void notifyChanged(PropertyHandle handle);
 
-    SlotMap<Property> properties_;
+    SlotMap<PropertyVariant> properties_;
     SlotMap<Group> groups_;
     std::unordered_map<std::string, PropertyHandle> propertyLookup_;
     std::unordered_map<std::string, GroupHandle> groupLookup_;
@@ -128,6 +128,6 @@ class PropertySet {
 
 PropertyHandle PropertySet::create(const std::string &name, IsProperty auto property)
 {
-    return createImpl(name, Property{std::move(property)});
+    return createImpl(name, PropertyVariant{std::move(property)});
 }
-} // namespace Cory::Prop
+} // namespace Cory::Proper

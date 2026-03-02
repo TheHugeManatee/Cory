@@ -184,6 +184,11 @@ set(CORY_SOURCES
         Proper/Properties.hpp
         Proper/PropertySet.cpp
         Proper/PropertySet.hpp
+        Proper/Property.hpp
+        Proper/Property.cpp
+        Coro/Scheduler.cpp
+        Coro/Scheduler.hpp
+        Proper/Parameter.hpp
 )
 
 

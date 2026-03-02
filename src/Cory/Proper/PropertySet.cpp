@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <type_traits>
 
-namespace Cory::Prop {
+namespace Cory::Proper {
 
-PropertyHandle PropertySet::createImpl(const std::string &name, Property property)
+PropertyHandle PropertySet::createImpl(const std::string &name, PropertyVariant property)
 {
     const auto handle = PropertyHandle{properties_.insert(std::move(property))};
     propertyLookup_[name] = handle;
@@ -138,4 +138,4 @@ void PropertySet::notifyChanged(PropertyHandle handle)
     }
 }
 
-} // namespace Cory::Prop
+} // namespace Cory::Proper

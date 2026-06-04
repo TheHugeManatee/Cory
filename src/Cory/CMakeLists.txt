@@ -97,6 +97,9 @@ set(CORY_SOURCES
         Base/WorkContractGroup.hpp
         Cory.cpp
         Cory.hpp
+        Ecs/Common.hpp
+        Ecs/SystemScheduler.cpp
+        Ecs/SystemScheduler.hpp
         Framegraph/Builder.cpp
         Framegraph/Common.hpp
         Framegraph/Framegraph.cpp

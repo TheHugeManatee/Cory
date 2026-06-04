@@ -44,6 +44,7 @@ As such, it uses features that are only supported in rather modern compilers.
     - [ ] use std::pmr based allocator for Vulkan API calls
 - GameObject/Scenegraph system (Entities + Components, not full data-drive ECS)
     - [ ] basic entity/component system
+    - [ ] ECS/script execution scheduler design ([ADR-07](ADR-07-ecs-script-execution.md))
 - Shader System
     - [x] push constants
     - [x] On-the fly shader compilation using [Slang](https://github.com/shader-slang/slang)

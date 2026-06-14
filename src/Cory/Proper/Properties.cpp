@@ -31,7 +31,10 @@ void AbstractProperty::notifyWaiters()
 
 void Task<void>::promise_type::cancel()
 {
-    if (cancelProperty_ && cancelAwaiting_) {
+    if (cancelPropertySet_ && cancelAwaiting_) {
+        cancelPropertySet_->unregisterWaiter(cancelPropertyHandle_, cancelAwaiting_);
+    }
+    else if (cancelProperty_ && cancelAwaiting_) {
         cancelProperty_->unregisterWaiter(cancelAwaiting_);
     }
     clearCancellation();

@@ -243,7 +243,7 @@ def _status_text_lines(data: dict[str, Any], prefix: str = "") -> list[str]:
     for key, value in data.items():
         label = f"{prefix}{key}"
         if isinstance(value, dict):
-            lines.append(f"[{label.strip(" ")}]")
+            lines.append(f"[{label.strip(' ')}]")
             lines.extend(_status_text_lines(value, prefix=f"  {label}."))
         else:
             lines.append(f"{label}: {value}")

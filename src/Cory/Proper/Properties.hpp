@@ -99,17 +99,29 @@ template <> class Task<void> {
         void setCancellation(AbstractProperty *property, cppcoro::coroutine_handle<> awaiting)
         {
             cancelProperty_ = property;
+            cancelPropertySet_ = nullptr;
+            cancelAwaiting_ = awaiting;
+        }
+        void setCancellation(PropertySet *set, PropertyHandle handle, cppcoro::coroutine_handle<> awaiting)
+        {
+            cancelProperty_ = nullptr;
+            cancelPropertySet_ = set;
+            cancelPropertyHandle_ = handle;
             cancelAwaiting_ = awaiting;
         }
         void clearCancellation()
         {
             cancelProperty_ = {};
+            cancelPropertySet_ = {};
+            cancelPropertyHandle_ = {};
             cancelAwaiting_ = {};
         }
         void cancel();
 
       private:
         AbstractProperty *cancelProperty_{nullptr};
+        PropertySet *cancelPropertySet_{nullptr};
+        PropertyHandle cancelPropertyHandle_{};
         cppcoro::coroutine_handle<> cancelAwaiting_{};
     };
 

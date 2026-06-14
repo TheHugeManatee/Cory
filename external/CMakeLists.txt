@@ -47,6 +47,21 @@ else ()
 endif ()
 FetchContent_MakeAvailable(KDGpu)
 
+# immer enables examples/tests/docs/extras by default, which pollutes the
+# parent build with auxiliary targets and can cause target/output collisions in IDE builds.
+set(immer_BUILD_TESTS OFF CACHE BOOL "Disable immer tests in Cory" FORCE)
+set(immer_BUILD_PERSIST_TESTS OFF CACHE BOOL "Disable immer persist tests in Cory" FORCE)
+set(immer_BUILD_EXAMPLES OFF CACHE BOOL "Disable immer examples in Cory" FORCE)
+set(immer_BUILD_DOCS OFF CACHE BOOL "Disable immer docs in Cory" FORCE)
+set(immer_BUILD_EXTRAS OFF CACHE BOOL "Disable immer extras in Cory" FORCE)
+
+FetchContent_Declare(
+        immer
+        GIT_REPOSITORY https://github.com/arximboldi/immer.git
+        GIT_TAG v0.9.1
+)
+FetchContent_MakeAvailable(immer)
+
 #include(${KDGpu_SOURCE_DIR}/cmake/CMakeRC.cmake)
 
 set(TARGET_NAME ThirdPartyLibs)
@@ -108,6 +123,7 @@ target_link_libraries(${TARGET_NAME}
         PUBLIC
         imgui::imgui
         glm::glm
+        immer
 )
 
 add_library(Cory::ThirdParty ALIAS ThirdPartyLibs)

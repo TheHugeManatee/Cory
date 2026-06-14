@@ -1,7 +1,7 @@
 #include <Cory/Base/FileWatchManager.hpp>
 
-#include <Cory/Base/Coro.hpp>
 #include <Cory/Base/Log.hpp>
+#include <Cory/Coro/Coro.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

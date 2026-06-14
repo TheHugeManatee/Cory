@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -149,6 +150,7 @@ class VolumeManagerSystem {
     void processUploadCompletion(uint64_t frameNumber, double currentTime);
     void retireOldVolumes(uint64_t frameNumber);
     void startNextSliceUpload(DatasetRuntime &dataset);
+    void drainErroredDatasetUploads(DatasetRuntime &dataset);
     static std::string stateToString(StreamState state);
 
     /// Ensures `datasets_` contains runtime state for this `StreamedVolume`.
@@ -156,7 +158,8 @@ class VolumeManagerSystem {
     /// Applies streamed dataset runtime textures onto entity `VolumeComponent`.
     void updateStreamedEntities(Cory::SceneGraph &graph, double currentTime);
     /// Generates/updates procedural textures and applies them onto `VolumeComponent`.
-    void updateProceduralEntities(Cory::SceneGraph &graph, uint64_t frameNumber, float timeSeconds);
+    void
+    updateProceduralEntities(Cory::SceneGraph &graph, uint64_t frameNumber, double timeSeconds);
     void enqueueProceduralGeneration(Cory::Entity entity,
                                      ProceduralVolume procedural,
                                      uint64_t frameNumber,
@@ -176,5 +179,6 @@ class VolumeManagerSystem {
     std::vector<RetiredVolume> retiredVolumes_{};
 
     cppcoro::async_scope readScope_{};
+    std::stop_source readCancellationSource_{};
     Cory::DatasetLoader datasetLoader_{};
 };

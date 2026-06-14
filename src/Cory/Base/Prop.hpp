@@ -4,6 +4,6 @@
 
 namespace Cory {
 
-template <typename T> using Property = KDBindings::Property<T>;
+template <typename T> using KdbProperty = KDBindings::Property<T>;
 
 }

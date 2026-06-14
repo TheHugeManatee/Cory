@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <Cory/Base/Coro.hpp>
+#include <Cory/Coro/Coro.hpp>
 #include <Cory/Renderer/ThreadScheduler.hpp>
 #include <DatasetLoader.hpp>
 
@@ -145,10 +145,7 @@ class FakeStagingUploader : public Cory::IStagingUploader {
         co_return slot;
     }
 
-    Cory::ThreadScheduler *threadScheduler() const noexcept override
-    {
-        return threadScheduler_;
-    }
+    Cory::ThreadScheduler *threadScheduler() const noexcept override { return threadScheduler_; }
 
     void recycleStaging(Cory::StagingSlot &&stagingSlot) override
     {
@@ -175,8 +172,7 @@ class FakeStagingUploader : public Cory::IStagingUploader {
 };
 
 template <typename T>
-T syncWaitWithRenderThreadPump(Cory::ThreadScheduler &renderThreadScheduler,
-                               cppcoro::task<T> task)
+T syncWaitWithRenderThreadPump(Cory::ThreadScheduler &renderThreadScheduler, cppcoro::task<T> task)
 {
     // DatasetLoader intentionally hops between worker threads and the uploader's owner thread via
     // ThreadScheduler::schedule(). A plain Cory::sync_wait() on this same thread can deadlock,
@@ -210,11 +206,10 @@ T syncWaitWithRenderThreadPump(Cory::ThreadScheduler &renderThreadScheduler,
     return std::move(*taskResult);
 }
 
-Cory::Result<Cory::LoadedVolume>
-loadViaFakeUploader(Cory::DatasetLoader &loader,
-                    Cory::ThreadScheduler &renderThreadScheduler,
-                    FakeStagingUploader &uploader,
-                    const Cory::LoadStackRequest &request)
+Cory::Result<Cory::LoadedVolume> loadViaFakeUploader(Cory::DatasetLoader &loader,
+                                                     Cory::ThreadScheduler &renderThreadScheduler,
+                                                     FakeStagingUploader &uploader,
+                                                     const Cory::LoadStackRequest &request)
 {
     auto loaded = Cory::LoadedVolume{};
     auto loadedMutex = std::mutex{};

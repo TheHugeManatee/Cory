@@ -54,13 +54,13 @@ set(CORY_SOURCES
         Base/Callback.hpp
         Base/Common.hpp
         Base/Concepts.hpp
-        Base/CoroBatch.cpp
-        Base/CoroBatch.hpp
-        Base/Coro.cpp
-        Base/Coro.hpp
-        Base/CoroOps.hpp
-        Base/CoroThreadPool.cpp
-        Base/CoroThreadPool.hpp
+        Coro/CoroBatch.cpp
+        Coro/CoroBatch.hpp
+        Coro/Coro.cpp
+        Coro/Coro.hpp
+        Coro/CoroOps.hpp
+        Coro/CoroThreadPool.cpp
+        Coro/CoroThreadPool.hpp
         Base/CpuBuffer.hpp
         Base/Debugger.cpp
         Base/Debugger.hpp
@@ -180,6 +180,15 @@ set(CORY_SOURCES
         Base/Prop.hpp
         Systems/ComponentEditorSystem.cpp
         Systems/ComponentEditorSystem.hpp
+        Proper/Properties.cpp
+        Proper/Properties.hpp
+        Proper/PropertySet.cpp
+        Proper/PropertySet.hpp
+        Proper/Property.hpp
+        Proper/Property.cpp
+        Coro/Scheduler.cpp
+        Coro/Scheduler.hpp
+        Proper/Parameter.hpp
 )
 
 
@@ -238,6 +247,7 @@ target_link_libraries(${TARGET_NAME}
         KDGpu::KDGpuExample
         KDGpuExample::Resources # for the embedded roboto font
         KDGpuExample::ShaderResources # for the embedded imgui shaders
+        Cory::project_sanitizers
         Cory::project_warnings
         Cory::project_options
 )

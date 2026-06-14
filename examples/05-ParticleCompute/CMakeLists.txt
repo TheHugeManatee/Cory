@@ -25,6 +25,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE "PARTICLECOMPUTEDEMO_RESOURCE_
 
 target_link_libraries(${TARGET_NAME}
         PRIVATE
+        project_sanitizers
         project_options
         project_warnings
         Cory::Cory

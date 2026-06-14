@@ -64,11 +64,11 @@ class VolumeRenderSystem
     explicit VolumeRenderSystem(Cory::Context &ctx);
     ~VolumeRenderSystem();
 
-    Cory::Property<bool> debugRasterize{false};
-    Cory::Property<bool> debugRaycast{false};
-    Cory::Property<bool> temporalAccumulation{true};
-    Cory::Property<float> temporalEmaTauMs{50.0f};
-    Cory::Property<float> alphaDeltaRejectThreshold{0.5f};
+    Cory::KdbProperty<bool> debugRasterize{false};
+    Cory::KdbProperty<bool> debugRaycast{false};
+    Cory::KdbProperty<bool> temporalAccumulation{true};
+    Cory::KdbProperty<float> temporalEmaTauMs{50.0f};
+    Cory::KdbProperty<float> alphaDeltaRejectThreshold{0.5f};
 
     /// Drops current temporal accumulation history and forces re-initialization next frame.
     void resetTemporalHistory();

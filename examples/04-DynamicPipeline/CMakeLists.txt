@@ -14,6 +14,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE "DYNAMIC_PIPELINE_RESOURCE_DIR
 
 target_link_libraries(${TARGET_NAME}
         PRIVATE
+        project_sanitizers
         project_options
         project_warnings
         Cory::Cory

@@ -62,6 +62,7 @@ add_library(Cory_TestLib OBJECT
         ApiPass_Test.cpp
         DatasetLoader_Test.cpp
         CppcoroConcurrency_Test.cpp
+        Properties_Test.cpp
 )
 
 target_include_directories(Cory_TestLib PRIVATE
@@ -71,11 +72,12 @@ target_include_directories(Cory_TestLib PRIVATE
 
 target_link_libraries(Cory_TestLib
         PUBLIC Catch2::Catch2 Cory::Cory
-        PRIVATE Cory::project_options nlohmann_json::nlohmann_json mio::mio
+        PRIVATE Cory::project_sanitizers Cory::project_options nlohmann_json::nlohmann_json mio::mio
 )
 
 add_executable(Cory_Tests catch_main.cpp)
 target_link_libraries(Cory_Tests PRIVATE
+        Cory::project_sanitizers
         Cory::project_warnings
         Cory::project_options
         Cory_TestLib

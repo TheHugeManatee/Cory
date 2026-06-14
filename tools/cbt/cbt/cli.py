@@ -19,20 +19,24 @@ from . import ctest as ctest_mod
 from . import format as format_mod
 from . import git as git_mod
 from . import run as run_mod
+from . import sanitizers as sanitizers_mod
 from . import tidy as tidy_mod
 from .config import new_config, require_config, write_config
 from .paths import (
     build_dir_for_profile,
+    conan_home_for_profile,
     config_path,
     default_build_root,
     last_build_dir_path,
     last_profile_path,
+    profile_lock_path,
     repo_root,
     venv_dir_for_build_root,
 )
 from .tools import resolve_tool
 from .util import (
     CbtError,
+    CbtLock,
     ConfigError,
     MissingPrereq,
     ToolError,
@@ -148,8 +152,21 @@ def _resolve_profile(profile: str | None) -> str:
     return profile or _env_profile() or "codex"
 
 
+def _argv_profile(argv: list[str]) -> str | None:
+    for index, arg in enumerate(argv):
+        if arg == "--profile" and index + 1 < len(argv):
+            return argv[index + 1]
+        prefix = "--profile="
+        if arg.startswith(prefix):
+            return arg[len(prefix):]
+    return None
+
+
 def _config_env(config: dict) -> dict[str, str]:
     env = dict(os.environ)
+    conan_home = config.get("conan", {}).get("home")
+    if conan_home:
+        env["CONAN_HOME"] = str(conan_home)
     if _is_tsan_profile(config):
         suppressions = repo_root() / "tools" / "tsan" / "tsan.supp"
         if suppressions.exists():
@@ -219,6 +236,299 @@ def _load_or_fail(profile: str | None, build_root: Path | None) -> tuple[dict, P
 def _record_last(build_root: Path, profile: str, build_dir: Path) -> None:
     write_text(last_profile_path(build_root), profile)
     write_text(last_build_dir_path(build_root), str(build_dir))
+
+
+def _status_text_lines(data: dict[str, Any], prefix: str = "") -> list[str]:
+    lines: list[str] = []
+    for key, value in data.items():
+        label = f"{prefix}{key}"
+        if isinstance(value, dict):
+            lines.append(f"[{label.strip(' ')}]")
+            lines.extend(_status_text_lines(value, prefix=f"  {label}."))
+        else:
+            lines.append(f"{label}: {value}")
+    return lines
+
+
+def _sanitizer_config_dict(state: sanitizers_mod.SanitizerState) -> dict[str, str | bool]:
+    return {
+        "active": state.active_value,
+        "signature": state.signature,
+        "from_define": state.from_define,
+    }
+
+
+def _sanitizer_define_key(build_type: str) -> str:
+    return f"CORY_SANITIZERS_{build_type}"
+
+
+def _apply_sanitizer_cli_option(
+    defines: dict[str, str],
+    build_type: str,
+    sanitizers: str | None,
+    no_sanitizers: bool,
+) -> dict[str, str]:
+    updated = dict(defines)
+    key = _sanitizer_define_key(build_type)
+    if sanitizers is not None and no_sanitizers:
+        raise ConfigError("Use either --sanitizers or --no-sanitizers, not both.")
+    if sanitizers is not None:
+        updated[key] = sanitizers
+    elif no_sanitizers:
+        updated[key] = ""
+    return updated
+
+
+def _resolve_sanitizer_state(
+    *,
+    build_type: str,
+    defines: dict[str, str],
+    stored_active: str | None,
+) -> tuple[sanitizers_mod.SanitizerState, dict[str, str], dict[str, str]]:
+    sanitizer_state = sanitizers_mod.resolve_sanitizers(
+        build_type=build_type,
+        defines=defines,
+        stored_active=stored_active,
+        windows=is_windows(),
+    )
+    synced_defines = dict(defines)
+    synced_defines[_sanitizer_define_key(build_type)] = sanitizer_state.active_value
+    return sanitizer_state, synced_defines, _effective_cmake_defines(
+        synced_defines, sanitizer_state, build_type
+    )
+
+
+def _effective_cmake_defines(
+    defines: dict[str, str],
+    sanitizer_state: sanitizers_mod.SanitizerState,
+    build_type: str,
+) -> dict[str, str]:
+    effective = dict(defines)
+    effective.pop(_sanitizer_define_key(build_type), None)
+    effective["CORY_ACTIVE_SANITIZERS"] = sanitizer_state.active_value
+    effective["CORY_SANITIZERS_VIA_TOOLCHAIN"] = "ON"
+    return effective
+
+
+_KNOWN_SANITIZER_FLAGS = (
+    "/fsanitize=address",
+    "-fsanitize=address",
+    "-fsanitize=thread",
+    "-fsanitize=undefined",
+)
+
+
+def _read_cmake_cache_entries(build_dir: Path) -> dict[str, str]:
+    cache_path = build_dir / "CMakeCache.txt"
+    if not cache_path.exists():
+        return {}
+
+    entries: dict[str, str] = {}
+    for line in cache_path.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith(("//", "#")) or "=" not in line:
+            continue
+        key_type, value = line.split("=", 1)
+        if ":" not in key_type:
+            continue
+        key, _ = key_type.split(":", 1)
+        entries[key] = value
+    return entries
+
+
+def _cmake_cache_has_expected_sanitizer_flags(
+    build_dir: Path, sanitizer_state: sanitizers_mod.SanitizerState
+) -> bool:
+    entries = _read_cmake_cache_entries(build_dir)
+    if not entries:
+        return True
+
+    compile_values = " ".join(
+        value
+        for key, value in entries.items()
+        if key.startswith("CMAKE_CXX_FLAGS") or key.startswith("CMAKE_C_FLAGS")
+    )
+    link_values = " ".join(
+        value
+        for key, value in entries.items()
+        if key.startswith("CMAKE_EXE_LINKER_FLAGS")
+        or key.startswith("CMAKE_SHARED_LINKER_FLAGS")
+    )
+
+    if sanitizer_state.enabled:
+        has_compile_flags = all(flag in compile_values for flag in sanitizer_state.cxxflags)
+        required_link_flags = tuple(
+            dict.fromkeys(
+                (*sanitizer_state.shared_link_flags, *sanitizer_state.exe_link_flags)
+            )
+        )
+        has_link_flags = all(flag in link_values for flag in required_link_flags)
+        return has_compile_flags and has_link_flags
+
+    return not any(
+        flag in compile_values or flag in link_values for flag in _KNOWN_SANITIZER_FLAGS
+    )
+
+
+def _reset_cmake_config_state(build_dir: Path, quiet: bool, reason: str) -> None:
+    if not quiet:
+        sys.stdout.write(f"Resetting CMake configure state: {reason}\n")
+
+    for relative in (
+        "CMakeCache.txt",
+        "build.ninja",
+        "cmake_install.cmake",
+        "compile_commands.json",
+        "CTestTestfile.cmake",
+        "DartConfiguration.tcl",
+        ".ninja_deps",
+        ".ninja_log",
+    ):
+        path = build_dir / relative
+        if path.exists():
+            path.unlink()
+
+    for relative in ("CMakeFiles", ".cmake", "Testing"):
+        path = build_dir / relative
+        if path.exists():
+            shutil.rmtree(path)
+
+
+def _ensure_cmake_sanitizer_state(
+    *,
+    tools: dict[str, str],
+    config: dict,
+    build_dir: Path,
+    env: dict[str, str],
+    quiet: bool,
+    sanitizer_state: sanitizers_mod.SanitizerState,
+) -> None:
+    if _cmake_cache_has_expected_sanitizer_flags(build_dir, sanitizer_state):
+        return
+
+    reason = (
+        f"stored sanitizer state '{sanitizer_state.active_value or 'none'}' "
+        "does not match cached CMake flags"
+    )
+    _reset_cmake_config_state(build_dir, quiet, reason)
+    cmake_mod.configure(
+        tools["cmake"],
+        build_dir,
+        Path(config["paths"]["source_dir"]),
+        config["cbt"]["build_type"],
+        Path(config["cmake"]["toolchain_file"]),
+        _effective_cmake_defines(
+            dict(config["cmake"]["defines"]),
+            sanitizer_state,
+            config["cbt"]["build_type"],
+        ),
+        env,
+        quiet,
+    )
+
+
+def _conan_conf_for_sanitizers(
+    sanitizer_state: sanitizers_mod.SanitizerState,
+) -> dict[str, list[str]]:
+    if not sanitizer_state.enabled:
+        return {}
+
+    return {
+        "tools.build:cxxflags": list(sanitizer_state.cxxflags),
+        "tools.build:sharedlinkflags": list(sanitizer_state.shared_link_flags),
+        "tools.build:exelinkflags": list(sanitizer_state.exe_link_flags),
+    }
+
+
+def _activate_build_env(
+    config: dict,
+    quiet: bool,
+    *,
+    base_env: dict[str, str] | None = None,
+    allow_discovery: bool = True,
+) -> dict[str, str]:
+    env = dict(base_env) if base_env is not None else _config_env(config)
+    if not is_windows():
+        return env
+
+    installation = config.get("msvc", {}).get("installation")
+    cached_env = config.get("msvc", {}).get("env")
+    if allow_discovery and not installation:
+        try:
+            installation = _find_vs_installation()
+        except Exception:
+            installation = None
+    if installation:
+        return _activate_vs_env_into(env, installation, "x64", quiet)
+    return _ensure_msvc_dev_env(
+        env,
+        quiet,
+        cached_installation=installation,
+        cached_env=cached_env,
+    )
+
+
+def _capture_msvc_config_env(config: dict, env: dict[str, str]) -> None:
+    if not is_windows():
+        return
+
+    installation = config.get("msvc", {}).get("installation")
+    if not installation:
+        return
+
+    env_before_activation = _config_env(config)
+    delta: dict[str, str] = {}
+    for key, value in env.items():
+        original = env_before_activation.get(key)
+        if original != value:
+            delta[key] = value
+    config.setdefault("msvc", {})["env"] = delta
+
+
+def _log_detected_compiler(env: dict[str, str], quiet: bool, prefix: str = "") -> None:
+    if quiet or not is_windows():
+        return
+    try:
+        cl_path = _shutil_which("cl", path=env.get("PATH", ""))
+    except Exception:
+        cl_path = None
+    if not cl_path:
+        cl_path = _find_executable_in_env_path(env.get("PATH", ""), "cl")
+    if cl_path:
+        message = f"{prefix}: cl detected in captured PATH: {cl_path}" if prefix else f"Using detected cl: {cl_path}"
+        sys.stdout.write(f"{message}\n")
+
+
+def _run_conan_install(
+    *,
+    tools: dict[str, str],
+    build_dir: Path,
+    source_dir: Path,
+    profile: str,
+    profile_host: str,
+    profile_build: str,
+    build_type: str,
+    env: dict[str, str],
+    quiet: bool,
+    sanitizer_state: sanitizers_mod.SanitizerState,
+) -> None:
+    conan_mod.ensure_profile_detected(
+        tools["conan"],
+        quiet,
+        env=env,
+        requested_profiles=[profile_host, profile_build],
+    )
+    conan_mod.install(
+        tools["conan"],
+        build_dir,
+        source_dir,
+        profile_host,
+        profile_build,
+        build_type,
+        quiet,
+        preset_name=profile,
+        env=env,
+        conf=_conan_conf_for_sanitizers(sanitizer_state),
+    )
 
 
 def _targets_from_help(output: str) -> list[str]:
@@ -506,20 +816,68 @@ def _ensure_msvc_dev_env(
 @click.pass_context
 def cli(ctx: click.Context, quiet: bool) -> None:
     ctx.obj = CliContext(quiet=quiet)
+    lock_profile = _resolve_profile(_argv_profile(sys.argv[1:]))
+    lock = CbtLock(profile_lock_path(lock_profile))
+    lock.acquire()
+    ctx.call_on_close(lock.release)
 
 
-@cli.command(short_help="Create configuration and run CMake")
-@click.option("--profile")
-@click.option("--build-type", default="Debug")
-@click.option("--build-root", type=click.Path(path_type=Path))
-@click.option("--profile-host")
-@click.option("--profile-build", default="default")
-@click.option("--cc")
-@click.option("--cxx")
-@click.option("--cmake-define", multiple=True)
-@click.option("--vulkan-sdk")
-@click.option("--export-compile-commands/--no-export-compile-commands", default=True)
-@click.option("--force", is_flag=True)
+@cli.command(
+    short_help="Create configuration and run CMake",
+    help=(
+        "Create a new build configuration. This runs Conan install and CMake configure, "
+        "persists the resulting settings in .cbt/config.toml, and resolves the active "
+        "sanitizer set from CORY_SANITIZERS_<build-type> defines before invoking either tool."
+    ),
+)
+@click.option("--profile", help="Logical cbt profile name. Determines the build directory name.")
+@click.option("--build-type", default="Debug", help="CMake/Conan build type to configure.")
+@click.option(
+    "--build-root",
+    type=click.Path(path_type=Path),
+    help="Override the build root. On Linux/WSL prefer a native filesystem path.",
+)
+@click.option(
+    "--profile-host",
+    help="Conan host profile to use. Defaults to 'default' on Windows and 'codex-clang' on Linux.",
+)
+@click.option(
+    "--profile-build",
+    default="default",
+    help="Conan build profile to use for build requirements.",
+)
+@click.option("--cc", help="C compiler path/name to persist into the generated cbt config.")
+@click.option("--cxx", help="C++ compiler path/name to persist into the generated cbt config.")
+@click.option(
+    "--cmake-define",
+    multiple=True,
+    help=(
+        "Additional -D style cache definitions in KEY=VALUE form. "
+        "Use this to override sanitizer settings such as CORY_SANITIZERS_Debug=ASAN."
+    ),
+)
+@click.option(
+    "--sanitizers",
+    help=(
+        "Sanitizer set for this build type, for example ASAN or ASAN;UBSAN. "
+        "This updates the stored sanitizer state and the matching CORY_SANITIZERS_<build-type> define."
+    ),
+)
+@click.option(
+    "--no-sanitizers",
+    is_flag=True,
+    help="Disable sanitizers for this build type and sync the stored state.",
+)
+@click.option(
+    "--vulkan-sdk",
+    help="Override the Vulkan SDK root and inject matching include/library hints.",
+)
+@click.option(
+    "--export-compile-commands/--no-export-compile-commands",
+    default=True,
+    help="Enable or disable generation of compile_commands.json.",
+)
+@click.option("--force", is_flag=True, help="Replace an existing .cbt config for the selected profile.")
 @click.pass_obj
 def configure(
     ctx: CliContext,
@@ -531,6 +889,8 @@ def configure(
     cc: str | None,
     cxx: str | None,
     cmake_define: tuple[str, ...],
+    sanitizers: str | None,
+    no_sanitizers: bool,
     vulkan_sdk: str | None,
     export_compile_commands: bool,
     force: bool,
@@ -549,7 +909,9 @@ def configure(
         tools["cc"] = cc
     if cxx:
         tools["cxx"] = cxx
-    defines = _parse_defines(cmake_define)
+    defines = _apply_sanitizer_cli_option(
+        _parse_defines(cmake_define), build_type, sanitizers, no_sanitizers
+    )
     if export_compile_commands:
         defines["CMAKE_EXPORT_COMPILE_COMMANDS"] = "ON"
     if cc:
@@ -567,17 +929,42 @@ def configure(
             ),
         }
         defines.update(vulkan_hints)
+    sanitizer_state, defines, effective_defines = _resolve_sanitizer_state(
+        build_type=build_type,
+        defines=defines,
+        stored_active=None,
+    )
     host_profile = profile_host or ("default" if is_windows() else "codex-clang")
-    conan_mod.ensure_profile_detected(tools["conan"], ctx.quiet)
-    conan_mod.install(
-        tools["conan"],
-        build_dir,
-        repo_root(),
-        host_profile,
-        profile_build,
-        build_type,
-        ctx.quiet,
-        preset_name=profile,
+    conan_home = conan_home_for_profile(profile, root, build_type, sanitizer_state.signature)
+    base_config = {
+        "cbt": {"profile": profile},
+        "conan": {"home": str(conan_home)},
+    }
+    if vulkan_sdk or vulkan_hints:
+        base_config["vulkan"] = {
+            "sdk": vulkan_sdk,
+            "cmake_hints": dict(vulkan_hints),
+        }
+    installation: str | None = None
+    if is_windows():
+        try:
+            installation = _find_vs_installation()
+        except Exception:
+            installation = None
+        if installation:
+            base_config["msvc"] = {"installation": installation}
+    env = _activate_build_env(base_config, ctx.quiet)
+    _run_conan_install(
+        tools=tools,
+        build_dir=build_dir,
+        source_dir=repo_root(),
+        profile=profile,
+        profile_host=host_profile,
+        profile_build=profile_build,
+        build_type=build_type,
+        env=env,
+        quiet=ctx.quiet,
+        sanitizer_state=sanitizer_state,
     )
     toolchain_file = build_dir / "conan_toolchain.cmake"
     config = new_config(
@@ -592,149 +979,15 @@ def configure(
         toolchain_file=toolchain_file,
         defines=defines,
         tools=tools,
+        conan_home=conan_home,
         vulkan_sdk=vulkan_sdk,
         vulkan_hints=vulkan_hints,
+        sanitizer=_sanitizer_config_dict(sanitizer_state),
     )
-    env = _config_env(config)
-    # Ensure MSVC dev environment is active on Windows when needed
-    # Attempt to detect Visual Studio once and cache the installation path
-    # into the generated cbt config so future invocations can reuse it.
-    msvc_inst: str | None = None
-    if is_windows():
-        # Try a quick detection now; store into config so it gets written.
-        try:
-            msvc_inst = _find_vs_installation()
-        except Exception:
-            msvc_inst = None
-        if msvc_inst:
-            config.setdefault("msvc", {})["installation"] = msvc_inst
-    # If we detected an installation, activate the dev env now and capture the
-    # environment delta so future runs can reuse it without invoking the batch.
-    if is_windows() and msvc_inst:
-        try:
-            activated = _activate_vs_env_into(env, msvc_inst, "x64", ctx.quiet)
-            # Compute delta between original env and activated env
-            delta: dict[str, str] = {}
-            for k, v in activated.items():
-                orig = env.get(k)
-                if orig != v:
-                    delta[k] = v
-            # Persist installation path and env delta
-            msvc = config.setdefault("msvc", {})
-            msvc["installation"] = msvc_inst
-            msvc["env"] = delta
-            # Use the activated environment for the rest of configure
-            env = activated
-        except Exception:
-            # Fallback to attempting to ensure env (which will raise a helpful error)
-            env = _ensure_msvc_dev_env(env, ctx.quiet, cached_installation=msvc_inst)
-    else:
-        env = _ensure_msvc_dev_env(env, ctx.quiet, cached_installation=msvc_inst)
-    # Debug: when not quiet, print a short PATH sample and whether cl is present in that PATH
-    if not ctx.quiet and is_windows():
-        sample_path = env.get("PATH", "")
-        # print only the tail (last 3 entries) to avoid huge output
-        parts = sample_path.split(os.pathsep)
-        tail = os.pathsep.join(parts[-3:]) if len(parts) >= 3 else sample_path
-        sys.stdout.write(f"Detected PATH tail: {tail}\n")
-        detected = _find_executable_in_env_path(sample_path, "cl") or _shutil_which(
-            "cl", path=sample_path
-        )
-        sys.stdout.write(f"cl found by detection: {detected}\n")
-    # If MSVC dev env activated, detect cl.exe in the captured PATH for diagnostics (do not set compilers)
-    if is_windows():
-        try:
-            cl_path = _shutil_which("cl", path=env.get("PATH", ""))
-        except Exception:
-            cl_path = None
-        if not cl_path:
-            # Fallback: look for cl.exe by scanning PATH entries directly
-            cl_path = _find_executable_in_env_path(env.get("PATH", ""), "cl")
-        if cl_path:
-            if not ctx.quiet:
-                sys.stdout.write(f"Using detected cl: {cl_path}\n")
-    # Strong diagnostic: print PATH and related VS env vars, and run 'where cl' via cmd with the captured env
-    if is_windows() and not ctx.quiet:
-        try:
-            path_full = env.get("PATH", "")
-            sys.stdout.write(f"Captured PATH length: {len(path_full)}\n")
-            parts = [p for p in path_full.split(os.pathsep) if p]
-            sys.stdout.write(f"Captured PATH entries (last 10): {parts[-10:]}\n")
-            for key in (
-                "VSINSTALLDIR",
-                "VS150COMNTOOLS",
-                "VisualStudioVersion",
-                "VCToolsInstallDir",
-            ):
-                if key in env:
-                    sys.stdout.write(f"{key}={env.get(key)}\n")
-            comspec = os.environ.get("COMSPEC", "cmd")
-            try:
-                proc = subprocess.run(
-                    [comspec, "/c", "where cl"],
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                sys.stdout.write(f"where cl stdout:\n{proc.stdout}\n")
-                sys.stdout.write(f"where cl stderr:\n{proc.stderr}\n")
-            except Exception as ex:
-                sys.stdout.write(f"Failed to run where cl via subprocess: {ex}\n")
-            # Additional diagnostics: check git and sh visibility under the same env
-            try:
-                proc = subprocess.run(
-                    [comspec, "/c", "where git"],
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                sys.stdout.write(f"where git stdout:\n{proc.stdout}\n")
-                sys.stdout.write(f"where git stderr:\n{proc.stderr}\n")
-            except Exception as ex:
-                sys.stdout.write(f"Failed to run where git via subprocess: {ex}\n")
-            try:
-                proc = subprocess.run(
-                    [comspec, "/c", "where sh"],
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                sys.stdout.write(f"where sh stdout:\n{proc.stdout}\n")
-                sys.stdout.write(f"where sh stderr:\n{proc.stderr}\n")
-            except Exception as ex:
-                sys.stdout.write(f"Failed to run where sh via subprocess: {ex}\n")
-            # Try to run git --version and sh --version directly
-            try:
-                proc = subprocess.run(
-                    ["git", "--version"],
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                sys.stdout.write(f"git --version stdout:\n{proc.stdout}\n")
-                sys.stdout.write(f"git --version stderr:\n{proc.stderr}\n")
-            except Exception as ex:
-                sys.stdout.write(
-                    f"Failed to run 'git --version' via subprocess: {ex}\n"
-                )
-            try:
-                proc = subprocess.run(
-                    ["sh", "--version"],
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                )
-                sys.stdout.write(f"sh --version stdout:\n{proc.stdout}\n")
-                sys.stdout.write(f"sh --version stderr:\n{proc.stderr}\n")
-            except Exception as ex:
-                sys.stdout.write(f"Failed to run 'sh --version' via subprocess: {ex}\n")
-        except Exception as ex:
-            sys.stdout.write(f"Diagnostic failure: {ex}\n")
+    if installation:
+        config.setdefault("msvc", {})["installation"] = installation
+    _capture_msvc_config_env(config, env)
+    _log_detected_compiler(env, ctx.quiet)
 
     cmake_mod.configure(
         tools["cmake"],
@@ -742,7 +995,7 @@ def configure(
         repo_root(),
         build_type,
         toolchain_file,
-        defines,
+        effective_defines,
         env,
         ctx.quiet,
     )
@@ -750,58 +1003,106 @@ def configure(
     _record_last(root, profile, build_dir)
 
 
-@cli.command(short_help="Re-run configuration (CMake/Conan) for a profile")
-@click.option("--profile")
-@click.option("--conan", "run_conan", is_flag=True)
-@click.option("--cmake-define", multiple=True)
+@cli.command(
+    short_help="Re-run configuration (CMake/Conan) for a profile",
+    help=(
+        "Re-run CMake configure using the stored .cbt config. Conan install is triggered "
+        "automatically when sanitizer settings change, or manually with --conan."
+    ),
+)
+@click.option("--profile", help="Logical cbt profile name to reconfigure.")
+@click.option(
+    "--conan",
+    "run_conan",
+    is_flag=True,
+    help="Force rerunning Conan install even if the sanitizer state did not change.",
+)
+@click.option(
+    "--cmake-define",
+    multiple=True,
+    help=(
+        "Override stored cache definitions in KEY=VALUE form for this reconfigure run. "
+        "Changing CORY_SANITIZERS_<build-type> automatically refreshes Conan dependencies."
+    ),
+)
+@click.option(
+    "--sanitizers",
+    help=(
+        "Sanitizer set for this build type, for example ASAN or ASAN;UBSAN. "
+        "This updates the stored sanitizer state and the matching CORY_SANITIZERS_<build-type> define."
+    ),
+)
+@click.option(
+    "--no-sanitizers",
+    is_flag=True,
+    help="Disable sanitizers for this build type and sync the stored state.",
+)
 @click.pass_obj
 def reconfigure(
-    ctx: CliContext, profile: str | None, run_conan: bool, cmake_define: tuple[str, ...]
+    ctx: CliContext,
+    profile: str | None,
+    run_conan: bool,
+    cmake_define: tuple[str, ...],
+    sanitizers: str | None,
+    no_sanitizers: bool,
 ) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, None)
-    env = _config_env(config)
-    env = _ensure_msvc_dev_env(
-        env,
-        ctx.quiet,
-        cached_installation=config.get("msvc", {}).get("installation"),
-        cached_env=config.get("msvc", {}).get("env"),
-    )
     tools = config["tools"]
-    if run_conan:
-        conan_mod.install(
-            tools["conan"],
-            Path(config["paths"]["build_dir"]),
-            Path(config["paths"]["source_dir"]),
-            config["conan"]["profile_host"],
-            config["conan"]["profile_build"],
-            config["cbt"]["build_type"],
-            ctx.quiet,
-            preset_name=profile,
-        )
     defines = dict(config["cmake"]["defines"])
-    defines.update(_parse_defines(cmake_define))
-    # If MSVC dev env activated, detect cl.exe in the captured PATH for diagnostics only
-    if is_windows():
-        try:
-            cl_path = _shutil_which("cl", path=env.get("PATH", ""))
-        except Exception:
-            cl_path = None
-        if not cl_path:
-            cl_path = _find_executable_in_env_path(env.get("PATH", ""), "cl")
-        if cl_path:
-            if not ctx.quiet:
-                sys.stdout.write(
-                    f"reconfigure: cl detected in captured PATH: {cl_path}\n"
-                )
-    # Diagnostic: confirm cl is visible when running subprocesses with the captured env
-    if is_windows() and not ctx.quiet:
-        try:
-            run(["where", "cl"], env=env, quiet=False)
-        except ToolError:
-            sys.stdout.write(
-                "Diagnostic: 'where cl' failed under captured env - cl not visible to subprocess.\n"
-            )
+    defines.update(
+        _apply_sanitizer_cli_option(
+            _parse_defines(cmake_define),
+            config["cbt"]["build_type"],
+            sanitizers,
+            no_sanitizers,
+        )
+    )
+    previous_active = config.get("sanitizers", {}).get("active")
+    previous_home = str(config.get("conan", {}).get("home", ""))
+    sanitizer_state, defines, effective_defines = _resolve_sanitizer_state(
+        build_type=config["cbt"]["build_type"],
+        defines=defines,
+        stored_active=previous_active,
+    )
+    conan_home = conan_home_for_profile(
+        config["cbt"]["profile"],
+        Path(config["paths"]["build_root"]),
+        config["cbt"]["build_type"],
+        sanitizer_state.signature,
+    )
+    config["conan"]["home"] = str(conan_home)
+    config["sanitizers"] = _sanitizer_config_dict(sanitizer_state)
+    config["cmake"]["defines"] = defines
+    env = _activate_build_env(config, ctx.quiet, allow_discovery=False)
+    sanitizer_changed = sanitizer_state.active_value != (previous_active or "") or str(conan_home) != previous_home
+    cache_stale = not _cmake_cache_has_expected_sanitizer_flags(build_dir, sanitizer_state)
+    if run_conan or sanitizer_changed:
+        _run_conan_install(
+            tools=tools,
+            build_dir=Path(config["paths"]["build_dir"]),
+            source_dir=Path(config["paths"]["source_dir"]),
+            profile=profile,
+            profile_host=config["conan"]["profile_host"],
+            profile_build=config["conan"]["profile_build"],
+            build_type=config["cbt"]["build_type"],
+            env=env,
+            quiet=ctx.quiet,
+            sanitizer_state=sanitizer_state,
+        )
+    if sanitizer_changed:
+        _reset_cmake_config_state(
+            build_dir,
+            ctx.quiet,
+            "sanitizer selection changed and CMake cache must be reinitialized",
+        )
+    elif cache_stale:
+        _reset_cmake_config_state(
+            build_dir,
+            ctx.quiet,
+            "sanitizer-enabled profile has stale CMake cache entries",
+        )
+    _log_detected_compiler(env, ctx.quiet, prefix="reconfigure")
 
     cmake_mod.configure(
         tools["cmake"],
@@ -809,10 +1110,11 @@ def reconfigure(
         Path(config["paths"]["source_dir"]),
         config["cbt"]["build_type"],
         Path(config["cmake"]["toolchain_file"]),
-        defines,
+        effective_defines,
         env,
         ctx.quiet,
     )
+    write_config(build_dir, config)
 
 
 @cli.command(short_help="Build the project or a specific target")
@@ -832,12 +1134,19 @@ def build(
 ) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
-    env = _config_env(config)
-    env = _ensure_msvc_dev_env(
-        env,
-        ctx.quiet,
-        cached_installation=config.get("msvc", {}).get("installation"),
-        cached_env=config.get("msvc", {}).get("env"),
+    env = _activate_build_env(config, ctx.quiet, allow_discovery=False)
+    sanitizer_state, _, _ = _resolve_sanitizer_state(
+        build_type=config["cbt"]["build_type"],
+        defines=dict(config["cmake"]["defines"]),
+        stored_active=config.get("sanitizers", {}).get("active"),
+    )
+    _ensure_cmake_sanitizer_state(
+        tools=config["tools"],
+        config=config,
+        build_dir=build_dir,
+        env=env,
+        quiet=ctx.quiet,
+        sanitizer_state=sanitizer_state,
     )
     cmake_mod.build(
         config["tools"]["cmake"],
@@ -871,13 +1180,7 @@ def run_target(
 ) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
-    env = _config_env(config)
-    env = _ensure_msvc_dev_env(
-        env,
-        ctx.quiet,
-        cached_installation=config.get("msvc", {}).get("installation"),
-        cached_env=config.get("msvc", {}).get("env"),
-    )
+    env = _activate_build_env(config, ctx.quiet, allow_discovery=False)
     if not no_build:
         # fail fast so we never run stale output if the build fails.
         cmake_mod.build(
@@ -1018,13 +1321,7 @@ def list_targets(
 ) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
-    env = _config_env(config)
-    env = _ensure_msvc_dev_env(
-        env,
-        ctx.quiet,
-        cached_installation=config.get("msvc", {}).get("installation"),
-        cached_env=config.get("msvc", {}).get("env"),
-    )
+    env = _activate_build_env(config, ctx.quiet, allow_discovery=False)
     result = run(
         [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
         env=env,
@@ -1048,7 +1345,9 @@ def list_tests(
 ) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
-    env = _config_env(config)
+    env = _activate_build_env(
+        config, ctx.quiet, base_env=_test_env(config), allow_discovery=False
+    )
     tests = ctest_mod.list_tests(config["tools"]["ctest"], build_dir, env, ctx.quiet)
     if as_json:
         print_json({"tests": tests})
@@ -1084,12 +1383,8 @@ def run_test(
 ) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
-    env = _test_env(config)
-    env = _ensure_msvc_dev_env(
-        env,
-        ctx.quiet,
-        cached_installation=config.get("msvc", {}).get("installation"),
-        cached_env=config.get("msvc", {}).get("env"),
+    env = _activate_build_env(
+        config, ctx.quiet, base_env=_test_env(config), allow_discovery=False
     )
     target_help = run(
         [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
@@ -1359,30 +1654,83 @@ def doctor(ctx: CliContext, as_json: bool) -> None:
         raise MissingPrereq("Missing prerequisites detected")
 
 
-@cli.command(short_help="Show status information for a build/profile")
-@click.option("--profile")
-@click.option("--build-root", type=click.Path(path_type=Path))
-@click.option("--json", "as_json", is_flag=True)
+@cli.command(
+    short_help="Show status information for a build/profile",
+    help="Show the stored cbt configuration, including tool paths, Conan settings, and active sanitizers.",
+)
+@click.option("--profile", help="Logical cbt profile name to inspect.")
+@click.option(
+    "--build-root",
+    type=click.Path(path_type=Path),
+    help="Override the build root used to resolve the profile directory.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON instead of text output.")
 @click.pass_obj
 def status(
     ctx: CliContext, profile: str | None, build_root: Path | None, as_json: bool
 ) -> None:
     profile = _resolve_profile(profile)
     config, build_dir = _load_or_fail(profile, build_root)
+    build_type = str(config.get("cbt", {}).get("build_type", "Debug"))
+    stored_defines = dict(config.get("cmake", {}).get("defines", {}))
+    stored_active = config.get("sanitizers", {}).get("active")
+    sanitizer_state, synced_defines, effective_defines = _resolve_sanitizer_state(
+        build_type=build_type,
+        defines=stored_defines,
+        stored_active=stored_active,
+    )
+    config_file = config_path(build_dir)
+    conan_info = dict(config.get("conan", {}))
+    conan_home = Path(
+        conan_info.get("home")
+        or conan_home_for_profile(
+            profile,
+            Path(config["paths"]["build_root"]),
+            build_type,
+            sanitizer_state.signature,
+        )
+    )
+    conan_info["home"] = str(conan_home)
+    if conan_home:
+        conan_info["home_exists"] = conan_home.exists()
+        conan_info["settings_file"] = str(conan_home / "settings.yml")
+        conan_info["settings_exists"] = (conan_home / "settings.yml").exists()
+        conan_info["profiles_dir"] = str(conan_home / "profiles")
+        conan_info["profiles_dir_exists"] = (conan_home / "profiles").exists()
+
+    compile_commands = Path(build_dir) / "compile_commands.json"
     info = {
-        "repo_root": config["paths"]["source_dir"],
-        "build_root": config["paths"]["build_root"],
-        "build_dir": str(build_dir),
-        "build_type": config["cbt"]["build_type"],
+        "profile": profile,
+        "config_path": str(config_file),
+        "config_exists": config_file.exists(),
+        "cbt": config.get("cbt", {}),
+        "paths": config.get("paths", {}),
+        "cmake": {
+            **config.get("cmake", {}),
+            "stored_defines": synced_defines,
+            "effective_defines": effective_defines,
+        },
         "tools": config.get("tools", {}),
-        "conan": config.get("conan", {}),
-        "compile_commands": str(Path(build_dir) / "compile_commands.json"),
+        "conan": conan_info,
+        "sanitizers": {
+            **config.get("sanitizers", {}),
+            "active": sanitizer_state.active_value,
+            "signature": sanitizer_state.signature,
+            "from_define": sanitizer_state.from_define,
+            "resolved": sanitizer_state.enabled,
+            "cxxflags": list(sanitizer_state.cxxflags),
+            "shared_link_flags": list(sanitizer_state.shared_link_flags),
+            "exe_link_flags": list(sanitizer_state.exe_link_flags),
+        },
+        "compile_commands": {
+            "path": str(compile_commands),
+            "exists": compile_commands.exists(),
+        },
     }
     if as_json:
         print_json(info)
     else:
-        for k, v in info.items():
-            sys.stdout.write(f"{k}: {v}\n")
+        sys.stdout.write("\n".join(_status_text_lines(info)) + "\n")
 
 
 @cli.command(name="which", short_help="Resolve the path to a tool")
@@ -1407,7 +1755,7 @@ def which_cmd(ctx: CliContext, tool: str) -> None:
 def env(ctx: CliContext, profile: str | None, build_root: Path | None) -> None:
     profile = _resolve_profile(profile)
     config, _ = _load_or_fail(profile, build_root)
-    env = _config_env(config)
+    env = _activate_build_env(config, ctx.quiet, allow_discovery=False)
     for key in ("VULKAN_SDK",):
         if key in env:
             sys.stdout.write(f"{key}={env[key]}\n")

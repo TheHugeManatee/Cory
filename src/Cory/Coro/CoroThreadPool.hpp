@@ -13,6 +13,9 @@
 
 namespace Cory {
 
+/// A simple thread pool scheduler for coroutines. Coroutines can co_await the schedule() function
+/// to yield execution to another worker thread.
+/// Implements the Scheduler concept.
 class CoroThreadPool : NoCopy {
   public:
     explicit CoroThreadPool(size_t workerCount = std::thread::hardware_concurrency());

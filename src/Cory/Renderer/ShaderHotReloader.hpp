@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Cory/Base/Common.hpp>
-#include <Cory/Base/Coro.hpp>
+#include <Cory/Coro/Coro.hpp>
 #include <Cory/Renderer/Common.hpp>
 
 #include <cstddef>

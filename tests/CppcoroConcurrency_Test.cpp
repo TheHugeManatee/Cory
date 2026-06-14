@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include <Cory/Base/Coro.hpp>
-#include <Cory/Base/CoroBatch.hpp>
-#include <Cory/Base/CoroOps.hpp>
-#include <Cory/Base/CoroThreadPool.hpp>
+#include <Cory/Coro/Coro.hpp>
+#include <Cory/Coro/CoroBatch.hpp>
+#include <Cory/Coro/CoroOps.hpp>
+#include <Cory/Coro/CoroThreadPool.hpp>
 
 #include <cppcoro/schedule_on.hpp>
 #include <cppcoro/static_thread_pool.hpp>

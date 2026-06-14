@@ -77,17 +77,22 @@ void CameraLayer::onUpdate([[maybe_unused]] const LogicUpdateContext &updateCont
     if (::ImGui::Begin("CameraLayer")) {
         CoImGui::Text("Mode: {}", state_->mode);
 
-        CoImGui::Slider("position", position, -10.0f, 10.0f);
-        CoImGui::Slider("up", up, -1.0f, 1.0f);
-        CoImGui::Slider("focus", focus, -10.0f, 10.0f);
-        CoImGui::Slider("fovy", fovy, 10.0f, 140.0f);
+        CoImGui::Slider(position);
+        CoImGui::Slider(up);
+        CoImGui::Slider(focus);
+
+        auto fovyDegrees = glm::degrees(fovy());
+        if (CoImGui::Slider(fovy.name(), fovyDegrees, 10.0f, 140.0f)) {
+            fovy.set(glm::radians(fovyDegrees));
+        }
+
         CoImGui::Slider("forward", forward, -1.0f, 1.0f);
         CoImGui::Slider("right", right, -1.0f, 1.0f);
 
         ImGui::Separator();
-        CoImGui::Slider("movement speed", movementSpeed, 0.01f, 1.0f);
-        CoImGui::Slider("rotation speed", rotationSpeed, 0.001f, 0.1f);
-        CoImGui::Slider("scroll speed", scrollSpeed, 0.1f, 10.0f);
+        CoImGui::Slider(movementSpeed);
+        CoImGui::Slider(rotationSpeed);
+        CoImGui::Slider(scrollSpeed);
     }
     ::ImGui::End();
 }
@@ -100,10 +105,10 @@ void CameraLayer::lookAt(glm::vec3 newPosition, glm::vec3 newFocus, glm::vec3 ne
 void CameraLayer::update()
 {
     worldToViewMatrix = glm::inverse(viewToWorldMatrix());
-    position = viewToWorldMatrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f};
-    up = viewToWorldMatrix() * glm::vec4{localUp, 0.0f};
-    forward = viewToWorldMatrix() * glm::vec4{localForward, 0.0f};
-    right = viewToWorldMatrix() * glm::vec4{localRight, 0.0f};
+    position = glm::vec3{viewToWorldMatrix() * glm::vec4{0.0f, 0.0f, 0.0f, 1.0f}};
+    up = glm::vec3{viewToWorldMatrix() * glm::vec4{localUp, 0.0f}};
+    forward = glm::vec3{viewToWorldMatrix() * glm::vec4{localForward, 0.0f}};
+    right = glm::vec3{viewToWorldMatrix() * glm::vec4{localRight, 0.0f}};
 }
 
 bool CameraLayer::mouseButton(const MouseButtonEvent &event)

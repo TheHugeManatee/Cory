@@ -60,6 +60,7 @@ add_library(Cory_TestLib OBJECT
         MappedCoherentDeviceBuffer_Test.cpp
         AsyncUploader_Test.cpp
         ApiPass_Test.cpp
+        EcsSystemScheduler_Test.cpp
         DatasetLoader_Test.cpp
         CppcoroConcurrency_Test.cpp
         Properties_Test.cpp

@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -18,6 +18,7 @@ type SizeConfig = {
 type RawConfig = {
 	defaultSize?: string;
 	piCommand?: string;
+	stallTimeoutSeconds?: number;
 	defaultTools?: string[];
 	defaultSystemPrompt?: string;
 	sizes?: Record<string, string | Partial<SizeConfig> & { id?: string }>;
@@ -27,6 +28,7 @@ type RawConfig = {
 type Config = {
 	defaultSize?: string;
 	piCommand?: string;
+	stallTimeoutSeconds?: number;
 	defaultTools?: string[];
 	defaultSystemPrompt?: string;
 	sizes: Record<string, SizeConfig>;
@@ -72,6 +74,7 @@ function normalizeConfig(raw: RawConfig): Config {
 	return {
 		defaultSize: typeof raw.defaultSize === "string" ? raw.defaultSize : undefined,
 		piCommand: typeof raw.piCommand === "string" ? raw.piCommand : undefined,
+		stallTimeoutSeconds: typeof raw.stallTimeoutSeconds === "number" && Number.isFinite(raw.stallTimeoutSeconds) ? raw.stallTimeoutSeconds : undefined,
 		defaultTools: Array.isArray(raw.defaultTools)
 			? raw.defaultTools.filter((tool): tool is string => typeof tool === "string" && tool.length > 0)
 			: undefined,
@@ -87,6 +90,7 @@ function mergeConfigs(base: Config | undefined, override: Config | undefined): C
 	return {
 		defaultSize: override.defaultSize ?? base.defaultSize,
 		piCommand: override.piCommand ?? base.piCommand,
+		stallTimeoutSeconds: override.stallTimeoutSeconds ?? base.stallTimeoutSeconds,
 		defaultTools: override.defaultTools ?? base.defaultTools,
 		defaultSystemPrompt: override.defaultSystemPrompt ?? base.defaultSystemPrompt,
 		sizes: { ...base.sizes, ...override.sizes },
@@ -156,17 +160,55 @@ function getFinalAssistantText(messages: Array<{ role: string; content: Array<{ 
 	return "";
 }
 
-function estimateTokens(text: string): number {
-	return Math.ceil(text.length / 4);
-}
+function consumeJsonEvents(buffer: string, onEvent: (event: unknown) => void): string {
+	let start = -1;
+	let depth = 0;
+	let inString = false;
+	let escape = false;
 
-function formatSeconds(ms: number | undefined): string {
-	if (ms === undefined) return "pending";
-	return `${(ms / 1000).toFixed(1)}s`;
-}
+	for (let i = 0; i < buffer.length; i++) {
+		const ch = buffer[i];
 
-function formatTokenRate(tokensPerSecond: number): string {
-	return `${tokensPerSecond.toFixed(1)} tok/s`;
+		if (start < 0) {
+			if (ch === "{") {
+				start = i;
+				depth = 1;
+				inString = false;
+				escape = false;
+			}
+			continue;
+		}
+
+		if (inString) {
+			if (escape) {
+				escape = false;
+			} else if (ch === "\\") {
+				escape = true;
+			} else if (ch === '"') {
+				inString = false;
+			}
+			continue;
+		}
+
+		if (ch === '"') {
+			inString = true;
+		} else if (ch === "{") {
+			depth++;
+		} else if (ch === "}") {
+			depth--;
+			if (depth === 0) {
+				const candidate = buffer.slice(start, i + 1);
+				try {
+					onEvent(JSON.parse(candidate));
+				} catch {
+					// Ignore malformed chunks and continue scanning for the next object.
+				}
+				start = -1;
+			}
+		}
+	}
+
+	return start >= 0 ? buffer.slice(start) : "";
 }
 
 function lastNonEmptyLines(text: string, count: number): string[] {
@@ -181,6 +223,25 @@ function summarizeTask(task: string): string {
 	const maxLength = 80;
 	const singleLine = task.replace(/\s+/g, " ").trim();
 	return singleLine.length <= maxLength ? singleLine : `${singleLine.slice(0, maxLength - 3)}...`;
+}
+
+async function killProcessTree(proc: ReturnType<typeof spawn>): Promise<void> {
+	if (!proc.pid) return;
+
+	if (process.platform === "win32") {
+		spawnSync("taskkill", ["/pid", String(proc.pid), "/t", "/f"], { stdio: "ignore" });
+		return;
+	}
+
+	try {
+		process.kill(-proc.pid, "SIGTERM");
+	} catch {
+		try {
+			proc.kill("SIGTERM");
+		} catch {
+			return;
+		}
+	}
 }
 
 async function writeSystemPrompt(systemPrompt: string): Promise<{ dir: string; filePath: string }> {
@@ -266,12 +327,14 @@ export default function (pi: ExtensionAPI) {
 
 			args.push(`${taskName ? `Task name: ${taskName}\n\n` : ""}Task: ${params.task}`);
 
-			const startedAtMs = Date.now();
 			const result = {
 				messages: [] as Array<{ role: string; content: Array<{ type: string; text?: string }>; usage?: any; stopReason?: string; errorMessage?: string; model?: string }>,
 				stderr: "",
 				streamedText: "",
 				firstTokenAtMs: undefined as number | undefined,
+				stallTimeoutMs: Math.max(30_000, (config.stallTimeoutSeconds ?? 300) * 1000),
+				lastActivityAtMs: Date.now(),
+				watchdogTriggered: false,
 				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 				stopReason: undefined as string | undefined,
 				errorMessage: undefined as string | undefined,
@@ -306,8 +369,16 @@ export default function (pi: ExtensionAPI) {
 				});
 			};
 
+			const markActivity = () => {
+				result.lastActivityAtMs = Date.now();
+			};
+
 			let proc: ReturnType<typeof spawn> | undefined;
-			let buffer = "";
+			let jsonBuffer = "";
+			let watchdog: ReturnType<typeof setInterval> | undefined;
+			let forceExitTimer: ReturnType<typeof setTimeout> | undefined;
+			let finished = false;
+			let timeoutReason: string | undefined;
 			let killListener: (() => void) | undefined;
 			let aborted = false;
 
@@ -315,20 +386,13 @@ export default function (pi: ExtensionAPI) {
 				const invocation = getPiInvocation(config.piCommand ?? "pi", args);
 				proc = spawn(invocation.command, invocation.args, {
 					cwd,
+					detached: process.platform !== "win32",
 					shell: false,
 					stdio: ["ignore", "pipe", "pipe"],
 				});
 				emitUpdate();
 
-				const processLine = (line: string) => {
-					if (!line.trim()) return;
-					let event: any;
-					try {
-						event = JSON.parse(line);
-					} catch {
-						return;
-					}
-
+				const processEvent = (event: any) => {
 					if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
 						const delta = event.assistantMessageEvent.delta;
 						if (typeof delta === "string" && delta.length > 0) {
@@ -369,35 +433,66 @@ export default function (pi: ExtensionAPI) {
 					}
 				};
 
+				const processJsonChunk = (chunk: string) => {
+					if (!chunk) return;
+					markActivity();
+					jsonBuffer += chunk;
+					jsonBuffer = consumeJsonEvents(jsonBuffer, processEvent);
+				};
+
 				proc.stdout.on("data", (data) => {
-					buffer += data.toString();
-					const lines = buffer.split("\n");
-					buffer = lines.pop() ?? "";
-					for (const line of lines) processLine(line);
+					processJsonChunk(data.toString());
 				});
 
 				proc.stderr.on("data", (data) => {
+					markActivity();
 					result.stderr += data.toString();
 				});
 
 				if (signal) {
 					killListener = () => {
 						aborted = true;
-						proc?.kill();
+						void killProcessTree(proc);
 					};
 					signal.addEventListener("abort", killListener, { once: true });
 				}
 
+				watchdog = setInterval(() => {
+					if (finished || aborted || timeoutReason || !proc?.pid) return;
+					if (Date.now() - result.lastActivityAtMs > result.stallTimeoutMs) {
+						result.watchdogTriggered = true;
+						timeoutReason = `Sub-agent stalled for ${Math.round(result.stallTimeoutMs / 1000)}s.`;
+						result.errorMessage = timeoutReason;
+						result.stopReason = "timeout";
+						emitUpdate();
+						void killProcessTree(proc);
+					}
+				}, 5000);
+				watchdog.unref?.();
+
 				const exitCode = await new Promise<number>((resolve) => {
-					proc?.on("close", (code) => {
-						if (buffer.trim()) processLine(buffer);
-						resolve(code ?? 0);
-					});
-					proc?.on("error", () => resolve(1));
+					const settle = (code: number) => {
+						if (finished) return;
+						finished = true;
+						if (watchdog) clearInterval(watchdog);
+						if (forceExitTimer) clearTimeout(forceExitTimer);
+						if (jsonBuffer.trim()) jsonBuffer = consumeJsonEvents(jsonBuffer, processEvent);
+						resolve(code);
+					};
+					proc?.on("close", (code) => settle(code ?? 0));
+					proc?.on("error", () => settle(1));
+					forceExitTimer = setTimeout(() => {
+						settle(1);
+					}, result.stallTimeoutMs + 10_000);
+					forceExitTimer.unref?.();
 				});
 
-				const effectiveExitCode = aborted ? 1 : exitCode;
-				const text = getFinalAssistantText(result.messages) || result.errorMessage || result.stderr || (aborted ? "(aborted)" : "(no output)");
+				const effectiveExitCode = aborted || timeoutReason ? 1 : exitCode;
+				const text =
+					getFinalAssistantText(result.messages) ||
+					(timeoutReason ?? result.errorMessage) ||
+					result.stderr ||
+					(aborted ? "(aborted)" : "(no output)");
 				return {
 					content: [{ type: "text", text }],
 					details: {
@@ -409,8 +504,8 @@ export default function (pi: ExtensionAPI) {
 						model: result.model,
 						cwd,
 						exitCode: effectiveExitCode,
-						stopReason: aborted ? "aborted" : result.stopReason,
-						errorMessage: aborted ? "Sub-agent was aborted." : result.errorMessage,
+						stopReason: aborted ? "aborted" : timeoutReason ? "timeout" : result.stopReason,
+						errorMessage: aborted ? "Sub-agent was aborted." : timeoutReason ?? result.errorMessage,
 						usage: result.usage,
 					},
 				};

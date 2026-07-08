@@ -1,5 +1,6 @@
 import { convertToPng, defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { Container, Image, Text } from "@earendil-works/pi-tui";
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -39,6 +40,20 @@ type VisualReviewDecision = {
 	note: string;
 };
 
+type VisualReviewToolDetails = {
+	request?: VisualReviewRequest;
+	requestPath?: string;
+	baselinePath?: string;
+	actualPath?: string;
+	diffPath?: string;
+	decisionPath?: string;
+	sourceExcerpt?: string;
+	existingDecision?: VisualReviewDecision;
+	accepted?: boolean;
+	note?: string;
+	error?: string;
+};
+
 const visualReviewTool = defineTool({
 	name: "visual_review_request",
 	label: "Visual Review Request",
@@ -73,6 +88,54 @@ const visualReviewTool = defineTool({
 			}),
 		),
 	}),
+	renderCall(args, theme) {
+		const action = typeof args.action === "string" ? args.action : "inspect";
+		const requestPath = typeof args.requestPath === "string" ? path.resolve(args.requestPath) : "<request.json>";
+		return new Text(
+			[
+				theme.fg("toolTitle", theme.bold(`Visual review · ${action}`)),
+				theme.fg("muted", `request.json: ${requestPath}`),
+			].join("\n"),
+			0,
+			0,
+		);
+	},
+	renderResult(result, { isPartial }, theme) {
+		const details = result.details as VisualReviewToolDetails | undefined;
+		if (isPartial) {
+			return new Text(theme.fg("warning", "Inspecting visual review request..."), 0, 0);
+		}
+		if (result.isError || details?.error) {
+			const message = details?.error ?? result.content.find((item) => item.type === "text")?.text ?? "unknown error";
+			return new Text(theme.fg("error", message), 0, 0);
+		}
+
+		const container = new Container();
+		const request = details?.request;
+		const requestPath = details?.requestPath;
+		const summaryLines = [
+			theme.fg("toolTitle", theme.bold(`Visual review: ${request?.caseName ?? "unknown case"}`)),
+			requestPath ? theme.fg("muted", `request.json: ${requestPath}`) : undefined,
+			request?.metadata?.catchTestName ? theme.fg("muted", `Catch test: ${request.metadata.catchTestName}`) : undefined,
+			request ? theme.fg("muted", formatMetrics(request.metrics)) : undefined,
+			details?.accepted !== undefined
+				? theme.fg(details.accepted ? "success" : "warning", `${details.accepted ? "Accepted" : "Rejected"}: ${details.note ?? ""}`)
+				: details?.existingDecision
+					? theme.fg("muted", `Existing decision: ${details.existingDecision.accepted ? "accepted" : "rejected"} (${details.existingDecision.note || "no note"})`)
+					: theme.fg("muted", "Existing decision: none"),
+		].filter((line): line is string => Boolean(line));
+		container.addChild(new Text(summaryLines.join("\n"), 0, 0));
+
+		for (const item of result.content) {
+			if (item.type === "text" && item.text.startsWith("IMAGE ")) {
+				container.addChild(new Text(theme.fg("accent", item.text), 0, 0));
+			}
+			else if (item.type === "image") {
+				container.addChild(new Image(item.data, item.mimeType, { fallbackColor: (text: string) => theme.fg("muted", text) }, { maxWidthCells: 80, maxHeightCells: 24 }));
+			}
+		}
+		return container;
+	},
 	async execute(_toolCallId, params) {
 		try {
 			const resolvedRequestPath = path.resolve(params.requestPath);
@@ -99,6 +162,7 @@ const visualReviewTool = defineTool({
 
 				const summaryLines = [
 					`Visual review request: ${request.id}`,
+					`Request JSON: ${resolvedRequestPath}`,
 					`Case: ${request.caseName}`,
 					request.metadata?.catchTestName ? `Catch test: ${request.metadata.catchTestName}` : undefined,
 					sourceFile && sourceLine > 0 ? `Source: ${sourceFile}:${sourceLine}` : undefined,
@@ -125,6 +189,7 @@ const visualReviewTool = defineTool({
 					],
 					details: {
 						request,
+						requestPath: resolvedRequestPath,
 						baselinePath,
 						actualPath,
 						diffPath,
@@ -160,6 +225,8 @@ const visualReviewTool = defineTool({
 					},
 				],
 				details: {
+					request,
+					requestPath: resolvedRequestPath,
 					requestId: request.id,
 					accepted,
 					note,

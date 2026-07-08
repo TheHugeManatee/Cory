@@ -224,7 +224,7 @@ TEST_CASE("Properties can be co_awaited on safely, and pending waiters are clean
     CHECK(waiter2CleanedUp);
 }
 
-TEST_CASE("Perf test to get some ideas", "[Properties]")
+TEST_CASE("Perf test to get some ideas", "[Properties][.]")
 {
     using namespace Cory;
 

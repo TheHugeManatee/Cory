@@ -7,12 +7,24 @@
 #include <Cory/Tools/VisualReviewProtocol.hpp>
 #include <Cory/Tools/VisualReviewUi.hpp>
 
+#include <filesystem>
+#include <fstream>
+#include <source_location>
+
 namespace {
 
 [[nodiscard]] Cory::IO::BmpImageRgba8 toBmpImage(const Cory::testing::ImageRgba8 &image)
 {
     return Cory::IO::BmpImageRgba8{
         .width = image.size.x, .height = image.size.y, .pixelsRgba8 = image.pixels};
+}
+
+[[nodiscard]] std::filesystem::path makeFixtureRoot()
+{
+    auto root = std::filesystem::temp_directory_path() / "Cory" / "VisualDiffReviewerUi_Test" /
+                "visual-review-ui-fixed-request";
+    std::filesystem::create_directories(root);
+    return root;
 }
 
 } // namespace
@@ -33,25 +45,51 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
     const auto actualBmp = toBmpImage(actualImage);
     const auto diffBmp = toBmpImage(diffImage);
 
+    const auto fixtureRoot = makeFixtureRoot();
+    const auto sourceLocation = std::source_location::current();
+
     const auto request = VisualReviewRequest{
         .id = "visual-review-ui-fixed-request",
         .caseName = "reviewer-ui-regression",
-        .metadata =
-            VisualReviewMetadata{.catchTestName = "VisualDiffReviewer UI matches reference",
-                                 .sourceFile = "tools/visual/tests/VisualDiffReviewerUi_Test.cpp",
-                                 .sourceLine = 0,
-                                 .sourceFunction = "ui regression"},
-        .baselinePath = "baseline.bmp",
-        .actualPath = "actual.bmp",
-        .diffPath = "diff.bmp",
-        .metricsPath = "metrics.json",
-        .requestPath = "request.json",
-        .decisionPath = "decision.json",
+        .metadata = VisualReviewMetadata{.catchTestName = "VisualDiffReviewer UI matches reference",
+                                         .sourceFile = sourceLocation.file_name(),
+                                         .sourceLine = sourceLocation.line(),
+                                         .sourceFunction = "ui regression"},
+        .baselinePath = fixtureRoot / "baseline.bmp",
+        .actualPath = fixtureRoot / "actual.bmp",
+        .diffPath = fixtureRoot / "diff.bmp",
+        .metricsPath = fixtureRoot / "metrics.json",
+        .requestPath = fixtureRoot / "request.json",
+        .decisionPath = fixtureRoot / "decision.json",
         .metrics = VisualReviewMetrics{.mismatchedPixels = 64,
                                        .mismatchRatio = 1.0,
                                        .maxChannelError = 255,
                                        .meanAbsoluteError = 127.5},
     };
+
+    REQUIRE(Cory::IO::writeBmpRgba8(request.baselinePath, baselineBmp));
+    REQUIRE(Cory::IO::writeBmpRgba8(request.actualPath, actualBmp));
+    REQUIRE(Cory::IO::writeBmpRgba8(request.diffPath, diffBmp));
+
+    writeRequest(request.requestPath, request);
+
+    {
+        std::ofstream metrics{request.metricsPath, std::ios::binary | std::ios::trunc};
+        REQUIRE(metrics.is_open());
+        metrics << "{\n"
+                << "  \"mismatchedPixels\": " << request.metrics.mismatchedPixels << ",\n"
+                << "  \"mismatchRatio\": " << request.metrics.mismatchRatio << ",\n"
+                << "  \"maxChannelError\": " << static_cast<int>(request.metrics.maxChannelError)
+                << ",\n"
+                << "  \"meanAbsoluteError\": " << request.metrics.meanAbsoluteError << "\n"
+                << "}\n";
+    }
+
+    {
+        std::ofstream decision{request.decisionPath, std::ios::binary | std::ios::trunc};
+        REQUIRE(decision.is_open());
+        decision << "{}\n";
+    }
 
     auto uiState = VisualReviewUiState{};
     const auto actual = canvas.render([&](Cory::testing::TestFrame &frame) {

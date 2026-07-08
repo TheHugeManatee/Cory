@@ -13,6 +13,8 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
+#include <source_location>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -20,7 +22,7 @@
 
 namespace Cory::testing {
 
-/** 
+/**
  * @brief CPU-side image used by visual tests.
  *
  * Pixels are tightly packed RGBA8 in row-major order with a top-left origin.
@@ -30,8 +32,8 @@ struct ImageRgba8 {
     std::vector<std::byte> pixels{};
 };
 
-/** 
- * @brief Tolerances used when comparing an actual image against a stored baseline. 
+/**
+ * @brief Tolerances used when comparing an actual image against a stored baseline.
  */
 struct ImageCompareOptions {
     /// Maximum accepted absolute error for any channel before a pixel is counted as mismatched.
@@ -40,10 +42,18 @@ struct ImageCompareOptions {
     double maxMeanAbsoluteError{0.0};
     /// Maximum accepted ratio of mismatched pixels in [0, 1].
     double maxMismatchRatio{0.0};
+    /// Optional override for the reference baseline path (primarily for helper tests).
+    std::optional<std::filesystem::path> baselinePathOverride{};
+    /// Optional override for the artifact root directory (primarily for helper tests).
+    std::optional<std::filesystem::path> artifactRootOverride{};
+    /// Optional override for the visual reviewer executable path (primarily for helper tests).
+    std::optional<std::filesystem::path> reviewerExecutableOverride{};
+    /// Additional arguments to pass to the reviewer executable.
+    std::vector<std::string> reviewerArguments{};
 };
 
-/** 
- * @brief Metrics and artifact paths produced by a visual image comparison. 
+/**
+ * @brief Metrics and artifact paths produced by a visual image comparison.
  */
 struct ImageCompareResult {
     bool passed{};
@@ -56,10 +66,16 @@ struct ImageCompareResult {
     std::filesystem::path actualPath{};
     std::filesystem::path diffPath{};
     std::filesystem::path metricsPath{};
+    std::filesystem::path requestPath{};
+    std::filesystem::path decisionPath{};
+    std::string catchTestName{};
+    std::filesystem::path sourceFile{};
+    uint64_t sourceLine{};
+    std::string sourceFunction{};
 };
 
-/** 
- * @brief Construction parameters for an isolated one-frame visual test canvas. 
+/**
+ * @brief Construction parameters for an isolated one-frame visual test canvas.
  */
 struct TestCanvasCreateInfo {
     glm::u32vec2 size{128, 128};
@@ -68,8 +84,8 @@ struct TestCanvasCreateInfo {
     std::string label{"TestCanvas"};
 };
 
-/** 
- * @brief Per-frame objects passed to a TestCanvas render callback. 
+/**
+ * @brief Per-frame objects passed to a TestCanvas render callback.
  */
 struct TestFrame {
     FrameContext &frameCtx;
@@ -80,7 +96,7 @@ struct TestFrame {
     TransientTextureHandle swapchain;
 };
 
-/** 
+/**
  * @brief Headless one-frame render target for Catch2 visual tests.
  *
  * The render callback declares framegraph work and returns the color texture to capture. TestCanvas
@@ -110,35 +126,44 @@ class TestCanvas : NoCopy, NoMove {
     std::unique_ptr<struct TestCanvasPrivate> data_;
 };
 
-/** 
- * @brief Create a solid-color RGBA8 image for comparison-helper tests. 
+/**
+ * @brief Create a solid-color RGBA8 image for comparison-helper tests.
  */
 [[nodiscard]] ImageRgba8
 makeSolidImage(glm::u32vec2 size, uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255);
 
-/** 
- * @brief Write an ImageRgba8 as an uncompressed 32-bit BMP artifact. 
+/**
+ * @brief Write an ImageRgba8 as an uncompressed 32-bit BMP artifact.
  */
 void writeBmp(const std::filesystem::path &path, const ImageRgba8 &image);
-/** 
- * @brief Read an uncompressed 32-bit BMP artifact into ImageRgba8. 
+/**
+ * @brief Read an uncompressed 32-bit BMP artifact into ImageRgba8.
  */
 [[nodiscard]] Result<ImageRgba8> readBmp(const std::filesystem::path &path);
 
-/** 
+/**
  * @brief Compare an actual image to `tests/baselines/visual/<caseName>.bmp`.
  *
- * Writes actual/diff/metrics artifacts on failure. Baseline and artifact roots can be overridden
- * with `CORY_VISUAL_BASELINE_DIR` and `CORY_VISUAL_ARTIFACT_DIR`.
+ * On failure this writes actual/diff/metrics/request artifacts under the test runtime directory and
+ * may launch the interactive reviewer when `CORY_VISUAL_INTERACTIVE=1`.
  */
-[[nodiscard]] ImageCompareResult compareToReference(std::string_view caseName,
-                                                    const ImageRgba8 &actual,
-                                                    ImageCompareOptions options = {});
-/** 
- * @brief Catch2-friendly wrapper around compareToReference that checks the comparison result. 
+[[nodiscard]] ImageCompareResult
+compareToReference(std::string_view caseName,
+                   const ImageRgba8 &actual,
+                   ImageCompareOptions options = {},
+                   std::source_location sourceLocation = std::source_location::current());
+
+/**
+ * @brief Catch2-friendly predicate that emits useful artifact paths before returning pass/fail.
+ */
+[[nodiscard]] bool visualMatch(const ImageCompareResult &result);
+
+/**
+ * @brief Catch2-friendly wrapper around compareToReference that checks the comparison result.
  */
 void requireMatchesReference(std::string_view caseName,
                              const ImageRgba8 &actual,
-                             ImageCompareOptions options = {});
+                             ImageCompareOptions options = {},
+                             std::source_location sourceLocation = std::source_location::current());
 
 } // namespace Cory::testing

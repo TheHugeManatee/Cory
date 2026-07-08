@@ -6,14 +6,20 @@
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Synchronization.hpp>
+#include <Cory/Tools/VisualReviewProtocol.hpp>
 
 #include <KDGpu/buffer_options.h>
 #include <KDGpu/texture.h>
 #include <KDGpu/vulkan/vulkan_resource_manager.h>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/interfaces/catch_interfaces_capture.hpp>
 #include <gsl/narrow>
 
 #include <vulkan/vulkan.h>
+
+#if defined(_WIN32)
+#include <process.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -21,9 +27,12 @@
 #include <cstring>
 #include <fstream>
 #include <iomanip>
+#include <optional>
 #include <span>
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace Cory::testing {
 namespace {
@@ -39,13 +48,6 @@ constexpr size_t kRgbaBytesPerPixel = 4;
 {
     const char *value = std::getenv(name);
     return value != nullptr && std::string_view{value} != "" && std::string_view{value} != "0";
-}
-
-[[nodiscard]] std::filesystem::path envPath(const char *name, std::filesystem::path fallback)
-{
-    const char *value = std::getenv(name);
-    if (value == nullptr || std::string_view{value}.empty()) return fallback;
-    return std::filesystem::path{value};
 }
 
 [[nodiscard]] std::string sanitizeCaseName(std::string_view caseName)
@@ -103,22 +105,44 @@ void appendI32(std::vector<std::byte> &out, int32_t value)
     return static_cast<int32_t>(readLe32(bytes, offset));
 }
 
-[[nodiscard]] std::filesystem::path baselinePathFor(std::string_view caseName)
+[[nodiscard]] std::filesystem::path baselinePathFor(std::string_view caseName,
+                                                    const ImageCompareOptions &options)
 {
+    if (options.baselinePathOverride) return *options.baselinePathOverride;
 #ifdef CORY_TEST_SOURCE_DIR
-    const auto defaultRoot = std::filesystem::path{CORY_TEST_SOURCE_DIR} / "baselines" / "visual";
+    const auto root = std::filesystem::path{CORY_TEST_SOURCE_DIR} / "baselines" / "visual";
 #else
-    const auto defaultRoot = std::filesystem::current_path() / "tests" / "baselines" / "visual";
+    const auto root = std::filesystem::current_path() / "tests" / "baselines" / "visual";
 #endif
-    const auto root = envPath("CORY_VISUAL_BASELINE_DIR", defaultRoot);
     return root / fmt::format("{}.bmp", sanitizeCaseName(caseName));
 }
 
-[[nodiscard]] std::filesystem::path artifactDirFor(std::string_view caseName)
+[[nodiscard]] std::string currentCatchTestName()
 {
-    const auto root =
-        envPath("CORY_VISUAL_ARTIFACT_DIR", std::filesystem::current_path() / "visual-artifacts");
-    return root / sanitizeCaseName(caseName);
+    try {
+        return Catch::getResultCapture().getCurrentTestName();
+    }
+    catch (...) {
+        return {};
+    }
+}
+
+[[nodiscard]] std::filesystem::path artifactDirFor(std::string_view caseName,
+                                                   std::string_view catchTestName,
+                                                   const std::source_location &sourceLocation,
+                                                   const ImageCompareOptions &options)
+{
+#ifdef CORY_TEST_RUNTIME_DIR
+    const auto defaultRoot = std::filesystem::path{CORY_TEST_RUNTIME_DIR} / "visual-artifacts";
+#else
+    const auto defaultRoot = std::filesystem::current_path() / "visual-artifacts";
+#endif
+    const auto root = options.artifactRootOverride ? *options.artifactRootOverride : defaultRoot;
+    const auto testComponent =
+        catchTestName.empty() ? std::string{"unknown-catch-test"} : sanitizeCaseName(catchTestName);
+    const auto caseComponent =
+        fmt::format("{}-L{}", sanitizeCaseName(caseName), sourceLocation.line());
+    return root / testComponent / caseComponent;
 }
 
 void writeText(const std::filesystem::path &path, std::string_view text)
@@ -126,6 +150,95 @@ void writeText(const std::filesystem::path &path, std::string_view text)
     std::filesystem::create_directories(path.parent_path());
     std::ofstream file{path, std::ios::binary};
     file << text;
+}
+
+[[nodiscard]] int launchReviewerProcess(const std::filesystem::path &reviewer,
+                                        const std::filesystem::path &requestPath,
+                                        std::span<const std::string> extraArgs)
+{
+    std::vector<std::string> args;
+    args.push_back(reviewer.string());
+    args.emplace_back("--request");
+    args.push_back(requestPath.string());
+    args.insert(args.end(), extraArgs.begin(), extraArgs.end());
+
+#if defined(_WIN32)
+    std::vector<const char *> argv;
+    argv.reserve(args.size() + 1);
+    for (const auto &arg : args) {
+        argv.push_back(arg.c_str());
+    }
+    argv.push_back(nullptr);
+    return _spawnv(_P_WAIT, args.front().c_str(), argv.data());
+#else
+    std::string command;
+    for (const auto &arg : args) {
+        if (!command.empty()) command += " ";
+        command += "'";
+        for (const char ch : arg) {
+            if (ch == '\'')
+                command += "'\\''";
+            else
+                command.push_back(ch);
+        }
+        command += "'";
+    }
+    return std::system(command.c_str());
+#endif
+}
+
+[[nodiscard]] std::filesystem::path reviewerExecutablePath(const ImageCompareOptions &options)
+{
+    if (options.reviewerExecutableOverride) return *options.reviewerExecutableOverride;
+#ifdef CORY_TEST_RUNTIME_DIR
+#ifdef CORY_TEST_EXECUTABLE_SUFFIX
+    return std::filesystem::path{CORY_TEST_RUNTIME_DIR} /
+           fmt::format("VisualDiffReviewer{}", CORY_TEST_EXECUTABLE_SUFFIX);
+#else
+    return std::filesystem::path{CORY_TEST_RUNTIME_DIR} / "VisualDiffReviewer";
+#endif
+#else
+    return std::filesystem::current_path() / "VisualDiffReviewer";
+#endif
+}
+
+[[nodiscard]] bool runInteractiveReview(const Tools::VisualReview::VisualReviewRequest &request,
+                                        const ImageCompareOptions &options)
+{
+    if (!envEnabled("CORY_VISUAL_INTERACTIVE") || envEnabled("CI")) return false;
+
+    const auto reviewer = reviewerExecutablePath(options);
+    if (!std::filesystem::exists(reviewer)) {
+        CO_CORE_ERROR(
+            "CORY_VISUAL_INTERACTIVE is enabled, but reviewer executable was not found at {}",
+            reviewer.string());
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(request.decisionPath, ec);
+
+    const int exitCode =
+        launchReviewerProcess(reviewer, request.requestPath, options.reviewerArguments);
+    if (exitCode != 0) {
+        CO_CORE_ERROR("Visual reviewer failed or was rejected by the shell (exit code {}).",
+                      exitCode);
+        return false;
+    }
+
+    auto decision = Tools::VisualReview::readDecision(request.decisionPath);
+    if (!decision) {
+        CO_CORE_ERROR("Visual reviewer did not write a valid decision file: {}",
+                      request.decisionPath.string());
+        return false;
+    }
+    if (decision->requestId != request.id) {
+        CO_CORE_ERROR("Visual reviewer decision id mismatch: expected '{}', got '{}'",
+                      request.id,
+                      decision->requestId);
+        return false;
+    }
+    return decision->accepted;
 }
 
 [[nodiscard]] ImageRgba8 makeDiffImage(const ImageRgba8 &baseline, const ImageRgba8 &actual)
@@ -163,7 +276,13 @@ void writeText(const std::filesystem::path &path, std::string_view text)
     out << "  \"baseline\": \"" << result.baselinePath.generic_string() << "\",\n";
     out << "  \"actual\": \"" << result.actualPath.generic_string() << "\",\n";
     out << "  \"diff\": \"" << result.diffPath.generic_string() << "\",\n";
-    out << "  \"metrics\": \"" << result.metricsPath.generic_string() << "\"\n";
+    out << "  \"metrics\": \"" << result.metricsPath.generic_string() << "\",\n";
+    out << "  \"request\": \"" << result.requestPath.generic_string() << "\",\n";
+    out << "  \"decision\": \"" << result.decisionPath.generic_string() << "\",\n";
+    out << "  \"catchTestName\": \"" << result.catchTestName << "\",\n";
+    out << "  \"sourceFile\": \"" << result.sourceFile.generic_string() << "\",\n";
+    out << "  \"sourceLine\": " << result.sourceLine << ",\n";
+    out << "  \"sourceFunction\": \"" << result.sourceFunction << "\"\n";
     out << "}\n";
     return out.str();
 }
@@ -427,37 +546,83 @@ Result<ImageRgba8> readBmp(const std::filesystem::path &path)
     return image;
 }
 
-ImageCompareResult
-compareToReference(std::string_view caseName, const ImageRgba8 &actual, ImageCompareOptions options)
+ImageCompareResult compareToReference(std::string_view caseName,
+                                      const ImageRgba8 &actual,
+                                      ImageCompareOptions options,
+                                      std::source_location sourceLocation)
 {
     auto result = ImageCompareResult{.size = actual.size};
-    result.baselinePath = baselinePathFor(caseName);
-    const auto artifactDir = artifactDirFor(caseName);
+    result.catchTestName = currentCatchTestName();
+    result.sourceFile = sourceLocation.file_name();
+    result.sourceLine = sourceLocation.line();
+    result.sourceFunction = sourceLocation.function_name();
+    result.baselinePath = baselinePathFor(caseName, options);
+    const auto artifactDir =
+        artifactDirFor(caseName, result.catchTestName, sourceLocation, options);
     result.actualPath = artifactDir / "actual.bmp";
     result.diffPath = artifactDir / "diff.bmp";
     result.metricsPath = artifactDir / "metrics.json";
+    result.requestPath = artifactDir / "request.json";
+    result.decisionPath = artifactDir / "decision.json";
 
-    if (envEnabled("CORY_UPDATE_VISUAL_BASELINES")) {
-        writeBmp(result.baselinePath, actual);
-        result.passed = true;
-        CO_CORE_INFO("Updated visual baseline '{}' at {}", caseName, result.baselinePath.string());
-        return result;
-    }
+    auto writeFailureArtifactsAndMaybeReview = [&](const ImageRgba8 *baselineImage) {
+        std::filesystem::create_directories(artifactDir);
+        writeBmp(result.actualPath, actual);
+        if (baselineImage != nullptr && baselineImage->size == actual.size &&
+            baselineImage->pixels.size() == actual.pixels.size()) {
+            writeBmp(result.diffPath, makeDiffImage(*baselineImage, actual));
+        }
+        writeText(result.metricsPath, metricsJson(caseName, result));
+
+        auto request = Tools::VisualReview::VisualReviewRequest{
+            .id = Tools::VisualReview::makeRequestId(
+                fmt::format("{}-{}-L{}", result.catchTestName, caseName, result.sourceLine)),
+            .caseName = std::string{caseName},
+            .metadata =
+                Tools::VisualReview::VisualReviewMetadata{
+                    .catchTestName = result.catchTestName,
+                    .sourceFile = result.sourceFile.generic_string(),
+                    .sourceLine = result.sourceLine,
+                    .sourceFunction = result.sourceFunction,
+                },
+            .baselinePath = result.baselinePath,
+            .actualPath = result.actualPath,
+            .diffPath = result.diffPath,
+            .metricsPath = result.metricsPath,
+            .requestPath = result.requestPath,
+            .decisionPath = result.decisionPath,
+            .metrics =
+                Tools::VisualReview::VisualReviewMetrics{
+                    .mismatchedPixels = result.mismatchedPixels,
+                    .mismatchRatio = result.mismatchRatio,
+                    .maxChannelError = result.maxChannelError,
+                    .meanAbsoluteError = result.meanAbsoluteError,
+                },
+        };
+        Tools::VisualReview::writeRequest(result.requestPath, request);
+
+        if (runInteractiveReview(request, options)) {
+            writeBmp(result.baselinePath, actual);
+            result.passed = true;
+            CO_CORE_INFO("Accepted visual review '{}' and updated baseline at {}",
+                         caseName,
+                         result.baselinePath.string());
+        }
+
+        writeText(result.metricsPath, metricsJson(caseName, result));
+        CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result));
+    };
 
     auto baseline = readBmp(result.baselinePath);
     if (!baseline) {
-        writeBmp(result.actualPath, actual);
         result.passed = false;
-        writeText(result.metricsPath, metricsJson(caseName, result));
-        CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result));
+        writeFailureArtifactsAndMaybeReview(nullptr);
         return result;
     }
 
     if (baseline->size != actual.size || baseline->pixels.size() != actual.pixels.size()) {
-        writeBmp(result.actualPath, actual);
         result.passed = false;
-        writeText(result.metricsPath, metricsJson(caseName, result));
-        CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result));
+        writeFailureArtifactsAndMaybeReview(&*baseline);
         return result;
     }
 
@@ -487,27 +652,34 @@ compareToReference(std::string_view caseName, const ImageRgba8 &actual, ImageCom
     result.passed = result.mismatchRatio <= options.maxMismatchRatio &&
                     result.meanAbsoluteError <= options.maxMeanAbsoluteError;
 
-    if (!result.passed || envEnabled("CORY_VISUAL_ALWAYS_WRITE_ACTUAL")) {
-        writeBmp(result.actualPath, actual);
-    }
     if (!result.passed) {
-        std::filesystem::create_directories(artifactDir);
-        writeBmp(result.diffPath, makeDiffImage(*baseline, actual));
-        writeText(result.metricsPath, metricsJson(caseName, result));
+        writeFailureArtifactsAndMaybeReview(&*baseline);
+        return result;
     }
     CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result));
     return result;
 }
 
+bool visualMatch(const ImageCompareResult &result)
+{
+    INFO("Visual baseline: " << result.baselinePath.string());
+    INFO("Visual actual: " << result.actualPath.string());
+    INFO("Visual diff: " << result.diffPath.string());
+    INFO("Visual metrics: " << result.metricsPath.string());
+    INFO("Visual review request: " << result.requestPath.string());
+    if (!result.decisionPath.empty()) {
+        INFO("Visual review decision: " << result.decisionPath.string());
+    }
+    return result.passed;
+}
+
 void requireMatchesReference(std::string_view caseName,
                              const ImageRgba8 &actual,
-                             ImageCompareOptions options)
+                             ImageCompareOptions options,
+                             std::source_location sourceLocation)
 {
-    const auto result = compareToReference(caseName, actual, options);
-    INFO("Visual actual: " << result.actualPath.string());
-    INFO("Visual baseline: " << result.baselinePath.string());
-    INFO("Visual diff: " << result.diffPath.string());
-    CHECK(result.passed);
+    const auto result = compareToReference(caseName, actual, options, sourceLocation);
+    CHECK(visualMatch(result));
 }
 
 } // namespace Cory::testing

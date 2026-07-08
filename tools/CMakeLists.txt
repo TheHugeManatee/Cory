@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
+add_subdirectory(visual)
+
 # Tools CMake helpers
 # Copy graphviz javascript assets and preview template into the build/runtime
 # output directory at configure time so HTML previews can be opened from there.

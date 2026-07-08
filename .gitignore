@@ -20,7 +20,6 @@ cmake-build-*/
 AGENTS.md
 *.egg-info/
 
-KDGpu
 imgui.ini
 Testing/
 

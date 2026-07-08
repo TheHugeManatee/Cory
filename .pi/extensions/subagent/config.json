@@ -1,0 +1,16 @@
+{
+  "defaultSize": "medium",
+  "defaultTools": ["read", "grep", "find", "ls"],
+  "defaultSystemPrompt": "You are a focused sub-agent. Be concise and report only the requested result.",
+  "small": {
+    "model": "local-openai/ornith-1.0-9b-mtp"
+  },
+  "medium": {
+    "model": "local-openai/ornith-1.0-9b-mtp",
+    "tools": ["read", "grep", "find", "ls", "bash"]
+  },
+  "large": {
+    "model": "local-openai/ornith-1.0-9b-mtp",
+    "tools": ["read", "grep", "find", "ls", "bash", "edit", "write"]
+  }
+}

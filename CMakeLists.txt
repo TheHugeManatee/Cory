@@ -99,12 +99,11 @@ add_subdirectory(external)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 add_subdirectory(src)
+add_subdirectory(tools)
 if (CORY_BUILD_TESTS)
     add_subdirectory(tests)
 endif ()
 add_subdirectory(examples)
-
-add_subdirectory(tools)
 
 
 # Setup our project as the startup project for Visual so that people don't need to do it manually

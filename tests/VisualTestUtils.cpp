@@ -3,6 +3,7 @@
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
+#include <Cory/IO/Bmp.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Synchronization.hpp>
@@ -37,11 +38,6 @@
 namespace Cory::testing {
 namespace {
 
-constexpr uint16_t kBmpFileHeaderSize = 14;
-constexpr uint32_t kBmpInfoHeaderSize = 40;
-constexpr uint16_t kBmpPlanes = 1;
-constexpr uint16_t kBmpBitCount = 32;
-constexpr uint32_t kBmpCompressionRgb = 0;
 constexpr size_t kRgbaBytesPerPixel = 4;
 
 [[nodiscard]] bool envEnabled(const char *name)
@@ -64,45 +60,6 @@ constexpr size_t kRgbaBytesPerPixel = 4;
         }
     }
     return result.empty() ? "visual-case" : result;
-}
-
-void appendU16(std::vector<std::byte> &out, uint16_t value)
-{
-    out.push_back(static_cast<std::byte>(value & 0xFFU));
-    out.push_back(static_cast<std::byte>((value >> 8U) & 0xFFU));
-}
-
-void appendU32(std::vector<std::byte> &out, uint32_t value)
-{
-    out.push_back(static_cast<std::byte>(value & 0xFFU));
-    out.push_back(static_cast<std::byte>((value >> 8U) & 0xFFU));
-    out.push_back(static_cast<std::byte>((value >> 16U) & 0xFFU));
-    out.push_back(static_cast<std::byte>((value >> 24U) & 0xFFU));
-}
-
-void appendI32(std::vector<std::byte> &out, int32_t value)
-{
-    appendU32(out, static_cast<uint32_t>(value));
-}
-
-[[nodiscard]] uint16_t readLe16(std::span<const std::byte> bytes, size_t offset)
-{
-    return static_cast<uint16_t>(
-        static_cast<uint8_t>(bytes[offset]) |
-        (static_cast<uint16_t>(static_cast<uint8_t>(bytes[offset + 1])) << 8U));
-}
-
-[[nodiscard]] uint32_t readLe32(std::span<const std::byte> bytes, size_t offset)
-{
-    return static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset])) |
-           (static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + 1])) << 8U) |
-           (static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + 2])) << 16U) |
-           (static_cast<uint32_t>(static_cast<uint8_t>(bytes[offset + 3])) << 24U);
-}
-
-[[nodiscard]] int32_t readLeI32(std::span<const std::byte> bytes, size_t offset)
-{
-    return static_cast<int32_t>(readLe32(bytes, offset));
 }
 
 [[nodiscard]] std::filesystem::path baselinePathFor(std::string_view caseName,
@@ -458,92 +415,19 @@ ImageRgba8 makeSolidImage(glm::u32vec2 size, uint8_t r, uint8_t g, uint8_t b, ui
 
 void writeBmp(const std::filesystem::path &path, const ImageRgba8 &image)
 {
-    std::filesystem::create_directories(path.parent_path());
-    const auto pixelBytes = static_cast<uint32_t>(image.pixels.size());
-    const auto fileSize = kBmpFileHeaderSize + kBmpInfoHeaderSize + pixelBytes;
-
-    std::vector<std::byte> bytes;
-    bytes.reserve(fileSize);
-    bytes.push_back(static_cast<std::byte>('B'));
-    bytes.push_back(static_cast<std::byte>('M'));
-    appendU32(bytes, fileSize);
-    appendU16(bytes, 0);
-    appendU16(bytes, 0);
-    appendU32(bytes, kBmpFileHeaderSize + kBmpInfoHeaderSize);
-    appendU32(bytes, kBmpInfoHeaderSize);
-    appendI32(bytes, gsl::narrow<int32_t>(image.size.x));
-    appendI32(bytes, -gsl::narrow<int32_t>(image.size.y)); // top-down rows
-    appendU16(bytes, kBmpPlanes);
-    appendU16(bytes, kBmpBitCount);
-    appendU32(bytes, kBmpCompressionRgb);
-    appendU32(bytes, pixelBytes);
-    appendI32(bytes, 0);
-    appendI32(bytes, 0);
-    appendU32(bytes, 0);
-    appendU32(bytes, 0);
-
-    for (size_t i = 0; i < image.pixels.size(); i += 4) {
-        bytes.push_back(image.pixels[i + 2]);
-        bytes.push_back(image.pixels[i + 1]);
-        bytes.push_back(image.pixels[i + 0]);
-        bytes.push_back(image.pixels[i + 3]);
-    }
-
-    std::ofstream file{path, std::ios::binary};
-    file.write(reinterpret_cast<const char *>(bytes.data()),
-               gsl::narrow<std::streamsize>(bytes.size()));
+    const auto result = IO::writeBmpRgba8(path,
+                                          IO::BmpImageRgba8{.width = image.size.x,
+                                                            .height = image.size.y,
+                                                            .pixelsRgba8 = image.pixels});
+    CO_CORE_ASSERT(result.has_value(), "{}", result.error());
 }
 
 Result<ImageRgba8> readBmp(const std::filesystem::path &path)
 {
-    std::ifstream file{path, std::ios::binary | std::ios::ate};
-    if (!file) return std::unexpected(fmt::format("Could not open BMP: {}", path.string()));
-    const auto size = file.tellg();
-    file.seekg(0);
-    std::vector<std::byte> bytes(gsl::narrow<size_t>(size));
-    file.read(reinterpret_cast<char *>(bytes.data()), size);
-
-    if (bytes.size() < kBmpFileHeaderSize + kBmpInfoHeaderSize || bytes[0] != std::byte{'B'} ||
-        bytes[1] != std::byte{'M'}) {
-        return std::unexpected("Not a BMP file");
-    }
-
-    const auto pixelOffset = readLe32(bytes, 10);
-    const auto headerSize = readLe32(bytes, 14);
-    const auto width = readLeI32(bytes, 18);
-    const auto height = readLeI32(bytes, 22);
-    const auto planes = readLe16(bytes, 26);
-    const auto bitCount = readLe16(bytes, 28);
-    const auto compression = readLe32(bytes, 30);
-    if (headerSize != kBmpInfoHeaderSize || width <= 0 || height == 0 || planes != kBmpPlanes ||
-        bitCount != kBmpBitCount || compression != kBmpCompressionRgb) {
-        return std::unexpected("Unsupported BMP format; expected uncompressed 32-bit BGRA BMP");
-    }
-
-    const auto absHeight = height < 0 ? -height : height;
-    const auto imageSize =
-        glm::u32vec2{gsl::narrow<uint32_t>(width), gsl::narrow<uint32_t>(absHeight)};
-    const auto requiredBytes =
-        static_cast<size_t>(imageSize.x) * static_cast<size_t>(imageSize.y) * kRgbaBytesPerPixel;
-    if (pixelOffset + requiredBytes > bytes.size())
-        return std::unexpected("BMP pixel data is truncated");
-
-    ImageRgba8 image{.size = imageSize};
-    image.pixels.resize(requiredBytes);
-    const bool topDown = height < 0;
-    for (uint32_t y = 0; y < imageSize.y; ++y) {
-        const auto srcY = topDown ? y : (imageSize.y - 1U - y);
-        const auto *src = bytes.data() + pixelOffset +
-                          static_cast<size_t>(srcY) * imageSize.x * kRgbaBytesPerPixel;
-        auto *dst = image.pixels.data() + static_cast<size_t>(y) * imageSize.x * kRgbaBytesPerPixel;
-        for (uint32_t x = 0; x < imageSize.x; ++x) {
-            dst[x * 4 + 0] = src[x * 4 + 2];
-            dst[x * 4 + 1] = src[x * 4 + 1];
-            dst[x * 4 + 2] = src[x * 4 + 0];
-            dst[x * 4 + 3] = src[x * 4 + 3];
-        }
-    }
-    return image;
+    auto image = IO::loadBmpRgba8(path);
+    if (!image) return std::unexpected(std::move(image.error()));
+    return ImageRgba8{.size = glm::u32vec2{image->width, image->height},
+                      .pixels = std::move(image->pixelsRgba8)};
 }
 
 ImageCompareResult compareToReference(std::string_view caseName,
@@ -660,8 +544,12 @@ ImageCompareResult compareToReference(std::string_view caseName,
     return result;
 }
 
-bool visualMatch(const ImageCompareResult &result)
+void requireMatchesReference(std::string_view caseName,
+                             const ImageRgba8 &actual,
+                             ImageCompareOptions options,
+                             std::source_location sourceLocation)
 {
+    const auto result = compareToReference(caseName, actual, options, sourceLocation);
     INFO("Visual baseline: " << result.baselinePath.string());
     INFO("Visual actual: " << result.actualPath.string());
     INFO("Visual diff: " << result.diffPath.string());
@@ -670,16 +558,7 @@ bool visualMatch(const ImageCompareResult &result)
     if (!result.decisionPath.empty()) {
         INFO("Visual review decision: " << result.decisionPath.string());
     }
-    return result.passed;
-}
-
-void requireMatchesReference(std::string_view caseName,
-                             const ImageRgba8 &actual,
-                             ImageCompareOptions options,
-                             std::source_location sourceLocation)
-{
-    const auto result = compareToReference(caseName, actual, options, sourceLocation);
-    CHECK(visualMatch(result));
+    CHECK(result.passed);
 }
 
 } // namespace Cory::testing

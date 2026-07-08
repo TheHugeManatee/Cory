@@ -7,6 +7,7 @@
 #include <Cory/Base/Log.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/IO/Bmp.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
@@ -38,97 +39,16 @@ namespace {
 using Cory::Tools::VisualReview::VisualReviewDecision;
 using Cory::Tools::VisualReview::VisualReviewRequest;
 
-struct ImageRgba8 {
-    glm::u32vec2 size{};
-    std::vector<std::byte> pixels{};
-};
-
-constexpr auto kBmpFileHeaderSize = uint32_t{14};
-constexpr auto kBmpInfoHeaderSize = uint32_t{40};
-constexpr auto kBmpPlanes = uint16_t{1};
-constexpr auto kBmpBitCount = uint16_t{32};
-constexpr auto kBmpCompressionRgb = uint32_t{0};
-constexpr auto kRgbaBytesPerPixel = uint32_t{4};
-
-[[nodiscard]] uint16_t readLe16(std::span<const std::byte> bytes, size_t offset)
-{
-    return uint16_t(static_cast<uint8_t>(bytes[offset])) |
-           (uint16_t(static_cast<uint8_t>(bytes[offset + 1])) << 8U);
-}
-
-[[nodiscard]] uint32_t readLe32(std::span<const std::byte> bytes, size_t offset)
-{
-    return uint32_t(static_cast<uint8_t>(bytes[offset])) |
-           (uint32_t(static_cast<uint8_t>(bytes[offset + 1])) << 8U) |
-           (uint32_t(static_cast<uint8_t>(bytes[offset + 2])) << 16U) |
-           (uint32_t(static_cast<uint8_t>(bytes[offset + 3])) << 24U);
-}
-
-[[nodiscard]] int32_t readLeI32(std::span<const std::byte> bytes, size_t offset)
-{
-    return static_cast<int32_t>(readLe32(bytes, offset));
-}
-
-[[nodiscard]] std::optional<ImageRgba8> readBmpRgba8(const std::filesystem::path &path)
-{
-    std::ifstream file{path, std::ios::binary | std::ios::ate};
-    if (!file) return std::nullopt;
-
-    const auto size = file.tellg();
-    file.seekg(0);
-    std::vector<std::byte> bytes(gsl::narrow<size_t>(size));
-    file.read(reinterpret_cast<char *>(bytes.data()), size);
-
-    if (bytes.size() < kBmpFileHeaderSize + kBmpInfoHeaderSize || bytes[0] != std::byte{'B'} ||
-        bytes[1] != std::byte{'M'}) {
-        return std::nullopt;
-    }
-
-    const auto pixelOffset = readLe32(bytes, 10);
-    const auto headerSize = readLe32(bytes, 14);
-    const auto width = readLeI32(bytes, 18);
-    const auto height = readLeI32(bytes, 22);
-    const auto planes = readLe16(bytes, 26);
-    const auto bitCount = readLe16(bytes, 28);
-    const auto compression = readLe32(bytes, 30);
-    if (headerSize != kBmpInfoHeaderSize || width <= 0 || height == 0 || planes != kBmpPlanes ||
-        bitCount != kBmpBitCount || compression != kBmpCompressionRgb) {
-        return std::nullopt;
-    }
-
-    const auto absHeight = height < 0 ? -height : height;
-    const auto imageSize =
-        glm::u32vec2{gsl::narrow<uint32_t>(width), gsl::narrow<uint32_t>(absHeight)};
-    const auto requiredBytes =
-        static_cast<size_t>(imageSize.x) * static_cast<size_t>(imageSize.y) * kRgbaBytesPerPixel;
-    if (static_cast<size_t>(pixelOffset) + requiredBytes > bytes.size()) return std::nullopt;
-
-    ImageRgba8 image{.size = imageSize};
-    image.pixels.resize(requiredBytes);
-    const bool topDown = height < 0;
-    for (uint32_t y = 0; y < imageSize.y; ++y) {
-        const auto srcY = topDown ? y : (imageSize.y - 1U - y);
-        const auto *src = bytes.data() + pixelOffset +
-                          static_cast<size_t>(srcY) * imageSize.x * kRgbaBytesPerPixel;
-        auto *dst = image.pixels.data() + static_cast<size_t>(y) * imageSize.x * kRgbaBytesPerPixel;
-        for (uint32_t x = 0; x < imageSize.x; ++x) {
-            dst[x * 4 + 0] = src[x * 4 + 2];
-            dst[x * 4 + 1] = src[x * 4 + 1];
-            dst[x * 4 + 2] = src[x * 4 + 0];
-            dst[x * 4 + 3] = src[x * 4 + 3];
-        }
-    }
-    return image;
-}
+using ImageRgba8 = Cory::IO::BmpImageRgba8;
 
 [[nodiscard]] ImU32 pixelColor(const ImageRgba8 &image, uint32_t x, uint32_t y)
 {
     const auto offset =
-        (static_cast<size_t>(y) * static_cast<size_t>(image.size.x) + static_cast<size_t>(x)) * 4U;
-    return IM_COL32(static_cast<uint8_t>(image.pixels[offset + 0]),
-                    static_cast<uint8_t>(image.pixels[offset + 1]),
-                    static_cast<uint8_t>(image.pixels[offset + 2]),
-                    static_cast<uint8_t>(image.pixels[offset + 3]));
+        (static_cast<size_t>(y) * static_cast<size_t>(image.width) + static_cast<size_t>(x)) * 4U;
+    return IM_COL32(static_cast<uint8_t>(image.pixelsRgba8[offset + 0]),
+                    static_cast<uint8_t>(image.pixelsRgba8[offset + 1]),
+                    static_cast<uint8_t>(image.pixelsRgba8[offset + 2]),
+                    static_cast<uint8_t>(image.pixelsRgba8[offset + 3]));
 }
 
 void drawImagePixels(const char *label, const ImageRgba8 *image, float zoom)
@@ -141,11 +61,11 @@ void drawImagePixels(const char *label, const ImageRgba8 *image, float zoom)
         return;
     }
 
-    ImGui::Text("%u x %u", image->size.x, image->size.y);
+    ImGui::Text("%u x %u", image->width, image->height);
     const auto origin = ImGui::GetCursorScreenPos();
     const auto pixelSize = std::max(1.0f, zoom);
-    const auto canvasSize = ImVec2{static_cast<float>(image->size.x) * pixelSize,
-                                   static_cast<float>(image->size.y) * pixelSize};
+    const auto canvasSize = ImVec2{static_cast<float>(image->width) * pixelSize,
+                                   static_cast<float>(image->height) * pixelSize};
     ImGui::InvisibleButton(fmt::format("{}-canvas", label).c_str(), canvasSize);
 
     auto *drawList = ImGui::GetWindowDrawList();
@@ -156,16 +76,16 @@ void drawImagePixels(const char *label, const ImageRgba8 *image, float zoom)
 
     const auto minX = std::clamp(static_cast<int>((clipMin.x - origin.x) / pixelSize) - 1,
                                  0,
-                                 gsl::narrow<int>(image->size.x));
+                                 gsl::narrow<int>(image->width));
     const auto maxX = std::clamp(static_cast<int>((clipMax.x - origin.x) / pixelSize) + 1,
                                  0,
-                                 gsl::narrow<int>(image->size.x));
+                                 gsl::narrow<int>(image->width));
     const auto minY = std::clamp(static_cast<int>((clipMin.y - origin.y) / pixelSize) - 1,
                                  0,
-                                 gsl::narrow<int>(image->size.y));
+                                 gsl::narrow<int>(image->height));
     const auto maxY = std::clamp(static_cast<int>((clipMax.y - origin.y) / pixelSize) + 1,
                                  0,
-                                 gsl::narrow<int>(image->size.y));
+                                 gsl::narrow<int>(image->height));
 
     if (pixelSize <= 1.5f) {
         // At 1x, drawing one rect per pixel is still adequate for the small test artifacts this
@@ -196,9 +116,9 @@ class VisualDiffReviewerApplication : public Cory::Application {
         app.allow_config_extras(true);
         app.parse(gsl::narrow<int>(args.size()), args.data());
 
-        baseline_ = readBmpRgba8(request_.baselinePath);
-        actual_ = readBmpRgba8(request_.actualPath);
-        diff_ = readBmpRgba8(request_.diffPath);
+        baseline_ = Cory::IO::loadBmpRgba8(request_.baselinePath);
+        actual_ = Cory::IO::loadBmpRgba8(request_.actualPath);
+        diff_ = Cory::IO::loadBmpRgba8(request_.diffPath);
 
         init(Cory::ContextCreationInfo{
             .validation = disableValidation ? Cory::ValidationLayers::Disabled
@@ -325,9 +245,9 @@ class VisualDiffReviewerApplication : public Cory::Application {
     }
 
     VisualReviewRequest request_;
-    std::optional<ImageRgba8> baseline_;
-    std::optional<ImageRgba8> actual_;
-    std::optional<ImageRgba8> diff_;
+    Cory::Result<ImageRgba8> baseline_;
+    Cory::Result<ImageRgba8> actual_;
+    Cory::Result<ImageRgba8> diff_;
     std::unique_ptr<Cory::Window> window_;
     uint64_t framesToRender_{0};
     float zoom_{8.0f};

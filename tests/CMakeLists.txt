@@ -75,14 +75,17 @@ target_include_directories(Cory_TestLib PRIVATE
 
 target_compile_definitions(Cory_TestLib PRIVATE
         CORY_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        CORY_TEST_RUNTIME_DIR="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        CORY_TEST_EXECUTABLE_SUFFIX="${CMAKE_EXECUTABLE_SUFFIX}"
 )
 
 target_link_libraries(Cory_TestLib
         PUBLIC Catch2::Catch2 Cory::Cory
-        PRIVATE Cory::project_sanitizers Cory::project_options nlohmann_json::nlohmann_json mio::mio
+        PRIVATE Cory::project_sanitizers Cory::project_options Cory::VisualReviewProtocol nlohmann_json::nlohmann_json mio::mio
 )
 
 add_executable(Cory_Tests catch_main.cpp)
+add_dependencies(Cory_Tests VisualDiffReviewer)
 target_link_libraries(Cory_Tests PRIVATE
         Cory::project_sanitizers
         Cory::project_warnings

@@ -97,6 +97,21 @@ uint8_t grayAt(std::span<const std::byte> pixels, size_t pixelIndex)
     return static_cast<uint8_t>(pixels[pixelIndex]);
 }
 
+std::byte rgbaAt(std::span<const std::byte> pixels, size_t pixelIndex, size_t channel)
+{
+    return pixels[pixelIndex * 4u + channel];
+}
+
+std::vector<std::byte> makeRgbaPixels(std::initializer_list<uint8_t> values)
+{
+    std::vector<std::byte> result;
+    result.reserve(values.size());
+    for (auto value : values) {
+        result.push_back(static_cast<std::byte>(value));
+    }
+    return result;
+}
+
 } // namespace
 
 TEST_CASE("BMP decoder loads 8-bit grayscale bottom-up images", "[Cory/IO]")
@@ -144,8 +159,12 @@ TEST_CASE("BMP decoder loads 8-bit grayscale top-down images", "[Cory/IO]")
 TEST_CASE("BMP decoder top-down fast path ignores row padding", "[Cory/IO]")
 {
     const std::vector<uint8_t> pixelIndices{
-        1, 2, 3,
-        4, 5, 6,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
     };
     const auto bmpBytes = makeGrayBmp8(3, -2, pixelIndices, true);
 
@@ -226,4 +245,35 @@ TEST_CASE("BMP decoder rejects output buffer size mismatch", "[Cory/IO]")
 
     REQUIRE_FALSE(loaded);
     CHECK(loaded.error().find("output buffer size mismatch") != std::string::npos);
+}
+
+TEST_CASE("BMP RGBA helpers round-trip 32-bit images", "[Cory/IO]")
+{
+    const auto path = std::filesystem::temp_directory_path() / "cory_bmp_rgba_roundtrip.bmp";
+    const Cory::IO::BmpImageRgba8 image{
+        .width = 2,
+        .height = 2,
+        .pixelsRgba8 =
+            makeRgbaPixels({255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255})};
+
+    auto writeResult = Cory::IO::writeBmpRgba8(path, image);
+    REQUIRE(writeResult);
+
+    auto loaded = Cory::IO::loadBmpRgba8(path);
+    std::filesystem::remove(path);
+
+    REQUIRE(loaded);
+    CHECK(loaded->width == image.width);
+    CHECK(loaded->height == image.height);
+    CHECK(loaded->pixelsRgba8 == image.pixelsRgba8);
+}
+
+TEST_CASE("BMP RGBA loader rejects non-RGBA BMP", "[Cory/IO]")
+{
+    const std::vector<uint8_t> pixelIndices{9};
+    const auto bmpBytes = makeGrayBmp8(1, 1, pixelIndices, true);
+
+    const auto decoded = Cory::IO::decodeBmpRgba8(bmpBytes);
+    REQUIRE_FALSE(decoded);
+    CHECK(decoded.error().find("32-bit BGRA BMP") != std::string::npos);
 }

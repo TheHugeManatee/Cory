@@ -35,20 +35,50 @@ TEST_CASE("TestCanvas captures clear color", "[visual][TestCanvas]")
 
     const auto result = Cory::testing::compareToReference("testcanvas-clear-red", actual);
 
-    CHECK(Cory::testing::visualMatch(result));
+    CHECK(result.passed);
 }
 
-TEST_CASE("Visual BMP helpers round-trip RGBA images", "[visual][TestCanvas][IO]")
+TEST_CASE("Minimal visual assertion example", "[visual][TestCanvas]")
 {
-    const auto image = Cory::testing::makeSolidImage(glm::u32vec2{4, 3}, 12, 34, 56, 255);
-    const auto path = std::filesystem::temp_directory_path() / "cory-visual-bmp-roundtrip.bmp";
+    Cory::testing::VulkanTester tester;
+    Cory::testing::TestCanvas canvas{tester.ctx(), glm::u32vec2{32, 32}};
 
-    Cory::testing::writeBmp(path, image);
-    auto decoded = Cory::testing::readBmp(path);
+    auto actual = canvas.render([](Cory::testing::TestFrame &frame) {
+        auto clear = Cory::StandardRenderTasks::clearAttachments(
+            frame.graph.declareTask("TASK_MinimalClearRed"),
+            frame.color,
+            frame.depth,
+            Gpu::ColorClearValue{1.0f, 0.0f, 0.0f, 1.0f});
+        return clear.output().color;
+    });
 
-    REQUIRE(decoded);
-    CHECK(decoded->size == image.size);
-    CHECK(decoded->pixels == image.pixels);
+    Cory::testing::requireMatchesReference("testcanvas-clear-red", actual);
+}
+
+TEST_CASE("Interactive visual comparison demo opens reviewer on mismatch",
+          "[visual][TestCanvas][comparison][manual][.]")
+{
+    const auto scratchRoot = testScratchRoot("reviewer-demo");
+    const auto baselinePath = scratchRoot / "baselines" / "reviewer-demo.bmp";
+    const auto artifactRoot = scratchRoot / "artifacts";
+    std::filesystem::remove_all(scratchRoot);
+    std::filesystem::create_directories(baselinePath.parent_path());
+
+    const auto baseline = Cory::testing::makeSolidImage(glm::u32vec2{2, 2}, 255, 0, 0, 255);
+    const auto actual = Cory::testing::makeSolidImage(glm::u32vec2{2, 2}, 0, 255, 0, 255);
+    Cory::testing::writeBmp(baselinePath, baseline);
+
+    _putenv_s("CORY_VISUAL_INTERACTIVE", "1");
+    auto cleanup = gsl::finally([] { _putenv_s("CORY_VISUAL_INTERACTIVE", ""); });
+
+    const auto result = Cory::testing::compareToReference("reviewer-demo",
+                                                          actual,
+                                                          Cory::testing::ImageCompareOptions{
+                                                              .baselinePathOverride = baselinePath,
+                                                              .artifactRootOverride = artifactRoot,
+                                                          });
+
+    CHECK(result.passed);
 }
 
 TEST_CASE("Visual comparison reports mismatch for non-matching reference",
@@ -71,7 +101,7 @@ TEST_CASE("Visual comparison reports mismatch for non-matching reference",
                                                               .artifactRootOverride = artifactRoot,
                                                           });
 
-    CHECK_FALSE(Cory::testing::visualMatch(result));
+    CHECK_FALSE(result.passed);
 }
 
 TEST_CASE("Interactive visual comparison fails closed when reviewer cannot launch",
@@ -99,7 +129,7 @@ TEST_CASE("Interactive visual comparison fails closed when reviewer cannot launc
             .reviewerExecutableOverride = scratchRoot / "missing-reviewer.exe",
         });
 
-    CHECK_FALSE(Cory::testing::visualMatch(result));
+    CHECK_FALSE(result.passed);
 }
 
 TEST_CASE("Interactive visual comparison can accept and update baseline",
@@ -128,7 +158,7 @@ TEST_CASE("Interactive visual comparison can accept and update baseline",
                                           });
     const auto updatedBaseline = Cory::testing::readBmp(baselinePath);
 
-    CHECK(Cory::testing::visualMatch(result));
+    CHECK(result.passed);
     REQUIRE(updatedBaseline);
     CHECK(updatedBaseline->pixels == actual.pixels);
 }

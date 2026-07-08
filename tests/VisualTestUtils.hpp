@@ -154,11 +154,6 @@ compareToReference(std::string_view caseName,
                    std::source_location sourceLocation = std::source_location::current());
 
 /**
- * @brief Catch2-friendly predicate that emits useful artifact paths before returning pass/fail.
- */
-[[nodiscard]] bool visualMatch(const ImageCompareResult &result);
-
-/**
  * @brief Catch2-friendly wrapper around compareToReference that checks the comparison result.
  */
 void requireMatchesReference(std::string_view caseName,

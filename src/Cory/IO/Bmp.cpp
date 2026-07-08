@@ -12,6 +12,10 @@ namespace {
 constexpr size_t fileHeaderSize = 14;
 constexpr size_t dibHeaderMinSize = 40;
 constexpr size_t minBmpSize = fileHeaderSize + dibHeaderMinSize;
+constexpr uint16_t bmpPlanes = 1;
+constexpr uint16_t bmpBitCountRgba8 = 32;
+constexpr uint32_t bmpCompressionRgb = 0;
+constexpr size_t rgba8BytesPerPixel = 4;
 
 struct ParsedBmpInfo {
     uint32_t width{};
@@ -144,6 +148,45 @@ struct ParsedBmpInfo {
     };
 }
 
+[[nodiscard]] Result<std::vector<std::byte>> loadFileBytes(const std::filesystem::path &path)
+{
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
+    if (!file.is_open()) {
+        return std::unexpected("BMP load failed: could not open file '" + path.string() + "'");
+    }
+
+    const auto end = file.tellg();
+    if (end < 0) {
+        return std::unexpected("BMP load failed: failed to read size of '" + path.string() + "'");
+    }
+
+    std::vector<std::byte> bytes(static_cast<size_t>(end));
+    file.seekg(0, std::ios::beg);
+    if (!file.read(reinterpret_cast<char *>(bytes.data()), end)) {
+        return std::unexpected("BMP load failed: failed to read file '" + path.string() + "'");
+    }
+    return bytes;
+}
+
+void appendU16(std::vector<std::byte> &out, uint16_t value)
+{
+    out.push_back(static_cast<std::byte>(value & 0xFFU));
+    out.push_back(static_cast<std::byte>((value >> 8U) & 0xFFU));
+}
+
+void appendU32(std::vector<std::byte> &out, uint32_t value)
+{
+    out.push_back(static_cast<std::byte>(value & 0xFFU));
+    out.push_back(static_cast<std::byte>((value >> 8U) & 0xFFU));
+    out.push_back(static_cast<std::byte>((value >> 16U) & 0xFFU));
+    out.push_back(static_cast<std::byte>((value >> 24U) & 0xFFU));
+}
+
+void appendI32(std::vector<std::byte> &out, int32_t value)
+{
+    appendU32(out, static_cast<uint32_t>(value));
+}
+
 } // namespace
 
 Result<BmpInfo> queryBmpInfo(std::span<const std::byte> bytes)
@@ -241,23 +284,10 @@ Result<BmpInfo> decodeBmp(std::span<const std::byte> bytes, std::span<std::byte>
 
 Result<BmpImage> loadBmp(const std::filesystem::path &path)
 {
-    std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        return std::unexpected("BMP load failed: could not open file '" + path.string() + "'");
-    }
+    auto bytes = loadFileBytes(path);
+    if (!bytes) return std::unexpected(std::move(bytes.error()));
 
-    const auto end = file.tellg();
-    if (end < 0) {
-        return std::unexpected("BMP load failed: failed to read size of '" + path.string() + "'");
-    }
-
-    std::vector<std::byte> bytes(static_cast<size_t>(end));
-    file.seekg(0, std::ios::beg);
-    if (!file.read(reinterpret_cast<char *>(bytes.data()), end)) {
-        return std::unexpected("BMP load failed: failed to read file '" + path.string() + "'");
-    }
-
-    auto info = queryBmpInfo(bytes);
+    auto info = queryBmpInfo(*bytes);
     if (!info) return std::unexpected(std::move(info.error()));
 
     BmpImage image{};
@@ -265,10 +295,115 @@ Result<BmpImage> loadBmp(const std::filesystem::path &path)
     image.height = info->height;
     image.pixelsR8.resize(info->r8ByteSize);
 
-    auto decoded = decodeBmp(bytes, image.pixelsR8);
+    auto decoded = decodeBmp(*bytes, image.pixelsR8);
     if (!decoded) return std::unexpected(std::move(decoded.error()));
 
     return image;
+}
+
+Result<BmpImageRgba8> decodeBmpRgba8(std::span<const std::byte> bytes)
+{
+    if (bytes.size() < fileHeaderSize + dibHeaderMinSize || bytes[0] != std::byte{'B'} ||
+        bytes[1] != std::byte{'M'}) {
+        return std::unexpected("BMP decode failed: invalid signature");
+    }
+
+    const auto pixelOffset = readU32(bytes, 10);
+    const auto headerSize = readU32(bytes, 14);
+    const auto widthSigned = readI32(bytes, 18);
+    const auto heightSigned = readI32(bytes, 22);
+    const auto planes = readU16(bytes, 26);
+    const auto bitCount = readU16(bytes, 28);
+    const auto compression = readU32(bytes, 30);
+    if (headerSize != dibHeaderMinSize || widthSigned <= 0 || heightSigned == 0 ||
+        planes != bmpPlanes || bitCount != bmpBitCountRgba8 || compression != bmpCompressionRgb) {
+        return std::unexpected("BMP decode failed: expected uncompressed 32-bit BGRA BMP");
+    }
+
+    const auto absHeight = heightSigned < 0 ? -heightSigned : heightSigned;
+    const auto width = gsl::narrow<uint32_t>(widthSigned);
+    const auto height = gsl::narrow<uint32_t>(absHeight);
+    const auto requiredBytes =
+        static_cast<size_t>(width) * static_cast<size_t>(height) * rgba8BytesPerPixel;
+    if (static_cast<size_t>(pixelOffset) + requiredBytes > bytes.size()) {
+        return std::unexpected("BMP decode failed: truncated pixel data");
+    }
+
+    BmpImageRgba8 image{.width = width, .height = height};
+    image.pixelsRgba8.resize(requiredBytes);
+    const bool topDown = heightSigned < 0;
+    for (uint32_t y = 0; y < height; ++y) {
+        const auto srcY = topDown ? y : (height - 1U - y);
+        const auto *src =
+            bytes.data() + pixelOffset +
+            static_cast<size_t>(srcY) * static_cast<size_t>(width) * rgba8BytesPerPixel;
+        auto *dst = image.pixelsRgba8.data() +
+                    static_cast<size_t>(y) * static_cast<size_t>(width) * rgba8BytesPerPixel;
+        for (uint32_t x = 0; x < width; ++x) {
+            dst[x * 4 + 0] = src[x * 4 + 2];
+            dst[x * 4 + 1] = src[x * 4 + 1];
+            dst[x * 4 + 2] = src[x * 4 + 0];
+            dst[x * 4 + 3] = src[x * 4 + 3];
+        }
+    }
+    return image;
+}
+
+Result<BmpImageRgba8> loadBmpRgba8(const std::filesystem::path &path)
+{
+    auto bytes = loadFileBytes(path);
+    if (!bytes) return std::unexpected(std::move(bytes.error()));
+    return decodeBmpRgba8(*bytes);
+}
+
+Result<void> writeBmpRgba8(const std::filesystem::path &path, const BmpImageRgba8 &image)
+{
+    std::filesystem::create_directories(path.parent_path());
+    const auto pixelBytes = gsl::narrow<uint32_t>(image.pixelsRgba8.size());
+    const auto expectedBytes =
+        static_cast<size_t>(image.width) * static_cast<size_t>(image.height) * rgba8BytesPerPixel;
+    if (image.pixelsRgba8.size() != expectedBytes) {
+        return std::unexpected("BMP write failed: pixel buffer size mismatch");
+    }
+
+    const auto fileSize = static_cast<uint32_t>(fileHeaderSize + dibHeaderMinSize) + pixelBytes;
+    std::vector<std::byte> bytes;
+    bytes.reserve(fileSize);
+    bytes.push_back(static_cast<std::byte>('B'));
+    bytes.push_back(static_cast<std::byte>('M'));
+    appendU32(bytes, fileSize);
+    appendU16(bytes, 0);
+    appendU16(bytes, 0);
+    appendU32(bytes, static_cast<uint32_t>(fileHeaderSize + dibHeaderMinSize));
+    appendU32(bytes, static_cast<uint32_t>(dibHeaderMinSize));
+    appendI32(bytes, gsl::narrow<int32_t>(image.width));
+    appendI32(bytes, -gsl::narrow<int32_t>(image.height));
+    appendU16(bytes, bmpPlanes);
+    appendU16(bytes, bmpBitCountRgba8);
+    appendU32(bytes, bmpCompressionRgb);
+    appendU32(bytes, pixelBytes);
+    appendI32(bytes, 0);
+    appendI32(bytes, 0);
+    appendU32(bytes, 0);
+    appendU32(bytes, 0);
+
+    for (size_t i = 0; i < image.pixelsRgba8.size(); i += 4) {
+        bytes.push_back(image.pixelsRgba8[i + 2]);
+        bytes.push_back(image.pixelsRgba8[i + 1]);
+        bytes.push_back(image.pixelsRgba8[i + 0]);
+        bytes.push_back(image.pixelsRgba8[i + 3]);
+    }
+
+    std::ofstream file{path, std::ios::binary | std::ios::trunc};
+    if (!file.is_open()) {
+        return std::unexpected("BMP write failed: could not open file '" + path.string() + "'");
+    }
+    file.write(reinterpret_cast<const char *>(bytes.data()),
+               gsl::narrow<std::streamsize>(bytes.size()));
+    if (!file) {
+        return std::unexpected("BMP write failed: failed to write file '" + path.string() + "'");
+    }
+    return {};
 }
 
 } // namespace Cory::IO

@@ -36,6 +36,9 @@ add_library(Cory_TestLib OBJECT
         ShaderHotReloader_Test.cpp
         TestUtils.cpp
         TestUtils.hpp
+        VisualTestUtils.cpp
+        VisualTestUtils.hpp
+        VisualCanvas_Test.cpp
         FmtUtils_Test.cpp
         RenderTaskDeclaration_Test.cpp
         DescriptorSetManager_Test.cpp
@@ -68,6 +71,10 @@ add_library(Cory_TestLib OBJECT
 target_include_directories(Cory_TestLib PRIVATE
         ${CMAKE_SOURCE_DIR}/examples/05-ParticleCompute/src
         ${CMAKE_SOURCE_DIR}/examples/06-VolumeRendering/src
+)
+
+target_compile_definitions(Cory_TestLib PRIVATE
+        CORY_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 target_link_libraries(Cory_TestLib

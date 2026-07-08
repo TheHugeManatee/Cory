@@ -1,6 +1,6 @@
 #include <Cory/Framegraph/RenderTaskDeclaration.hpp>
 
-#include "TestUtils.hpp"
+#include <Cory/Testing/TestUtils.hpp>
 
 #include <cppcoro/coroutine.hpp>
 

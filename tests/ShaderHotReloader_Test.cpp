@@ -4,7 +4,7 @@
 #include <Cory/Renderer/ShaderHotReloader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
-#include "TestUtils.hpp"
+#include <Cory/Testing/TestUtils.hpp>
 
 #include <chrono>
 #include <filesystem>

@@ -3,7 +3,7 @@
 #include <Cory/Renderer/Shader.hpp>
 #include <Cory/Renderer/ShaderManager.hpp>
 
-#include "TestUtils.hpp"
+#include <Cory/Testing/TestUtils.hpp>
 
 static_assert(!std::copyable<Cory::ShaderManager>, "ShaderManager is not designed to be copyable");
 static_assert(std::movable<Cory::ShaderManager>, "ShaderManager is designed to be movable");

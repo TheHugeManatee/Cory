@@ -1,4 +1,4 @@
-#include "TestUtils.hpp"
+#include <Cory/Testing/TestUtils.hpp>
 
 #include <../src/Cory/Renderer/RadixSorter.hpp>
 #include <Cory/Base/ResourceLocator.hpp>

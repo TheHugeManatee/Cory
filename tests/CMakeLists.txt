@@ -20,6 +20,40 @@ find_package(mio REQUIRED)
 
 include(Catch)
 
+add_library(Cory_TestSupport STATIC
+        ../test-support/include/Cory/Testing/TestUtils.hpp
+        ../test-support/include/Cory/Testing/VisualTestUtils.hpp
+        ../test-support/src/TestUtils.cpp
+        ../test-support/src/VisualTestUtils.cpp
+)
+
+target_include_directories(Cory_TestSupport
+        PUBLIC
+        ${CMAKE_SOURCE_DIR}/test-support/include
+        PRIVATE
+        ${CMAKE_SOURCE_DIR}/examples/05-ParticleCompute/src
+        ${CMAKE_SOURCE_DIR}/examples/06-VolumeRendering/src
+)
+
+target_compile_definitions(Cory_TestSupport PRIVATE
+        CORY_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+        CORY_TEST_RUNTIME_DIR="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        CORY_TEST_EXECUTABLE_SUFFIX="${CMAKE_EXECUTABLE_SUFFIX}"
+)
+
+target_link_libraries(Cory_TestSupport
+        PUBLIC
+        Cory::Cory
+        PRIVATE
+        Catch2::Catch2
+        Cory::project_sanitizers
+        Cory::project_options
+        Cory::VisualReviewProtocol
+        Cory::VisualReviewUi
+        nlohmann_json::nlohmann_json
+        mio::mio
+)
+
 add_library(Cory_TestLib OBJECT
         Utils_Test.cpp
         SlotMap_Test.cpp
@@ -34,11 +68,9 @@ add_library(Cory_TestLib OBJECT
         CoroutinePlayground.cpp
         ShaderManager_Test.cpp
         ShaderHotReloader_Test.cpp
-        TestUtils.cpp
-        TestUtils.hpp
-        VisualTestUtils.cpp
-        VisualTestUtils.hpp
+        TestUtils_Test.cpp
         VisualCanvas_Test.cpp
+        ../tools/visual/tests/VisualDiffReviewerUi_Test.cpp
         FmtUtils_Test.cpp
         RenderTaskDeclaration_Test.cpp
         DescriptorSetManager_Test.cpp
@@ -81,7 +113,14 @@ target_compile_definitions(Cory_TestLib PRIVATE
 
 target_link_libraries(Cory_TestLib
         PUBLIC Catch2::Catch2 Cory::Cory
-        PRIVATE Cory::project_sanitizers Cory::project_options Cory::VisualReviewProtocol nlohmann_json::nlohmann_json mio::mio
+        PRIVATE
+        Cory::project_sanitizers
+        Cory::project_options
+        Cory::VisualReviewProtocol
+        Cory::VisualReviewUi
+        nlohmann_json::nlohmann_json
+        mio::mio
+        Cory_TestSupport
 )
 
 add_executable(Cory_Tests catch_main.cpp)

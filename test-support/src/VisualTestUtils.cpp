@@ -1,9 +1,10 @@
-#include "VisualTestUtils.hpp"
+#include <Cory/Testing/VisualTestUtils.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Base/Log.hpp>
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/IO/Bmp.hpp>
+#include <Cory/ImGui/ImguiRenderer.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
 #include <Cory/Renderer/Synchronization.hpp>
@@ -15,6 +16,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/interfaces/catch_interfaces_capture.hpp>
 #include <gsl/narrow>
+#include <imgui.h>
 
 #include <vulkan/vulkan.h>
 
@@ -361,6 +363,90 @@ Context &TestCanvas::ctx()
 glm::u32vec2 TestCanvas::size() const
 {
     return data_->createInfo.size;
+}
+
+struct ImGuiTestRendererPrivate {
+    Context *ctx{};
+    glm::u32vec2 size{};
+    ImGuiContext *context{};
+    std::unique_ptr<ImGuiRenderer> renderer;
+};
+
+ImGuiTestRenderer::ImGuiTestRenderer(Context &ctx, glm::u32vec2 size)
+    : data_{std::make_unique<ImGuiTestRendererPrivate>()}
+{
+    data_->ctx = &ctx;
+    data_->size = size;
+
+    IMGUI_CHECKVERSION();
+    data_->context = ImGui::CreateContext();
+    ImGui::SetCurrentContext(data_->context);
+    auto &io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    ImGui::StyleColorsDark();
+
+    data_->renderer =
+        std::make_unique<ImGuiRenderer>(&ctx.device(), &ctx.graphicsQueue(), data_->context);
+    data_->renderer->initialize(1.0f,
+                                Gpu::SampleCountFlagBits::Samples1Bit,
+                                Gpu::Format::B8G8R8A8_UNORM,
+                                Gpu::Format::D24_UNORM_S8_UINT);
+}
+
+ImGuiTestRenderer::~ImGuiTestRenderer()
+{
+    if (data_ == nullptr) return;
+    ImGui::SetCurrentContext(data_->context);
+    data_->renderer->cleanup();
+    ImGui::DestroyContext(data_->context);
+}
+
+RenderTaskDeclaration<TransientTextureHandle>
+ImGuiTestRenderer::render(RenderTaskBuilder builder,
+                          TransientTextureHandle colorTarget,
+                          std::optional<TransientTextureHandle> depthTarget,
+                          const std::function<void()> &drawUi)
+{
+    ImGui::SetCurrentContext(data_->context);
+    auto &io = ImGui::GetIO();
+    io.DeltaTime = 1.0f / 60.0f;
+    io.DisplaySize = ImVec2{static_cast<float>(data_->size.x), static_cast<float>(data_->size.y)};
+
+    ImGui::NewFrame();
+    drawUi();
+
+    auto imguiPass = builder.declareRenderPass(RenderPassDeclaration{
+        .name = "PASS_ImGuiTest",
+        .options = PassOptionFlagBits::SkipPipelineBind,
+        .attachments = {{
+            {
+                .target = colorTarget,
+                .load = Gpu::AttachmentLoadOperation::Load,
+                .store = Gpu::AttachmentStoreOperation::Store,
+                .clearColor = {},
+            },
+        }},
+        .depthAttachment = depthTarget
+                               ? std::optional<DepthStencilAttachment>{DepthStencilAttachment{
+                                     .target = *depthTarget,
+                                     .load = Gpu::AttachmentLoadOperation::Load,
+                                     .store = Gpu::AttachmentStoreOperation::Store,
+                                     .clearDepthStencil = {},
+                                 }}
+                               : std::nullopt,
+    });
+    const auto colorOut = imguiPass.colorOutputs().front();
+
+    RenderInput renderApi = co_await builder.finishDeclaration(colorOut);
+    auto &frameCtx = *renderApi.frameCtx;
+    auto recorder = imguiPass.begin(renderApi);
+    ImGui::Render();
+    if (data_->renderer->updateGeometryBuffers(frameCtx)) {
+        data_->renderer->recordCommands(frameCtx, &recorder);
+    }
+    imguiPass.end(std::move(recorder));
 }
 
 ImageRgba8

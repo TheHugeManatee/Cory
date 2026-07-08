@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "TestUtils.hpp"
+#include <Cory/Testing/TestUtils.hpp>
 
 #include <Cory/Base/FmtUtils.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>

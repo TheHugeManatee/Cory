@@ -6,7 +6,7 @@
 #include <Cory/Framegraph/FramegraphResourceManager.hpp>
 #include <Cory/Framegraph/RenderTaskBuilder.hpp>
 
-#include "TestUtils.hpp"
+#include <Cory/Testing/TestUtils.hpp>
 
 class MockLayer : public Cory::ApplicationLayer {
   public:

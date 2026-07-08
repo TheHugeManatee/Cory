@@ -1,5 +1,5 @@
-#include "TestUtils.hpp"
-#include "VisualTestUtils.hpp"
+#include <Cory/Testing/TestUtils.hpp>
+#include <Cory/Testing/VisualTestUtils.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

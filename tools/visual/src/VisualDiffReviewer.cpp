@@ -1,4 +1,5 @@
 #include <Cory/Tools/VisualReviewProtocol.hpp>
+#include <Cory/Tools/VisualReviewUi.hpp>
 
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/ImGuiLayer.hpp>
@@ -14,13 +15,9 @@
 
 #include <CLI/CLI.hpp>
 #include <GLFW/glfw3.h>
-#include <fmt/format.h>
-#include <glm/vec2.hpp>
 #include <gsl/narrow>
-#include <imgui.h>
 #include <spdlog/spdlog.h>
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -40,69 +37,6 @@ using Cory::Tools::VisualReview::VisualReviewDecision;
 using Cory::Tools::VisualReview::VisualReviewRequest;
 
 using ImageRgba8 = Cory::IO::BmpImageRgba8;
-
-[[nodiscard]] ImU32 pixelColor(const ImageRgba8 &image, uint32_t x, uint32_t y)
-{
-    const auto offset =
-        (static_cast<size_t>(y) * static_cast<size_t>(image.width) + static_cast<size_t>(x)) * 4U;
-    return IM_COL32(static_cast<uint8_t>(image.pixelsRgba8[offset + 0]),
-                    static_cast<uint8_t>(image.pixelsRgba8[offset + 1]),
-                    static_cast<uint8_t>(image.pixelsRgba8[offset + 2]),
-                    static_cast<uint8_t>(image.pixelsRgba8[offset + 3]));
-}
-
-void drawImagePixels(const char *label, const ImageRgba8 *image, float zoom)
-{
-    ImGui::BeginChild(label, ImVec2{0.0f, 0.0f}, true, ImGuiWindowFlags_HorizontalScrollbar);
-    ImGui::TextUnformatted(label);
-    if (image == nullptr) {
-        ImGui::TextDisabled("Image unavailable");
-        ImGui::EndChild();
-        return;
-    }
-
-    ImGui::Text("%u x %u", image->width, image->height);
-    const auto origin = ImGui::GetCursorScreenPos();
-    const auto pixelSize = std::max(1.0f, zoom);
-    const auto canvasSize = ImVec2{static_cast<float>(image->width) * pixelSize,
-                                   static_cast<float>(image->height) * pixelSize};
-    ImGui::InvisibleButton(fmt::format("{}-canvas", label).c_str(), canvasSize);
-
-    auto *drawList = ImGui::GetWindowDrawList();
-    const auto clipMin = ImGui::GetWindowPos();
-    const auto clipMax =
-        ImVec2{clipMin.x + ImGui::GetWindowWidth(), clipMin.y + ImGui::GetWindowHeight()};
-    drawList->PushClipRect(clipMin, clipMax, true);
-
-    const auto minX = std::clamp(static_cast<int>((clipMin.x - origin.x) / pixelSize) - 1,
-                                 0,
-                                 gsl::narrow<int>(image->width));
-    const auto maxX = std::clamp(static_cast<int>((clipMax.x - origin.x) / pixelSize) + 1,
-                                 0,
-                                 gsl::narrow<int>(image->width));
-    const auto minY = std::clamp(static_cast<int>((clipMin.y - origin.y) / pixelSize) - 1,
-                                 0,
-                                 gsl::narrow<int>(image->height));
-    const auto maxY = std::clamp(static_cast<int>((clipMax.y - origin.y) / pixelSize) + 1,
-                                 0,
-                                 gsl::narrow<int>(image->height));
-
-    if (pixelSize <= 1.5f) {
-        // At 1x, drawing one rect per pixel is still adequate for the small test artifacts this
-        // reviewer targets today. For large artifacts the clip-restricted loop keeps work bounded.
-    }
-    for (int y = minY; y < maxY; ++y) {
-        for (int x = minX; x < maxX; ++x) {
-            const auto p0 = ImVec2{origin.x + static_cast<float>(x) * pixelSize,
-                                   origin.y + static_cast<float>(y) * pixelSize};
-            const auto p1 = ImVec2{p0.x + pixelSize, p0.y + pixelSize};
-            drawList->AddRectFilled(
-                p0, p1, pixelColor(*image, gsl::narrow<uint32_t>(x), gsl::narrow<uint32_t>(y)));
-        }
-    }
-    drawList->PopClipRect();
-    ImGui::EndChild();
-}
 
 class VisualDiffReviewerApplication : public Cory::Application {
   public:
@@ -189,59 +123,19 @@ class VisualDiffReviewerApplication : public Cory::Application {
 
     void drawUi()
     {
-        ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f}, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
-        if (!ImGui::Begin("Visual Review",
-                          nullptr,
-                          ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-                              ImGuiWindowFlags_NoMove)) {
-            ImGui::End();
-            return;
-        }
-
-        ImGui::Text("Case: %s", request_.caseName.c_str());
-        ImGui::SameLine();
-        ImGui::TextDisabled("Request: %s", request_.id.c_str());
-        ImGui::Text("Catch test: %s", request_.metadata.catchTestName.c_str());
-        ImGui::Text("Source: %s:%llu",
-                    request_.metadata.sourceFile.c_str(),
-                    static_cast<unsigned long long>(request_.metadata.sourceLine));
-        ImGui::Text("Mismatched pixels: %llu (%.6f), max channel error: %u, MAE: %.4f",
-                    static_cast<unsigned long long>(request_.metrics.mismatchedPixels),
-                    request_.metrics.mismatchRatio,
-                    static_cast<unsigned>(request_.metrics.maxChannelError),
-                    request_.metrics.meanAbsoluteError);
-        ImGui::TextDisabled("Baseline: %s", request_.baselinePath.string().c_str());
-        ImGui::TextDisabled("Actual:   %s", request_.actualPath.string().c_str());
-        ImGui::TextDisabled("Diff:     %s", request_.diffPath.string().c_str());
-
-        ImGui::Separator();
-        ImGui::SliderFloat("Zoom", &zoom_, 1.0f, 32.0f, "%.0fx");
-        ImGui::SameLine();
-        ImGui::Checkbox("Show diff instead of actual", &showDiff_);
-        ImGui::SameLine();
-        if (ImGui::Button("Accept / update baseline")) {
+        const auto actions = Cory::Tools::VisualReview::drawReviewUi(
+            request_,
+            Cory::Tools::VisualReview::VisualReviewUiImages{.baseline =
+                                                                baseline_ ? &*baseline_ : nullptr,
+                                                            .actual = actual_ ? &*actual_ : nullptr,
+                                                            .diff = diff_ ? &*diff_ : nullptr},
+            uiState_);
+        if (actions.acceptRequested) {
             writeDecisionAndClose(true, "accepted in VisualDiffReviewer");
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Reject")) {
+        if (actions.rejectRequested) {
             writeDecisionAndClose(false, "rejected in VisualDiffReviewer");
         }
-
-        ImGui::Separator();
-        const auto available = ImGui::GetContentRegionAvail();
-        const auto paneWidth = (available.x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        ImGui::BeginChild("baseline-pane", ImVec2{paneWidth, 0.0f}, false);
-        drawImagePixels("Baseline", baseline_ ? &*baseline_ : nullptr, zoom_);
-        ImGui::EndChild();
-        ImGui::SameLine();
-        ImGui::BeginChild("candidate-pane", ImVec2{0.0f, 0.0f}, false);
-        drawImagePixels(showDiff_ ? "Diff" : "Actual",
-                        showDiff_ ? (diff_ ? &*diff_ : nullptr) : (actual_ ? &*actual_ : nullptr),
-                        zoom_);
-        ImGui::EndChild();
-
-        ImGui::End();
     }
 
     VisualReviewRequest request_;
@@ -250,8 +144,7 @@ class VisualDiffReviewerApplication : public Cory::Application {
     Cory::Result<ImageRgba8> diff_;
     std::unique_ptr<Cory::Window> window_;
     uint64_t framesToRender_{0};
-    float zoom_{8.0f};
-    bool showDiff_{false};
+    Cory::Tools::VisualReview::VisualReviewUiState uiState_{};
     bool decisionWritten_{false};
 };
 

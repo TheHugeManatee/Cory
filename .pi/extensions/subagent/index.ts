@@ -228,8 +228,52 @@ function summarizeTask(task: string): string {
 	return singleLine.length <= maxLength ? singleLine : `${singleLine.slice(0, maxLength - 3)}...`;
 }
 
+const unicodeWordRe = /[\p{L}\p{N}]/u;
+const unicodeUpperRe = /\p{Lu}/u;
+const unicodeLowerRe = /\p{Ll}/u;
+
 function estimateTokens(text: string): number {
-	return Math.ceil(text.length / 4);
+	let count = 0;
+	let open = false;
+	let kind = 0; // 1 lower, 2 upper, 3 digit, 4 other word
+
+	for (let i = 0; i < text.length; i++) {
+		const code = text.charCodeAt(i);
+		const ch = text[i];
+
+		if (code <= 32 || ch === "_") {
+			if (open) count++;
+			open = false;
+			kind = 0;
+			continue;
+		}
+
+		let nextKind = 0;
+		if (code >= 48 && code <= 57) nextKind = 3;
+		else if (code >= 65 && code <= 90) nextKind = 2;
+		else if (code >= 97 && code <= 122) nextKind = 1;
+		else if (unicodeWordRe.test(ch)) nextKind = unicodeUpperRe.test(ch) ? 2 : unicodeLowerRe.test(ch) ? 1 : 4;
+
+		if (nextKind === 0) {
+			if (open) count++;
+			count++;
+			open = false;
+			kind = 0;
+			continue;
+		}
+
+		const next = text[i + 1];
+		const nextLower = next !== undefined && ((next.charCodeAt(0) >= 97 && next.charCodeAt(0) <= 122) || unicodeLowerRe.test(next));
+
+		if (open && ((kind === 1 && nextKind === 2) || (kind !== nextKind && (kind === 3 || nextKind === 3)) || (kind === 2 && nextKind === 2 && nextLower))) {
+			count++;
+		}
+
+		open = true;
+		kind = nextKind;
+	}
+
+	return count + (open ? 1 : 0);
 }
 
 async function killProcessTree(proc: ReturnType<typeof spawn>): Promise<void> {

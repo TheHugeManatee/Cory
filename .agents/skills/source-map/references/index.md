@@ -35,6 +35,8 @@ Compact router for Cory tasks. Read `routes.md`, then one matching module page, 
 - `src/Cory/Cory.cpp`
 - `src/Cory/Renderer/Context.hpp`
 - `src/Cory/Framegraph/Framegraph.hpp`
+- `src/Cory/SceneGraph/SceneGraph.hpp`
+- `src/Cory/Systems/SystemCoordinator.hpp`
 - `tests/CMakeLists.txt`
 - `examples/CMakeLists.txt`
 

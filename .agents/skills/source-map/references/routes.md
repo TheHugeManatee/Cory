@@ -32,8 +32,11 @@ Use the smallest module page that matches the task.
 ## UI rendering, widgets, ImGui integration
 - Read: `modules/imgui.md`
 
-## Scene graph, entities, transforms, editor/component systems
+## Scene graph, entities, hierarchy
 - Read: `modules/scenegraph.md`
+
+## Transform systems, gizmos, editor component UI
+- Read: `modules/systems.md`
 
 ## Property/parameter system
 - Read: `modules/proper.md`

@@ -31,6 +31,12 @@ constexpr ImU32 kRowBgB = IM_COL32(18, 22, 30, 255);
 constexpr ImU32 kLabelColor = IM_COL32(165, 183, 214, 255);
 constexpr ImU32 kValueColor = IM_COL32(236, 240, 245, 255);
 
+struct KeyValueRow {
+    const char *label;
+    std::string value;
+    std::string tooltip;
+};
+
 [[nodiscard]] ImVec4 toVec4(ImU32 color)
 {
     return ImGui::ColorConvertU32ToFloat4(color);
@@ -56,42 +62,15 @@ constexpr ImU32 kValueColor = IM_COL32(236, 240, 245, 255);
     return clicked;
 }
 
-void drawImage(const char *title,
-               const ImageRgba8 *image,
-               ImGuiTextureId textureId,
-               float zoom,
-               ImU32 titleColor)
+[[nodiscard]] std::string displayPathLabel(const std::filesystem::path &path)
 {
-    ImGui::PushStyleColor(ImGuiCol_Text, toVec4(titleColor));
-    ImGui::TextUnformatted(title);
-    ImGui::PopStyleColor();
-
-    if (image == nullptr || textureId == InvalidImGuiTextureId) {
-        ImGui::TextDisabled("Image unavailable");
-        return;
-    }
-
-    ImGui::TextDisabled("%u x %u", image->width, image->height);
-    const auto pixelSize = std::max(1.0f, zoom);
-    ImGui::Image(ImTextureRef{static_cast<ImTextureID>(textureId)},
-                 ImVec2{static_cast<float>(image->width) * pixelSize,
-                        static_cast<float>(image->height) * pixelSize});
-}
-
-[[nodiscard]] std::string displayPath(const std::filesystem::path &path)
-{
-    return path.lexically_normal().generic_string();
-}
-
-[[nodiscard]] std::string displaySourceLocation(const std::string &sourceFile, uint64_t line)
-{
-    return fmt::format("{}:{}", displayPath(sourceFile), line);
+    return path.filename().lexically_normal().generic_string();
 }
 
 template <size_t N>
 void drawKeyValueTable(const char *id,
                        const char *title,
-                       const std::array<std::pair<const char *, std::string>, N> &rows,
+                       const std::array<KeyValueRow, N> &rows,
                        ImU32 titleColor)
 {
     ImGui::PushStyleColor(ImGuiCol_Text, toVec4(titleColor));
@@ -109,7 +88,7 @@ void drawKeyValueTable(const char *id,
         ImGui::TableHeadersRow();
 
         auto rowIndex = 0;
-        for (const auto &[label, value] : rows) {
+        for (const auto &[label, value, tooltip] : rows) {
             ImGui::TableNextRow();
             ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0,
                                    (rowIndex % 2 == 0) ? kRowBgA : kRowBgB);
@@ -121,9 +100,10 @@ void drawKeyValueTable(const char *id,
 
             ImGui::TableNextColumn();
             ImGui::PushStyleColor(ImGuiCol_Text, toVec4(kValueColor));
-            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
             ImGui::TextUnformatted(value.c_str());
-            ImGui::PopTextWrapPos();
+            if (!tooltip.empty() && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                ImGui::SetTooltip("%s", tooltip.c_str());
+            }
             ImGui::PopStyleColor();
 
             ++rowIndex;
@@ -160,17 +140,28 @@ void drawMetadataTables(const VisualReviewRequest &request)
             "request-table",
             "Request",
             std::array{
-                std::pair{"Case", request.caseName},
-                std::pair{"Request ID", request.id},
-                std::pair{"Request path", displayPath(request.requestPath)},
-                std::pair{"Baseline path", displayPath(request.baselinePath)},
-                std::pair{"Actual path", displayPath(request.actualPath)},
-                std::pair{"Diff path", displayPath(request.diffPath)},
-                std::pair{"Mismatched pixels", fmt::format("{}", request.metrics.mismatchedPixels)},
-                std::pair{"Mismatch ratio", fmt::format("{:.4f}", request.metrics.mismatchRatio)},
-                std::pair{"Max channel error", fmt::format("{}", request.metrics.maxChannelError)},
-                std::pair{"Mean absolute error",
-                          fmt::format("{:.4f}", request.metrics.meanAbsoluteError)},
+                KeyValueRow{"Case", request.caseName, {}},
+                KeyValueRow{"Request ID", request.id, {}},
+                KeyValueRow{"Request path",
+                            displayPathLabel(request.requestPath),
+                            std::filesystem::absolute(request.requestPath)
+                                .lexically_normal()
+                                .generic_string()},
+                KeyValueRow{"Baseline path",
+                            displayPathLabel(request.baselinePath),
+                            std::filesystem::absolute(request.baselinePath)
+                                .lexically_normal()
+                                .generic_string()},
+                KeyValueRow{"Actual path",
+                            displayPathLabel(request.actualPath),
+                            std::filesystem::absolute(request.actualPath)
+                                .lexically_normal()
+                                .generic_string()},
+                KeyValueRow{"Diff path",
+                            displayPathLabel(request.diffPath),
+                            std::filesystem::absolute(request.diffPath)
+                                .lexically_normal()
+                                .generic_string()},
             },
             kTitleBlue);
 
@@ -178,11 +169,29 @@ void drawMetadataTables(const VisualReviewRequest &request)
         drawKeyValueTable("source-table",
                           "Source location",
                           std::array{
-                              std::pair{"Catch test", request.metadata.catchTestName},
-                              std::pair{"Source location",
-                                        displaySourceLocation(request.metadata.sourceFile,
-                                                              request.metadata.sourceLine)},
-                              std::pair{"Source function", request.metadata.sourceFunction},
+                                            KeyValueRow{"Mismatched pixels",
+                            fmt::format("{}", request.metrics.mismatchedPixels),
+                            {}},
+                KeyValueRow{"Mismatch ratio",
+                            fmt::format("{:.4f}", request.metrics.mismatchRatio),
+                            {}},
+                KeyValueRow{"Max channel error",
+                            fmt::format("{}", request.metrics.maxChannelError),
+                            {}},
+                KeyValueRow{"Mean absolute error",
+                            fmt::format("{:.4f}", request.metrics.meanAbsoluteError),
+                            {}},
+                              KeyValueRow{"Catch test", request.metadata.catchTestName, {}},
+                              KeyValueRow{"Source location",
+                                          fmt::format("{}:{}",
+                                                      displayPathLabel(request.metadata.sourceFile),
+                                                      request.metadata.sourceLine),
+                                          fmt::format("{}:{}",
+                                                      std::filesystem::absolute(request.metadata.sourceFile)
+                                                          .lexically_normal()
+                                                          .generic_string(),
+                                                      request.metadata.sourceLine)},
+                              KeyValueRow{"Source function", request.metadata.sourceFunction, {}},
                           },
                           kTitleYellow);
 
@@ -212,7 +221,7 @@ void drawToolbar(const VisualReviewRequest &request,
                                 2.0f * 94.0f + ImGui::GetStyle().ItemSpacing.x);
         ImGui::TableNextRow();
 
-        ImGui::TableSetColumnIndex(0);
+        ImGui::TableNextColumn();
         ImGui::AlignTextToFramePadding();
         ImGui::TextDisabled("Zoom");
         ImGui::SameLine();
@@ -223,24 +232,38 @@ void drawToolbar(const VisualReviewRequest &request,
             state.showDiff = !state.showDiff;
         }
 
-        ImGui::TableSetColumnIndex(1);
+        const auto &io = ImGui::GetIO();
+        const bool acceptShortcut = io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A, false);
+        const bool rejectShortcut = io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false);
+
+        ImGui::TableNextColumn();
         const auto buttonWidth = 94.0f;
         const auto totalWidth = buttonWidth * 2.0f + ImGui::GetStyle().ItemSpacing.x;
         const auto offset = std::max(0.0f, ImGui::GetContentRegionAvail().x - totalWidth);
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
 
-        if (coloredButton("Accept", kAcceptColor, ImVec2{buttonWidth, 0.0f})) {
+        const auto handleAccept = [&]() {
             if (images.actual != nullptr) {
-                actions.acceptRequested = true;
-            }
-            else {
+                if (const auto result = IO::writeBmpRgba8(request.baselinePath, *images.actual);
+                    result) {
+                    actions.acceptRequested = true;
+                } else {
+                    CO_CORE_ERROR("Failed to update baseline image '{}': {}",
+                                  request.baselinePath.string(),
+                                  result.error());
+                }
+            } else {
                 CO_CORE_ERROR("Cannot accept visual review '{}': actual image is missing",
                               request.id);
             }
+        };
+
+        if (acceptShortcut || coloredButton("Accept", kAcceptColor, ImVec2{buttonWidth, 0.0f})) {
+            handleAccept();
         }
 
         ImGui::SameLine();
-        if (coloredButton("Reject", kRejectColor, ImVec2{buttonWidth, 0.0f})) {
+        if (rejectShortcut || coloredButton("Reject", kRejectColor, ImVec2{buttonWidth, 0.0f})) {
             actions.rejectRequested = true;
         }
 
@@ -250,18 +273,96 @@ void drawToolbar(const VisualReviewRequest &request,
     ImGui::EndChild();
 }
 
-void drawPreviewPane(const char *id,
-                     const char *title,
-                     const ImageRgba8 *image,
-                     ImGuiTextureId textureId,
-                     float zoom,
-                     ImU32 titleColor)
+[[nodiscard]] float panSpeedFromWheel(const VisualReviewUiState &state)
+{
+    return std::max(24.0f, 64.0f / std::max(state.zoom, 1.0f));
+}
+
+void applyWheelPan(VisualReviewUiState &state, const ImGuiIO &io)
+{
+    const auto speed = panSpeedFromWheel(state);
+    if (io.MouseWheelH != 0.0f) {
+        state.panX -= io.MouseWheelH * speed;
+    }
+    if (io.MouseWheel != 0.0f) {
+        state.panY -= io.MouseWheel * speed;
+    }
+}
+
+void applyWheelZoom(VisualReviewUiState &state,
+                    const ImGuiIO &io,
+                    const ImVec2 &canvasOrigin,
+                    const ImVec2 &mousePos)
+{
+    const auto oldZoom = std::max(state.zoom, kZoomMin);
+    const auto newZoom = std::clamp(oldZoom * std::pow(1.10f, io.MouseWheel), kZoomMin, kZoomMax);
+    if (newZoom == oldZoom) {
+        return;
+    }
+
+    const auto mouseLocal = ImVec2{mousePos.x - canvasOrigin.x, mousePos.y - canvasOrigin.y};
+    const auto zoomRatio = newZoom / oldZoom;
+    state.panX = (state.panX + mouseLocal.x) * zoomRatio - mouseLocal.x;
+    state.panY = (state.panY + mouseLocal.y) * zoomRatio - mouseLocal.y;
+    state.zoom = newZoom;
+}
+
+void drawImagePane(const char *id,
+                   const char *title,
+                   const ImageRgba8 *image,
+                   ImGuiTextureId textureId,
+                   VisualReviewUiState &state,
+                   ImU32 titleColor)
 {
     ImGui::BeginChild(id,
                       ImVec2{0.0f, 0.0f},
                       true,
-                      ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoMove);
-    drawImage(title, image, textureId, zoom, titleColor);
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    ImGui::PushStyleColor(ImGuiCol_Text, toVec4(titleColor));
+    ImGui::TextUnformatted(title);
+    ImGui::PopStyleColor();
+
+    if (image == nullptr || textureId == InvalidImGuiTextureId) {
+        ImGui::TextDisabled("Image unavailable");
+        ImGui::EndChild();
+        return;
+    }
+
+    ImGui::TextDisabled("%u x %u", image->width, image->height);
+
+    const auto canvasOrigin = ImGui::GetCursorScreenPos();
+    const auto pixelSize = std::max(1.0f, state.zoom);
+    const auto canvasSize = ImVec2{static_cast<float>(image->width) * pixelSize,
+                                   static_cast<float>(image->height) * pixelSize};
+    ImGui::InvisibleButton(fmt::format("{}##canvas", id).c_str(),
+                           canvasSize,
+                           ImGuiButtonFlags_MouseButtonLeft);
+
+    const auto &io = ImGui::GetIO();
+    const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+    if (hovered) {
+        ImGui::SetMouseCursor(io.MouseDown[0] ? ImGuiMouseCursor_ResizeAll : ImGuiMouseCursor_Hand);
+
+        if (io.KeyCtrl && io.MouseWheel != 0.0f) {
+            applyWheelZoom(state, io, canvasOrigin, io.MousePos);
+        } else {
+            applyWheelPan(state, io);
+        }
+
+        if (io.MouseDown[0] && (io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f)) {
+            state.panX -= io.MouseDelta.x;
+            state.panY -= io.MouseDelta.y;
+        }
+    }
+
+    auto *drawList = ImGui::GetWindowDrawList();
+    const auto drawPixelSize = std::max(1.0f, state.zoom);
+    const auto drawMin = ImVec2{canvasOrigin.x - state.panX, canvasOrigin.y - state.panY};
+    const auto drawMax = ImVec2{drawMin.x + static_cast<float>(image->width) * drawPixelSize,
+                                drawMin.y + static_cast<float>(image->height) * drawPixelSize};
+    drawList->AddImage(static_cast<ImTextureID>(textureId), drawMin, drawMax);
+
     ImGui::EndChild();
 }
 
@@ -275,16 +376,23 @@ VisualReviewUiActions drawReviewUi(const VisualReviewRequest &request,
 
     ImGui::SetNextWindowPos(ImVec2{0.0f, 0.0f}, ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize, ImGuiCond_Always);
+    auto windowBg = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
+    windowBg.w = 1.0f;
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, windowBg);
     if (!ImGui::Begin("Visual Review",
                       nullptr,
                       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
                           ImGuiWindowFlags_NoMove)) {
         ImGui::End();
+        ImGui::PopStyleColor();
         return actions;
     }
 
     drawMetadataTables(request);
     ImGui::Spacing();
+
+    const auto &io = ImGui::GetIO();
+    const bool effectiveShowDiff = state.showDiff ^ io.KeyAlt;
 
     if (ImGui::BeginChild("preview-area", ImVec2{0.0f, -kToolbarHeight}, false)) {
         if (ImGui::BeginTable("preview-table",
@@ -295,30 +403,23 @@ VisualReviewUiActions drawReviewUi(const VisualReviewRequest &request,
             ImGui::TableSetupColumn("candidate", ImGuiTableColumnFlags_WidthStretch, 1.0f);
             ImGui::TableNextRow();
 
-            ImGui::TableSetColumnIndex(0);
-            drawPreviewPane("baseline-pane",
-                            "Baseline",
-                            images.baseline,
-                            images.baselineTexture,
-                            state.zoom,
-                            kTitleBlue);
+            ImGui::TableNextColumn();
+            drawImagePane("baseline-pane",
+                          "Baseline",
+                          images.baseline,
+                          images.baselineTexture,
+                          state,
+                          kTitleBlue);
 
-            ImGui::TableSetColumnIndex(1);
-            drawPreviewPane("candidate-pane",
-                            state.showDiff ? "Diff" : "Actual",
-                            state.showDiff ? images.diff : images.actual,
-                            state.showDiff ? images.diffTexture : images.actualTexture,
-                            state.zoom,
-                            kTitleYellow);
+            ImGui::TableNextColumn();
+            drawImagePane("candidate-pane",
+                          effectiveShowDiff ? "Diff" : "Actual",
+                          effectiveShowDiff ? images.diff : images.actual,
+                          effectiveShowDiff ? images.diffTexture : images.actualTexture,
+                          state,
+                          kTitleYellow);
 
             ImGui::EndTable();
-        }
-
-        const auto &io = ImGui::GetIO();
-        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) &&
-            io.MouseWheel != 0.0f) {
-            state.zoom =
-                std::clamp(state.zoom * std::pow(1.10f, io.MouseWheel), kZoomMin, kZoomMax);
         }
     }
     ImGui::EndChild();
@@ -327,6 +428,7 @@ VisualReviewUiActions drawReviewUi(const VisualReviewRequest &request,
     drawToolbar(request, images, state, actions);
 
     ImGui::End();
+    ImGui::PopStyleColor();
     return actions;
 }
 

@@ -16,8 +16,10 @@ struct VisualReviewUiImages {
 };
 
 struct VisualReviewUiState {
-    float zoom{8.0f};
+    float zoom{2.0f};
     bool showDiff{false};
+    float panX{0.0f};
+    float panY{0.0f};
 };
 
 struct VisualReviewUiActions {

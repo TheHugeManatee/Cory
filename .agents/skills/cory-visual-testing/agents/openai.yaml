@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cory Visual Testing"
+  short_description: "Write and debug TestCanvas visual tests."
+  default_prompt: "Use $cory-visual-testing to create, run, debug, or update a Cory TestCanvas visual regression test."

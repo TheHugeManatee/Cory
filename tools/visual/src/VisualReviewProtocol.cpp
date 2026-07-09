@@ -2,6 +2,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -12,6 +13,19 @@ namespace Cory::Tools::VisualReview {
 namespace {
 
 using json = nlohmann::json;
+
+[[nodiscard]] std::filesystem::path makeAtomicTempPath(const std::filesystem::path &path)
+{
+    static std::atomic_uint64_t counter{0};
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    const auto suffix = std::to_string(stamp) + "." +
+                        std::to_string(counter.fetch_add(1, std::memory_order_relaxed));
+    const auto name = std::string{"."} + path.filename().string() + ".tmp." + suffix;
+    if (path.parent_path().empty()) {
+        return std::filesystem::path{name};
+    }
+    return path.parent_path() / name;
+}
 
 [[nodiscard]] std::string pathToString(const std::filesystem::path &path)
 {
@@ -98,10 +112,24 @@ void writeRequest(const std::filesystem::path &path, const VisualReviewRequest &
     if (!path.parent_path().empty()) {
         std::filesystem::create_directories(path.parent_path());
     }
-    std::ofstream out{path, std::ios::binary};
-    out << std::setw(2) << value << '\n';
-    if (!out) {
-        throw std::runtime_error{"Failed to write visual review request: " + path.string()};
+    const auto tempPath = makeAtomicTempPath(path);
+    {
+        std::ofstream out{tempPath, std::ios::binary | std::ios::trunc};
+        out << std::setw(2) << value << '\n';
+        if (!out) {
+            std::error_code ec;
+            std::filesystem::remove(tempPath, ec);
+            throw std::runtime_error{"Failed to write visual review request: " + path.string()};
+        }
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    std::filesystem::rename(tempPath, path, ec);
+    if (ec) {
+        std::filesystem::remove(tempPath, ec);
+        throw std::runtime_error{"Failed to publish visual review request: " + path.string() +
+                                 ": " + ec.message()};
     }
 }
 
@@ -146,10 +174,24 @@ void writeDecision(const std::filesystem::path &path, const VisualReviewDecision
     if (!path.parent_path().empty()) {
         std::filesystem::create_directories(path.parent_path());
     }
-    std::ofstream out{path, std::ios::binary};
-    out << std::setw(2) << value << '\n';
-    if (!out) {
-        throw std::runtime_error{"Failed to write visual review decision: " + path.string()};
+    const auto tempPath = makeAtomicTempPath(path);
+    {
+        std::ofstream out{tempPath, std::ios::binary | std::ios::trunc};
+        out << std::setw(2) << value << '\n';
+        if (!out) {
+            std::error_code ec;
+            std::filesystem::remove(tempPath, ec);
+            throw std::runtime_error{"Failed to write visual review decision: " + path.string()};
+        }
+    }
+
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    std::filesystem::rename(tempPath, path, ec);
+    if (ec) {
+        std::filesystem::remove(tempPath, ec);
+        throw std::runtime_error{"Failed to publish visual review decision: " + path.string() +
+                                 ": " + ec.message()};
     }
 }
 

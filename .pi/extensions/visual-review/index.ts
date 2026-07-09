@@ -142,11 +142,11 @@ const visualReviewTool = defineTool({
 			const request = await readRequest(resolvedRequestPath);
 			const requestDir = path.dirname(resolvedRequestPath);
 			const baselinePath = resolveArtifactPath(requestDir, request.baselinePath);
-			const actualPath = resolveArtifactPath(requestDir, request.actualPath);
-			const diffPath = resolveArtifactPath(requestDir, request.diffPath);
-			const decisionPath = resolveArtifactPath(requestDir, request.decisionPath);
+			const actualPath = ensureWithinDirectory(requestDir, resolveArtifactPath(requestDir, request.actualPath), "Actual path");
+			const diffPath = ensureWithinDirectory(requestDir, resolveArtifactPath(requestDir, request.diffPath), "Diff path");
+			const decisionPath = ensureWithinDirectory(requestDir, resolveArtifactPath(requestDir, request.decisionPath), "Decision path");
 			const sourceFile = request.metadata?.sourceFile
-				? resolveArtifactPath(requestDir, request.metadata.sourceFile)
+				? path.resolve(requestDir, request.metadata.sourceFile)
 				: undefined;
 			const sourceLine = request.metadata?.sourceLine ?? 0;
 			const contextLines = clamp(Math.round(params.contextLines ?? 11), 5, 60);
@@ -203,6 +203,7 @@ const visualReviewTool = defineTool({
 			const accepted = params.action === "accept";
 			const note = params.note?.trim() || (accepted ? "accepted by model review" : "rejected by model review");
 			if (accepted) {
+				ensureWithinDirectory(process.cwd(), baselinePath, "Baseline path");
 				await fs.copyFile(actualPath, baselinePath);
 			}
 
@@ -258,6 +259,16 @@ async function readRequest(requestPath: string): Promise<VisualReviewRequest> {
 		throw new Error(`Invalid visual review request: ${requestPath}`);
 	}
 	return parsed as VisualReviewRequest;
+}
+
+function ensureWithinDirectory(baseDir: string, candidate: string, label: string): string {
+	const resolvedBase = path.resolve(baseDir);
+	const resolvedCandidate = path.resolve(candidate);
+	const relative = path.relative(resolvedBase, resolvedCandidate);
+	if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+		return resolvedCandidate;
+	}
+	throw new Error(`${label} escapes the review directory: ${resolvedCandidate}`);
 }
 
 async function readDecisionIfPresent(decisionPath: string): Promise<VisualReviewDecision | undefined> {

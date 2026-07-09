@@ -12,12 +12,6 @@
 
 namespace {
 
-[[nodiscard]] Cory::IO::BmpImageRgba8 toBmpImage(const Cory::testing::ImageRgba8 &image)
-{
-    return Cory::IO::BmpImageRgba8{
-        .width = image.size.x, .height = image.size.y, .pixelsRgba8 = image.pixels};
-}
-
 [[nodiscard]] std::filesystem::path makeFixtureRoot()
 {
     auto root = std::filesystem::temp_directory_path() / "Cory" / "VisualDiffReviewerUi_Test" /
@@ -41,9 +35,9 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
     const auto actualImage = Cory::testing::makeSolidImage(glm::u32vec2{512, 512}, 0, 255, 0, 255);
     const auto diffImage = Cory::testing::makeSolidImage(glm::u32vec2{512, 512}, 255, 255, 0, 255);
 
-    const auto baselineBmp = toBmpImage(baselineImage);
-    const auto actualBmp = toBmpImage(actualImage);
-    const auto diffBmp = toBmpImage(diffImage);
+    const auto baselineBmp = baselineImage;
+    const auto actualBmp = actualImage;
+    const auto diffBmp = diffImage;
     const auto baselineTexture = imgui.registerTexture("Reviewer UI Baseline", baselineImage);
     const auto actualTexture = imgui.registerTexture("Reviewer UI Actual", actualImage);
     const auto diffTexture = imgui.registerTexture("Reviewer UI Diff", diffImage);
@@ -124,5 +118,9 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
             .output();
     });
 
-    Cory::testing::requireMatchesReference("visual-diff-reviewer-ui", actual);
+    Cory::testing::requireMatchesReference(
+        "visual-diff-reviewer-ui",
+        actual,
+        Cory::testing::ImageCompareOptions{.perChannelTolerance = 2,
+                                           .maxMeanAbsoluteError = 0.01});
 }

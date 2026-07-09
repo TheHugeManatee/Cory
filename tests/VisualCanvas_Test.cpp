@@ -215,5 +215,5 @@ TEST_CASE("Interactive visual comparison can accept and update baseline",
 
     CHECK(result.passed);
     REQUIRE(updatedBaseline);
-    CHECK(updatedBaseline->pixels == actual.pixels);
+    CHECK(updatedBaseline->pixelsRgba8 == actual.pixelsRgba8);
 }

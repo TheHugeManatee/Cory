@@ -13,10 +13,12 @@
 #include <Cory/Base/Time.hpp>
 #include <Cory/Cory.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/IO/Bmp.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/FrameCapture.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
@@ -32,16 +34,50 @@
 
 #include <algorithm>
 #include <glm/common.hpp>
+#include <stdexcept>
+
+namespace {
+
+void writeOutputFrame(const std::filesystem::path &outputPath,
+                      Cory::Context &ctx,
+                      const Cory::Texture &texture,
+                      uint32_t width,
+                      uint32_t height,
+                      Gpu::Format format,
+                      Gpu::TextureLayout layout)
+{
+    ctx.device().waitUntilIdle();
+    const auto image = Cory::readbackTextureRgba8(ctx,
+                                                  texture,
+                                                  glm::u32vec2{width, height},
+                                                  format,
+                                                  layout);
+    const auto result = Cory::IO::writeBmpRgba8(outputPath, image);
+    if (!result) {
+        throw std::runtime_error(result.error());
+    }
+}
+
+} // namespace
 
 ParticleComputeDemoApplication::ParticleComputeDemoApplication(std::span<const char *> args)
 {
     CLI::App app{"ParticleComputeDemoApplication"};
     bool disableValidation{false};
+    std::string outputPathString{};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
+    app.add_option("--output", outputPathString, "Write the final frame to a BMP file");
     app.add_flag("--disable-validation", disableValidation, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.allow_config_extras(true);
     app.parse(gsl::narrow<int>(args.size()), args.data());
+    if (!outputPathString.empty()) {
+        outputPath_ = outputPathString;
+        headless_ = true;
+        if (framesToRender_ == 0) {
+            framesToRender_ = 1;
+        }
+    }
 
     Cory::ResourceLocator::addSearchPath(PARTICLECOMPUTEDEMO_RESOURCE_DIR);
 
@@ -213,6 +249,14 @@ void ParticleComputeDemoApplication::run()
                     defineRenderPasses(fg, currentFrame);
                 });
 
+            if (!outputPath_.empty()) {
+                lastRenderedTexture_ = frameCtx.swapchainImage;
+                lastRenderedWidth_ = frameCtx.extent.x;
+                lastRenderedHeight_ = frameCtx.extent.y;
+                lastRenderedFormat_ = frameCtx.colorFormat;
+                lastRenderedLayout_ = Gpu::TextureLayout::PresentSrc;
+            }
+
             if (dumpNextFramegraph_) {
                 dumpFramegraph(recordedFrame.framegraph,
                                recordedFrame.executionInfo,
@@ -222,6 +266,20 @@ void ParticleComputeDemoApplication::run()
             }
         },
         [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
+
+    if (outputPath_.empty()) {
+        return;
+    }
+
+    CO_CORE_ASSERT(lastRenderedTexture_ != nullptr,
+                   "ParticleComputeDemo output requested, but no frame texture was captured");
+    writeOutputFrame(outputPath_,
+                     ctx(),
+                     *lastRenderedTexture_,
+                     lastRenderedWidth_,
+                     lastRenderedHeight_,
+                     lastRenderedFormat_,
+                     lastRenderedLayout_);
 }
 
 void ParticleComputeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,

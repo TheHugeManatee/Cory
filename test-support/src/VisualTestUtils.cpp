@@ -7,12 +7,9 @@
 #include <Cory/ImGui/ImguiRenderer.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/FrameCapture.hpp>
 #include <Cory/Renderer/Synchronization.hpp>
 #include <Cory/Tools/VisualReviewProtocol.hpp>
-
-#include <KDGpu/buffer_options.h>
-#include <KDGpu/command_recorder.h>
-#include <KDGpu/texture.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/interfaces/catch_interfaces_capture.hpp>
 #include <gsl/narrow>
@@ -26,7 +23,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <optional>
 #include <span>
@@ -209,21 +205,25 @@ void writeText(const std::filesystem::path &path, std::string_view text)
     return decision->accepted;
 }
 
-[[nodiscard]] ImageRgba8 makeDiffImage(const ImageRgba8 &baseline, const ImageRgba8 &actual)
+[[nodiscard]] IO::BmpImageRgba8 makeDiffImage(const IO::BmpImageRgba8 &baseline,
+                                                const IO::BmpImageRgba8 &actual)
 {
-    ImageRgba8 diff{.size = actual.size};
-    diff.pixels.resize(actual.pixels.size());
-    for (size_t i = 0; i < actual.pixels.size(); i += 4) {
-        const auto ar = static_cast<uint8_t>(actual.pixels[i + 0]);
-        const auto ag = static_cast<uint8_t>(actual.pixels[i + 1]);
-        const auto ab = static_cast<uint8_t>(actual.pixels[i + 2]);
-        const auto br = static_cast<uint8_t>(baseline.pixels[i + 0]);
-        const auto bg = static_cast<uint8_t>(baseline.pixels[i + 1]);
-        const auto bb = static_cast<uint8_t>(baseline.pixels[i + 2]);
-        diff.pixels[i + 0] = static_cast<std::byte>(std::min(255, std::abs(int(ar) - int(br)) * 8));
-        diff.pixels[i + 1] = static_cast<std::byte>(std::min(255, std::abs(int(ag) - int(bg)) * 8));
-        diff.pixels[i + 2] = static_cast<std::byte>(std::min(255, std::abs(int(ab) - int(bb)) * 8));
-        diff.pixels[i + 3] = static_cast<std::byte>(255);
+    IO::BmpImageRgba8 diff{.width = actual.width, .height = actual.height};
+    diff.pixelsRgba8.resize(actual.pixelsRgba8.size());
+    for (size_t i = 0; i < actual.pixelsRgba8.size(); i += 4) {
+        const auto ar = static_cast<uint8_t>(actual.pixelsRgba8[i + 0]);
+        const auto ag = static_cast<uint8_t>(actual.pixelsRgba8[i + 1]);
+        const auto ab = static_cast<uint8_t>(actual.pixelsRgba8[i + 2]);
+        const auto br = static_cast<uint8_t>(baseline.pixelsRgba8[i + 0]);
+        const auto bg = static_cast<uint8_t>(baseline.pixelsRgba8[i + 1]);
+        const auto bb = static_cast<uint8_t>(baseline.pixelsRgba8[i + 2]);
+        diff.pixelsRgba8[i + 0] =
+            static_cast<std::byte>(std::min(255, std::abs(int(ar) - int(br)) * 8));
+        diff.pixelsRgba8[i + 1] =
+            static_cast<std::byte>(std::min(255, std::abs(int(ag) - int(bg)) * 8));
+        diff.pixelsRgba8[i + 2] =
+            static_cast<std::byte>(std::min(255, std::abs(int(ab) - int(bb)) * 8));
+        diff.pixelsRgba8[i + 3] = static_cast<std::byte>(255);
     }
     return diff;
 }
@@ -254,64 +254,7 @@ metricsJson(std::string_view caseName, const ImageCompareResult &result, bool pr
     return value.dump(pretty ? 2 : -1) + (pretty ? "\n" : "");
 }
 
-[[nodiscard]] ImageRgba8
-readbackTextureRgba8(Context &ctx, const Texture &texture, glm::u32vec2 size, Gpu::Format format)
-{
-    CO_CORE_ASSERT(format == Gpu::Format::B8G8R8A8_UNORM || format == Gpu::Format::R8G8B8A8_UNORM,
-                   "TestCanvas readback currently supports only BGRA8/RGBA8 UNORM textures");
 
-    const auto byteSize = static_cast<Gpu::DeviceSize>(size.x) *
-                          static_cast<Gpu::DeviceSize>(size.y) *
-                          static_cast<Gpu::DeviceSize>(kRgbaBytesPerPixel);
-    auto readback = ctx.device().createBuffer(
-        Gpu::BufferOptions{.label = "TestCanvasReadback",
-                           .size = byteSize,
-                           .usage = Gpu::BufferUsageFlagBits::TransferDstBit,
-                           .memoryUsage = Gpu::MemoryUsage::CpuOnly});
-
-    auto recorder = ctx.device().createCommandRecorder(Gpu::CommandRecorderOptions{
-        .label = "CMD-TestCanvasReadback",
-        .queue = ctx.graphicsQueue().handle(),
-        .level = Gpu::CommandBufferLevel::Primary,
-    });
-
-    recorder.copyTextureToBuffer(Gpu::TextureToBufferCopy{
-        .srcTexture = texture.handle(),
-        .srcTextureLayout = Gpu::TextureLayout::TransferSrcOptimal,
-        .dstBuffer = readback.handle(),
-        .regions = {{
-            .textureSubResource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
-            .textureExtent = {size.x, size.y, 1},
-        }},
-    });
-
-    auto commands = recorder.finish();
-    auto fence = ctx.device().createFence(
-        Gpu::FenceOptions{.label = "TestCanvasReadbackFence", .createSignalled = false});
-    ctx.graphicsQueue().submit(
-        Gpu::SubmitOptions{.commandBuffers = {commands.handle()}, .signalFence = fence.handle()});
-    fence.wait();
-
-    readback.invalidate();
-    const auto *mapped = static_cast<const std::byte *>(readback.map());
-    CO_CORE_ASSERT(mapped != nullptr, "Failed to map TestCanvas readback buffer");
-
-    ImageRgba8 image{.size = size};
-    image.pixels.resize(gsl::narrow<size_t>(byteSize));
-    if (format == Gpu::Format::R8G8B8A8_UNORM) {
-        std::memcpy(image.pixels.data(), mapped, image.pixels.size());
-    }
-    else {
-        for (size_t i = 0; i < image.pixels.size(); i += 4) {
-            image.pixels[i + 0] = mapped[i + 2];
-            image.pixels[i + 1] = mapped[i + 1];
-            image.pixels[i + 2] = mapped[i + 0];
-            image.pixels[i + 3] = mapped[i + 3];
-        }
-    }
-    readback.unmap();
-    return image;
-}
 
 } // namespace
 
@@ -443,12 +386,15 @@ ImGuiTestRenderer::render(RenderTaskBuilder builder,
     imguiPass.end(std::move(recorder));
 }
 
-ImGuiTextureId ImGuiTestRenderer::registerTexture(std::string_view label, const ImageRgba8 &image)
+ImGuiTextureId ImGuiTestRenderer::registerTexture(std::string_view label,
+                                                   const IO::BmpImageRgba8 &image)
 {
-    return data_->renderer->registerTexture(label, image.size, image.pixels);
+    return data_->renderer->registerTexture(label,
+                                            glm::u32vec2{image.width, image.height},
+                                            image.pixelsRgba8);
 }
 
-ImageRgba8
+IO::BmpImageRgba8
 TestCanvas::renderImpl(const std::function<TransientTextureHandle(TestFrame &)> &renderFunc)
 {
     const Texture *captureTexture{};
@@ -480,47 +426,48 @@ TestCanvas::renderImpl(const std::function<TransientTextureHandle(TestFrame &)> 
 
     data_->ctx->device().waitUntilIdle();
     CO_CORE_ASSERT(captureTexture != nullptr, "TestCanvas did not capture a frame texture");
-    return readbackTextureRgba8(
+    return ::Cory::readbackTextureRgba8(
         *data_->ctx, *captureTexture, data_->createInfo.size, data_->createInfo.colorFormat);
 }
 
-ImageRgba8 makeSolidImage(glm::u32vec2 size, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+IO::BmpImageRgba8 makeSolidImage(glm::u32vec2 size, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
-    ImageRgba8 image{.size = size};
-    image.pixels.resize(static_cast<size_t>(size.x) * static_cast<size_t>(size.y) *
-                        kRgbaBytesPerPixel);
-    for (size_t i = 0; i < image.pixels.size(); i += 4) {
-        image.pixels[i + 0] = static_cast<std::byte>(r);
-        image.pixels[i + 1] = static_cast<std::byte>(g);
-        image.pixels[i + 2] = static_cast<std::byte>(b);
-        image.pixels[i + 3] = static_cast<std::byte>(a);
+    IO::BmpImageRgba8 image{.width = size.x, .height = size.y};
+    image.pixelsRgba8.resize(static_cast<size_t>(size.x) * static_cast<size_t>(size.y) *
+                             kRgbaBytesPerPixel);
+    for (size_t i = 0; i < image.pixelsRgba8.size(); i += 4) {
+        image.pixelsRgba8[i + 0] = static_cast<std::byte>(r);
+        image.pixelsRgba8[i + 1] = static_cast<std::byte>(g);
+        image.pixelsRgba8[i + 2] = static_cast<std::byte>(b);
+        image.pixelsRgba8[i + 3] = static_cast<std::byte>(a);
     }
     return image;
 }
 
-void writeBmp(const std::filesystem::path &path, const ImageRgba8 &image)
+void writeBmp(const std::filesystem::path &path, const IO::BmpImageRgba8 &image)
 {
     const auto result = IO::writeBmpRgba8(path,
-                                          IO::BmpImageRgba8{.width = image.size.x,
-                                                            .height = image.size.y,
-                                                            .pixelsRgba8 = image.pixels});
+                                          IO::BmpImageRgba8{.width = image.width,
+                                                            .height = image.height,
+                                                            .pixelsRgba8 = image.pixelsRgba8});
     CO_CORE_ASSERT(result.has_value(), "{}", result.error());
 }
 
-Result<ImageRgba8> readBmp(const std::filesystem::path &path)
+Result<IO::BmpImageRgba8> readBmp(const std::filesystem::path &path)
 {
     auto image = IO::loadBmpRgba8(path);
     if (!image) return std::unexpected(std::move(image.error()));
-    return ImageRgba8{.size = glm::u32vec2{image->width, image->height},
-                      .pixels = std::move(image->pixelsRgba8)};
+    return IO::BmpImageRgba8{.width = image->width,
+                             .height = image->height,
+                             .pixelsRgba8 = std::move(image->pixelsRgba8)};
 }
 
 ImageCompareResult compareToReference(std::string_view caseName,
-                                      const ImageRgba8 &actual,
+                                      const IO::BmpImageRgba8 &actual,
                                       ImageCompareOptions options,
                                       std::source_location sourceLocation)
 {
-    auto result = ImageCompareResult{.size = actual.size};
+    auto result = ImageCompareResult{.size = glm::u32vec2{actual.width, actual.height}};
     result.catchTestName = currentCatchTestName();
     result.sourceFile = sourceLocation.file_name();
     result.sourceLine = sourceLocation.line();
@@ -534,11 +481,12 @@ ImageCompareResult compareToReference(std::string_view caseName,
     result.requestPath = artifactDir / "request.json";
     result.decisionPath = artifactDir / "decision.json";
 
-    auto writeFailureArtifactsAndMaybeReview = [&](const ImageRgba8 *baselineImage) {
+    auto writeFailureArtifactsAndMaybeReview = [&](const IO::BmpImageRgba8 *baselineImage) {
         std::filesystem::create_directories(artifactDir);
         writeBmp(result.actualPath, actual);
-        if (baselineImage != nullptr && baselineImage->size == actual.size &&
-            baselineImage->pixels.size() == actual.pixels.size()) {
+        if (baselineImage != nullptr && baselineImage->width == actual.width &&
+            baselineImage->height == actual.height &&
+            baselineImage->pixelsRgba8.size() == actual.pixelsRgba8.size()) {
             writeBmp(result.diffPath, makeDiffImage(*baselineImage, actual));
         }
         writeText(result.metricsPath, metricsJson(caseName, result, true));
@@ -600,18 +548,19 @@ ImageCompareResult compareToReference(std::string_view caseName,
         return result;
     }
 
-    if (baseline->size != actual.size || baseline->pixels.size() != actual.pixels.size()) {
+    if (baseline->width != actual.width || baseline->height != actual.height ||
+        baseline->pixelsRgba8.size() != actual.pixelsRgba8.size()) {
         result.passed = false;
         writeFailureArtifactsAndMaybeReview(&*baseline);
         return result;
     }
 
     uint64_t totalError = 0;
-    for (size_t pixel = 0; pixel < actual.pixels.size(); pixel += 4) {
+    for (size_t pixel = 0; pixel < actual.pixelsRgba8.size(); pixel += 4) {
         bool pixelMismatch = false;
         for (size_t c = 0; c < 4; ++c) {
-            const auto a = static_cast<uint8_t>(actual.pixels[pixel + c]);
-            const auto b = static_cast<uint8_t>(baseline->pixels[pixel + c]);
+            const auto a = static_cast<uint8_t>(actual.pixelsRgba8[pixel + c]);
+            const auto b = static_cast<uint8_t>(baseline->pixelsRgba8[pixel + c]);
             const auto error = static_cast<uint8_t>(std::abs(int(a) - int(b)));
             totalError += error;
             result.maxChannelError = std::max(result.maxChannelError, error);
@@ -621,14 +570,14 @@ ImageCompareResult compareToReference(std::string_view caseName,
     }
 
     const auto pixelCount =
-        static_cast<uint64_t>(actual.size.x) * static_cast<uint64_t>(actual.size.y);
+        static_cast<uint64_t>(actual.width) * static_cast<uint64_t>(actual.height);
     result.mismatchRatio = pixelCount == 0 ? 0.0
                                            : static_cast<double>(result.mismatchedPixels) /
                                                  static_cast<double>(pixelCount);
     result.meanAbsoluteError =
-        actual.pixels.empty()
+        actual.pixelsRgba8.empty()
             ? 0.0
-            : static_cast<double>(totalError) / static_cast<double>(actual.pixels.size());
+            : static_cast<double>(totalError) / static_cast<double>(actual.pixelsRgba8.size());
     result.passed = result.mismatchRatio <= options.maxMismatchRatio &&
                     result.meanAbsoluteError <= options.maxMeanAbsoluteError;
 
@@ -644,7 +593,7 @@ ImageCompareResult compareToReference(std::string_view caseName,
 }
 
 void requireMatchesReference(std::string_view caseName,
-                             const ImageRgba8 &actual,
+                             const IO::BmpImageRgba8 &actual,
                              ImageCompareOptions options,
                              std::source_location sourceLocation)
 {

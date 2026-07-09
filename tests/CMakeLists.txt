@@ -70,6 +70,7 @@ add_library(Cory_TestLib OBJECT
         ShaderHotReloader_Test.cpp
         TestUtils_Test.cpp
         VisualCanvas_Test.cpp
+        VisualReviewProtocol_Test.cpp
         ../tools/visual/tests/VisualDiffReviewerUi_Test.cpp
         FmtUtils_Test.cpp
         RenderTaskDeclaration_Test.cpp

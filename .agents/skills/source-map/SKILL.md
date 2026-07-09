@@ -13,6 +13,7 @@ Provide a compact, task-routed map of the codebase so the agent can load only th
 
 ## Load Order
 
+0. Important: The `references` folder is located in `.agents/skills/source-map/` (next to this skill file).
 1. Read `references/index.md` for the top-level map.
 2. Read `references/routes.md` to route the task to the smallest relevant subsystem docs.
 3. Read only the matching files under `references/modules/`.

@@ -6,6 +6,7 @@
 #include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -61,6 +62,12 @@ class DynamicPipelineApplication : public Cory::Application {
     double getElapsedTimeSeconds() const;
 
     uint64_t framesToRender_{0};
+    std::filesystem::path outputPath_{};
+    const Cory::Texture *lastRenderedTexture_{nullptr};
+    uint32_t lastRenderedWidth_{0};
+    uint32_t lastRenderedHeight_{0};
+    Gpu::Format lastRenderedFormat_{};
+    Gpu::TextureLayout lastRenderedLayout_{Gpu::TextureLayout::PresentSrc};
     bool disableValidation_{false};
     bool headless_{false};
     double startupTime_{0.0};

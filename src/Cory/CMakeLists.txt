@@ -134,6 +134,8 @@ set(CORY_SOURCES
         Renderer/FrameGenerator.hpp
         Renderer/FrameContext.hpp
         Renderer/FrameResourceLifetimeHelper.hpp
+        Renderer/FrameCapture.cpp
+        Renderer/FrameCapture.hpp
         Renderer/HeadlessFrameSource.cpp
         Renderer/HeadlessFrameSource.hpp
         Renderer/FrameSource.hpp

@@ -8,6 +8,7 @@
 #include <Cory/SceneGraph/SceneGraph.hpp>
 #include <Cory/Systems/SystemCoordinator.hpp>
 
+#include <filesystem>
 #include <memory>
 #include <span>
 
@@ -26,6 +27,12 @@ class ParticleComputeDemoApplication : public Cory::Application {
 
   private:
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
+    std::filesystem::path outputPath_{};
+    const Cory::Texture *lastRenderedTexture_{nullptr};
+    uint32_t lastRenderedWidth_{0};
+    uint32_t lastRenderedHeight_{0};
+    Gpu::Format lastRenderedFormat_{};
+    Gpu::TextureLayout lastRenderedLayout_{Gpu::TextureLayout::PresentSrc};
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<Cory::HeadlessFrameSource> headlessFrames_;
     bool headless_{false};

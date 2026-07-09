@@ -1,11 +1,11 @@
 ---
 name: cory-visual-testing
-description: Create, run, debug, and update Cory TestCanvas-based visual regression tests and baselines. Use when working on headless GPU rendering tests, image comparisons, visual artifacts, reviewer UI tests, baseline updates, or driver-dependent render output in Cory.
+description: Create, run, debug, and update Cory visual regression tests and baselines. Use when working on headless GPU rendering tests, image comparisons, visual artifacts, reviewer UI tests, baseline updates, or driver-dependent render output in Cory.
 ---
 
 # Cory Visual Testing
 
-Use this skill for Cory visual tests built on `Cory::testing::TestCanvas`, `compareToReference()`, and `requireMatchesReference()`.
+Use this skill for Cory visual tests built on `Cory::testing::TestCanvas`, `compareToReference()`, and `requireMatchesReference()`, or when working on the example executables.
 
 ## Workflow
 
@@ -36,3 +36,7 @@ Read `references/visual-testing.md` for:
 ## Practical Rule
 
 If a visual test fails, inspect the image artifacts before changing the test or the baseline. Update the golden only after you have confirmed the new render is intentional.
+
+## Example executables
+If you need to debug visual behavior that is not easily captured in a unit test or specific to one of the example applications (in `examples` folder):
+Each example executable has a `--headless` mode that can be used to just make sure it actually runs correctly. They also have a `--output <path-to-image.bmp>` option to capture the last frame (controllable with `--frames <N>`). You can use this to capture a reference image of the current app, and then read the image back into your context for inspection to understand better the visual bug.

@@ -21,7 +21,7 @@ SingleShotCommandRecorder::~SingleShotCommandRecorder()
 {
     auto command_buffer = commandRecorder_.finish();
 
-    auto fence = ctx_->device().createFence();
+    auto fence = ctx_->createFence("SingleShotCommandRecorder", FenceCreateMode::Unsignaled);
 
     ctx_->graphicsQueue().submit(Gpu::SubmitOptions{
         .commandBuffers = {command_buffer.handle()},

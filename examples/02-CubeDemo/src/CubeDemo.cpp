@@ -12,10 +12,12 @@
 #include <Cory/Base/Random.hpp>
 #include <Cory/Base/ResourceLocator.hpp>
 #include <Cory/Framegraph/Framegraph.hpp>
+#include <Cory/IO/Bmp.hpp>
 #include <Cory/ImGui/Inputs.hpp>
 #include <Cory/ImGui/Widgets.hpp>
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 #include <Cory/Renderer/Context.hpp>
+#include <Cory/Renderer/FrameCapture.hpp>
 #include <Cory/Renderer/FrameContext.hpp>
 #include <Cory/Renderer/FrameSource.hpp>
 #include <Cory/Renderer/HeadlessFrameSource.hpp>
@@ -27,6 +29,7 @@
 
 #include <CLI/App.hpp>
 #include <CLI/CLI.hpp>
+#include <fmt/format.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -120,10 +123,18 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
 {
     CLI::App app{"CubeDemo"};
     app.add_option("-f,--frames", framesToRender_, "The number of frames to render");
+    app.add_option("--output", outputPath_, "Write the final frame to a BMP file");
     app.add_flag("--disable-validation", disableValidation_, "Disable validation layers");
     app.add_flag("--headless", headless_, "Run without a window and render offscreen");
     app.parse(argc, argv);
     const std::vector<const char *> appArgs{argv, argv + argc};
+
+    if (!outputPath_.empty()) {
+        headless_ = true;
+        if (framesToRender_ == 0) {
+            framesToRender_ = 1;
+        }
+    }
 
     Cory::ResourceLocator::addSearchPath(CUBEDEMO_RESOURCE_DIR);
 
@@ -170,10 +181,13 @@ CubeDemoApplication::CubeDemoApplication(int argc, const char **argv)
                                               .viewportDimensions = window_->dimensions()};
         layers().addLayer<Cory::DepthDebugLayer>(layerAttachInfo);
         layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+    }
 
-        camera_.setMode(Cory::CameraManipulator::Mode::Trackball);
-        camera_.setWindowSize(window_->dimensions());
-        camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
+    camera_.setMode(Cory::CameraManipulator::Mode::Trackball);
+    camera_.setWindowSize(Cory::glmu::u32vec2::from(WINDOW_SIZE));
+    camera_.setLookat({0.0f, 3.0f, 2.5f}, {0.0f, 4.0f, 2.0f}, {0.0f, 1.0f, 0.0f});
+
+    if (window_ != nullptr) {
         setupCameraCallbacks();
     }
 }
@@ -220,6 +234,12 @@ void CubeDemoApplication::run()
                     defineRenderPasses(fg, currentFrame);
                 });
 
+            if (!outputPath_.empty()) {
+                lastRenderedTexture_ = frameCtx.swapchainImage;
+                lastRenderedExtent_ = frameCtx.extent;
+                lastRenderedFormat_ = frameCtx.colorFormat;
+            }
+
             if (dumpNextFramegraph_) {
                 dumpFramegraph(recordedFrame.framegraph,
                                recordedFrame.executionInfo,
@@ -229,6 +249,24 @@ void CubeDemoApplication::run()
             }
         },
         [this](Cory::FrameContext &, const Cory::LogicUpdateContext &) { drawImguiControls(); });
+
+    if (outputPath_.empty()) {
+        return;
+    }
+
+    ctx().device().waitUntilIdle();
+    CO_CORE_ASSERT(lastRenderedTexture_ != nullptr,
+                   "CubeDemo output requested, but no frame texture was captured");
+    const auto image = Cory::readbackTextureRgba8(ctx(),
+                                                  *lastRenderedTexture_,
+                                                  lastRenderedExtent_,
+                                                  lastRenderedFormat_,
+                                                  Gpu::TextureLayout::PresentSrc);
+    const auto result = Cory::IO::writeBmpRgba8(outputPath_, image);
+    if (!result) {
+        throw std::runtime_error(fmt::format(
+            "Failed to write output BMP '{}': {}", outputPath_.string(), result.error()));
+    }
 }
 
 void CubeDemoApplication::defineRenderPasses(Cory::Framegraph &framegraph,

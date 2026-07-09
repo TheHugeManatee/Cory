@@ -13,6 +13,7 @@
 #include <glm/vec4.hpp>
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -80,6 +81,10 @@ class CubeDemoApplication : public Cory::Application {
     bool disableValidation_{false};
     bool headless_{false};
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
+    std::filesystem::path outputPath_{};
+    const Cory::Texture *lastRenderedTexture_{nullptr};
+    glm::u32vec2 lastRenderedExtent_{};
+    Gpu::Format lastRenderedFormat_{};
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<Cory::HeadlessFrameSource> headlessFrames_;
 

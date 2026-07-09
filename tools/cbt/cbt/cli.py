@@ -21,6 +21,7 @@ from . import git as git_mod
 from . import run as run_mod
 from . import sanitizers as sanitizers_mod
 from . import tidy as tidy_mod
+from . import visual_review as visual_review_mod
 from .config import new_config, require_config, write_config
 from .paths import (
     build_dir_for_profile,
@@ -541,6 +542,40 @@ def _targets_from_help(output: str) -> list[str]:
             continue
         targets.append(line.split()[0])
     return sorted(set(targets))
+
+
+def _build_test_targets(config: dict, build_dir: Path, env: dict[str, str], quiet: bool) -> None:
+    target_help = run(
+        [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
+        env=env,
+        quiet=True,
+    )
+    available = set(_targets_from_help(target_help.stdout))
+    for target in ["tests", "Cory_Tests"]:
+        if target in available:
+            cmake_mod.build(
+                config["tools"]["cmake"],
+                build_dir,
+                config["cbt"]["build_type"],
+                target,
+                None,
+                False,
+                env,
+                quiet,
+                native_tool=config.get("tools", {}).get("ninja"),
+            )
+            return
+    cmake_mod.build(
+        config["tools"]["cmake"],
+        build_dir,
+        config["cbt"]["build_type"],
+        None,
+        None,
+        False,
+        env,
+        quiet,
+        native_tool=config.get("tools", {}).get("ninja"),
+    )
 
 
 def _filter_source_files(files: list[Path]) -> list[Path]:
@@ -1386,38 +1421,7 @@ def run_test(
     env = _activate_build_env(
         config, ctx.quiet, base_env=_test_env(config), allow_discovery=False
     )
-    target_help = run(
-        [config["tools"]["cmake"], "--build", str(build_dir), "--target", "help"],
-        env=env,
-        quiet=True,
-    )
-    available = set(_targets_from_help(target_help.stdout))
-    for target in ["tests", "Cory_Tests"]:
-        if target in available:
-            cmake_mod.build(
-                config["tools"]["cmake"],
-                build_dir,
-                config["cbt"]["build_type"],
-                target,
-                None,
-                False,
-                env,
-                ctx.quiet,
-                native_tool=config.get("tools", {}).get("ninja"),
-            )
-            break
-    else:
-        cmake_mod.build(
-            config["tools"]["cmake"],
-            build_dir,
-            config["cbt"]["build_type"],
-            None,
-            None,
-            False,
-            env,
-            ctx.quiet,
-            native_tool=config.get("tools", {}).get("ninja"),
-        )
+    _build_test_targets(config, build_dir, env, ctx.quiet)
     ctest_mod.run_tests(
         config["tools"]["ctest"],
         build_dir,
@@ -1514,6 +1518,106 @@ def fmt(
     if not files:
         raise ConfigError("No files to format")
     format_mod.format_files(config["tools"]["clang_format"], files, check, ctx.quiet)
+
+
+@cli.command(short_help="Review golden image changes or open visual review requests")
+@click.option("--profile")
+@click.option("--build-root", type=click.Path(path_type=Path))
+@click.option("--scan", is_flag=True, help="Open review requests found under the build root")
+@click.option("--upstream", is_flag=True, help="Compare against the develop branch instead of HEAD")
+@click.option("--all", "run_all", is_flag=True, help="Build and run all Catch2 tests tagged [visual] with interactive review enabled")
+@click.pass_obj
+def visual_review(
+    ctx: CliContext,
+    profile: str | None,
+    build_root: Path | None,
+    scan: bool,
+    upstream: bool,
+    run_all: bool,
+) -> None:
+    if sum(1 for flag in (scan, upstream, run_all) if flag) > 1:
+        raise ConfigError("Use at most one of --scan, --upstream, or --all.")
+
+    profile = _resolve_profile(profile)
+    config, build_dir = _load_or_fail(profile, build_root)
+    review_root = build_root or default_build_root()
+    repo = repo_root()
+    reference_ref = "develop" if upstream else "HEAD"
+
+    env = _activate_build_env(config, ctx.quiet, base_env=_test_env(config), allow_discovery=False)
+    sanitizer_state, _, _ = _resolve_sanitizer_state(
+        build_type=config["cbt"]["build_type"],
+        defines=dict(config["cmake"]["defines"]),
+        stored_active=config.get("sanitizers", {}).get("active"),
+    )
+    _ensure_cmake_sanitizer_state(
+        tools=config["tools"],
+        config=config,
+        build_dir=build_dir,
+        env=env,
+        quiet=ctx.quiet,
+        sanitizer_state=sanitizer_state,
+    )
+
+    if run_all:
+        visual_tests = visual_review_mod.discover_visual_tests(repo)
+        if not visual_tests:
+            sys.stdout.write("No [visual] tests were found\n")
+            return
+        env["CORY_VISUAL_INTERACTIVE"] = "1"
+        _build_test_targets(config, build_dir, env, ctx.quiet)
+        ctest_mod.run_tests(
+            config["tools"]["ctest"],
+            build_dir,
+            visual_review_mod.visual_test_regex(visual_tests),
+            None,
+            None,
+            None,
+            False,
+            False,
+            False,
+            None,
+            env,
+            ctx.quiet,
+        )
+        return
+
+    if scan:
+        requests = visual_review_mod.discover_open_requests(review_root)
+        if not requests:
+            sys.stdout.write(f"No open visual review requests found under {review_root}\n")
+            return
+    else:
+        source_paths = visual_review_mod.discover_worktree_image_changes(repo, reference_ref, ctx.quiet)
+        if not source_paths:
+            sys.stdout.write(f"No changed golden images found against {reference_ref}\n")
+            return
+
+    cmake_mod.build(
+        config["tools"]["cmake"],
+        build_dir,
+        config["cbt"]["build_type"],
+        "VisualDiffReviewer",
+        None,
+        False,
+        env,
+        ctx.quiet,
+        native_tool=config.get("tools", {}).get("ninja"),
+    )
+
+    reviewer_exe = build_dir / "bin" / ("VisualDiffReviewer" + (".exe" if is_windows() else ""))
+    if not reviewer_exe.exists():
+        raise ConfigError(f"VisualDiffReviewer executable not found: {reviewer_exe}")
+
+    visual_review_mod.review_visual_changes(
+        repo_root=repo,
+        build_root=review_root,
+        reviewer_executable=reviewer_exe,
+        env=env,
+        quiet=ctx.quiet,
+        upstream=upstream,
+        scan=scan,
+    )
 
 
 @cli.command(short_help="Run clang-tidy checks (lint) on files")

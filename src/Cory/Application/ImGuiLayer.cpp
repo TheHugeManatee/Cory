@@ -165,6 +165,18 @@ void ImGuiLayer::recordFrameCommands(FrameContext &frameCtx,
     }
 }
 
+ImGuiTextureId ImGuiLayer::registerTexture(std::string_view label,
+                                           glm::u32vec2 size,
+                                           std::span<const std::byte> pixelsRgba8)
+{
+    return data_->imguiRenderer->registerTexture(label, size, pixelsRgba8);
+}
+
+void ImGuiLayer::unregisterTexture(ImGuiTextureId textureId)
+{
+    data_->imguiRenderer->unregisterTexture(textureId);
+}
+
 void ImGuiLayer::setupCustomColors()
 {
     ImVec4 *colors = ImGui::GetStyle().Colors;

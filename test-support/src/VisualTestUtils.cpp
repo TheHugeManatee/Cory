@@ -443,6 +443,11 @@ ImGuiTestRenderer::render(RenderTaskBuilder builder,
     imguiPass.end(std::move(recorder));
 }
 
+ImGuiTextureId ImGuiTestRenderer::registerTexture(std::string_view label, const ImageRgba8 &image)
+{
+    return data_->renderer->registerTexture(label, image.size, image.pixels);
+}
+
 ImageRgba8
 TestCanvas::renderImpl(const std::function<TransientTextureHandle(TestFrame &)> &renderFunc)
 {

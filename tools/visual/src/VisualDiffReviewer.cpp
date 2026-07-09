@@ -65,7 +65,25 @@ class VisualDiffReviewerApplication : public Cory::Application {
         const auto viewportDimensions = glm::i32vec2(window_->extent());
         Cory::LayerAttachInfo layerAttachInfo{.maxFramesInFlight = Cory::MAX_FRAMES_IN_FLIGHT,
                                               .viewportDimensions = viewportDimensions};
-        layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+        auto &imguiLayer =
+            layers().emplacePriorityLayer<Cory::ImGuiLayer>(layerAttachInfo, std::ref(*window_));
+        if (baseline_) {
+            baselineTexture_ =
+                imguiLayer.registerTexture("Visual Review Baseline",
+                                           glm::u32vec2{baseline_->width, baseline_->height},
+                                           baseline_->pixelsRgba8);
+        }
+        if (actual_) {
+            actualTexture_ =
+                imguiLayer.registerTexture("Visual Review Actual",
+                                           glm::u32vec2{actual_->width, actual_->height},
+                                           actual_->pixelsRgba8);
+        }
+        if (diff_) {
+            diffTexture_ = imguiLayer.registerTexture("Visual Review Diff",
+                                                      glm::u32vec2{diff_->width, diff_->height},
+                                                      diff_->pixelsRgba8);
+        }
         layers().connectToWindow(*window_);
     }
 
@@ -128,7 +146,10 @@ class VisualDiffReviewerApplication : public Cory::Application {
             Cory::Tools::VisualReview::VisualReviewUiImages{.baseline =
                                                                 baseline_ ? &*baseline_ : nullptr,
                                                             .actual = actual_ ? &*actual_ : nullptr,
-                                                            .diff = diff_ ? &*diff_ : nullptr},
+                                                            .diff = diff_ ? &*diff_ : nullptr,
+                                                            .baselineTexture = baselineTexture_,
+                                                            .actualTexture = actualTexture_,
+                                                            .diffTexture = diffTexture_},
             uiState_);
         if (actions.acceptRequested) {
             writeDecisionAndClose(true, "accepted in VisualDiffReviewer");
@@ -145,6 +166,9 @@ class VisualDiffReviewerApplication : public Cory::Application {
     std::unique_ptr<Cory::Window> window_;
     uint64_t framesToRender_{0};
     Cory::Tools::VisualReview::VisualReviewUiState uiState_{};
+    Cory::ImGuiTextureId baselineTexture_{Cory::InvalidImGuiTextureId};
+    Cory::ImGuiTextureId actualTexture_{Cory::InvalidImGuiTextureId};
+    Cory::ImGuiTextureId diffTexture_{Cory::InvalidImGuiTextureId};
     bool decisionWritten_{false};
 };
 

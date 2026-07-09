@@ -125,9 +125,8 @@ struct VertexImGui {
     }
 };
 
-[[maybe_unused]] static std::vector<uint32_t> readShaderFileFromCmrc(
-    cmrc::embedded_filesystem &fs,
-    const std::string &filename)
+[[maybe_unused]] static std::vector<uint32_t> readShaderFileFromCmrc(cmrc::embedded_filesystem &fs,
+                                                                     const std::string &filename)
 {
     auto file = fs.open(filename);
     const std::size_t byteSize = file.size();
@@ -195,14 +194,13 @@ void ImGuiRenderer::initialize(float scaleFactor,
 
     m_bindGroupLayout = m_device->createBindGroupLayout(BindGroupLayoutOptions{
         .label = "ImGui BindGroupLayout",
-        .bindings =
-            {{
-                .binding = 0,
-                .count = 1,
-                .resourceType = ResourceBindingType::CombinedImageSampler,
-                .shaderStages = ShaderStageFlagBits::FragmentBit,
-                .immutableSamplers = {},
-            }},
+        .bindings = {{
+            .binding = 0,
+            .count = 1,
+            .resourceType = ResourceBindingType::CombinedImageSampler,
+            .shaderStages = ShaderStageFlagBits::FragmentBit,
+            .immutableSamplers = {},
+        }},
     });
 
     const std::vector<PushConstantRange> pushConstantRanges{
@@ -213,10 +211,10 @@ void ImGuiRenderer::initialize(float scaleFactor,
         },
     };
 
-    m_pipelineLayout = m_device->createPipelineLayout(PipelineLayoutOptions{
-        .label = "ImGui PipelineLayout",
-        .bindGroupLayouts = {m_bindGroupLayout},
-        .pushConstantRanges = pushConstantRanges});
+    m_pipelineLayout = m_device->createPipelineLayout(
+        PipelineLayoutOptions{.label = "ImGui PipelineLayout",
+                              .bindGroupLayouts = {m_bindGroupLayout},
+                              .pushConstantRanges = pushConstantRanges});
 
     m_vertexShaderObject = m_device->createShaderObject(ShaderObjectOptions{
         .label = "ImGui Vertex Shader",
@@ -248,12 +246,17 @@ void ImGuiRenderer::initialize(float scaleFactor,
     m_vertexAttributes = VertexImGui::vertexAttributes();
 
     const auto samplerOptions = SamplerOptions{
-        .label = "ImGui Sampler",
-        .magFilter = FilterMode::Linear,
-        .minFilter = FilterMode::Linear};
+        .label = "ImGui Sampler", .magFilter = FilterMode::Linear, .minFilter = FilterMode::Linear};
     m_sampler = m_device->createSampler(samplerOptions);
+    m_imageSampler = m_device->createSampler(SamplerOptions{
+        .label = "ImGui Image Sampler",
+        .magFilter = FilterMode::Nearest,
+        .minFilter = FilterMode::Nearest,
+    });
 
     updateScale(scaleFactor);
+    rebuildRegisteredTextureBindGroups();
+    ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 }
 
 void ImGuiRenderer::updateScale(const float scaleFactor)
@@ -269,10 +272,14 @@ void ImGuiRenderer::updateScale(const float scaleFactor)
 void ImGuiRenderer::cleanup()
 {
     m_meshes.clear();
+    for (auto &[textureId, texture] : m_registeredTextures) {
+        texture.bindGroup = {};
+    }
     m_pipelineLayout = {};
     m_bindGroupLayout = {};
     m_bindGroup = {};
     m_sampler = {};
+    m_imageSampler = {};
     m_textureView = {};
     m_texture = {};
     m_vertexShaderObject = {};
@@ -355,8 +362,8 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx, Gpu::RenderPassComman
 
     if ((!imDrawData) || (imDrawData->CmdListsCount == 0)) return;
 
-    int32_t vertexOffset = 0;
-    uint32_t indexOffset = 0;
+    int32_t globalVertexOffset = 0;
+    uint32_t globalIndexOffset = 0;
 
     recorder->bindShaders(m_shaderStages, m_shaderHandles);
     recorder->setPrimitiveTopology(PrimitiveTopology::TriangleList);
@@ -400,9 +407,6 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx, Gpu::RenderPassComman
     const std::vector<SampleMask> sampleMasks(1, 0xffffffffu);
     recorder->setSampleMask(m_samples, sampleMasks);
 
-    // Bind the descriptor set
-    recorder->setBindGroup(0, m_bindGroup, m_pipelineLayout);
-
     // Set the push constants
     const float displaySize[2] = {imDrawData->DisplaySize.x, imDrawData->DisplaySize.y};
     const float displayPos[2] = {imDrawData->DisplayPos.x, imDrawData->DisplayPos.y};
@@ -445,6 +449,13 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx, Gpu::RenderPassComman
         for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++) {
             const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[j];
 
+            const auto textureId = static_cast<ImGuiTextureId>(pcmd->GetTexID());
+            const auto registeredTexture = m_registeredTextures.find(textureId);
+            const auto &bindGroup = registeredTexture != m_registeredTextures.end()
+                                        ? registeredTexture->second.bindGroup
+                                        : m_bindGroup;
+            recorder->setBindGroup(0, bindGroup, m_pipelineLayout);
+
             // Set the scissor rect
             recorder->setScissor(Gpu::Rect2D{
                 .offset =
@@ -462,14 +473,90 @@ void ImGuiRenderer::recordCommands(FrameContext &frameCtx, Gpu::RenderPassComman
             // And finally, draw a part of the UI
             recorder->drawIndexed(DrawIndexedCommand{
                 .indexCount = pcmd->ElemCount,
-                .firstIndex = indexOffset,
-                .vertexOffset = vertexOffset,
+                .firstIndex = globalIndexOffset + pcmd->IdxOffset,
+                .vertexOffset = globalVertexOffset + gsl::narrow<int32_t>(pcmd->VtxOffset),
             });
-
-            indexOffset += pcmd->ElemCount;
         }
-        vertexOffset += cmd_list->VtxBuffer.Size;
+        globalIndexOffset += gsl::narrow<uint32_t>(cmd_list->IdxBuffer.Size);
+        globalVertexOffset += gsl::narrow<int32_t>(cmd_list->VtxBuffer.Size);
     }
+}
+
+ImGuiTextureId ImGuiRenderer::registerTexture(std::string_view label,
+                                              glm::u32vec2 size,
+                                              std::span<const std::byte> pixelsRgba8)
+{
+    const auto expectedByteSize = static_cast<size_t>(size.x) * static_cast<size_t>(size.y) * 4U;
+    CO_CORE_ASSERT(size.x > 0 && size.y > 0, "Cannot register an empty ImGui texture");
+    CO_CORE_ASSERT(pixelsRgba8.size() == expectedByteSize,
+                   "ImGui texture '{}' has {} bytes, expected {}",
+                   label,
+                   pixelsRgba8.size(),
+                   expectedByteSize);
+
+    auto texture = m_device->createTexture(TextureOptions{
+        .label = std::string{label},
+        .type = TextureType::TextureType2D,
+        .format = Format::R8G8B8A8_UNORM,
+        .extent = {.width = size.x, .height = size.y, .depth = 1},
+        .mipLevels = 1,
+        .usage = TextureUsageFlagBits::SampledBit | TextureUsageFlagBits::TransferDstBit,
+    });
+    m_queue->waitForUploadTextureData(WaitForTextureUploadOptions{
+        .destinationTexture = texture,
+        .dstStages = PipelineStageFlagBit::FragmentShaderBit,
+        .data = pixelsRgba8.data(),
+        .byteSize = gsl::narrow<DeviceSize>(pixelsRgba8.size()),
+        .oldLayout = TextureLayout::Undefined,
+        .newLayout = TextureLayout::ShaderReadOnlyOptimal,
+        .regions = {{
+            .textureSubResource = {.aspectMask = TextureAspectFlagBits::ColorBit},
+            .textureExtent = {.width = size.x, .height = size.y, .depth = 1},
+        }},
+    });
+
+    const auto textureId = m_nextTextureId++;
+    auto [it, inserted] = m_registeredTextures.emplace(textureId,
+                                                       RegisteredTexture{
+                                                           .label = std::string{label},
+                                                           .texture = std::move(texture),
+                                                       });
+    CO_CORE_ASSERT(inserted, "Failed to allocate ImGui texture id {}", textureId);
+    it->second.textureView = it->second.texture.createView();
+    it->second.bindGroup = createRegisteredTextureBindGroup(it->second);
+    return textureId;
+}
+
+void ImGuiRenderer::unregisterTexture(ImGuiTextureId textureId)
+{
+    m_registeredTextures.erase(textureId);
+}
+
+void ImGuiRenderer::rebuildRegisteredTextureBindGroups()
+{
+    if (!m_bindGroupLayout.isValid() || !m_imageSampler.isValid()) return;
+
+    for (auto &[textureId, texture] : m_registeredTextures) {
+        texture.bindGroup = createRegisteredTextureBindGroup(texture);
+    }
+}
+
+Gpu::BindGroup ImGuiRenderer::createRegisteredTextureBindGroup(const RegisteredTexture &texture)
+{
+    CO_CORE_ASSERT(m_bindGroupLayout.isValid() && m_imageSampler.isValid(),
+                   "ImGuiRenderer must be initialized before registering textures");
+    return m_device->createBindGroup(BindGroupOptions{
+        .label = texture.label,
+        .layout = m_bindGroupLayout,
+        .resources = {{
+            .binding = 0,
+            .resource =
+                TextureViewSamplerBinding{
+                    .textureView = texture.textureView,
+                    .sampler = m_imageSampler,
+                },
+        }},
+    });
 }
 
 void ImGuiRenderer::initializeFontData(const float scaleFactor)
@@ -493,8 +580,8 @@ void ImGuiRenderer::initializeFontData(const float scaleFactor)
     io.Fonts->AddFontFromMemoryTTF(
         ttfData, gsl::narrow<int>(ttfFile.size()), fontPixelSize, &fontConfig);
     io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
-    DeviceSize uploadSize = static_cast<DeviceSize>(texWidth) *
-                            static_cast<DeviceSize>(texHeight) * 4 * sizeof(char);
+    DeviceSize uploadSize =
+        static_cast<DeviceSize>(texWidth) * static_cast<DeviceSize>(texHeight) * 4 * sizeof(char);
 
     const auto textureOptions = TextureOptions{
         .label = "ImGui Font Texture",
@@ -536,10 +623,9 @@ void ImGuiRenderer::initializeFontData(const float scaleFactor)
     }
     else {
         // Create a bind group for the font texture
-        const BindGroupOptions bindGroupOptions = {
-            .label = "ImGui Font BindGroup",
-            .layout = m_bindGroupLayout,
-            .resources = {
+        const BindGroupOptions bindGroupOptions = {.label = "ImGui Font BindGroup",
+                                                   .layout = m_bindGroupLayout,
+                                                   .resources = {
                                                        {
                                                            .binding = 0,
                                                            .resource =
@@ -551,6 +637,7 @@ void ImGuiRenderer::initializeFontData(const float scaleFactor)
                                                    }};
         m_bindGroup = m_device->createBindGroup(bindGroupOptions);
     }
+    io.Fonts->SetTexID(static_cast<ImTextureID>(FontTextureId));
 }
 
 } // namespace Cory

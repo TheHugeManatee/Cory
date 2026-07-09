@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Cory/IO/Bmp.hpp>
+#include <Cory/ImGui/ImguiRenderer.hpp>
 #include <Cory/Tools/VisualReviewProtocol.hpp>
 
 namespace Cory::Tools::VisualReview {
@@ -9,6 +10,9 @@ struct VisualReviewUiImages {
     const IO::BmpImageRgba8 *baseline{};
     const IO::BmpImageRgba8 *actual{};
     const IO::BmpImageRgba8 *diff{};
+    ImGuiTextureId baselineTexture{InvalidImGuiTextureId};
+    ImGuiTextureId actualTexture{InvalidImGuiTextureId};
+    ImGuiTextureId diffTexture{InvalidImGuiTextureId};
 };
 
 struct VisualReviewUiState {

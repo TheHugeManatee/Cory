@@ -36,13 +36,17 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
     Cory::testing::TestCanvas canvas{tester.ctx(), glm::u32vec2{1500, 900}};
     Cory::testing::ImGuiTestRenderer imgui{tester.ctx(), canvas.size()};
 
-    const auto baselineImage = Cory::testing::makeSolidImage(glm::u32vec2{8, 8}, 255, 0, 0, 255);
-    const auto actualImage = Cory::testing::makeSolidImage(glm::u32vec2{8, 8}, 0, 255, 0, 255);
-    const auto diffImage = Cory::testing::makeSolidImage(glm::u32vec2{8, 8}, 255, 255, 0, 255);
+    const auto baselineImage =
+        Cory::testing::makeSolidImage(glm::u32vec2{512, 512}, 255, 0, 0, 255);
+    const auto actualImage = Cory::testing::makeSolidImage(glm::u32vec2{512, 512}, 0, 255, 0, 255);
+    const auto diffImage = Cory::testing::makeSolidImage(glm::u32vec2{512, 512}, 255, 255, 0, 255);
 
     const auto baselineBmp = toBmpImage(baselineImage);
     const auto actualBmp = toBmpImage(actualImage);
     const auto diffBmp = toBmpImage(diffImage);
+    const auto baselineTexture = imgui.registerTexture("Reviewer UI Baseline", baselineImage);
+    const auto actualTexture = imgui.registerTexture("Reviewer UI Actual", actualImage);
+    const auto diffTexture = imgui.registerTexture("Reviewer UI Diff", diffImage);
 
     const auto fixtureRoot = makeFixtureRoot();
     const auto baselineFixturePath = fixtureRoot / "baseline.bmp";
@@ -96,7 +100,7 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
         decision << "{}\n";
     }
 
-    auto uiState = VisualReviewUiState{};
+    auto uiState = VisualReviewUiState{.zoom = 1.0f};
     const auto actual = canvas.render([&](Cory::testing::TestFrame &frame) {
         auto clear = Cory::StandardRenderTasks::clearAttachments(
             frame.graph.declareTask("TASK_ClearReviewerUiTest"),
@@ -111,7 +115,10 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
                         (void)drawReviewUi(request,
                                            VisualReviewUiImages{.baseline = &baselineBmp,
                                                                 .actual = &actualBmp,
-                                                                .diff = &diffBmp},
+                                                                .diff = &diffBmp,
+                                                                .baselineTexture = baselineTexture,
+                                                                .actualTexture = actualTexture,
+                                                                .diffTexture = diffTexture},
                                            uiState);
                     })
             .output();

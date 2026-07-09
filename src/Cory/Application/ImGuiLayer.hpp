@@ -7,10 +7,13 @@
 #pragma once
 
 #include <Cory/Application/ApplicationLayer.hpp>
+#include <Cory/ImGui/ImguiRenderer.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 
 #include <cstdint>
 #include <memory>
+#include <span>
+#include <string_view>
 
 namespace Cory {
 
@@ -34,6 +37,11 @@ class ImGuiLayer : public ApplicationLayer {
     // this is mostly still public so we can use the layer in an
     // application that does not use a frame graph
     void recordFrameCommands(FrameContext &frameCtx, Gpu::RenderPassCommandRecorder *recorder);
+
+    [[nodiscard]] ImGuiTextureId registerTexture(std::string_view label,
+                                                 glm::u32vec2 size,
+                                                 std::span<const std::byte> pixelsRgba8);
+    void unregisterTexture(ImGuiTextureId textureId);
 
   private:
     struct Private;

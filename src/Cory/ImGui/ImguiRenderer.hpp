@@ -23,6 +23,15 @@
 #include <KDGpu/texture.h>
 #include <KDGpu/texture_view.h>
 
+#include <glm/vec2.hpp>
+
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace KDGpu {
@@ -35,6 +44,9 @@ class RenderPass;
 struct ImGuiContext;
 
 namespace Cory {
+
+using ImGuiTextureId = uint64_t;
+inline constexpr ImGuiTextureId InvalidImGuiTextureId = 0;
 
 /*
  * @brief ImGui renderer abstraction to adapt to KDGpu.
@@ -63,6 +75,11 @@ class ImGuiRenderer {
     bool updateGeometryBuffers(FrameContext &frameCtx);
     void recordCommands(FrameContext &frameCtx, Gpu::RenderPassCommandRecorder *recorder);
 
+    [[nodiscard]] ImGuiTextureId registerTexture(std::string_view label,
+                                                 glm::u32vec2 size,
+                                                 std::span<const std::byte> pixelsRgba8);
+    void unregisterTexture(ImGuiTextureId textureId);
+
   private:
     void initializeFontData(float scaleFactor);
 
@@ -84,6 +101,20 @@ class ImGuiRenderer {
     Texture m_texture;
     TextureView m_textureView;
     Gpu::Sampler m_sampler;
+    Gpu::Sampler m_imageSampler;
+
+    struct RegisteredTexture {
+        std::string label;
+        Texture texture;
+        TextureView textureView;
+        Gpu::BindGroup bindGroup;
+    };
+    void rebuildRegisteredTextureBindGroups();
+    [[nodiscard]] Gpu::BindGroup createRegisteredTextureBindGroup(const RegisteredTexture &texture);
+
+    std::unordered_map<ImGuiTextureId, RegisteredTexture> m_registeredTextures;
+    ImGuiTextureId m_nextTextureId{1};
+    static constexpr ImGuiTextureId FontTextureId = std::numeric_limits<ImGuiTextureId>::max();
 
     struct PushConstantBlock {
         float scale[2];

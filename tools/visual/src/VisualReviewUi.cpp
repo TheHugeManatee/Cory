@@ -1,7 +1,6 @@
 #include <Cory/Tools/VisualReviewUi.hpp>
 
 #include <fmt/format.h>
-#include <gsl/narrow>
 #include <imgui.h>
 
 #include <algorithm>
@@ -57,63 +56,26 @@ constexpr ImU32 kValueColor = IM_COL32(236, 240, 245, 255);
     return clicked;
 }
 
-[[nodiscard]] ImU32 pixelColor(const ImageRgba8 &image, uint32_t x, uint32_t y)
-{
-    const auto offset =
-        (static_cast<size_t>(y) * static_cast<size_t>(image.width) + static_cast<size_t>(x)) * 4U;
-    return IM_COL32(static_cast<uint8_t>(image.pixelsRgba8[offset + 0]),
-                    static_cast<uint8_t>(image.pixelsRgba8[offset + 1]),
-                    static_cast<uint8_t>(image.pixelsRgba8[offset + 2]),
-                    static_cast<uint8_t>(image.pixelsRgba8[offset + 3]));
-}
-
-void drawImagePixels(const char *title, const ImageRgba8 *image, float zoom, ImU32 titleColor)
+void drawImage(const char *title,
+               const ImageRgba8 *image,
+               ImGuiTextureId textureId,
+               float zoom,
+               ImU32 titleColor)
 {
     ImGui::PushStyleColor(ImGuiCol_Text, toVec4(titleColor));
     ImGui::TextUnformatted(title);
     ImGui::PopStyleColor();
 
-    if (image == nullptr) {
+    if (image == nullptr || textureId == InvalidImGuiTextureId) {
         ImGui::TextDisabled("Image unavailable");
         return;
     }
 
     ImGui::TextDisabled("%u x %u", image->width, image->height);
-    const auto origin = ImGui::GetCursorScreenPos();
     const auto pixelSize = std::max(1.0f, zoom);
-    const auto canvasSize = ImVec2{static_cast<float>(image->width) * pixelSize,
-                                   static_cast<float>(image->height) * pixelSize};
-    ImGui::InvisibleButton(fmt::format("{}-canvas", title).c_str(), canvasSize);
-
-    auto *drawList = ImGui::GetWindowDrawList();
-    const auto clipMin = ImGui::GetWindowPos();
-    const auto clipMax =
-        ImVec2{clipMin.x + ImGui::GetWindowWidth(), clipMin.y + ImGui::GetWindowHeight()};
-    drawList->PushClipRect(clipMin, clipMax, true);
-
-    const auto minX = std::clamp(static_cast<int>((clipMin.x - origin.x) / pixelSize) - 1,
-                                 0,
-                                 gsl::narrow<int>(image->width));
-    const auto maxX = std::clamp(static_cast<int>((clipMax.x - origin.x) / pixelSize) + 1,
-                                 0,
-                                 gsl::narrow<int>(image->width));
-    const auto minY = std::clamp(static_cast<int>((clipMin.y - origin.y) / pixelSize) - 1,
-                                 0,
-                                 gsl::narrow<int>(image->height));
-    const auto maxY = std::clamp(static_cast<int>((clipMax.y - origin.y) / pixelSize) + 1,
-                                 0,
-                                 gsl::narrow<int>(image->height));
-
-    for (int y = minY; y < maxY; ++y) {
-        for (int x = minX; x < maxX; ++x) {
-            const auto p0 = ImVec2{origin.x + static_cast<float>(x) * pixelSize,
-                                   origin.y + static_cast<float>(y) * pixelSize};
-            const auto p1 = ImVec2{p0.x + pixelSize, p0.y + pixelSize};
-            drawList->AddRectFilled(
-                p0, p1, pixelColor(*image, gsl::narrow<uint32_t>(x), gsl::narrow<uint32_t>(y)));
-        }
-    }
-    drawList->PopClipRect();
+    ImGui::Image(ImTextureRef{static_cast<ImTextureID>(textureId)},
+                 ImVec2{static_cast<float>(image->width) * pixelSize,
+                        static_cast<float>(image->height) * pixelSize});
 }
 
 [[nodiscard]] std::string displayPath(const std::filesystem::path &path)
@@ -288,14 +250,18 @@ void drawToolbar(const VisualReviewRequest &request,
     ImGui::EndChild();
 }
 
-void drawPreviewPane(
-    const char *id, const char *title, const ImageRgba8 *image, float zoom, ImU32 titleColor)
+void drawPreviewPane(const char *id,
+                     const char *title,
+                     const ImageRgba8 *image,
+                     ImGuiTextureId textureId,
+                     float zoom,
+                     ImU32 titleColor)
 {
     ImGui::BeginChild(id,
                       ImVec2{0.0f, 0.0f},
                       true,
                       ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoMove);
-    drawImagePixels(title, image, zoom, titleColor);
+    drawImage(title, image, textureId, zoom, titleColor);
     ImGui::EndChild();
 }
 
@@ -330,12 +296,18 @@ VisualReviewUiActions drawReviewUi(const VisualReviewRequest &request,
             ImGui::TableNextRow();
 
             ImGui::TableSetColumnIndex(0);
-            drawPreviewPane("baseline-pane", "Baseline", images.baseline, state.zoom, kTitleBlue);
+            drawPreviewPane("baseline-pane",
+                            "Baseline",
+                            images.baseline,
+                            images.baselineTexture,
+                            state.zoom,
+                            kTitleBlue);
 
             ImGui::TableSetColumnIndex(1);
             drawPreviewPane("candidate-pane",
                             state.showDiff ? "Diff" : "Actual",
                             state.showDiff ? images.diff : images.actual,
+                            state.showDiff ? images.diffTexture : images.actualTexture,
                             state.zoom,
                             kTitleYellow);
 

@@ -5,11 +5,44 @@
 
 #include <Cory/RenderTasks/StandardRenderTasks.hpp>
 
+#include <cstdlib>
 #include <filesystem>
-
-#include <gsl/util>
+#include <optional>
+#include <string>
 
 namespace {
+
+class ScopedEnvironmentVariable {
+  public:
+    ScopedEnvironmentVariable(const char *name, const char *value)
+        : name_{name}
+    {
+        if (const auto *existing = std::getenv(name); existing != nullptr) {
+            previousValue_ = existing;
+        }
+        set(value);
+    }
+
+    ~ScopedEnvironmentVariable() { set(previousValue_ ? previousValue_->c_str() : nullptr); }
+
+  private:
+    void set(const char *value)
+    {
+#if defined(_WIN32)
+        _putenv_s(name_.c_str(), value != nullptr ? value : "");
+#else
+        if (value != nullptr) {
+            (void)setenv(name_.c_str(), value, 1);
+        }
+        else {
+            (void)unsetenv(name_.c_str());
+        }
+#endif
+    }
+
+    std::string name_;
+    std::optional<std::string> previousValue_;
+};
 
 [[nodiscard]] std::filesystem::path testScratchRoot(std::string_view name)
 {
@@ -68,8 +101,7 @@ TEST_CASE("Interactive visual comparison demo opens reviewer on mismatch",
     const auto actual = Cory::testing::makeSolidImage(glm::u32vec2{2, 2}, 0, 255, 0, 255);
     Cory::testing::writeBmp(baselinePath, baseline);
 
-    _putenv_s("CORY_VISUAL_INTERACTIVE", "1");
-    auto cleanup = gsl::finally([] { _putenv_s("CORY_VISUAL_INTERACTIVE", ""); });
+    const ScopedEnvironmentVariable interactive{"CORY_VISUAL_INTERACTIVE", "1"};
 
     const auto result = Cory::testing::compareToReference("reviewer-demo",
                                                           actual,
@@ -104,6 +136,31 @@ TEST_CASE("Visual comparison reports mismatch for non-matching reference",
     CHECK_FALSE(result.passed);
 }
 
+TEST_CASE("Visual comparison honors environment overrides when updating a baseline",
+          "[visual][TestCanvas][comparison]")
+{
+    const auto scratchRoot = testScratchRoot("environment-overrides");
+    const auto baselineRoot = scratchRoot / "baselines";
+    const auto artifactRoot = scratchRoot / "artifacts";
+    std::filesystem::remove_all(scratchRoot);
+
+    const auto baselineRootString = baselineRoot.string();
+    const auto artifactRootString = artifactRoot.string();
+    const ScopedEnvironmentVariable baselineDir{"CORY_VISUAL_BASELINE_DIR",
+                                                baselineRootString.c_str()};
+    const ScopedEnvironmentVariable artifactDir{"CORY_VISUAL_ARTIFACT_DIR",
+                                                artifactRootString.c_str()};
+    const ScopedEnvironmentVariable updateBaselines{"CORY_UPDATE_VISUAL_BASELINES", "1"};
+
+    const auto actual = Cory::testing::makeSolidImage(glm::u32vec2{2, 2}, 10, 20, 30, 255);
+    const auto result = Cory::testing::compareToReference("environment-overrides", actual);
+
+    CHECK(result.passed);
+    CHECK(result.baselinePath == baselineRoot / "environment-overrides.bmp");
+    CHECK(result.actualPath.string().starts_with(artifactRoot.string()));
+    CHECK(std::filesystem::exists(result.baselinePath));
+}
+
 TEST_CASE("Interactive visual comparison fails closed when reviewer cannot launch",
           "[visual][TestCanvas][comparison]")
 {
@@ -117,8 +174,7 @@ TEST_CASE("Interactive visual comparison fails closed when reviewer cannot launc
     const auto actual = Cory::testing::makeSolidImage(glm::u32vec2{2, 2}, 0, 255, 0, 255);
     Cory::testing::writeBmp(baselinePath, baseline);
 
-    _putenv_s("CORY_VISUAL_INTERACTIVE", "1");
-    auto cleanup = gsl::finally([] { _putenv_s("CORY_VISUAL_INTERACTIVE", ""); });
+    const ScopedEnvironmentVariable interactive{"CORY_VISUAL_INTERACTIVE", "1"};
 
     const auto result = Cory::testing::compareToReference(
         "review-fail-closed",
@@ -145,8 +201,7 @@ TEST_CASE("Interactive visual comparison can accept and update baseline",
     const auto actual = Cory::testing::makeSolidImage(glm::u32vec2{2, 2}, 0, 255, 0, 255);
     Cory::testing::writeBmp(baselinePath, baseline);
 
-    _putenv_s("CORY_VISUAL_INTERACTIVE", "1");
-    auto cleanup = gsl::finally([] { _putenv_s("CORY_VISUAL_INTERACTIVE", ""); });
+    const ScopedEnvironmentVariable interactive{"CORY_VISUAL_INTERACTIVE", "1"};
 
     const auto result =
         Cory::testing::compareToReference("review-auto-accept",

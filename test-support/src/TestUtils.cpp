@@ -17,7 +17,7 @@ Context &getTestContext()
 {
     static Context testContext = [] {
         Context ctx{ContextCreationInfo{.validation = ValidationLayers::Enabled}};
-        testContext.setupHeadlessDevice();
+        ctx.setupHeadlessDevice();
         return ctx;
     }();
     return testContext;

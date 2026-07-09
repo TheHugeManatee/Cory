@@ -9,7 +9,6 @@
 
 #include <filesystem>
 #include <fstream>
-#include <source_location>
 
 namespace {
 
@@ -46,35 +45,41 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
     const auto diffBmp = toBmpImage(diffImage);
 
     const auto fixtureRoot = makeFixtureRoot();
-    const auto sourceLocation = std::source_location::current();
+    const auto baselineFixturePath = fixtureRoot / "baseline.bmp";
+    const auto actualFixturePath = fixtureRoot / "actual.bmp";
+    const auto diffFixturePath = fixtureRoot / "diff.bmp";
+    const auto metricsFixturePath = fixtureRoot / "metrics.json";
+    const auto requestFixturePath = fixtureRoot / "request.json";
+    const auto decisionFixturePath = fixtureRoot / "decision.json";
 
     const auto request = VisualReviewRequest{
         .id = "visual-review-ui-fixed-request",
         .caseName = "reviewer-ui-regression",
-        .metadata = VisualReviewMetadata{.catchTestName = "VisualDiffReviewer UI matches reference",
-                                         .sourceFile = sourceLocation.file_name(),
-                                         .sourceLine = sourceLocation.line(),
-                                         .sourceFunction = "ui regression"},
-        .baselinePath = fixtureRoot / "baseline.bmp",
-        .actualPath = fixtureRoot / "actual.bmp",
-        .diffPath = fixtureRoot / "diff.bmp",
-        .metricsPath = fixtureRoot / "metrics.json",
-        .requestPath = fixtureRoot / "request.json",
-        .decisionPath = fixtureRoot / "decision.json",
+        .metadata =
+            VisualReviewMetadata{.catchTestName = "VisualDiffReviewer UI matches reference",
+                                 .sourceFile = "tools/visual/tests/VisualDiffReviewerUi_Test.cpp",
+                                 .sourceLine = 49,
+                                 .sourceFunction = "ui regression"},
+        .baselinePath = "visual-review-fixture/baseline.bmp",
+        .actualPath = "visual-review-fixture/actual.bmp",
+        .diffPath = "visual-review-fixture/diff.bmp",
+        .metricsPath = "visual-review-fixture/metrics.json",
+        .requestPath = "visual-review-fixture/request.json",
+        .decisionPath = "visual-review-fixture/decision.json",
         .metrics = VisualReviewMetrics{.mismatchedPixels = 64,
                                        .mismatchRatio = 1.0,
                                        .maxChannelError = 255,
                                        .meanAbsoluteError = 127.5},
     };
 
-    REQUIRE(Cory::IO::writeBmpRgba8(request.baselinePath, baselineBmp));
-    REQUIRE(Cory::IO::writeBmpRgba8(request.actualPath, actualBmp));
-    REQUIRE(Cory::IO::writeBmpRgba8(request.diffPath, diffBmp));
+    REQUIRE(Cory::IO::writeBmpRgba8(baselineFixturePath, baselineBmp));
+    REQUIRE(Cory::IO::writeBmpRgba8(actualFixturePath, actualBmp));
+    REQUIRE(Cory::IO::writeBmpRgba8(diffFixturePath, diffBmp));
 
-    writeRequest(request.requestPath, request);
+    writeRequest(requestFixturePath, request);
 
     {
-        std::ofstream metrics{request.metricsPath, std::ios::binary | std::ios::trunc};
+        std::ofstream metrics{metricsFixturePath, std::ios::binary | std::ios::trunc};
         REQUIRE(metrics.is_open());
         metrics << "{\n"
                 << "  \"mismatchedPixels\": " << request.metrics.mismatchedPixels << ",\n"
@@ -86,7 +91,7 @@ TEST_CASE("VisualDiffReviewer UI matches reference", "[visual][VisualDiffReviewe
     }
 
     {
-        std::ofstream decision{request.decisionPath, std::ios::binary | std::ios::trunc};
+        std::ofstream decision{decisionFixturePath, std::ios::binary | std::ios::trunc};
         REQUIRE(decision.is_open());
         decision << "{}\n";
     }

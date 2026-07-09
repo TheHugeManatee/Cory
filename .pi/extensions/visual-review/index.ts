@@ -284,8 +284,8 @@ async function readSourceExcerpt(sourceFile: string, sourceLine: number, context
 		const lines = raw.split(/\r?\n/);
 		if (lines.length === 0) return `Source file is empty: ${sourceFile}`;
 		const center = sourceLine > 0 ? sourceLine - 1 : 0;
-		const before = Math.max(0, Math.min(7, contextLines - 1));
-		const after = Math.max(0, Math.min(3, contextLines - 1 - before));
+		const before = Math.floor((contextLines - 1) / 2);
+		const after = contextLines - 1 - before;
 		const start = Math.max(0, center - before);
 		const end = Math.min(lines.length, center + after + 1);
 		return lines

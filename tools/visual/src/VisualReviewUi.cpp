@@ -59,9 +59,8 @@ constexpr ImU32 kValueColor = IM_COL32(236, 240, 245, 255);
 
 [[nodiscard]] ImU32 pixelColor(const ImageRgba8 &image, uint32_t x, uint32_t y)
 {
-    const auto offset = (static_cast<size_t>(y) * static_cast<size_t>(image.width) +
-                         static_cast<size_t>(x)) *
-                        4U;
+    const auto offset =
+        (static_cast<size_t>(y) * static_cast<size_t>(image.width) + static_cast<size_t>(x)) * 4U;
     return IM_COL32(static_cast<uint8_t>(image.pixelsRgba8[offset + 0]),
                     static_cast<uint8_t>(image.pixelsRgba8[offset + 1]),
                     static_cast<uint8_t>(image.pixelsRgba8[offset + 2]),
@@ -88,8 +87,8 @@ void drawImagePixels(const char *title, const ImageRgba8 *image, float zoom, ImU
 
     auto *drawList = ImGui::GetWindowDrawList();
     const auto clipMin = ImGui::GetWindowPos();
-    const auto clipMax = ImVec2{clipMin.x + ImGui::GetWindowWidth(),
-                                clipMin.y + ImGui::GetWindowHeight()};
+    const auto clipMax =
+        ImVec2{clipMin.x + ImGui::GetWindowWidth(), clipMin.y + ImGui::GetWindowHeight()};
     drawList->PushClipRect(clipMin, clipMax, true);
 
     const auto minX = std::clamp(static_cast<int>((clipMin.x - origin.x) / pixelSize) - 1,
@@ -119,7 +118,7 @@ void drawImagePixels(const char *title, const ImageRgba8 *image, float zoom, ImU
 
 [[nodiscard]] std::string displayPath(const std::filesystem::path &path)
 {
-    return std::filesystem::absolute(path).lexically_normal().generic_string();
+    return path.lexically_normal().generic_string();
 }
 
 [[nodiscard]] std::string displaySourceLocation(const std::string &sourceFile, uint64_t line)
@@ -195,21 +194,23 @@ void drawMetadataTables(const VisualReviewRequest &request)
         ImGui::TableNextRow();
 
         ImGui::TableNextColumn();
-        drawKeyValueTable("request-table",
-                          "Request",
-                          std::array{
-                              std::pair{"Case", request.caseName},
-                              std::pair{"Request ID", request.id},
-                              std::pair{"Request path", displayPath(request.requestPath)},
-                              std::pair{"Baseline path", displayPath(request.baselinePath)},
-                              std::pair{"Actual path", displayPath(request.actualPath)},
-                              std::pair{"Diff path", displayPath(request.diffPath)},
-                              std::pair{"Mismatched pixels", fmt::format("{}", request.metrics.mismatchedPixels)},
-                              std::pair{"Mismatch ratio", fmt::format("{:.4f}", request.metrics.mismatchRatio)},
-                              std::pair{"Max channel error", fmt::format("{}", request.metrics.maxChannelError)},
-                              std::pair{"Mean absolute error", fmt::format("{:.4f}", request.metrics.meanAbsoluteError)},
-                          },
-                          kTitleBlue);
+        drawKeyValueTable(
+            "request-table",
+            "Request",
+            std::array{
+                std::pair{"Case", request.caseName},
+                std::pair{"Request ID", request.id},
+                std::pair{"Request path", displayPath(request.requestPath)},
+                std::pair{"Baseline path", displayPath(request.baselinePath)},
+                std::pair{"Actual path", displayPath(request.actualPath)},
+                std::pair{"Diff path", displayPath(request.diffPath)},
+                std::pair{"Mismatched pixels", fmt::format("{}", request.metrics.mismatchedPixels)},
+                std::pair{"Mismatch ratio", fmt::format("{:.4f}", request.metrics.mismatchRatio)},
+                std::pair{"Max channel error", fmt::format("{}", request.metrics.maxChannelError)},
+                std::pair{"Mean absolute error",
+                          fmt::format("{:.4f}", request.metrics.meanAbsoluteError)},
+            },
+            kTitleBlue);
 
         ImGui::TableNextColumn();
         drawKeyValueTable("source-table",
@@ -234,7 +235,9 @@ void drawToolbar(const VisualReviewRequest &request,
                  VisualReviewUiState &state,
                  VisualReviewUiActions &actions)
 {
-    ImGui::BeginChild("toolbar", ImVec2{0.0f, kToolbarHeight}, true,
+    ImGui::BeginChild("toolbar",
+                      ImVec2{0.0f, kToolbarHeight},
+                      true,
                       ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     if (ImGui::BeginTable("toolbar-table",
@@ -266,15 +269,9 @@ void drawToolbar(const VisualReviewRequest &request,
 
         if (coloredButton("Accept", kAcceptColor, ImVec2{buttonWidth, 0.0f})) {
             if (images.actual != nullptr) {
-                if (const auto result = IO::writeBmpRgba8(request.baselinePath, *images.actual);
-                    result) {
-                    actions.acceptRequested = true;
-                } else {
-                    CO_CORE_ERROR("Failed to update baseline image '{}': {}",
-                                  request.baselinePath.string(),
-                                  result.error());
-                }
-            } else {
+                actions.acceptRequested = true;
+            }
+            else {
                 CO_CORE_ERROR("Cannot accept visual review '{}': actual image is missing",
                               request.id);
             }
@@ -291,11 +288,8 @@ void drawToolbar(const VisualReviewRequest &request,
     ImGui::EndChild();
 }
 
-void drawPreviewPane(const char *id,
-                     const char *title,
-                     const ImageRgba8 *image,
-                     float zoom,
-                     ImU32 titleColor)
+void drawPreviewPane(
+    const char *id, const char *title, const ImageRgba8 *image, float zoom, ImU32 titleColor)
 {
     ImGui::BeginChild(id,
                       ImVec2{0.0f, 0.0f},
@@ -349,10 +343,10 @@ VisualReviewUiActions drawReviewUi(const VisualReviewRequest &request,
         }
 
         const auto &io = ImGui::GetIO();
-        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) && io.MouseWheel != 0.0f) {
-            state.zoom = std::clamp(state.zoom * std::pow(1.10f, io.MouseWheel),
-                                    kZoomMin,
-                                    kZoomMax);
+        if (ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) &&
+            io.MouseWheel != 0.0f) {
+            state.zoom =
+                std::clamp(state.zoom * std::pow(1.10f, io.MouseWheel), kZoomMin, kZoomMax);
         }
     }
     ImGui::EndChild();

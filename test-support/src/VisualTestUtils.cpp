@@ -11,14 +11,13 @@
 #include <Cory/Tools/VisualReviewProtocol.hpp>
 
 #include <KDGpu/buffer_options.h>
+#include <KDGpu/command_recorder.h>
 #include <KDGpu/texture.h>
-#include <KDGpu/vulkan/vulkan_resource_manager.h>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/interfaces/catch_interfaces_capture.hpp>
 #include <gsl/narrow>
 #include <imgui.h>
-
-#include <vulkan/vulkan.h>
+#include <nlohmann/json.hpp>
 
 #if defined(_WIN32)
 #include <process.h>
@@ -29,10 +28,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <iomanip>
 #include <optional>
 #include <span>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -46,6 +43,13 @@ constexpr size_t kRgbaBytesPerPixel = 4;
 {
     const char *value = std::getenv(name);
     return value != nullptr && std::string_view{value} != "" && std::string_view{value} != "0";
+}
+
+[[nodiscard]] std::optional<std::filesystem::path> envPath(const char *name)
+{
+    const char *value = std::getenv(name);
+    if (value == nullptr || std::string_view{value}.empty()) return std::nullopt;
+    return std::filesystem::path{value};
 }
 
 [[nodiscard]] std::string sanitizeCaseName(std::string_view caseName)
@@ -68,6 +72,9 @@ constexpr size_t kRgbaBytesPerPixel = 4;
                                                     const ImageCompareOptions &options)
 {
     if (options.baselinePathOverride) return *options.baselinePathOverride;
+    if (const auto root = envPath("CORY_VISUAL_BASELINE_DIR")) {
+        return *root / fmt::format("{}.bmp", sanitizeCaseName(caseName));
+    }
 #ifdef CORY_TEST_SOURCE_DIR
     const auto root = std::filesystem::path{CORY_TEST_SOURCE_DIR} / "baselines" / "visual";
 #else
@@ -96,7 +103,9 @@ constexpr size_t kRgbaBytesPerPixel = 4;
 #else
     const auto defaultRoot = std::filesystem::current_path() / "visual-artifacts";
 #endif
-    const auto root = options.artifactRootOverride ? *options.artifactRootOverride : defaultRoot;
+    const auto root = options.artifactRootOverride
+                          ? *options.artifactRootOverride
+                          : envPath("CORY_VISUAL_ARTIFACT_DIR").value_or(defaultRoot);
     const auto testComponent =
         catchTestName.empty() ? std::string{"unknown-catch-test"} : sanitizeCaseName(catchTestName);
     const auto caseComponent =
@@ -219,31 +228,30 @@ void writeText(const std::filesystem::path &path, std::string_view text)
     return diff;
 }
 
-[[nodiscard]] std::string metricsJson(std::string_view caseName, const ImageCompareResult &result)
+[[nodiscard]] std::string
+metricsJson(std::string_view caseName, const ImageCompareResult &result, bool pretty)
 {
-    std::ostringstream out;
-    out << std::setprecision(10);
-    out << "{\n";
-    out << "  \"case\": \"" << caseName << "\",\n";
-    out << "  \"passed\": " << (result.passed ? "true" : "false") << ",\n";
-    out << "  \"width\": " << result.size.x << ",\n";
-    out << "  \"height\": " << result.size.y << ",\n";
-    out << "  \"mismatchedPixels\": " << result.mismatchedPixels << ",\n";
-    out << "  \"mismatchRatio\": " << result.mismatchRatio << ",\n";
-    out << "  \"maxChannelError\": " << static_cast<uint32_t>(result.maxChannelError) << ",\n";
-    out << "  \"meanAbsoluteError\": " << result.meanAbsoluteError << ",\n";
-    out << "  \"baseline\": \"" << result.baselinePath.generic_string() << "\",\n";
-    out << "  \"actual\": \"" << result.actualPath.generic_string() << "\",\n";
-    out << "  \"diff\": \"" << result.diffPath.generic_string() << "\",\n";
-    out << "  \"metrics\": \"" << result.metricsPath.generic_string() << "\",\n";
-    out << "  \"request\": \"" << result.requestPath.generic_string() << "\",\n";
-    out << "  \"decision\": \"" << result.decisionPath.generic_string() << "\",\n";
-    out << "  \"catchTestName\": \"" << result.catchTestName << "\",\n";
-    out << "  \"sourceFile\": \"" << result.sourceFile.generic_string() << "\",\n";
-    out << "  \"sourceLine\": " << result.sourceLine << ",\n";
-    out << "  \"sourceFunction\": \"" << result.sourceFunction << "\"\n";
-    out << "}\n";
-    return out.str();
+    const auto value = nlohmann::json{
+        {"case", caseName},
+        {"passed", result.passed},
+        {"width", result.size.x},
+        {"height", result.size.y},
+        {"mismatchedPixels", result.mismatchedPixels},
+        {"mismatchRatio", result.mismatchRatio},
+        {"maxChannelError", result.maxChannelError},
+        {"meanAbsoluteError", result.meanAbsoluteError},
+        {"baseline", result.baselinePath.generic_string()},
+        {"actual", result.actualPath.generic_string()},
+        {"diff", result.diffPath.generic_string()},
+        {"metrics", result.metricsPath.generic_string()},
+        {"request", result.requestPath.generic_string()},
+        {"decision", result.decisionPath.generic_string()},
+        {"catchTestName", result.catchTestName},
+        {"sourceFile", result.sourceFile.generic_string()},
+        {"sourceLine", result.sourceLine},
+        {"sourceFunction", result.sourceFunction},
+    };
+    return value.dump(pretty ? 2 : -1) + (pretty ? "\n" : "");
 }
 
 [[nodiscard]] ImageRgba8
@@ -267,30 +275,15 @@ readbackTextureRgba8(Context &ctx, const Texture &texture, glm::u32vec2 size, Gp
         .level = Gpu::CommandBufferLevel::Primary,
     });
 
-    auto *textureResource = ctx.resources().getTexture(texture.handle());
-    auto *bufferResource = ctx.resources().getBuffer(readback.handle());
-    auto *commandRecorderResource = ctx.resources().getCommandRecorder(recorder);
-    CO_CORE_ASSERT(textureResource != nullptr && bufferResource != nullptr &&
-                       commandRecorderResource != nullptr,
-                   "Failed to resolve Vulkan resources for TestCanvas readback");
-
-    VkBufferImageCopy region{
-        .bufferOffset = 0,
-        .bufferRowLength = 0,
-        .bufferImageHeight = 0,
-        .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                             .mipLevel = 0,
-                             .baseArrayLayer = 0,
-                             .layerCount = 1},
-        .imageOffset = {0, 0, 0},
-        .imageExtent = {size.x, size.y, 1},
-    };
-    vkCmdCopyImageToBuffer(commandRecorderResource->commandBuffer,
-                           textureResource->image,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                           bufferResource->buffer,
-                           1,
-                           &region);
+    recorder.copyTextureToBuffer(Gpu::TextureToBufferCopy{
+        .srcTexture = texture.handle(),
+        .srcTextureLayout = Gpu::TextureLayout::TransferSrcOptimal,
+        .dstBuffer = readback.handle(),
+        .regions = {{
+            .textureSubResource = {.aspectMask = Gpu::TextureAspectFlagBits::ColorBit},
+            .textureExtent = {size.x, size.y, 1},
+        }},
+    });
 
     auto commands = recorder.finish();
     auto fence = ctx.device().createFence(
@@ -299,6 +292,7 @@ readbackTextureRgba8(Context &ctx, const Texture &texture, glm::u32vec2 size, Gp
         Gpu::SubmitOptions{.commandBuffers = {commands.handle()}, .signalFence = fence.handle()});
     fence.wait();
 
+    readback.invalidate();
     const auto *mapped = static_cast<const std::byte *>(readback.map());
     CO_CORE_ASSERT(mapped != nullptr, "Failed to map TestCanvas readback buffer");
 
@@ -542,7 +536,7 @@ ImageCompareResult compareToReference(std::string_view caseName,
             baselineImage->pixels.size() == actual.pixels.size()) {
             writeBmp(result.diffPath, makeDiffImage(*baselineImage, actual));
         }
-        writeText(result.metricsPath, metricsJson(caseName, result));
+        writeText(result.metricsPath, metricsJson(caseName, result, true));
 
         auto request = Tools::VisualReview::VisualReviewRequest{
             .id = Tools::VisualReview::makeRequestId(
@@ -579,9 +573,20 @@ ImageCompareResult compareToReference(std::string_view caseName,
                          result.baselinePath.string());
         }
 
-        writeText(result.metricsPath, metricsJson(caseName, result));
-        CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result));
+        writeText(result.metricsPath, metricsJson(caseName, result, true));
+        CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result, false));
     };
+
+    if (envEnabled("CORY_UPDATE_VISUAL_BASELINES")) {
+        writeBmp(result.baselinePath, actual);
+        result.passed = true;
+        if (envEnabled("CORY_VISUAL_ALWAYS_WRITE_ACTUAL")) {
+            writeBmp(result.actualPath, actual);
+        }
+        CO_CORE_INFO("Updated visual baseline '{}' at {}", caseName, result.baselinePath.string());
+        CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result, false));
+        return result;
+    }
 
     auto baseline = readBmp(result.baselinePath);
     if (!baseline) {
@@ -626,7 +631,10 @@ ImageCompareResult compareToReference(std::string_view caseName,
         writeFailureArtifactsAndMaybeReview(&*baseline);
         return result;
     }
-    CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result));
+    if (envEnabled("CORY_VISUAL_ALWAYS_WRITE_ACTUAL")) {
+        writeBmp(result.actualPath, actual);
+    }
+    CO_CORE_INFO("CORY_VISUAL_RESULT {}", metricsJson(caseName, result, false));
     return result;
 }
 

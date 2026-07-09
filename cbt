@@ -17,14 +17,18 @@ if [[ "$is_windows_shell" -eq 1 ]]; then
     venv_python="${venv_bin}/python.exe"
     activate_path="${venv_bin}/activate"
 else
-    build_root="/home/$(whoami)/cory-work/"
+    build_root="${HOME}/cory-work"
     venv_bin="${build_root}/.venv/bin"
     venv_python="${venv_bin}/python"
     activate_path="${venv_bin}/activate"
 fi
 python_exec="${venv_python}"
 if [[ ! -x "$python_exec" ]]; then
-    python_exec="python"
+    if command -v python3 >/dev/null 2>&1; then
+        python_exec="python3"
+    else
+        python_exec="python"
+    fi
 fi
 
 if [[ "${1:-}" == "setup" ]]; then
@@ -52,7 +56,7 @@ if [[ "${1:-}" == "setup" ]]; then
 
     mkdir -p "$build_root"
     if [[ ! -d "$venv_dir" ]]; then
-        python -m venv "$venv_dir"
+        "$python_exec" -m venv "$venv_dir"
     fi
 
     "$venv_python" -m pip install -e "$script_dir/tools/cbt"
@@ -64,15 +68,21 @@ fi
 venv_dir="${build_root}/.venv"
 
 if [[ "${1:-}" == "start" || "${1:-}" == "-h" ]]; then
+    if [[ ! -x "$venv_python" ]]; then
+        echo "cbt: no venv found at ${venv_dir}. Run './cbt setup' first." >&2
+        exit 1
+    fi
+
     echo -e "Cory build tool (cbt) working correctly. No further step required.\n" >&2
 
-    exec "$python_exec" -m cbt --help
+    exec "$venv_python" -m cbt --help
 
     exit 0
 fi
 
 if [[ ! -x "$venv_python" ]]; then
     echo "cbt: no venv found at ${venv_dir}. Run './cbt setup' first." >&2
+    exit 1
 fi
 
-exec "$python_exec" -m cbt "$@"
+exec "$venv_python" -m cbt "$@"

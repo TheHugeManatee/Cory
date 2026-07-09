@@ -37,7 +37,7 @@ Adopt an incremental “agent acceleration layer” around Cory rather than repl
 ### P0: Add headless screenshot capture
 
 Implement a small rendering-capture API around `HeadlessFrameSource`.
-ok, 
+
 Suggested engine pieces:
 
 - `src/Cory/Renderer/FrameCapture.hpp/.cpp`

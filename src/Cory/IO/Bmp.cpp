@@ -316,16 +316,21 @@ Result<BmpImageRgba8> decodeBmpRgba8(std::span<const std::byte> bytes)
     const auto bitCount = readU16(bytes, 28);
     const auto compression = readU32(bytes, 30);
     if (headerSize != dibHeaderMinSize || widthSigned <= 0 || heightSigned == 0 ||
-        planes != bmpPlanes || bitCount != bmpBitCountRgba8 || compression != bmpCompressionRgb) {
+        heightSigned == std::numeric_limits<int32_t>::min() || planes != bmpPlanes ||
+        bitCount != bmpBitCountRgba8 || compression != bmpCompressionRgb) {
         return std::unexpected("BMP decode failed: expected uncompressed 32-bit BGRA BMP");
     }
 
     const auto absHeight = heightSigned < 0 ? -heightSigned : heightSigned;
-    const auto width = gsl::narrow<uint32_t>(widthSigned);
-    const auto height = gsl::narrow<uint32_t>(absHeight);
-    const auto requiredBytes =
-        static_cast<size_t>(width) * static_cast<size_t>(height) * rgba8BytesPerPixel;
-    if (static_cast<size_t>(pixelOffset) + requiredBytes > bytes.size()) {
+    const auto width = static_cast<uint32_t>(widthSigned);
+    const auto height = static_cast<uint32_t>(absHeight);
+    const auto requiredBytes64 =
+        static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * rgba8BytesPerPixel;
+    if (requiredBytes64 > std::numeric_limits<size_t>::max()) {
+        return std::unexpected("BMP decode failed: image is too large");
+    }
+    const auto requiredBytes = static_cast<size_t>(requiredBytes64);
+    if (pixelOffset > bytes.size() || requiredBytes > bytes.size() - pixelOffset) {
         return std::unexpected("BMP decode failed: truncated pixel data");
     }
 
@@ -358,15 +363,29 @@ Result<BmpImageRgba8> loadBmpRgba8(const std::filesystem::path &path)
 
 Result<void> writeBmpRgba8(const std::filesystem::path &path, const BmpImageRgba8 &image)
 {
-    std::filesystem::create_directories(path.parent_path());
-    const auto pixelBytes = gsl::narrow<uint32_t>(image.pixelsRgba8.size());
-    const auto expectedBytes =
-        static_cast<size_t>(image.width) * static_cast<size_t>(image.height) * rgba8BytesPerPixel;
+    if (image.width == 0 || image.height == 0 ||
+        image.width > static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) ||
+        image.height > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+        return std::unexpected("BMP write failed: invalid image dimensions");
+    }
+
+    const auto expectedBytes64 = static_cast<uint64_t>(image.width) *
+                                 static_cast<uint64_t>(image.height) * rgba8BytesPerPixel;
+    constexpr auto headerBytes = fileHeaderSize + dibHeaderMinSize;
+    if (expectedBytes64 > std::numeric_limits<uint32_t>::max() - headerBytes ||
+        expectedBytes64 > std::numeric_limits<size_t>::max()) {
+        return std::unexpected("BMP write failed: image is too large");
+    }
+    const auto expectedBytes = static_cast<size_t>(expectedBytes64);
     if (image.pixelsRgba8.size() != expectedBytes) {
         return std::unexpected("BMP write failed: pixel buffer size mismatch");
     }
+    const auto pixelBytes = static_cast<uint32_t>(expectedBytes);
+    if (!path.parent_path().empty()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
 
-    const auto fileSize = static_cast<uint32_t>(fileHeaderSize + dibHeaderMinSize) + pixelBytes;
+    const auto fileSize = static_cast<uint32_t>(headerBytes) + pixelBytes;
     std::vector<std::byte> bytes;
     bytes.reserve(fileSize);
     bytes.push_back(static_cast<std::byte>('B'));

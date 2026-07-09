@@ -113,20 +113,23 @@ function loadConfig(): Config {
 	const projectDir = path.join(process.cwd(), ".pi");
 	const extensionDir = path.dirname(fileURLToPath(import.meta.url));
 	const merged = mergeConfigs(
+		loadConfigFile(path.join(extensionDir, "config.json")),
 		loadConfigFile(path.join(globalDir, "subagent.json")),
+	);
+	const withGlobal = mergeConfigs(
+		merged,
 		loadConfigFile(path.join(globalDir, "subagent.config.json")),
 	);
 	const withProject = mergeConfigs(
-		merged,
+		withGlobal,
 		mergeConfigs(loadConfigFile(path.join(projectDir, "subagent.json")), loadConfigFile(path.join(projectDir, "subagent.config.json"))),
 	);
-	const withExtension = mergeConfigs(withProject, loadConfigFile(path.join(extensionDir, "config.json")));
 
 	const envConfigPath = process.env.PI_SUBAGENT_CONFIG;
-	if (!envConfigPath) return withExtension;
+	if (!envConfigPath) return withProject;
 
 	const envConfig = loadConfigFile(path.resolve(envConfigPath));
-	return mergeConfigs(withExtension, envConfig);
+	return mergeConfigs(withProject, envConfig);
 }
 
 function getPiInvocation(command: string, args: string[]): { command: string; args: string[] } {
@@ -225,6 +228,10 @@ function summarizeTask(task: string): string {
 	return singleLine.length <= maxLength ? singleLine : `${singleLine.slice(0, maxLength - 3)}...`;
 }
 
+function estimateTokens(text: string): number {
+	return Math.ceil(text.length / 4);
+}
+
 async function killProcessTree(proc: ReturnType<typeof spawn>): Promise<void> {
 	if (!proc.pid) return;
 
@@ -240,6 +247,19 @@ async function killProcessTree(proc: ReturnType<typeof spawn>): Promise<void> {
 			proc.kill("SIGTERM");
 		} catch {
 			return;
+		}
+	}
+
+	await new Promise((resolve) => setTimeout(resolve, 2000));
+	if (proc.exitCode !== null || proc.signalCode !== null) return;
+
+	try {
+		process.kill(-proc.pid, "SIGKILL");
+	} catch {
+		try {
+			proc.kill("SIGKILL");
+		} catch {
+			// The process exited between the status check and the signal.
 		}
 	}
 }
@@ -376,7 +396,6 @@ export default function (pi: ExtensionAPI) {
 			let proc: ReturnType<typeof spawn> | undefined;
 			let jsonBuffer = "";
 			let watchdog: ReturnType<typeof setInterval> | undefined;
-			let forceExitTimer: ReturnType<typeof setTimeout> | undefined;
 			let finished = false;
 			let timeoutReason: string | undefined;
 			let killListener: (() => void) | undefined;
@@ -452,7 +471,7 @@ export default function (pi: ExtensionAPI) {
 				if (signal) {
 					killListener = () => {
 						aborted = true;
-						void killProcessTree(proc);
+						if (proc) void killProcessTree(proc);
 					};
 					signal.addEventListener("abort", killListener, { once: true });
 				}
@@ -465,7 +484,7 @@ export default function (pi: ExtensionAPI) {
 						result.errorMessage = timeoutReason;
 						result.stopReason = "timeout";
 						emitUpdate();
-						void killProcessTree(proc);
+						if (proc) void killProcessTree(proc);
 					}
 				}, 5000);
 				watchdog.unref?.();
@@ -475,16 +494,11 @@ export default function (pi: ExtensionAPI) {
 						if (finished) return;
 						finished = true;
 						if (watchdog) clearInterval(watchdog);
-						if (forceExitTimer) clearTimeout(forceExitTimer);
 						if (jsonBuffer.trim()) jsonBuffer = consumeJsonEvents(jsonBuffer, processEvent);
 						resolve(code);
 					};
-					proc?.on("close", (code) => settle(code ?? 0));
+					proc?.on("close", (code) => settle(code ?? 1));
 					proc?.on("error", () => settle(1));
-					forceExitTimer = setTimeout(() => {
-						settle(1);
-					}, result.stallTimeoutMs + 10_000);
-					forceExitTimer.unref?.();
 				});
 
 				const effectiveExitCode = aborted || timeoutReason ? 1 : exitCode;

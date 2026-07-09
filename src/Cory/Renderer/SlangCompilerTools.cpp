@@ -102,12 +102,14 @@ void dumpTypeLayout(slang::TypeLayoutReflection *typeLayout,
         return;
     }
 
+    auto *type = typeLayout->getType();
+    const auto *typeName = type != nullptr ? type->getName() : nullptr;
     out.line("TypeLayout: {} size={}",
-             typeLayout->getName() ? typeLayout->getName() : "<unnamed>",
+             typeName != nullptr ? typeName : "<unnamed>",
              typeLayout->getSize());
 
     if (options.includeTypes && depthRemaining > 0) {
-        if (auto *type = typeLayout->getType()) {
+        if (type != nullptr) {
             auto indent = out.indent();
             dumpType(type, out, depthRemaining - 1, options);
         }

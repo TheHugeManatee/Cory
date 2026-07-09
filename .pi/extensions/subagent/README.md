@@ -4,7 +4,8 @@ A Pi extension tool that launches a separate `pi` process with a model selected 
 
 ## Config
 
-Supported locations, merged in order:
+The bundled `config.json` supplies defaults. User configuration is then merged in this order, with
+later files overriding earlier files:
 
 - `~/.pi/agent/subagent.json`
 - `~/.pi/agent/subagent.config.json`
@@ -36,8 +37,7 @@ or:
 
 - `modelSize` - selects the mapped model size
 - `taskName` - short label shown while the sub-agent is running and included in the sub-agent prompt
-  - live display format: `subagent: <taskName> · ttfb <seconds> · <tokens/sec>`
-  - next line shows the task summary
+  - live display shows the task name, summary, and current token estimate
   - final lines show `running...` until output streams, then the last two non-empty streamed lines
 - `task` - task for the sub-agent
 - `cwd` - optional working directory

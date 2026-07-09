@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <stdexcept>
 
 namespace Cory::Tools::VisualReview {
 namespace {
@@ -94,9 +95,14 @@ void writeRequest(const std::filesystem::path &path, const VisualReviewRequest &
                      {"decisionPath", pathToString(request.decisionPath)},
                      {"metrics", metricsToJson(request.metrics)}};
 
-    std::filesystem::create_directories(path.parent_path());
+    if (!path.parent_path().empty()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
     std::ofstream out{path, std::ios::binary};
     out << std::setw(2) << value << '\n';
+    if (!out) {
+        throw std::runtime_error{"Failed to write visual review request: " + path.string()};
+    }
 }
 
 std::optional<VisualReviewRequest> readRequest(const std::filesystem::path &path)
@@ -107,7 +113,10 @@ std::optional<VisualReviewRequest> readRequest(const std::filesystem::path &path
     json value;
     try {
         in >> value;
-        return VisualReviewRequest{
+        if (value.value<std::string>("schema", "") != "cory.visual-review-request.v1") {
+            return std::nullopt;
+        }
+        auto request = VisualReviewRequest{
             .id = value.value<std::string>("id", ""),
             .caseName = value.value<std::string>("caseName", ""),
             .metadata = metadataFromJson(value.value("metadata", json::object())),
@@ -119,6 +128,8 @@ std::optional<VisualReviewRequest> readRequest(const std::filesystem::path &path
             .decisionPath = pathFromJson(value.at("decisionPath")),
             .metrics = metricsFromJson(value.value("metrics", json::object())),
         };
+        if (request.id.empty() || request.caseName.empty()) return std::nullopt;
+        return request;
     }
     catch (...) {
         return std::nullopt;
@@ -132,9 +143,14 @@ void writeDecision(const std::filesystem::path &path, const VisualReviewDecision
                      {"accepted", decision.accepted},
                      {"note", decision.note}};
 
-    std::filesystem::create_directories(path.parent_path());
+    if (!path.parent_path().empty()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
     std::ofstream out{path, std::ios::binary};
     out << std::setw(2) << value << '\n';
+    if (!out) {
+        throw std::runtime_error{"Failed to write visual review decision: " + path.string()};
+    }
 }
 
 std::optional<VisualReviewDecision> readDecision(const std::filesystem::path &path)
@@ -145,9 +161,14 @@ std::optional<VisualReviewDecision> readDecision(const std::filesystem::path &pa
     json value;
     try {
         in >> value;
-        return VisualReviewDecision{.requestId = value.value<std::string>("requestId", ""),
-                                    .accepted = value.value<bool>("accepted", false),
-                                    .note = value.value<std::string>("note", "")};
+        if (value.value<std::string>("schema", "") != "cory.visual-review-decision.v1") {
+            return std::nullopt;
+        }
+        auto decision = VisualReviewDecision{.requestId = value.value<std::string>("requestId", ""),
+                                             .accepted = value.value<bool>("accepted", false),
+                                             .note = value.value<std::string>("note", "")};
+        if (decision.requestId.empty()) return std::nullopt;
+        return decision;
     }
     catch (...) {
         return std::nullopt;

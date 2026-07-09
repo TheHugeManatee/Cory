@@ -1,7 +1,7 @@
 # ADR-07 Agent-Friendly Iteration and Visual Development
 
 ## Status
-Proposed.
+In progress.
 
 ## Context
 Cory is a Vulkan/KDGpu renderer and playground with a coroutine-oriented application loop, framegraph renderer, Slang shader workflow, examples, tests, and a custom `cbt` build tool. This review was a passive codebase inspection only; no build/test/run was performed.

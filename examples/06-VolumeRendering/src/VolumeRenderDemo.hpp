@@ -2,7 +2,9 @@
 
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/Common.hpp>
+#include <Cory/Application/HeadlessOutput.hpp>
 #include <Cory/Base/Prop.hpp>
+#include <Cory/Renderer/FrameCapture.hpp>
 #include <Cory/Base/SimulationClock.hpp>
 #include <Cory/Framegraph/Common.hpp>
 #include <Cory/Renderer/Common.hpp>
@@ -15,6 +17,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -42,12 +45,8 @@ class VolumeRenderDemoApplication : public Cory::Application {
 
   private:
     uint64_t framesToRender_{0}; // the frames to render - 0 is infinite
-    std::filesystem::path outputPath_{};
-    const Cory::Texture *lastRenderedTexture_{nullptr};
-    uint32_t lastRenderedWidth_{0};
-    uint32_t lastRenderedHeight_{0};
-    Gpu::Format lastRenderedFormat_{};
-    Gpu::TextureLayout lastRenderedLayout_{Gpu::TextureLayout::PresentSrc};
+    Cory::HeadlessOutputOptions output_{};
+    std::optional<Cory::CapturedFrame> capturedFrame_{};
     std::unique_ptr<Cory::Window> window_;
     std::unique_ptr<Cory::HeadlessFrameSource> headlessFrames_;
     bool headless_{false};

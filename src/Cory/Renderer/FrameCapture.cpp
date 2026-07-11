@@ -154,4 +154,16 @@ IO::BmpImageRgba8 readbackTextureRgba8(Context &ctx,
     return readbackBufferToBmp(readback, size, format);
 }
 
+void writeCapturedFrameBmp(Context &ctx, const CapturedFrame &frame, const std::filesystem::path &path)
+{
+    CO_CORE_ASSERT(frame.texture != nullptr, "CapturedFrame does not contain a texture");
+    const auto image = readbackTextureRgba8(ctx,
+                                            *frame.texture,
+                                            frame.extent,
+                                            frame.format,
+                                            frame.layout);
+    const auto result = IO::writeBmpRgba8(path, image);
+    CO_CORE_ASSERT(result.has_value(), "{}", result.error());
+}
+
 } // namespace Cory

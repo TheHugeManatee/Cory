@@ -2,12 +2,14 @@
 
 #include <Cory/Application/Application.hpp>
 #include <Cory/Application/DynamicGeometry.hpp>
+#include <Cory/Application/HeadlessOutput.hpp>
 #include <Cory/Coro/Coro.hpp>
+#include <Cory/Renderer/FrameCapture.hpp>
 #include <Cory/Renderer/Gpu.hpp>
 #include <Cory/Renderer/Shader.hpp>
 
-#include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -62,12 +64,8 @@ class DynamicPipelineApplication : public Cory::Application {
     double getElapsedTimeSeconds() const;
 
     uint64_t framesToRender_{0};
-    std::filesystem::path outputPath_{};
-    const Cory::Texture *lastRenderedTexture_{nullptr};
-    uint32_t lastRenderedWidth_{0};
-    uint32_t lastRenderedHeight_{0};
-    Gpu::Format lastRenderedFormat_{};
-    Gpu::TextureLayout lastRenderedLayout_{Gpu::TextureLayout::PresentSrc};
+    Cory::HeadlessOutputOptions output_{};
+    std::optional<Cory::CapturedFrame> capturedFrame_{};
     bool disableValidation_{false};
     bool headless_{false};
     double startupTime_{0.0};
